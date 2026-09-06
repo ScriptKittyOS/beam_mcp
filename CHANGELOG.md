@@ -11,7 +11,36 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing is published yet. The sections below describe what a first release would contain.
+### Known, fixed in 0.1.1
+
+**Two hexdocs warnings**, reproduced by running `mix docs` rather than taken from the publish
+output:
+
+    warning: documentation references module "BeamMCP.Server" but it is hidden
+    warning: documentation references module "BeamMCP.Server" but it is hidden
+
+`BeamMCP.Server` carries `@moduledoc false` — inherited verbatim from the tree it was extracted
+from, where it was an internal module and the annotation was correct. It is now the package's
+principal public module, and `BeamMCP.ToolCatalog`'s docs link to it, so the published docs
+reference a module hexdocs will not render. The annotation stopped being true the moment the
+code left the umbrella, and nothing caught it because a hidden module is not a compile warning
+and the gate does not run `mix docs`.
+
+## [0.1.0] — 2026-09-06
+
+First release. Tag `v0.1.0`, an annotated tag whose object is `69c8159` and whose commit is
+`2add129e65d04759ce67c77520208b854c05dcee`.
+
+**Package digest, read from the Hex API rather than from a terminal:**
+
+    $ curl -s https://hex.pm/api/packages/beam_mcp/releases/0.1.0 | jq '{checksum, inserted_at, has_docs}'
+      checksum:     b8c351933260d90844eae1614ae4759cf979d4a524ee139fbbef1c2dfaab5e7f
+      inserted_at:  2026-09-06T20:57:51.749883Z
+      has_docs:     true
+      requirements: ["jason"]
+
+The registry's own value is the one recorded, because a checksum printed by the machine that
+built the tarball attests to that machine and not to what a consumer will fetch.
 
 ### Why 0.1.0 was not published at `c5da02f`
 
