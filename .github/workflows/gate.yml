@@ -38,11 +38,15 @@ jobs:
             range="origin/${{ github.base_ref }}..HEAD"
             git rev-list --no-merges "$range" > /tmp/commits \
               || { echo "cannot resolve $range"; exit 1; }
-          elif [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
-            # A branch's first push has no previous state, so github.event.before is the
-            # all-zeros SHA and before..HEAD is not a range. Every commit reachable from HEAD
-            # is new to the remote on that push, so every one of them is in scope.
-            echo "first push of this branch: checking every commit reachable from HEAD"
+          elif [ -z "$before" ] \
+            || [ "$before" = "0000000000000000000000000000000000000000" ] \
+            || ! git rev-parse --verify --quiet "$before^{commit}" >/dev/null; then
+            # Two cases, one fallback. A branch's first push has no previous state, so
+            # github.event.before is the all-zeros SHA. A force-push names a real-looking SHA
+            # that is no longer reachable -- dropping a commit leaves `before` pointing at
+            # something the fetched history does not contain. Testing the SHA's SHAPE catches
+            # only the first; asking git whether it RESOLVES catches both.
+            echo "before is unusable ('$before'): checking every commit reachable from HEAD"
             git rev-list --no-merges HEAD > /tmp/commits \
               || { echo "cannot list commits from HEAD"; exit 1; }
           else
