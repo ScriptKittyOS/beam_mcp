@@ -10,7 +10,9 @@ defmodule BeamMCP.Server do
 
   @protocol_version "2024-11-05"
   @default_server_name "beam_mcp"
-  @server_version "0.1.0"
+  # Read from the application spec rather than restated here. A hardcoded copy beside the one
+  # in mix.exs is a transcription defect waiting for the first release that updates one of them.
+  @server_version Mix.Project.config()[:version]
 
   @typedoc """
   The dispatch contract. A host supplies a function of this shape; the server calls it and
