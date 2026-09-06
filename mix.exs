@@ -5,7 +5,7 @@ defmodule BeamMCP.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/HackTuah/beam_mcp"
+  @source_url "https://github.com/ScriptKittyOS/beam_mcp"
 
   def project do
     [
