@@ -74,6 +74,10 @@ held to cannot drift apart. Argument keys are derived from the schema's `propert
 are passed through unchanged, because turning a string into a domain term is the host's job and
 a generic layer that guesses has acquired someone else's domain.
 
+A `ToolSpec` that omits `input_schema` is a tool with no arguments: it advertises an open
+empty object, so `tools/call` refuses nothing and dispatch is handed `%{}` whatever the client
+sent.
+
 Validation is a deliberately small subset of JSON Schema — `type`, `properties`, `required`,
 `additionalProperties`, and bounds. It refuses rather than guesses, and it is not a general
 validator.
