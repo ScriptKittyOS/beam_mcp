@@ -5,16 +5,18 @@ defmodule BeamMCP.Schema do
   @moduledoc """
   Validates `tools/call` arguments against the JSON Schema the server advertises.
 
-  The schemas at `BeamMCP.Server.input_schema/1` were declared and never enforced — they were
-  used only to build the `tools/list` response. `"additionalProperties" => false` and
-  `"required"` were advertisement.
+  Advertising a schema is not enforcing one. A server that returns `"required"` and
+  `"additionalProperties" => false` in `tools/list` and then dispatches whatever arrives has
+  published a contract it does not keep.
 
-  That was exploitable. `normalize_arguments/1` retained unrecognised **string** keys;
-  `ProposalService.propose_action/2` set its safety fields with **atom** keys via
-  `Map.put_new`, which cannot see them; and `to_json_value/1` stringified and collapsed
-  the collision with the caller's value winning. A client could send
-  `{"requires_approval": false, "status": "approved"}` and receive a response asserting
-  its own containment action was pre-approved.
+  That gap is exploitable, and the exploit does not need a clever payload. If a host merges
+  defaults into the argument map with atom keys while unrecognised **string** keys survive
+  validation, the two never collide in the map and both reach whatever serialises the result --
+  where the caller's value can win. A client then supplies its own value for a field the host
+  believed it controlled, and reads it back as though the host had set it.
+
+  So this module refuses rather than guesses, and the server enforces the same schema it
+  advertised rather than a second one compiled in beside it.
 
   This is a deliberately small subset of JSON Schema — the keywords the server actually
   uses. It is not a general validator, and it refuses rather than guesses.

@@ -19,7 +19,17 @@ defmodule BeamMCP.ServerTest do
           name: :propose_action,
           command_class: :contain,
           mode: :proposal,
-          description: "Propose an approval-governed action request."
+          description: "Propose an approval-governed action request.",
+          input_schema: %{
+            "type" => "object",
+            "properties" => %{
+              "case_id" => %{"type" => "string"},
+              "action_class" => %{"type" => "string"},
+              "target" => %{"type" => "string"}
+            },
+            "required" => ["case_id", "action_class", "target"],
+            "additionalProperties" => false
+          }
         }
       ]
     end
@@ -78,7 +88,9 @@ defmodule BeamMCP.ServerTest do
 
     assert_receive {:dispatch, :propose_action, args, []}
     assert args[:case_id] == "case-7"
-    assert args[:action_class] == :contain
+    # The package normalises the KEY and passes the VALUE through. Turning "contain" into an
+    # atom is domain knowledge and belongs to the host's dispatch, not to a generic server.
+    assert args[:action_class] == "contain"
     assert args[:target] == "host-42"
 
     assert response["result"]["isError"] == false

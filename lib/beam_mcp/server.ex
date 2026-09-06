@@ -78,10 +78,10 @@ defmodule BeamMCP.Server do
       ) do
     arguments = Map.get(params, "arguments", %{})
 
-    case normalize_tool_name(state, name) do
-      {:ok, tool_name} ->
+    case find_tool(state, name) do
+      {:ok, %ToolSpec{} = spec} ->
         response =
-          case validate_and_dispatch(state, tool_name, arguments) do
+          case validate_and_dispatch(state, spec, arguments) do
             {:ok, payload} ->
               result(id, tool_success(payload))
 
@@ -120,7 +120,7 @@ defmodule BeamMCP.Server do
     %{
       "name" => Atom.to_string(tool.name),
       "description" => tool.description,
-      "inputSchema" => input_schema(tool.name),
+      "inputSchema" => tool.input_schema,
       "annotations" => %{
         "destructiveHint" => tool.mode == :proposal,
         "idempotentHint" => tool.mode == :read_only,
@@ -150,161 +150,58 @@ defmodule BeamMCP.Server do
     }
   end
 
-  defp normalize_tool_name(state, name) when is_binary(name) do
-    valid_names = Enum.map(state.tool_catalog.all(), &Atom.to_string(&1.name))
-
-    if name in valid_names do
-      {:ok, String.to_existing_atom(name)}
-    else
-      :error
-    end
+  # One lookup governs both paths: a tool is callable exactly when the injected catalog names
+  # it, and the spec it returns carries the schema that will be enforced.
+  defp find_tool(state, name) when is_binary(name) do
+    Enum.find_value(state.tool_catalog.all(), :error, fn spec ->
+      if Atom.to_string(spec.name) == name, do: {:ok, spec}
+    end)
   end
 
-  defp normalize_tool_name(_state, name) when is_atom(name), do: {:ok, name}
-  defp normalize_tool_name(_state, _name), do: :error
+  defp find_tool(state, name) when is_atom(name),
+    do: find_tool(state, Atom.to_string(name))
+
+  defp find_tool(_state, _name), do: :error
 
   # The advertised schema is the contract. Validate the wire form -- string keys, as the
   # client sent them -- before normalising, so `required` and `additionalProperties`
   # mean what tools/list says they mean.
-  defp validate_and_dispatch(state, tool_name, arguments) do
-    case Schema.validate(arguments, input_schema(tool_name)) do
+  defp validate_and_dispatch(state, %ToolSpec{} = spec, arguments) do
+    case Schema.validate(arguments, spec.input_schema) do
       :ok ->
-        state.dispatch.(tool_name, normalize_arguments(arguments), state.dispatch_opts)
+        args = normalize_arguments(arguments, spec.input_schema)
+        state.dispatch.(spec.name, args, state.dispatch_opts)
 
       {:error, reason} ->
-        {:error, %{tool: tool_name, reason: "invalid arguments: #{reason}"}}
+        {:error, %{tool: spec.name, reason: "invalid arguments: #{reason}"}}
     end
   end
 
   # Only reached with a map: Schema.validate/2 rejects anything else first.
-  defp normalize_arguments(arguments) when is_map(arguments) do
-    Enum.reduce(arguments, %{}, fn {key, value}, acc ->
-      normalized_value = normalize_argument_value(key, value)
+  #
+  # The permitted key set is **derived from the schema the catalog supplied**, not from a list
+  # compiled in here. A declared key is handed to dispatch as an atom; an undeclared one is
+  # dropped, because whether it was allowed at all was already decided by validation against
+  # `additionalProperties`.
+  #
+  # Values are passed through unchanged apart from JSON normalisation. Coercing a value to a
+  # domain term is the host's business: this module has no way to know that one tool's string
+  # is another system's enum, and guessing is how a generic layer acquires someone else's
+  # domain.
+  defp normalize_arguments(arguments, schema) when is_map(arguments) do
+    atoms = declared_atoms(schema)
 
-      # Only recognised keys survive, and only as atoms. Previously both the string
-      # and atom form were inserted, and unrecognised string keys were retained --
-      # which let a caller smuggle fields past ProposalService's atom-keyed
-      # Map.put_new and win the collision during stringification.
-      case normalize_argument_key(key) do
-        {:ok, atom_key} -> Map.put(acc, atom_key, normalized_value)
-        :error -> acc
-      end
-    end)
+    for {key, value} <- arguments,
+        {:ok, atom} <- [Map.fetch(atoms, key)],
+        into: %{},
+        do: {atom, to_json_value(value)}
   end
 
-  defp normalize_argument_key(key) when is_atom(key), do: {:ok, key}
-
-  defp normalize_argument_key(key) when is_binary(key) do
-    case key do
-      "action_class" -> {:ok, :action_class}
-      "case_id" -> {:ok, :case_id}
-      "format" -> {:ok, :format}
-      "limit" -> {:ok, :limit}
-      "rationale" -> {:ok, :rationale}
-      "summary" -> {:ok, :summary}
-      "target" -> {:ok, :target}
-      _ -> :error
-    end
-  end
-
-  defp normalize_argument_key(_key), do: :error
-
-  defp normalize_argument_value("action_class", value) when is_binary(value) do
-    case value do
-      "contain" -> :contain
-      "observe" -> :observe
-      "notify_export" -> :notify_export
-      other -> other
-    end
-  end
-
-  defp normalize_argument_value(_key, value) when is_map(value), do: to_json_value(value)
-
-  defp normalize_argument_value(_key, value) when is_list(value),
-    do: Enum.map(value, &to_json_value/1)
-
-  defp normalize_argument_value(_key, value), do: value
-
-  @doc false
-  @spec input_schema_for(atom()) :: map()
-  def input_schema_for(tool_name), do: input_schema(tool_name)
-
-  defp input_schema(:get_latest_alerts) do
-    %{
-      "type" => "object",
-      "properties" => %{
-        "limit" => %{
-          "type" => "integer",
-          "description" => "Maximum number of alert queue entries to return.",
-          "minimum" => 1,
-          "maximum" => 100
-        }
-      },
-      "additionalProperties" => false
-    }
-  end
-
-  defp input_schema(:get_case_timeline) do
-    %{
-      "type" => "object",
-      "properties" => %{
-        "case_id" => %{
-          "type" => "string",
-          "description" => "Case identifier to inspect."
-        }
-      },
-      "required" => ["case_id"],
-      "additionalProperties" => false
-    }
-  end
-
-  defp input_schema(:draft_report) do
-    %{
-      "type" => "object",
-      "properties" => %{
-        "case_id" => %{
-          "type" => "string",
-          "description" => "Case identifier to draft a report for."
-        },
-        "format" => %{
-          "type" => "string",
-          "description" => "Optional report format hint."
-        }
-      },
-      "required" => ["case_id"],
-      "additionalProperties" => false
-    }
-  end
-
-  defp input_schema(:propose_action) do
-    %{
-      "type" => "object",
-      "properties" => %{
-        "case_id" => %{
-          "type" => "string",
-          "description" => "Case identifier for the action request."
-        },
-        "action_class" => %{
-          "type" => "string",
-          "description" => "Action class to propose.",
-          "enum" => ["contain", "observe", "notify_export"]
-        },
-        "target" => %{
-          "type" => "string",
-          "description" => "Target host, identity, or resource."
-        },
-        "rationale" => %{
-          "type" => "string",
-          "description" => "Why the action is being proposed."
-        }
-      },
-      "required" => ["case_id", "action_class", "target"],
-      "additionalProperties" => false
-    }
-  end
-
-  defp input_schema(_tool_name) do
-    %{"type" => "object", "properties" => %{}, "additionalProperties" => true}
+  defp declared_atoms(schema) do
+    schema
+    |> Map.get("properties", %{})
+    |> Map.keys()
+    |> Map.new(fn key -> {key, String.to_atom(key)} end)
   end
 
   defp to_json_value(value) when is_map(value) do
