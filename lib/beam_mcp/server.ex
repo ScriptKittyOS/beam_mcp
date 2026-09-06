@@ -4,7 +4,33 @@
 defmodule BeamMCP.Server do
   alias BeamMCP.Schema
 
-  @moduledoc false
+  @moduledoc """
+  The protocol core: one message in, one response out, no process and no state of its own.
+
+  `handle_message/2` takes a decoded JSON-RPC message and the state from `new/1`, and returns
+  the next state and a response — or `nil` where the protocol defines no reply. A transport
+  supplies the bytes; this module never touches them.
+
+  ## Two eras
+
+  It serves `2026-07-28` and `2025-11-25`, and tells them apart the way the specification says
+  a dual-era server should: a request carrying per-request `_meta` is served statelessly under
+  the modern revision, and an `initialize` request selects legacy semantics. A request naming
+  a revision it does not support gets `UnsupportedProtocolVersionError` (`-32022`) listing
+  what it does.
+
+  ## What the host supplies
+
+      BeamMCP.Server.new(
+        tool_catalog: MyApp.Catalog,        # required, a BeamMCP.ToolCatalog
+        dispatch: &MyApp.Dispatch.call/3,   # required for tools/call
+        server_name: "my-app"               # optional, defaults to "beam_mcp"
+      )
+
+  The server holds no catalog and executes nothing. It advertises the schema a tool's
+  `BeamMCP.ToolSpec` carries and enforces that same schema on the call, so what a client is
+  shown and what it is held to cannot drift apart.
+  """
 
   alias BeamMCP.ToolSpec
 
