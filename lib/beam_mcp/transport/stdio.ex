@@ -40,8 +40,8 @@ defmodule BeamMCP.Transport.Stdio do
     end
   end
 
-  # MCP stdio framing is newline-delimited JSON-RPC. The spec at 2024-11-05 -- the
-  # revision this server advertises -- and every revision since:
+  # MCP stdio framing is newline-delimited JSON-RPC. The spec at 2024-11-05 and every
+  # revision since, including both revisions this server speaks:
   #
   #   "Messages are delimited by newlines, and MUST NOT contain embedded newlines."
   #

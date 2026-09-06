@@ -80,12 +80,25 @@ validator.
 
 ## What it speaks
 
-`initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`, `shutdown`,
-`exit`. Protocol revision **`2024-11-05`**, newline-delimited JSON-RPC over stdio.
+Newline-delimited JSON-RPC over stdio, **dual-era**: it serves both the current revision and
+one legacy revision.
 
-**Revision negotiation is not implemented.** The server advertises one revision and does not
-negotiate; a client asking for another gets this one. That is the next piece of work, and it
-is stated here rather than discovered by a reader.
+| | `2026-07-28` (modern) | `2025-11-25` (legacy) |
+|---|---|---|
+| opens with | any request, or `server/discover` | `initialize` |
+| version travels in | `_meta` on every request | the `initialize` params |
+| session | none; each request stands alone | yes |
+| `ping` | removed from the revision, refused | answered |
+
+`server/discover`, `tools/list`, `tools/call`, `shutdown`, `exit` at both eras; `initialize`
+and `notifications/initialized` at legacy only.
+
+A request naming a revision the server does not support gets `UnsupportedProtocolVersionError`
+(**`-32022`**) listing what it does support. **`2024-11-05` is not supported** — it predates
+the two chosen revisions.
+
+**JSON-RPC batching is refused.** It was added in `2025-03-26` and removed in `2025-06-18`, so
+it is required by exactly one revision of five and by neither of ours.
 
 ## Status
 

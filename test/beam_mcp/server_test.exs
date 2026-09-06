@@ -42,7 +42,9 @@ defmodule BeamMCP.ServerTest do
       Server.handle_message(state, %{"jsonrpc" => "2.0", "id" => 1, "method" => "initialize"})
 
     assert next_state.initialized?
-    assert response["result"]["protocolVersion"] == "2024-11-05"
+    # The supported set is 2026-07-28 + 2025-11-25. An initialize with no requested version
+    # gets the newest legacy revision; 2024-11-05 is no longer offered.
+    assert response["result"]["protocolVersion"] == "2025-11-25"
     assert response["result"]["capabilities"] == %{"tools" => %{"listChanged" => false}}
     assert response["result"]["serverInfo"]["name"] == "beam_mcp"
   end

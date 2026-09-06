@@ -64,7 +64,7 @@ defmodule BeamMCP.Transport.StdioTest do
     assert length(lines) == 1
     assert {:ok, decoded} = Jason.decode(hd(lines))
     assert decoded["id"] == 1
-    assert decoded["result"]["protocolVersion"] == "2024-11-05"
+    assert decoded["result"]["protocolVersion"] == "2025-11-25"
   end
 
   test "responses are newline-delimited and never Content-Length framed" do

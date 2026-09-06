@@ -8,7 +8,15 @@ defmodule BeamMCP.Server do
 
   alias BeamMCP.ToolSpec
 
-  @protocol_version "2024-11-05"
+  # Two revisions, two eras. 2026-07-28 removed the initialize handshake and protocol-level
+  # sessions; 2025-11-25 and earlier open with initialize. The spec calls a server serving
+  # both "dual-era" and fixes the discriminator: modern per-request _meta, or initialize.
+  @modern_version "2026-07-28"
+  @legacy_version "2025-11-25"
+  @supported_versions [@modern_version, @legacy_version]
+
+  @version_meta_key "io.modelcontextprotocol/protocolVersion"
+  @server_info_meta_key "io.modelcontextprotocol/serverInfo"
   @default_server_name "beam_mcp"
   # Read from the application spec rather than restated here. A hardcoded copy beside the one
   # in mix.exs is a transcription defect waiting for the first release that updates one of them.
@@ -44,16 +52,61 @@ defmodule BeamMCP.Server do
   @spec shutdown?(state()) :: boolean()
   def shutdown?(state), do: state.shutdown?
 
-  @spec handle_message(state(), map()) :: {state(), map() | nil}
-  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "initialize"}) do
-    response =
-      result(id, %{
-        "protocolVersion" => @protocol_version,
-        "capabilities" => %{"tools" => %{"listChanged" => false}},
-        "serverInfo" => %{"name" => state.server_name, "version" => @server_version}
-      })
+  @spec handle_message(state(), map() | list()) :: {state(), map() | nil}
+  # JSON-RPC batching was added in 2025-03-26 and removed in 2025-06-18. Neither supported
+  # revision includes it, so a batch is refused rather than half-processed.
+  def handle_message(state, messages) when is_list(messages) do
+    {state,
+     error(nil, -32_600, "Batch requests are not supported at any supported protocol version")}
+  end
 
-    {%{state | initialized?: true}, response}
+  # server/discover is mandatory in 2026-07-28, and on stdio it doubles as the era probe: a
+  # client sends it before it knows what it is talking to. So it is answered whether or not
+  # the request carries modern _meta.
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "server/discover"}) do
+    {state,
+     result(id, %{
+       "protocolVersions" => @supported_versions,
+       "capabilities" => %{"tools" => %{"listChanged" => false}},
+       "serverInfo" => %{"name" => state.server_name, "version" => @server_version}
+     })}
+  end
+
+  # An initialize request selects legacy semantics, whatever else it carries.
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "initialize"} = message) do
+    requested = get_in(message, ["params", "protocolVersion"]) || @legacy_version
+
+    if requested in @supported_versions do
+      response =
+        result(id, %{
+          "protocolVersion" => requested,
+          "capabilities" => %{"tools" => %{"listChanged" => false}},
+          "serverInfo" => %{"name" => state.server_name, "version" => @server_version}
+        })
+
+      {%{state | initialized?: true}, response}
+    else
+      {state, unsupported_version(id, requested)}
+    end
+  end
+
+  # A request carrying modern per-request _meta is served statelessly under 2026-07-28.
+  def handle_message(
+        state,
+        %{"jsonrpc" => "2.0", "id" => id, "_meta" => %{@version_meta_key => version}} = message
+      ) do
+    cond do
+      version not in @supported_versions ->
+        {state, unsupported_version(id, version)}
+
+      # ping was removed in 2026-07-28. The legacy handler must not inherit it.
+      message["method"] == "ping" ->
+        {state, error(id, -32_601, "Method not found: ping")}
+
+      true ->
+        {next, response} = handle_message(state, Map.drop(message, ["_meta"]))
+        {next, modernise(response, state)}
+    end
   end
 
   def handle_message(state, %{"jsonrpc" => "2.0", "method" => "notifications/initialized"}) do
@@ -219,6 +272,37 @@ defmodule BeamMCP.Server do
 
   defp format_reason(reason) when is_binary(reason), do: reason
   defp format_reason(reason), do: inspect(reason)
+
+  defp unsupported_version(id, requested) do
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "error" => %{
+        "code" => -32_022,
+        "message" => "Unsupported protocol version",
+        "data" => %{"supported" => @supported_versions, "requested" => requested}
+      }
+    }
+  end
+
+  # 2026-07-28 requires resultType on every result, and servers SHOULD identify themselves in
+  # each result's _meta. Applied only on the modern path: a legacy result carries neither.
+  defp modernise(%{"result" => payload} = response, state) when is_map(payload) do
+    %{
+      response
+      | "result" =>
+          payload
+          |> Map.put("resultType", "complete")
+          |> Map.put("_meta", %{
+            @server_info_meta_key => %{
+              "name" => state.server_name,
+              "version" => @server_version
+            }
+          })
+    }
+  end
+
+  defp modernise(response, _state), do: response
 
   defp result(id, payload), do: %{"jsonrpc" => "2.0", "id" => id, "result" => payload}
 
