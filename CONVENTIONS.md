@@ -46,6 +46,25 @@ The same rule covers the toolchain a workflow pins: `setup-beam` resolving a giv
 pair on a given runner image is a claim about someone else's infrastructure, and it is
 unverified until observed.
 
+**Observed, and accepted rather than pinned.** The workflow asks for `otp-version: 28` and
+`elixir-version: 1.18`. What CI installs is:
+
+    Installing Erlang/OTP OTP-28.5.0.6 - built on amd64/ubuntu-24.04
+    Using Elixir 1.18.5 (built for Erlang/OTP 27)
+    Erlang/OTP 28 [erts-16.4.0.6]
+    Elixir 1.18.5 (compiled with Erlang/OTP 27)
+
+**An Elixir 1.18.5 build compiled for OTP 27, running on OTP 28.** The gate passes on it.
+
+This is **recorded, not pinned**, and the reason is that pinning is the change which looks
+more rigorous and is worse: Elixir 1.18 publishes no `otp-28` build, so pinning
+`1.18.5-otp-28` would fail to resolve, and moving to an Elixir line that has one is a
+toolchain decision rather than a CI tidy-up. Revisit when the Elixir pin next moves.
+
+The point of writing it down is that the next person to read the workflow sees `otp-version: 28`
+and `elixir-version: 1.18` and would reasonably assume a matched pair. It is not one, it is
+known not to be one, and nothing here depends on it being one.
+
 ## Every "verified" names its command and its exit code
 
 Counts are quoted from command output, never typed fresh. A red is demonstrated before a fix,
