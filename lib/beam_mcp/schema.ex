@@ -59,17 +59,16 @@ defmodule BeamMCP.Schema do
     end
   end
 
+  # Extracted so the reduce body nests two deep rather than three. Same behaviour: a passing
+  # check continues the fold, a failing one halts it carrying the error.
+  defp continue_or_halt(:ok), do: {:cont, :ok}
+  defp continue_or_halt(error), do: {:halt, error}
+
   defp check_properties(arguments, properties) do
     Enum.reduce_while(arguments, :ok, fn {key, value}, :ok ->
       case Map.fetch(properties, key) do
-        {:ok, spec} ->
-          case check_value(key, value, spec) do
-            :ok -> {:cont, :ok}
-            error -> {:halt, error}
-          end
-
-        :error ->
-          {:cont, :ok}
+        {:ok, spec} -> continue_or_halt(check_value(key, value, spec))
+        :error -> {:cont, :ok}
       end
     end)
   end
