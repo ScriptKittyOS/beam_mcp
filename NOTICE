@@ -1,0 +1,16 @@
+beam_mcp
+Copyright 2026 Sudo Apt Holdings LLC
+
+This product includes software developed by Script Kitty LLC.
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file
+for the full terms.
+
+Roles, stated separately because they are separate:
+
+  Sudo Apt Holdings LLC   owns the intellectual property.
+  Script Kitty LLC        built it.
+  Ayla Croft              authored it. ORCID 0009-0008-9457-2160
+
+Third-party dependencies retain their own licenses; see mix.lock and the
+individual package sources for details.
