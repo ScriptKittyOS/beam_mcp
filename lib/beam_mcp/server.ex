@@ -195,15 +195,33 @@ defmodule BeamMCP.Server do
     }
   end
 
+  # An error crossing the wire carries JSON. `structuredContent` gets the term as data so a
+  # client can read a field; `content` gets a sentence a person can read. Neither carries
+  # Elixir syntax: a caller has no reason to know what language this is written in, and no way
+  # to parse its terms.
   defp tool_failure(reason) do
-    message = format_reason(reason)
-
     %{
-      "content" => [%{"type" => "text", "text" => message}],
-      "structuredContent" => %{"error" => message},
+      "content" => [%{"type" => "text", "text" => error_text(reason)}],
+      "structuredContent" => %{"error" => to_json_value(reason)},
       "isError" => true
     }
   end
+
+  defp error_text(reason) when is_binary(reason), do: reason
+
+  defp error_text(%{"tool" => tool, "reason" => detail}), do: "#{tool}: #{detail}"
+
+  defp error_text(reason) when is_map(reason) do
+    reason
+    |> to_json_value()
+    |> Enum.map_join(", ", fn {key, value} -> "#{key}: #{stringify(value)}" end)
+  end
+
+  defp error_text(reason), do: stringify(to_json_value(reason))
+
+  defp stringify(value) when is_binary(value), do: value
+  defp stringify(value) when is_number(value), do: to_string(value)
+  defp stringify(value), do: Jason.encode!(value)
 
   # One lookup governs both paths: a tool is callable exactly when the injected catalog names
   # it, and the spec it returns carries the schema that will be enforced.
@@ -228,7 +246,8 @@ defmodule BeamMCP.Server do
         state.dispatch.(spec.name, args, state.dispatch_opts)
 
       {:error, reason} ->
-        {:error, %{tool: spec.name, reason: "invalid arguments: #{reason}"}}
+        {:error,
+         %{"tool" => Atom.to_string(spec.name), "reason" => "invalid arguments: #{reason}"}}
     end
   end
 
@@ -269,9 +288,6 @@ defmodule BeamMCP.Server do
   defp to_json_value(value) when is_list(value), do: Enum.map(value, &to_json_value/1)
   defp to_json_value(value) when is_atom(value), do: Atom.to_string(value)
   defp to_json_value(value), do: value
-
-  defp format_reason(reason) when is_binary(reason), do: reason
-  defp format_reason(reason), do: inspect(reason)
 
   defp unsupported_version(id, requested) do
     %{

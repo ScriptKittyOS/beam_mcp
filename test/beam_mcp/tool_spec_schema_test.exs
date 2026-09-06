@@ -75,7 +75,8 @@ defmodule BeamMCP.ToolSpecSchemaTest do
     assert resp["result"]["isError"],
            "the server accepted a call that violates the schema its own catalog advertises"
 
-    assert resp["result"]["structuredContent"]["error"] =~ "widget_id"
+    # The error is a JSON object now, not a string: `=~` no longer applies to it.
+    assert resp["result"]["structuredContent"]["error"]["reason"] =~ "widget_id"
   end
 
   test "a call carrying a property the catalog's schema forbids is refused" do

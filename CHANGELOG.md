@@ -57,6 +57,13 @@ fails quietly against the revision most evaluators would try first.
 - Argument keys are derived from the tool's schema; values pass through unchanged, since
   coercing a string to a domain term belongs to the host (`c5da02f`).
 
+### Fixed
+
+- **Error payloads no longer carry `inspect/1` output.** A failed call returned Elixir term
+  syntax — a map literal and a bare atom — to a client with no way to parse it and no reason
+  to know the server's language. `structuredContent` now carries the error as a JSON object
+  and `content` carries a sentence.
+
 ### Removed
 
 - Per-tool `input_schema/1` clauses, `input_schema_for/1`, the hardcoded argument-key
@@ -84,7 +91,6 @@ Each is additive and can be adopted without a breaking change.
 
 - CI has not run against this history at the time of writing; a committed workflow is not a
   working one until a run exists.
-- Error payloads carry `inspect/1` output, so Elixir term syntax reaches the wire. A boundary
-  defect at every revision, and its own slice before publish.
+- Streamable HTTP and the rest of the non-stdio surface (see below).
 - Streamable HTTP, `subscriptions/listen`, MRTR, tasks, authorization, elicitation, sampling
   and roots are not implemented. This is a stdio, tools-only server.
