@@ -33,12 +33,24 @@ jobs:
       - name: every commit in the range carries a Signed-off-by
         run: |
           set -uo pipefail
+          before="${{ github.event.before }}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             range="origin/${{ github.base_ref }}..HEAD"
+            git rev-list --no-merges "$range" > /tmp/commits \
+              || { echo "cannot resolve $range"; exit 1; }
+          elif [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            # A branch's first push has no previous state, so github.event.before is the
+            # all-zeros SHA and before..HEAD is not a range. Every commit reachable from HEAD
+            # is new to the remote on that push, so every one of them is in scope.
+            echo "first push of this branch: checking every commit reachable from HEAD"
+            git rev-list --no-merges HEAD > /tmp/commits \
+              || { echo "cannot list commits from HEAD"; exit 1; }
           else
-            range="${{ github.event.before }}..HEAD"
+            range="$before..HEAD"
+            git rev-list --no-merges "$range" > /tmp/commits \
+              || { echo "cannot resolve $range"; exit 1; }
           fi
-          git rev-list --no-merges "$range" > /tmp/commits || { echo "cannot resolve $range"; exit 1; }
+          echo "commits in scope: $(wc -l < /tmp/commits)"
           fail=0
           while read -r sha; do
             [ -z "$sha" ] && continue
