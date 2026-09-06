@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+
+name: gate
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  gate:
+    name: Gate - quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28"
+          elixir-version: "1.18"
+      - run: mix deps.get
+      - run: ./tools/gate.sh
+
+  dco:
+    name: Gate - DCO sign-off
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: every commit in the range carries a Signed-off-by
+        run: |
+          set -uo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="origin/${{ github.base_ref }}..HEAD"
+          else
+            range="${{ github.event.before }}..HEAD"
+          fi
+          git rev-list --no-merges "$range" > /tmp/commits || { echo "cannot resolve $range"; exit 1; }
+          fail=0
+          while read -r sha; do
+            [ -z "$sha" ] && continue
+            if git log -1 --format='%B' "$sha" | grep -q '^Signed-off-by: '; then
+              echo "  ok   $sha"
+            else
+              echo "  FAIL $sha carries no Signed-off-by"; fail=1
+            fi
+          done < /tmp/commits
+          exit $fail
