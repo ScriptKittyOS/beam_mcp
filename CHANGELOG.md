@@ -9,9 +9,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] — unreleased
 
-### Known, fixed in 0.1.1
+### Fixed
+
+- **`BeamMCP.Server` is documented.** It carried `@moduledoc false`, so hexdocs rendered the
+  package's principal module as hidden and the two warnings below were emitted on every build.
+
+### Was known, now fixed
 
 **Two hexdocs warnings**, reproduced by running `mix docs` rather than taken from the publish
 output:
