@@ -147,6 +147,21 @@ for m in a b; do
   fi
 done
 echo
+echo "=== CAPTURES: the README-claim mutation logs ==="
+echo "  Same treatment as the mutation logs above and for the same reason: reproducing them"
+echo "  needs a mutated README or lib/, which this script must not create in the working tree."
+for m in a b; do
+  f="$L/mutation-readme-$m.txt"
+  [ -f "$f" ] || continue
+  echo "-- mutation-readme-$m.txt --"
+  if marks "$f"; then
+    verdict "mutation-readme-$m.txt" 0 "(banner + code: + stacktrace: + Finished in, all present)" ""
+  else
+    verdict "mutation-readme-$m.txt" 1 "" "(a mark is missing; a filtered capture would look like this)"
+  fi
+done
+echo
+
 echo "=== CAPTURES: the three specification pages, re-fetched and diffed against upstream ==="
 echo "These are the only files whose source lives OUTSIDE the tree, so they are the only"
 echo "ones a diff can check against an independent authority. Grouping them with prose"

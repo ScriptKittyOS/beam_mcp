@@ -3,6 +3,6 @@
   compile                    pass
   test                       pass
   credo                      pass
-  reuse                      pass (19 commentable files)
+  reuse                      pass (20 commentable files)
   licence files              pass
 Gate OK.

@@ -205,3 +205,35 @@ two lane verdicts are recorded in `slices/001b-ping-guard/` as text, and each la
 tree hash it read into `logs/`, so the binding is *checkable by hand* and is *not enforced*.
 Stated plainly rather than implied, because a signoff file that no tool consumes looks like a
 control and is not one.
+
+---
+
+## Appended 2026-09-07 — the version is `0.2.0`, superseding the Version section above
+
+**Owner decision.** The Version section above specifies `0.1.2` and is left exactly as written;
+this note supersedes it rather than rewriting it, per the corrections-are-appended rule.
+
+The reasoning is the one this slice's own `CHANGELOG` entry recorded while still numbered a
+patch: a method that answered now refuses for a client declaring `2025-11-25`, and the same
+version-blind clause stops stamping `resultType` and modern `serverInfo` onto legacy-declared
+results. A consumer can depend on both. For a published package the wire JSON is the API, so
+that is a minor bump and not a patch.
+
+Round-7 scope, fixed before the lanes were dispatched and bounded to exactly this:
+
+1. `mix.exs` — `0.1.2` -> `0.2.0`.
+2. `CHANGELOG.md` — the section heading; the rationale paragraph, which argued for a patch and
+   is now wrong; and the `0.1.1` note, which must say plainly why published versions jump
+   `0.1.0` -> `0.2.0`.
+3. `logs/probe-after.txt` and the sweep re-taken, because `@server_version` is read from
+   `mix.exs` and the archived probe output embeds it.
+4. This note, and the round-7 record in `FINDINGS.md` and `REVIEW.md`.
+
+**Nothing else.** No `lib/`, no `test/`, no change to the `### Changed` heading — the owner took
+the semver argument from that heading, so softening it now that the number agrees with it would
+remove the reasoning that produced the decision.
+
+**Stale `0.1.2` strings elsewhere are deliberate and must stay.** They appear in the twelve
+reviewer-lane reports under `logs/`, which are immutable archives of what each lane read at the
+time, and in this slice's own historical record of rounds 1-6. Editing them would falsify the
+record to make it tidy, which is the failure mode this whole slice is about.
