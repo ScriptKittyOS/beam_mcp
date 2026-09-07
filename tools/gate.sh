@@ -25,6 +25,11 @@ step "compile"  mix compile --warnings-as-errors --force
 step "test"     mix test
 step "credo"    mix credo --strict
 
+# `optional: true` is a resolution flag, not a compilation one: the HTTP transport compiles here,
+# where plug is present, and broke every stdio-only consumer until round 1. Asserted on the
+# artefact in a throwaway consumer project, because a compile that "succeeded" is not evidence.
+step "optional deps" bash tools/probe_optional_deps.sh
+
 # REUSE: every tracked file that can carry a comment carries an SPDX identifier.
 # Derived from the tracked set, never from a hand list.
 missing=$(git ls-files -- '*.ex' '*.exs' '*.sh' '*.yml' | while read -r f; do

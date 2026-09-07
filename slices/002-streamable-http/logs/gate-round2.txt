@@ -1,0 +1,16 @@
+# Gate after the round-2 class fixes
+
+2026-09-07T13:13:24-04:00
+
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  reuse                      pass (22 commentable files)
+  licence files              pass
+Gate OK.
+
+# The optional-dependency probe, run alone, with its artefact assertions
+pass: consumer compiles without plug; Server present, Transport.HTTP absent

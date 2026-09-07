@@ -1,0 +1,23 @@
+### RED 1: is there an HTTP endpoint in this package today?
+### Asked of the tree, not of memory.
+
+--- every module the package ships ---
+lib/beam_mcp:
+schema.ex
+server.ex
+tool_catalog.ex
+tool_spec.ex
+transport
+
+lib/beam_mcp/transport:
+stdio.ex
+
+--- any Plug, Bandit, or HTTP dependency? ---
+  none in mix.exs deps
+
+--- anything answering HTTP anywhere in lib/? ---
+  no HTTP-serving code in lib/
+
+--- so: a client POSTing to /mcp reaches nothing. Demonstrated by asking the
+--- package for the module the spec's transport would live in:
+    Code.ensure_loaded?(BeamMCP.Transport.HTTP) -> false

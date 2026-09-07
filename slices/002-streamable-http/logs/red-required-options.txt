@@ -1,0 +1,12 @@
+### RED 3 / GREEN 3: wiring the Plug without the required options must fail AT INIT,
+### not at request time. This is the "inescapable, not documented" contract: a host
+### cannot start without deciding who may call and which origins are legitimate.
+
+  no :authorize, no :allowed_origins
+      -> ArgumentError at init: BeamMCP.Transport.HTTP requires an :authorize option, and it has no default.
+  only :allowed_origins
+      -> ArgumentError at init: BeamMCP.Transport.HTTP requires an :authorize option, and it has no default.
+  only :authorize
+      -> ArgumentError at init: BeamMCP.Transport.HTTP requires an :allowed_origins option, and it has no default.
+  both supplied
+      -> INITIALISED (no failure)

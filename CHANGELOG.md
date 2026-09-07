@@ -9,7 +9,130 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] — unreleased
+## [0.3.0] — unreleased
+
+### Added — stateless Streamable HTTP transport
+
+`BeamMCP.Transport.HTTP` is a `Plug` serving `2026-07-28` at one endpoint. Every request stands
+alone: **no sessions, no `Mcp-Session-Id`, no SSE resumability**, all three removed from the
+transport in that revision. `handle_message/2` gains no clause — HTTP is a second caller of the
+existing core.
+
+`plug` and `bandit` are **optional** dependencies, so a host using only stdio does not pull an
+HTTP server into its tree.
+
+**Two options have no defaults, and a host that omits either cannot start.**
+
+    Bandit.child_spec(
+      plug: {BeamMCP.Transport.HTTP,
+             tool_catalog: MyApp.Catalog,
+             dispatch: &MyApp.Dispatch.call/3,
+             authorize: &MyApp.Auth.check/1,                  # required, no default
+             allowed_origins: ["https://app.example.com"]},   # required, no default
+      port: 4000, ip: {127, 0, 0, 1})
+
+This package cannot decide who may call your tools — it has no view of your identity model, and
+deciding for you would be claiming something it cannot keep. But a Plug that serves `tools/call`
+to anyone who can reach the port is a confused-deputy surface, and "the host should have
+authenticated" is documentation rather than a control. **A required argument with no default is
+a contract**, because you cannot start without answering it. To accept every caller, say so
+explicitly: `authorize: fn _conn -> :ok end`.
+
+`allowed_origins` exists because the specification makes validating `Origin` a MUST, to prevent
+DNS rebinding. `:any` is available and must be chosen deliberately.
+
+**What the transport enforces**, each a MUST of the transport specification:
+
+| requirement | behaviour |
+|---|---|
+| `MCP-Protocol-Version` on every POST | missing -> `400`, `-32020` |
+| header must match the body's `_meta` | mismatch -> `400`, `-32020` |
+| `Mcp-Method` on every request (**not** on notifications, which the revision leaves undefined) | missing or mismatched -> `400`, `-32020` |
+| `Mcp-Name` on `tools/call` | missing or mismatched -> `400`, `-32020` |
+| `Mcp-Param-{Name}` mirroring a tool argument | mismatched or naming an absent argument -> `400`, `-32020` |
+| an encoded header value is decoded before comparison | `=?base64?…?=` on `Mcp-Name` / `Mcp-Param-{Name}` |
+| unsupported version | `400`, `-32022` |
+| invalid `Origin` | `403` |
+| unknown **method** | `404`, `-32601` |
+| unknown **tool** | `200` with `-32601` in the body — a live endpoint, a bad argument |
+| non-POST (a SHOULD, not a MUST) | `405` with `Allow: POST` |
+
+**Every header is validated in all of its values, not the first.** A duplicated header — a
+satisfying value followed by a hostile one — is the same smuggling the MUST above exists to
+stop, and the first version of this transport read only the first value of four of them. There
+is now one read path, `header_values/2`, and one mutant per header proving each is pinned
+(`logs/mutation.md`).
+
+`Mcp-Method` and `Mcp-Name` are validated against the body because the specification says why:
+*"a load balancer routing on the header value while the MCP server executes based on the body
+value."* An earlier draft of this table omitted both while calling itself a list of MUSTs, and a
+reviewer demonstrated the consequence — `Mcp-Method: tools/list` with a `tools/call` body
+returned `200` and reached dispatch.
+
+**What this closes.** On stdio a `tools/call` with no handshake and no `_meta` is served —
+defensible there, because whoever can write to that transport already has the host's privileges.
+Over HTTP that argument does not hold, and the specification removes the case: the version header
+is mandatory, so a request with no era established is *malformed* and refused as a protocol
+matter rather than a policy choice.
+
+### Added — `ttlMs` and `cacheScope` on `tools/list`
+
+`2026-07-28` requires both via `CacheableResult`. No release before this one emitted them.
+
+Neither is the package's to invent: `ttlMs` is a freshness hint about a catalog the host owns,
+and `cacheScope` is a disclosure decision — `"public"` lets shared intermediaries cache a tool
+list, and a tool list can be sensitive. Both are host-supplied through `tools_ttl_ms:` and
+`tools_cache_scope:`, and **the default is the non-permissive one** (`0` and `"private"`). A
+package that picked the permissive default on a host's behalf would be making a disclosure
+decision it cannot keep.
+
+### Changed — the recommended dependency requirement
+
+`README.md` now recommends `{:beam_mcp, "~> 0.3.0"}`. `~> 0.3` admits `0.4.0`, and this package
+documents wire breaks at the **minor** position while it is `0.x`.
+
+### Fixed — two failure modes found by measuring rather than by reasoning
+
+- **A failure in the host's dispatch answered with an empty `500`.** It now answers
+  `-32603 Internal error` **carrying no detail**; the reason still reaches the logger, where the
+  host can see it. Leaking it to an HTTP caller would hand a possibly-unauthenticated party the
+  host's internals.
+
+  The first fix used `rescue`, which catches raises only. A reviewer showed `throw` and `exit`
+  still producing the bare empty `500` this entry claimed had been eliminated — and `exit` is
+  the shape that matters most, because **a `GenServer.call` timeout exits**, which is what a
+  host calling a backend hits first. Now `catch`, covering all three.
+
+- **The `403` for a refused caller carried the host's refusal reason.** `authorize/1` returns
+  `{:error, term}`, and that term was `inspect`ed into the response body — on the one branch
+  that is by definition unauthenticated. A reviewer recovered a planted bearer token and a
+  database URL from it. The reason now goes to the log; the caller is told only `Forbidden`.
+
+- **A non-map `_meta` crashed outside the rescue**, giving the same bare empty `500`. `_meta` is
+  any JSON value once the body is an object, and reaching into a string raised in `Access.get/3`
+  before the handler was entered. Now a `400`.
+
+- **Five error paths poisoned the next request on a keep-alive connection**, and the first
+  diagnosis of this was wrong in a way worth recording. It was reported here as a `413`
+  problem. A reviewer could not reproduce it on `413` — and was right, because `413` already
+  carried the updated connection out. The real defect was one level up: `with/else` clauses
+  cannot see bindings made inside the `with`, so **every refusal after the body was read
+  answered on the pre-read connection**. Bandit then framed the next request's bytes as this
+  one's unread body, and the following request hung.
+
+  Affected: missing protocol header, header mismatch, unsupported version, invalid JSON and
+  non-object JSON. It is **size-dependent** — a few dozen bytes arrive in a single adapter read
+  and look correct — which is why every test and every row of the first resilience table passed
+  while five paths were broken. Found with a 16 KB body and two requests on one socket.
+
+  Now every step returns the connection it was handed and every refusal answers on that one.
+  Verified over a raw socket at 16 KB: all five paths answer, and the following request on the
+  same connection returns `200`.
+
+Request bodies are capped at 1 MiB. Without a cap, a body is an unbounded allocation an
+unauthenticated caller controls.
+
+## [0.2.0] — 2026-09-07
 
 ### Changed — two fields are REMOVED from results for legacy-declared requests
 

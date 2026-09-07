@@ -67,7 +67,9 @@ defmodule BeamMCP.Server do
           initialized?: boolean(),
           server_name: String.t(),
           shutdown?: boolean(),
-          tool_catalog: module()
+          tool_catalog: module(),
+          tools_cache_scope: String.t(),
+          tools_ttl_ms: non_neg_integer()
         }
 
   @spec new(keyword()) :: state()
@@ -78,7 +80,15 @@ defmodule BeamMCP.Server do
       initialized?: false,
       server_name: Keyword.get(opts, :server_name, @default_server_name),
       shutdown?: false,
-      tool_catalog: Keyword.fetch!(opts, :tool_catalog)
+      tool_catalog: Keyword.fetch!(opts, :tool_catalog),
+      # 2026-07-28 requires ttlMs and cacheScope on tools/list results. Neither is the
+      # package's to invent: ttlMs is a freshness hint about a catalog the host owns, and
+      # cacheScope is a disclosure decision -- "public" lets shared intermediaries cache a
+      # tool list, and a tool list can be sensitive. So both are supplied, and the default
+      # is the NON-permissive one, because a package that picks the permissive default on a
+      # host's behalf has made a disclosure decision it cannot keep.
+      tools_ttl_ms: Keyword.get(opts, :tools_ttl_ms, 0),
+      tools_cache_scope: Keyword.get(opts, :tools_cache_scope, "private")
     }
   end
 
@@ -171,7 +181,17 @@ defmodule BeamMCP.Server do
 
   def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "tools/list"}) do
     tools = Enum.map(state.tool_catalog.all(), &tool_definition/1)
-    {state, result(id, %{"tools" => tools})}
+
+    # CacheableResult: 2026-07-28 requires both fields on tools/list. They are carried at
+    # both eras rather than only the modern one -- 2025-11-25 permits any result structure,
+    # so their presence is harmless there, while making them conditional would put a second
+    # version-dependent branch in a clause that has already been the subject of one defect.
+    {state,
+     result(id, %{
+       "tools" => tools,
+       "ttlMs" => state.tools_ttl_ms,
+       "cacheScope" => state.tools_cache_scope
+     })}
   end
 
   def handle_message(

@@ -1,0 +1,14 @@
+### KEEP-ALIVE: every error path must answer AND leave the connection usable.
+### Raw socket, two requests on one connection, 16 KB bodies -- the defect is size-dependent
+### and a few dozen bytes arrive in one adapter read, which is why the unit tests missed it.
+
+
+12:48:49.567 [info] Running BeamMCP.Transport.HTTP with Bandit 1.12.5 at 127.0.0.1:4321 (http)
+Two requests on ONE keep-alive socket. req2 is always a well-formed tools/list.
+A 16 KB body is used because the defect is size-dependent: small bodies arrive in one
+adapter read and mask it, which is why every unit test passed while five paths were broken.
+  400 bad JSON (16 KB)               req1: HTTP/1.1 400 Bad Request   req2: HTTP/1.1 200 OK
+  400 non-object JSON (16 KB)        req1: HTTP/1.1 400 Bad Request   req2: HTTP/1.1 200 OK
+  400 _meta not a map (16 KB)        req1: HTTP/1.1 400 Bad Request   req2: HTTP/1.1 200 OK
+  400 header mismatch (16 KB)        req1: HTTP/1.1 400 Bad Request   req2: HTTP/1.1 200 OK
+  200 baseline (16 KB)               req1: HTTP/1.1 200 OK            req2: HTTP/1.1 200 OK
