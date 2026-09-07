@@ -1,0 +1,31 @@
+### EVERY MUTANT IN THIS SLICE, RE-SCORED ON THE TREE THAT SHIPS, TWICE.
+###
+### Slice 002 round 7's blocker was a table headed 'on the tree that ships' whose scoring
+### run was a smaller tree. This is that table, produced by the run shown below rather than
+### carried forward from the round each mutant was first scored in.
+###
+### TWICE, and that is not belt and braces. The first attempt at this table scored Mc2 as
+### KILLED. It is a SURVIVOR: a 700 ms first-byte window in the Bandit harness expired
+### under the load of the scoring loop itself, the 9 MB test failed on an empty buffer, and
+### a surviving mutant read as killed. A flake that makes a table read all-killed is the
+### failure this whole exercise exists to catch, so the harness was fixed (a generous
+### first-byte timeout, a short quiet window after data starts) and the set is run twice to
+### show the numbers are the code's and not the machine's.
+###
+### Each mutant's own log holds its diff against the pristine file, so every one is shown
+### applied rather than reported applied. applied=1 below is that diff's presence.
+### Command, per mutant:  $S/mut.sh <name>
+
+HEAD: 11e0b7a9a680729ea402fd463fea57e055b1a2bb
+tree: c504d36db97a22bc745c157c7d2e68e3d98479a4  (working tree also carries the harness fix above)
+
+mutant     applied  pass 1                                  pass 2                   
+M13rev     1        158 tests, 1 failure     TEST_EXIT=2    158 tests, 1 failure     TEST_EXIT=2
+M2always   1        158 tests, 1 failure     TEST_EXIT=2    158 tests, 1 failure     TEST_EXIT=2
+M2never    1        158 tests, 0 failures    TEST_EXIT=0    158 tests, 0 failures    TEST_EXIT=0
+Mc2        1        158 tests, 0 failures    TEST_EXIT=0    158 tests, 0 failures    TEST_EXIT=0
+Mc3        1        158 tests, 2 failures    TEST_EXIT=2    158 tests, 2 failures    TEST_EXIT=2
+Md1        1        158 tests, 9 failures    TEST_EXIT=2    158 tests, 9 failures    TEST_EXIT=2
+Md2        1        158 tests, 2 failures    TEST_EXIT=2    158 tests, 2 failures    TEST_EXIT=2
+Mr1        1        158 tests, 4 failures    TEST_EXIT=2    158 tests, 4 failures    TEST_EXIT=2
+Mr2        1        158 tests, 3 failures    TEST_EXIT=2    158 tests, 3 failures    TEST_EXIT=2

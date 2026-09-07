@@ -53,6 +53,8 @@ mattered, the verdict says so.
 | 1 | b | `1d27f1a` | 2 (B1, B2) | 1 (B3) | changes required, made |
 | 2 | a | `bae1fca` | — | — | no changes required |
 | 2 | b | `bae1fca` | 3 (B4, B5, B6) | — | changes required, made |
+| 3 | a | `c504d36` | 1 (C1) | — | changes required, made |
+| 3 | b | `c504d36` | 1 (C2) | — | changes required, made |
 
 ### Round 1 — three record defects in code that behaves correctly
 
@@ -129,18 +131,82 @@ away from the code -- arriving at the record and staying there.
 
 Gate at round 2 close: `logs/gate-round2.txt`, all eight step lines `pass`, `GATE_EXIT=0`.
 
+### Round 3 — a flake made a survivor score as killed
+
+Both lanes read `11e0b7a`, tree `c504d36`. Round 3's job was the one slice 002 round 7 named:
+every mutant in this slice had been scored in the round that produced it, at 147, 156 or 158
+tests, and a count belonging to a smaller tree is a label rather than a measurement. So the whole
+set was re-run on the final tree.
+
+**C1, lane a — and it is the sharpest finding of the three rounds.** The first re-score scored
+`Mc2` as **KILLED**. `Mc2` is a **SURVIVOR**. The failure was not the mutant: it was the Bandit
+harness's 9 MB case failing on an empty receive buffer, because `drain/2` used one 700 ms window
+for every read and the upload had not finished inside it under the load of the scoring loop
+itself.
+
+`CONVENTIONS.md` says a test written so the table reads all-killed is worse than the survivor,
+because it looks like evidence. **A flaky harness produces that same false table with nobody
+writing a dishonest test.** The number simply reads better than the truth, in the direction
+nobody checks. Had the set not been run twice, this slice's record would have claimed a pinned
+check that is not pinned — which is the exact failure the record exists to prevent, arriving by
+a route no rule in `CONVENTIONS.md` currently names.
+
+Fixed in the harness rather than by deleting the test: a generous first-byte timeout
+(`@first_byte_ms 10_000`), bounded by how long the client takes to finish writing, then the short
+quiet window (`@quiet_ms 700`) that distinguishes "still holding the connection" from "done".
+Demonstrated stable rather than declared fixed: ten consecutive runs of the Bandit file, all
+`9 tests, 0 failures` (`logs/flake-check-bandit.txt`), and the full mutation set run twice
+end to end.
+
+**The table, on the tree that ships, twice** (`logs/mutation-round3.txt`, with each mutant's diff
+against the pristine file in its own log):
+
+    mutant     applied  pass 1                  pass 2
+    M13rev     1        158 tests, 1 failure    158 tests, 1 failure
+    M2always   1        158 tests, 1 failure    158 tests, 1 failure
+    M2never    1        158 tests, 0 failures   158 tests, 0 failures
+    Mc2        1        158 tests, 0 failures   158 tests, 0 failures
+    Mc3        1        158 tests, 2 failures   158 tests, 2 failures
+    Md1        1        158 tests, 9 failures   158 tests, 9 failures
+    Md2        1        158 tests, 2 failures   158 tests, 2 failures
+    Mr1        1        158 tests, 4 failures   158 tests, 4 failures
+    Mr2        1        158 tests, 3 failures   158 tests, 3 failures
+
+`Md1` and `Md2` each gained a failure against their round-1 scores. The extra in both is the
+release commit's new README-claim test, which is the README rule working: a claim added in one
+commit is pinned by a test that dies with the behaviour.
+
+**C2, lane b.** Two comments written by this slice carried counts from the tree they were written
+on — `tool_annotations/2`'s "156 tests, 0 failures" and the deleted-stand-in block's "147". Every
+verdict in them still held; only the numbers were false, which is the version of this defect that
+is hard to see. Both now cite the round-3 table and quote 158. The round-1 verdict and the (c)
+and (d) commit messages keep their original counts, because a round's record is a record of what
+that round measured and backfilling it would break the rule the correction exists to serve.
+
+Gate at round 3 close: `logs/gate-round3.txt`, all eight step lines `pass`, `GATE_EXIT=0`.
+
+### The three rounds, in one line
+
+Seven blocking findings, **none of them in what the code does**: a justification nobody measured,
+an off-by-one in a derived population, a derivation command that stopped working, a review
+claimed that had not happened, an unresolvable path, an abridged quotation, and a flake that made
+a survivor read as killed. Slice 002 recorded the failure moving one level away from the code
+each round. In this slice it started at the record and stayed there.
+
 ## Open, recorded rather than fixed
 
 **1. `check_annotations/2` inside `host_call/1` is unpinned, and deliberately so.** `Mc2` --
-the spec read and schema walk inside, the validity check outside -- survives at 156 tests, 0
-failures (`logs/mutation-c-Mc2.txt`). Reaching a difference needs a `properties` map whose KEY
+the spec read and schema walk inside, the validity check outside -- survives at **158 tests, 0
+failures, twice, on the tree that ships** (`logs/mutation-round3.txt`; the round-1 score of
+156/0 in `logs/mutation-c-Mc2.txt` was against the smaller tree of that round, and the first
+re-score read it as killed on a harness flake -- see round 3). Reaching a difference needs a `properties` map whose KEY
 has no `String.Chars` implementation *and* a type offence or a name collision, so that
 `annotation_detail/1` interpolates it. No JSON-derived schema can produce that. Pinning it would
 mean a test constructing a schema no host can write, which is an implementation detail wearing a
 test's clothes. Recorded as a survivor with the argument, per `CONVENTIONS.md`.
 
-**2. `fault_response/4`'s re-raise branch is still unpinned.** `M2never` survives at 147 tests,
-0 failures (`logs/mutation-c-M2never.txt`), unchanged by this slice and scoped out of it by the
+**2. `fault_response/4`'s re-raise branch is still unpinned.** `M2never` survives at 158 tests,
+0 failures, twice, on the tree that ships (`logs/mutation-round3.txt`), unchanged by this slice and scoped out of it by the
 owner. Detecting it needs a non-500 `:plug_status` exception from code that is not the host's --
 the adapter's read path alone. This slice stands up the Bandit-backed instrument that could
 close it (`test/beam_mcp/transport/http_bandit_test.exs`) and does not use it for this, because
@@ -183,3 +249,10 @@ drains the body and the second pipelined request IS answered
 above the adapter's 8_000_000-byte drain cap the connection is dropped with nothing said, and
 below it the server reads megabytes for a caller it refused -- but the symptom named for it is
 not the one this adapter shows.
+
+**7. The Bandit harness's timing is a property of the machine, not of the code.** `drain/2` now
+waits up to 10 s for a first byte and 700 ms of quiet after that. Those are generous on this
+machine and were flaky at 700 ms flat under load; a slower machine or a busier CI runner could
+find a new edge. The failure mode is a false red on the 9 MB case rather than a false green,
+which is the safe direction, but it is a timing dependency in a suite that otherwise has none
+and it is written down rather than left to be rediscovered.

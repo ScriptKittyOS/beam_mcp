@@ -117,8 +117,22 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
   # `:closed` means the server ended the connection. `:open` means it is still holding it --
   # which, for a refused request with an unfinished body, means it is still draining.
+  #
+  # TWO TIMEOUTS, AND THE FIRST ONE IS WHY. A single 700 ms window made the 9 MB case FLAKY:
+  # under load the upload had not finished before the window expired, `drain/2` returned an
+  # empty buffer, and the test failed on a race rather than on the behaviour. It surfaced as a
+  # SURVIVING mutant scoring as KILLED in a re-scoring run, which is the worst way for a flake
+  # to present itself -- a table reading all-killed because a test failed for the wrong reason.
+  # So: wait generously for the FIRST byte, which is bounded by however long the client takes
+  # to finish writing, and only then use the short quiet window that distinguishes "the server
+  # is holding this connection" from "the server is done".
+  @first_byte_ms 10_000
+  @quiet_ms 700
+
   defp drain(sock, acc) do
-    case :gen_tcp.recv(sock, 0, 700) do
+    timeout = if acc == "", do: @first_byte_ms, else: @quiet_ms
+
+    case :gen_tcp.recv(sock, 0, timeout) do
       {:ok, data} -> drain(sock, acc <> data)
       {:error, :timeout} -> {acc, :open}
       {:error, :closed} -> {acc, :closed}
