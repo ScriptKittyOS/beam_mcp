@@ -691,15 +691,30 @@ if Code.ensure_loaded?(Plug) do
       do_dispatch(conn, message, opts)
     rescue
       exception ->
-        # Same rule as call/2's, through the same function. This rescue is kept inside that one
-        # only because it knows `message["id"]` by now and a crash before decoding does not --
-        # and a second copy of the rule is how the status-swallowing regression survived being
-        # fixed in the outer one.
-        fault_response(conn, exception, __STACKTRACE__, message["id"])
+        host_fault(conn, :error, exception, __STACKTRACE__, message["id"])
     catch
       kind, reason ->
-        Logger.error(Exception.format(kind, reason, __STACKTRACE__))
-        send_json(conn, 500, error(message["id"], -32_603, "Internal error"))
+        host_fault(conn, kind, reason, __STACKTRACE__, message["id"])
+    end
+
+    # NOT call/2's rule, and what separates them is WHOSE exception it is.
+    #
+    # call/2's rescue spans the transport's own machinery, where a :plug_status means the SERVER
+    # is signalling -- Bandit raises Bandit.HTTPError with :request_timeout for a read timeout
+    # and its pipeline turns that into a 408. This rescue spans the HOST's code, and an
+    # exception out of a host tool carries no such authority however it happens to be annotated.
+    #
+    # Routing both through fault_response/4 let a host tool choose the HTTP status of a JSON-RPC
+    # call and leave the envelope altogether: `raise Plug.BadRequestError` in a tool answered a
+    # bare adapter 400 carrying no error object, on a path where the protocol requires one.
+    # Every exception, throw and exit out of the host is therefore -32603 inside the envelope,
+    # with the id this rescue is placed here to know.
+    #
+    # rescue and catch share this function rather than repeating it, because a second copy of a
+    # rule is how the status-swallowing regression survived being fixed in the first one.
+    defp host_fault(conn, kind, reason, stacktrace, id) do
+      Logger.error(Exception.format(kind, reason, stacktrace))
+      send_json(conn, 500, error(id, -32_603, "Internal error"))
     end
 
     defp do_dispatch(conn, %{"method" => method} = message, _opts)
