@@ -1141,6 +1141,23 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert body!(conn)["error"]["message"] == "Forbidden"
     end
 
+    test "a fault-shaped tuple tagged with another module is not our sentinel either" do
+      # The collision fix has two halves -- five elements AND the module tag -- and only the
+      # width was pinned: relaxing both consumers to `{_mod, :host_fault, ...}` kept the suite
+      # green. The tag is what makes the sentinel private, so it gets its own anchor.
+      o =
+        opts(
+          authorize: fn _conn ->
+            {SomeOtherModule, :host_fault, :error, %RuntimeError{message: "x"}, []}
+          end
+        )
+
+      conn = post(call_body(%{}), call_headers([]), o)
+
+      assert conn.status == 403
+      assert body!(conn)["error"]["message"] == "Forbidden"
+    end
+
     test "an exception with no status of its own, raised outside host_call/1, keeps the envelope" do
       # This drives `call/2`'s rescue and `fault_response/4`'s answer branch, which lost their
       # only cover when the assert_raise stand-in was deleted: mutants making fault_response/4
@@ -1164,6 +1181,14 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert conn.resp_body != ""
       assert body!(conn)["error"]["code"] == -32_603
       assert body!(conn)["jsonrpc"] == "2.0"
+
+      # `id: null` is what proves this went through call/2's rescue rather than
+      # check_param_headers/4's fault branch, which answers with the request's id. Without it,
+      # moving `annotations(spec.input_schema)` inside host_call/1 -- this module's own stated
+      # discipline for host territory -- reroutes the test and disarms the mutant it exists to
+      # kill, silently. Measured: that refactor plus the always-re-raise mutant is green
+      # without this line.
+      assert body!(conn)["id"] == nil
     end
 
     # DELETED, AND THE GAP IS RECORDED RATHER THAN REFILLED WITH A STAND-IN.

@@ -5,11 +5,17 @@ defmodule BeamMCP.ReadmeClaimsTest do
   @moduledoc """
   The README claims listed here are pinned to the sentences they quote.
 
-  `CONVENTIONS.md`: every claim listed in this file is pinned to the sentence it quotes; a claim
-  not on the list is not pinned. That is the rule as it stands, and the narrower wording is the
-  point -- an earlier version of both that rule and this moduledoc said *every* behavioural claim
-  in the README was pinned, which promised a completeness no mechanism here delivers. Nothing
-  enumerates the README's claims and proves each has a test.
+  **The rule and this file disagree, and the rule is the one that stands.** `CONVENTIONS.md`
+  says "Every behavioural claim in it is pinned by a test that runs." What this file delivers is
+  narrower: every claim LISTED here is pinned to the sentence it quotes, and nothing enumerates
+  the README's claims to prove each has a test.
+
+  An earlier version of this moduledoc said the rule had been narrowed to match. It had not --
+  `git log -S` finds the broad wording added once, in the commit that wrote it, and never
+  changed -- so that sentence described a reconciliation that never happened and made this file
+  look complete. The gap is real and is stated rather than legislated away: closing it means
+  either a mechanism that derives the README's claim set, or an owner decision to narrow the
+  rule.
 
   So this file catches a listed claim that **moves or disappears**. It does not catch a claim
   **added without a test**, nor one **contradicted by the prose around it** while the quoted
@@ -381,6 +387,12 @@ defmodule BeamMCP.ReadmeClaimsTest do
       #    pin-the-class-not-the-string argument: if CONVENTIONS.md were later added to the
       #    package, this fails rather than leaving the README asserting the opposite.
       claims("not shipped in the package and so is linked rather than named")
+
+      # 3. Round 6 rewrote the opening sentence to name both transports -- a behavioural claim,
+      #    added by the very commit that pinned the two above. Pinned now: the third round
+      #    running in which this rule has caught the commit citing it.
+      claims("two transports")
+      claims("a stateless Streamable HTTP `Plug`")
 
       files = Mix.Project.config()[:package][:files]
       refute "CONVENTIONS.md" in files

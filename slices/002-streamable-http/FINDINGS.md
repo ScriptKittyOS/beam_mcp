@@ -153,3 +153,39 @@ Pre-existing, not a round-5 regression: it applies equally to the `403` for a ba
 no misframing, no smuggling — which is why it is filed rather than blocking.
 `read_body_bounded/1`'s `413` already calls `close_after/1`; the pre-read refusals could do the
 same. Same family as round 1's keep-alive finding.
+
+## Round 7 — the code was sound; the records about it were not
+
+Lane v1 read tree `3fd986f2` and found **no defect in `lib/`**. Both blockers were
+record-integrity defects, in the round whose entire subject was record integrity.
+
+**1. The re-archived docs probe recorded the gate red on the shipping tree.** Its restored
+section read `docs pass` beside `GATE_EXIT=1`, which no re-run could reproduce. The cause: when
+that probe ran, credo was red on nested-module test fixtures — fixed later in the same commit —
+and the archive was piped through `grep`, so the filter hid the `credo FAIL` line and left a
+passing step next to a failing exit with nothing to explain it. Two defects in one file: the
+exit code did not belong to the run as shown, and **a filtered transcript is not a verbatim
+archive.** Re-run captured whole.
+
+**2. `mutation-round6.txt` was headed "on the tree that ships" and was scored at 136 tests.**
+The shipping tree was 137 — the same commit added a test to `readme_claims_test.exs` after the
+table was produced. All five mutants did die and every failure count was right; only the label
+was false. Re-run at 138 in `logs/mutation-round7.txt`, with three mutants the round-6 set did
+not cover.
+
+**The pattern, seven rounds in.** Rounds 1-4: a fix reintroducing a defect. Round 5: fixes
+correct, anchors unable to move. Round 6: anchors fixed, records about them wrong. The failure
+keeps moving one level away from the code — defect, then test, then record — and at each level
+the same rule catches it: derive the population, quote the count, capture the whole output.
+
+Three anchors that could not move, found this round and now killed (`logs/mutation-round7.txt`):
+
+    M13      annotations/1 moved inside host_call/1      round 6: SURVIVED
+    M13_M2   ...plus fault_response always re-raises     round 6: SURVIVED
+    M10full  consumers relax the module tag              round 6: SURVIVED
+
+M13 is the sharp one: moving `annotations(spec.input_schema)` inside `host_call/1` is this
+module's *own stated discipline* for host territory, and doing it rerouted the round-6 test and
+disarmed the mutant it existed to kill — round 5's defect reproduced one refactor away, inside
+the test written to fix round 5's defect. Closed by asserting the `id`, which is the only thing
+distinguishing the two routes.

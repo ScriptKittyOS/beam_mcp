@@ -1,0 +1,46 @@
+### Round 7 -- the anchors scored by mutation, on the tree that ships.
+###
+### The round-6 version of this file was headed 'on the tree that ships' and was scored at
+### 136 tests. The shipping tree was 137: the same commit added a test to
+### readme_claims_test.exs after the table was produced. All five mutants did die -- only the
+### label was false -- but a table that names the wrong tree cannot be re-derived, so it is
+### re-run here. Round 7 lane v1 found it.
+###
+### Each mutant is applied to lib/, compiled --warnings-as-errors --force first so a compiler
+### kill is never scored as a test kill, then measured with mix test.
+
+BASELINE:
+138 tests, 0 failures
+
+--- M8 ---
+mutant: mirrored_params/2 swallows the host fault to %{}
+138 tests, 2 failures
+
+--- M6 ---
+mutant: check_param_headers/4 loses its fault case
+138 tests, 2 failures
+
+--- M2 ---
+mutant: fault_response/4 always re-raises (the bodyless-500 shape)
+138 tests, 1 failure
+
+--- M3 ---
+mutant: host_call/1 loses its catch (throw/exit lose the id)
+138 tests, 1 failure
+
+--- M4 ---
+mutant: authorize/2 loses its fault clause
+138 tests, 2 failures
+
+--- M13 ---
+mutant: annotations/1 moved INSIDE host_call/1 (reroutes the data fault)
+138 tests, 1 failure
+
+--- M13_M2 ---
+mutant: M13 ...
+mutant: ... plus fault_response/4 always re-raises
+138 tests, 1 failure
+
+--- M10full ---
+mutant: consumers relax the module tag (width kept)
+138 tests, 1 failure
