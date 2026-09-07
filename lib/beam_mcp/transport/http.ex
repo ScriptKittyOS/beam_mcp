@@ -587,9 +587,7 @@ if Code.ensure_loaded?(Plug) do
     defp mirrored_params(%{"method" => "tools/call"} = message, opts) do
       with name when is_binary(name) <- param(message, "name"),
            catalog when not is_nil(catalog) <- opts.server_opts[:tool_catalog],
-           {:ok, spec} <- host_call(fn -> ToolCatalog.fetch(catalog, name) end),
-           entries = annotations(spec.input_schema),
-           :ok <- check_annotations(name, entries) do
+           {:ok, entries} <- host_call(fn -> tool_annotations(catalog, name) end) do
         entries
       else
         # A host catalog that RAISES is not a catalog with no such tool, and collapsing the two
@@ -607,6 +605,34 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp mirrored_params(_message, _opts), do: []
+
+    # EVERYTHING THE HOST SUPPLIES IS READ INSIDE `host_call/1`, and the boundary is the whole
+    # point of this function existing rather than the three steps sitting in the `with` above.
+    #
+    # `ToolCatalog.fetch/2` was already wrapped; `spec.input_schema` and the schema walk were
+    # not. So a host catalog that RAISED kept the request's id, and the same host catalog
+    # returning MALFORMED DATA -- a map where a `%ToolSpec{}` was promised -- raised `KeyError`
+    # one line later, escaped to `call/2`'s rescue and answered `id: null`. Measured in
+    # `slices/002-streamable-http/logs/probe-fault-ids.txt`:
+    #
+    #   host tool_catalog RAISES (header validation)   500  -32603  id=4242
+    #   host tool_catalog returns a malformed spec     500  -32603  id=nil
+    #
+    # One host bug, two envelopes, decided by which line it landed on. The line is not the
+    # boundary; the host is. `check_annotations/2` is inside too, because its inputs are the
+    # annotation names, paths and types the host wrote, and a schema whose `properties` keys
+    # are not strings raises in `Enum.join/2` there.
+    #
+    # `ToolCatalog.fetch/2` returning anything but `{:ok, spec}` still falls through this
+    # `with` unchanged, to the caller's `_ -> []`: a tool this catalog does not have mirrors
+    # no parameters, which is not a fault.
+    defp tool_annotations(catalog, name) do
+      with {:ok, spec} <- ToolCatalog.fetch(catalog, name),
+           entries = annotations(spec.input_schema),
+           :ok <- check_annotations(name, entries) do
+        {:ok, entries}
+      end
+    end
 
     # ONE ENTRY PER ANNOTATED PROPERTY, and a list rather than a map keyed by the case-folded
     # name. The key was the defect: `Map.put` dropped a sibling annotated with the same name in
