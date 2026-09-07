@@ -1158,36 +1158,79 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert body!(conn)["error"]["message"] == "Forbidden"
     end
 
-    test "an exception with no status of its own, raised outside host_call/1, keeps the envelope" do
-      # This drives `call/2`'s rescue and `fault_response/4`'s answer branch, which lost their
-      # only cover when the assert_raise stand-in was deleted: mutants making fault_response/4
-      # never re-raise AND always re-raise both survived at 133 tests, 0 failures, where both
-      # were killed before. The always-re-raise mutant serves a bodyless 500 -- the exact failure
-      # this module exists to avoid -- so this branch is load-bearing, not dead.
+    test "a host catalog returning a malformed spec answers with the request's id" do
+      # ONE HOST BUG, ONE ENVELOPE. A host `tool_catalog` that RAISES is answered by
+      # `check_param_headers/4`'s fault branch and keeps the request's id; the same host
+      # catalog returning MALFORMED DATA -- a spec-shaped map that is not a `%ToolSpec{}` --
+      # used to raise `KeyError` on the `spec.input_schema` read one line later, escape to
+      # `call/2`'s rescue and answer `id: null`. Measured before the fix, in
+      # `slices/002-streamable-http/logs/probe-fault-ids.txt`:
       #
-      # Reached with host DATA rather than a host raise: `annotations(spec.input_schema)` sits in
-      # the `with` body, outside `host_call/1`, so a catalog returning a spec-shaped map that is
-      # not a ToolSpec raises KeyError there.
+      #   host tool_catalog RAISES (header validation)   500  -32603  id=4242
+      #   host tool_catalog returns a malformed spec     500  -32603  id=nil
+      #
+      # Which envelope a host bug got was decided by which line it landed on. The id is the
+      # ONLY thing that distinguishes the two routes, which is why it is what this asserts:
+      # status and code are identical on both, so asserting those alone is an anchor that
+      # cannot move.
       defmodule BadSpecCatalog do
         @behaviour BeamMCP.ToolCatalog
         @impl true
         def all, do: [%{name: :echo}]
       end
 
-      conn = post(call_body(%{}), call_headers([]), opts(tool_catalog: BadSpecCatalog))
+      body = call_body(%{}) |> Map.put("id", 4242)
+      conn = post(body, call_headers([]), opts(tool_catalog: BadSpecCatalog))
+
+      assert conn.status == 500
+      assert conn.resp_body != ""
+      assert body!(conn)["error"]["code"] == -32_603
+      assert body!(conn)["jsonrpc"] == "2.0"
+      # The whole fix, in one assertion: this was `nil` before `spec.input_schema` and the
+      # annotation walk moved inside `host_call/1`.
+      assert body!(conn)["id"] == 4242
+      # And the caller still learns nothing about the host's broken spec.
+      assert body!(conn)["error"]["message"] == "Internal error"
+      refute Map.has_key?(body!(conn)["error"], "data")
+    end
+
+    test "an exception with no status of its own, raised in transport code, keeps the envelope" do
+      # This drives `call/2`'s rescue and `fault_response/4`'s ANSWER branch. That branch was
+      # previously reached only by the malformed-spec catalog above, and the fix for the lost
+      # id moves that request off it -- so this test exists to keep the branch pinned across
+      # that move. With no cover here, the mutant making `fault_response/4` ALWAYS re-raise
+      # serves a bodyless 500, which is the precise failure this module exists to avoid.
+      #
+      # THE INPUT IS A RECORDED OPEN DEFECT AND THIS TEST DOES NOT ENDORSE IT. Invalid UTF-8
+      # bytes in `MCP-Protocol-Version` are echoed back in the refusal's `data.requested`, so
+      # `Jason.encode!` raises `Jason.EncodeError` inside `send_json/3` in `handle/2`'s `else`
+      # -- outside every inner rescue -- and a caller turns its own 400 into a 500 with an
+      # error-level stacktrace in the host's log. Measured, and filed in this slice's
+      # FINDINGS.md under "Open, recorded rather than fixed". What is pinned here is that an
+      # exception with no `:plug_status`, raised by the transport's OWN machinery, is answered
+      # INSIDE the envelope rather than as a bare 500 -- NOT that 500 is the right status for
+      # this input. When the reflection is fixed, this anchor must be REPLACED, not deleted.
+      #
+      #   Plug.Exception.status(%Jason.EncodeError{}) == 500   <- hence the answer branch
+      invalid_utf8 = <<"1.0-", 0xFF, 0xFE>>
+      refute String.valid?(invalid_utf8)
+
+      # `_meta` is DROPPED deliberately. With a body version present, `compare_versions/3`'s
+      # first branch fires -- "header does not match the body value" -- and answers a 400 that
+      # reflects nothing. The reflecting branch is the one that runs on a body declaring no
+      # era, which is every request that does not carry `_meta`.
+      body = call_body(%{}) |> Map.put("id", 4243) |> Map.delete("_meta")
+
+      conn =
+        post(body, [{@hdr, invalid_utf8}, {"mcp-method", "tools/call"}, {"mcp-name", "echo"}])
 
       assert conn.status == 500
       # A body at all is half the point: the mutant that re-raises everything sends none.
       assert conn.resp_body != ""
       assert body!(conn)["error"]["code"] == -32_603
       assert body!(conn)["jsonrpc"] == "2.0"
-
-      # `id: null` is what proves this went through call/2's rescue rather than
-      # check_param_headers/4's fault branch, which answers with the request's id. Without it,
-      # moving `annotations(spec.input_schema)` inside host_call/1 -- this module's own stated
-      # discipline for host territory -- reroutes the test and disarms the mutant it exists to
-      # kill, silently. Measured: that refactor plus the always-re-raise mutant is green
-      # without this line.
+      # `id: null` here is honest rather than desirable: `call/2`'s rescue spans the whole
+      # request path and holds no decoded body to read an id from.
       assert body!(conn)["id"] == nil
     end
 
@@ -1201,33 +1244,41 @@ defmodule BeamMCP.Transport.HTTPTest do
     # was filed. That is a claim of evidence that was never produced, which CONVENTIONS.md names
     # as the worst member of its family, so the test is deleted rather than reworded.
     #
-    # It is not replaced, because after the fix there is nothing left in this suite that can
-    # reach the re-raise. `fault_response/4` is now reached only from `call/2`'s rescue, and the
-    # only non-host code under it that raises a status-carrying exception is the adapter's read
-    # path -- `Bandit.HTTPError` at 400 for a malformed transfer coding, `Plug.TimeoutError` at
-    # 408 for a read timeout. `Plug.Test` produces neither: its `read_body/2` is a
-    # `:binary.part` of an in-memory binary.
+    # It is still not replaced, because nothing in this suite can reach the re-raise.
+    # `fault_response/4` is reached only from `call/2`'s rescue, and the only non-host code
+    # under it that raises a status-carrying exception is the adapter's read path --
+    # `Bandit.HTTPError` at 400 for a malformed transfer coding, `Plug.TimeoutError` at 408 for
+    # a read timeout. `Plug.Test` produces neither: its `read_body/2` is a `:binary.part` of an
+    # in-memory binary.
     #
     # WHAT IS AND IS NOT COVERED, measured rather than asserted -- the first version of this
-    # comment named only half of what the deletion cost, and a lane measured the rest.
+    # comment named only half of what the deletion cost, and a lane measured the rest. The
+    # numbers below were RE-MEASURED for slice 003, on the tree that ships, because the fix for
+    # the lost request id moved the malformed-spec catalog off this branch and onto
+    # `check_param_headers/4`'s. A count carried over from the round that produced it would have
+    # been a label rather than a measurement.
     #
-    #   fault_response/4 ALWAYS re-raises   -> KILLED, 136 tests, 1 failure
-    #     by "an exception with no status of its own ... keeps the envelope" below. That mutant
-    #     serves a bodyless 500, which is the failure this module exists to avoid, and it
-    #     survived for one round after the stand-in was deleted.
+    #   fault_response/4 ALWAYS re-raises   -> KILLED, 147 tests, 1 failure
+    #     by "an exception with no status of its own, raised in transport code, keeps the
+    #     envelope" ABOVE, which now reaches the branch through the invalid-UTF-8 reflection
+    #     rather than through the malformed-spec catalog. That mutant serves a bodyless 500,
+    #     which is the failure this module exists to avoid.
+    #     Archived: slices/003-release-0-3-1/logs/mutation-c-M2always.txt
     #
-    #   fault_response/4 NEVER re-raises    -> SURVIVES, 137 tests, 0 failures
+    #   fault_response/4 NEVER re-raises    -> SURVIVES, 147 tests, 0 failures
     #     Still unpinned, and honestly so. Detecting it needs an exception with a non-500
-    #     :plug_status raised by code that is NOT the host's -- which after this round's fix
-    #     means the adapter's read path alone: Bandit.HTTPError at 400 for a malformed transfer
-    #     coding, Plug.TimeoutError at 408 for a read timeout. Plug.Test produces neither; its
-    #     read_body/2 is a :binary.part of an in-memory binary.
+    #     :plug_status raised by code that is NOT the host's -- which means the adapter's read
+    #     path alone: Bandit.HTTPError at 400 for a malformed transfer coding, Plug.TimeoutError
+    #     at 408 for a read timeout. Plug.Test produces neither; its read_body/2 is a
+    #     :binary.part of an in-memory binary.
+    #     Archived: slices/003-release-0-3-1/logs/mutation-c-M2never.txt
     #
-    # So the answer branch is pinned here and the re-raise branch is not. The re-raise branch is
-    # covered by lane probes against a live Bandit listener, archived in this slice's logs.
-    # Closing it properly needs a Bandit-backed test. That is new work, and it is recorded in
-    # the slice FINDINGS rather than described here as filed -- the last time this comment said
-    # something was filed, grep found exactly one hit and it was the comment.
+    # So the answer branch is pinned above and the re-raise branch is not. Closing the re-raise
+    # branch needs a Bandit-backed test. Slice 003 stands one up for the `connection: close`
+    # work and still does not close this, because the owner scoped the re-raise pin out of that
+    # slice; it is recorded in slices/003-release-0-3-1/FINDINGS.md under "Open, recorded rather
+    # than fixed", not described here as filed -- the last time this comment said something was
+    # filed, grep found exactly one hit and it was the comment.
 
     test "an exception with no status of its own is still answered as -32603" do
       o = opts(dispatch: fn _, _, _ -> raise "ordinary fault" end)
