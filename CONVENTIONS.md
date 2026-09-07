@@ -160,6 +160,13 @@ A survivor that is genuinely equivalent is recorded as a survivor, with the argu
 alternative is writing a test that asserts an implementation detail so the table can read
 all-killed, which is worse than the survivor: it looks like evidence and is not.
 
+**A partial result is reported as partial.** A mutant expected to kill five tests that kills three
+is recorded as killing three, with the reason — in the case this rule came from, two of the five
+reads did not route their comparison through the mutated helper, because one compares set
+membership and the other has a second check that fires first. The pull is to describe it as "the
+class mutant killed everything", which is the false version and the easier sentence. The number in
+the table is what the run printed; the explanation goes beside it.
+
 ## Every place a mechanism reads the same kind of input is one mechanism
 
 When a defect is "this read handles the input wrongly", the fix is not that read. Derive the set

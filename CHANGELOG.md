@@ -86,6 +86,23 @@ list, and a tool list can be sensitive. Both are host-supplied through `tools_tt
 package that picked the permissive default on a host's behalf would be making a disclosure
 decision it cannot keep.
 
+### Known limitation — `authorize/1` cannot see the request body
+
+It runs **before** the body is read and returns `:ok | {:error, reason}`, with no way to hand back
+the `conn` it read from, so **body-signature authentication — an HMAC over the payload — is not
+possible in it**. This does not fail as an error: a small request appears to work because the body
+is already in the adapter's buffer, and a larger one hangs until the server's read timeout and
+returns `408` with the connection dead (measured: 119 bytes `200`; 16 KiB and 200 KiB both `408`
+at 15.0 s). A host that meets this by experiment would reasonably read it as a bug, so it is
+written down.
+
+Today: authenticate in a plug in front of this one that reads the body and re-supplies it, or
+decide in `dispatch/3`, which is handed the decoded arguments. **This is an open design question,
+not a final shape.** The likely answer is two hooks — `authorize/1` staying as the cheap pre-read
+gate on headers, origin and peer, plus an optional post-read hook for body signatures — and that
+belongs in its own release rather than in one that is otherwise finished. Designing an
+authentication contract under release pressure is how the wrong one ships permanently.
+
 ### Changed — the recommended dependency requirement
 
 `README.md` now recommends `{:beam_mcp, "~> 0.3.0"}`. `~> 0.3` admits `0.4.0`, and this package
