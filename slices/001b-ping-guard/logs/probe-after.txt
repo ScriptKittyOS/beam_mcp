@@ -1,0 +1,14 @@
+beam_mcp version: 0.1.2
+
+ping + _meta 2026-07-28
+  -> {"error":{"code":-32601,"message":"Method not found: ping"},"id":1,"jsonrpc":"2.0"}
+ping + _meta 2025-11-25
+  -> {"id":1,"jsonrpc":"2.0","result":{}}
+ping + _meta, no version key
+  -> {"id":1,"jsonrpc":"2.0","result":{}}
+ping bare
+  -> {"id":1,"jsonrpc":"2.0","result":{}}
+tools/list + _meta 2025-11-25
+  -> {"id":2,"jsonrpc":"2.0","result":{"tools":[{"annotations":{"destructiveHint":false,"idempotentHint":true,"openWorldHint":false,"readOnlyHint":true},"description":"Echo.","inputSchema":{"additionalProperties":true,"properties":{},"type":"object"},"name":"echo"}]}}
+tools/list + _meta 2026-07-28
+  -> {"id":2,"jsonrpc":"2.0","result":{"_meta":{"io.modelcontextprotocol/serverInfo":{"name":"beam_mcp","version":"0.1.2"}},"resultType":"complete","tools":[{"annotations":{"destructiveHint":false,"idempotentHint":true,"openWorldHint":false,"readOnlyHint":true},"description":"Echo.","inputSchema":{"additionalProperties":true,"properties":{},"type":"object"},"name":"echo"}]}}

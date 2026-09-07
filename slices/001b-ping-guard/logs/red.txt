@@ -1,0 +1,38 @@
+==> file_system
+Compiling 7 files (.ex)
+Generated file_system app
+==> bunt
+Compiling 2 files (.ex)
+Generated bunt app
+==> jason
+Compiling 10 files (.ex)
+Generated jason app
+==> credo
+Compiling 257 files (.ex)
+Generated credo app
+==> beam_mcp
+Compiling 5 files (.ex)
+Generated beam_mcp app
+Running ExUnit with seed: 719196, max_cases: 64
+
+.......
+
+  1) test the result envelope follows the declared revision, not the carrier a result for a request declaring 2025-11-25 carries neither (BeamMCP.NegotiationTest)
+     test/beam_mcp/negotiation_test.exs:186
+     resultType was added in 2026-07-28; the spec says clients MUST treat results from earlier-protocol servers that omit it as "complete", so emitting it on a 2025-11-25 result claims a revision the client did not ask for
+     code: refute r["result"]["resultType"],
+     stacktrace:
+       test/beam_mcp/negotiation_test.exs:191: (test)
+
+..
+
+  2) test ping — answered at legacy, absent at modern a ping declaring 2025-11-25 through _meta is answered (BeamMCP.NegotiationTest)
+     test/beam_mcp/negotiation_test.exs:167
+     ping exists in 2025-11-25. This server advertises 2025-11-25 in server/discover and lists it in the -32022 `supported` payload, and the specification tells a client to pick from that list and retry the request — which produces this message. Refusing it refuses a revision we advertise.
+     code: assert r["result"] == %{},
+     stacktrace:
+       test/beam_mcp/negotiation_test.exs:170: (test)
+
+.
+Finished in 0.03 seconds (0.03s async, 0.00s sync)
+12 tests, 2 failures

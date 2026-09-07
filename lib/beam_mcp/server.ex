@@ -14,10 +14,17 @@ defmodule BeamMCP.Server do
   ## Two eras
 
   It serves `2026-07-28` and `2025-11-25`, and tells them apart the way the specification says
-  a dual-era server should: a request carrying per-request `_meta` is served statelessly under
-  the modern revision, and an `initialize` request selects legacy semantics. A request naming
-  a revision it does not support gets `UnsupportedProtocolVersionError` (`-32022`) listing
-  what it does.
+  a dual-era server should: a request carrying per-request `_meta` is served statelessly, and
+  an `initialize` request selects legacy semantics. `_meta` decides only the statelessness —
+  the revision it *names* then decides the method table and the result envelope, so a request
+  declaring `2025-11-25` through `_meta` gets that revision's semantics, not the modern ones.
+  A request naming a revision it does not support gets `UnsupportedProtocolVersionError`
+  (`-32022`) listing what it does.
+
+  Two methods are matched before that switch and so are served identically at both eras:
+  `server/discover`, which is the stdio era probe and must answer a client that does not yet
+  know what it is talking to, and `initialize`, which selects legacy semantics whatever else
+  it carries. Neither result is decorated.
 
   ## What the host supplies
 
@@ -116,22 +123,41 @@ defmodule BeamMCP.Server do
     end
   end
 
-  # A request carrying modern per-request _meta is served statelessly under 2026-07-28.
+  # A request carrying a _meta that NAMES A REVISION is served statelessly: no session,
+  # whatever revision it names. A _meta that is not a map, or that carries no version key,
+  # does not match this head at all and falls through to the handlers below.
+  # Which revision it names then decides the method table and the result envelope,
+  # because the spec requires every request to declare its version in _meta and requires the
+  # server to serve or refuse *that* version. Both branches below are reachable: -32022 tells
+  # a client to pick from `supported` -- which lists 2025-11-25 -- and retry the request,
+  # so a _meta naming the legacy revision is a message this server asks clients to send.
   def handle_message(
         state,
         %{"jsonrpc" => "2.0", "id" => id, "_meta" => %{@version_meta_key => version}} = message
       ) do
-    cond do
-      version not in @supported_versions ->
+    bare = Map.drop(message, ["_meta"])
+
+    case version do
+      @modern_version ->
+        # ping was removed in 2026-07-28. The legacy handler below must not be inherited by a
+        # request that declared the modern revision.
+        if message["method"] == "ping" do
+          {state, error(id, -32_601, "Method not found: ping")}
+        else
+          {next, response} = handle_message(state, bare)
+          # `next`, not `state`: modernise/2 reads only server_name today, which nothing
+          # mutates, so this is currently indistinguishable -- and would stop being so the
+          # moment any handler changed a field modernise/2 reads.
+          {next, modernise(response, next)}
+        end
+
+      @legacy_version ->
+        # 2025-11-25 semantics: ping exists, and the result carries neither resultType nor
+        # serverInfo _meta, both of which 2026-07-28 introduced.
+        handle_message(state, bare)
+
+      _other ->
         {state, unsupported_version(id, version)}
-
-      # ping was removed in 2026-07-28. The legacy handler must not inherit it.
-      message["method"] == "ping" ->
-        {state, error(id, -32_601, "Method not found: ping")}
-
-      true ->
-        {next, response} = handle_message(state, Map.drop(message, ["_meta"]))
-        {next, modernise(response, state)}
     end
   end
 

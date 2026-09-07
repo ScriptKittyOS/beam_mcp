@@ -89,13 +89,36 @@ one legacy revision.
 
 | | `2026-07-28` (modern) | `2025-11-25` (legacy) |
 |---|---|---|
-| opens with | any request, or `server/discover` | `initialize` |
-| version travels in | `_meta` on every request | the `initialize` params |
-| session | none; each request stands alone | yes |
+| opens with | any request, or `server/discover` | `initialize`, or `_meta` naming it |
+| version travels in | `_meta` on every request | the `initialize` params, or `_meta` |
+| session | none; each request stands alone | tracked, not enforced — see below |
 | `ping` | removed from the revision, refused | answered |
+| result envelope | `resultType` and `_meta` `serverInfo` | neither; both are `2026-07-28` additions |
 
 `server/discover`, `tools/list`, `tools/call`, `shutdown`, `exit` at both eras; `initialize`
 and `notifications/initialized` at legacy only.
+
+**A revision, not a carrier, decides the semantics.** `_meta` decides only that a request is
+served statelessly. Which revision the `_meta` *names* then decides the method table and the
+result envelope, so a `ping` declaring `2025-11-25` through `_meta` is answered and its result
+carries no `resultType`. This matters because `-32022` tells a client to pick from `supported`
+— which lists `2025-11-25` — and retry the request, so a `_meta` naming the legacy revision is
+a message this server asks clients to send.
+
+**Two exceptions, and they are exceptions to the row above.** `server/discover` and
+`initialize` are matched *before* the revision switch, so neither is affected by what a `_meta`
+declares and **neither result is decorated** — a `server/discover` result carries no
+`resultType` even under `2026-07-28`, where the specification requires one on every result.
+`server/discover` is matched first on purpose: on stdio it is the era probe, sent by a client
+that does not yet know what it is talking to. The missing `resultType` on it is a known gap,
+not a design choice.
+
+**The session is tracked, not enforced.** Nothing in this package refuses a request because
+`initialize` has not been seen: every method it implements is served bare, `tools/call`
+included — and `tools/call` executes through the host's dispatch. On stdio that is defensible,
+because whoever can write to the transport already has the host's privileges. **On any
+transport where that is not true, refusing unestablished callers is the host's job, and this
+package does not do it for you.**
 
 A request naming a revision the server does not support gets `UnsupportedProtocolVersionError`
 (**`-32022`**) listing what it does support. **`2024-11-05` is not supported** — it predates

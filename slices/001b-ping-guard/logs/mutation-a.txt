@@ -1,0 +1,16 @@
+Compiling 5 files (.ex)
+Generated beam_mcp app
+Running ExUnit with seed: 814630, max_cases: 64
+
+...
+
+  1) test state threads through both era branches shutdown declaring 2025-11-25 through _meta still sets shutdown? (BeamMCP.NegotiationTest)
+     test/beam_mcp/negotiation_test.exs:184
+     the legacy branch returns the recursion's tuple whole; if it returned the pre-recursion state instead, the transport would never stop
+     code: assert Server.shutdown?(send_for_state(legacy_meta("shutdown"))),
+     stacktrace:
+       test/beam_mcp/negotiation_test.exs:185: (test)
+
+...........
+Finished in 0.03 seconds (0.03s async, 0.00s sync)
+15 tests, 1 failure

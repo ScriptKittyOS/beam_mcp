@@ -9,6 +9,68 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — unreleased
+
+### Changed — two fields are REMOVED from results for legacy-declared requests
+
+**Read this before upgrading if any client sends `_meta` naming `2025-11-25`.** A result
+answering such a request no longer carries `resultType` or `_meta`
+`io.modelcontextprotocol/serverInfo`. In `0.1.0` it carried both. This is not limited to
+`ping` — it applies to every method reaching that path, `tools/list`, `tools/call` and
+`shutdown` included:
+
+    0.1.0:  tools/list + _meta 2025-11-25
+      -> {"result":{"_meta":{"io.modelcontextprotocol/serverInfo":{...}},"resultType":"complete","tools":[...]}}
+    0.1.2:  tools/list + _meta 2025-11-25
+      -> {"result":{"tools":[...]}}
+
+A client that reads `result.resultType` on that path gets `nil` after what is numbered a patch
+release. It is numbered a patch because `0.y.z` is outside semver's compatibility contract and
+because the removed fields were never correct — they announced a revision the client did not
+ask for. **Neither of those makes the wire change smaller**, and the honest signal for a
+published package where the JSON *is* the API would arguably be `0.2.0`. Recorded here as the
+removal it is so the number is not the only thing a reader has to go on. Raised by review;
+the version choice is the owner's at publish time.
+
+Requests declaring `2026-07-28`, and requests with no `_meta` at all, are unaffected.
+
+### Fixed
+
+- **A request declaring `2025-11-25` through per-request `_meta` is now served as
+  `2025-11-25`.** The `_meta` clause branched on the method and never on the declared
+  revision, so `ping` was refused with `-32601` at every revision reaching it, and every
+  result was decorated with `resultType` and `_meta` `serverInfo` — two fields `2026-07-28`
+  introduced and `2025-11-25` does not define. Both halves came from one version-blind `cond`.
+
+  Measured against `0.1.1`, each message the first and only one on a fresh state. (`0.1.1`
+  here and `0.1.0` above name the **same** before-state: `0.1.1` changed documentation only,
+  so the version-blind clause is byte-identical at the `v0.1.0` tag and on `main`. Two numbers
+  for one behaviour, flagged by review as a readability trap.)
+
+      ping + _meta 2025-11-25   ->  {"error":{"code":-32601,"message":"Method not found: ping"},...}
+      tools/list + _meta 2025-11-25
+        ->  {"result":{"_meta":{"io.modelcontextprotocol/serverInfo":{...}},"resultType":"complete",...}}
+
+  and after:
+
+      ping + _meta 2025-11-25   ->  {"id":1,"jsonrpc":"2.0","result":{}}
+      tools/list + _meta 2025-11-25  ->  {"result":{"tools":[...]}}          # no resultType, no _meta
+
+  Live in published `0.1.0`. The refusal is reachable only through `_meta`: a bare `ping`, and
+  a `_meta` carrying no `io.modelcontextprotocol/protocolVersion`, were always answered.
+
+  Why a `_meta` may name the legacy revision at all: this server advertises `2025-11-25` in
+  `server/discover` and lists it in the `-32022` `supported` payload, and the specification
+  tells a client receiving `-32022` to select from `supported` and **retry the request** —
+  which produces exactly this message. `_meta` fixes statelessness; the revision it names
+  fixes the semantics.
+
+### Note on `0.1.1`
+
+`0.1.1` reached `main` and was **never published to Hex**. `mix.exs` now reads `0.1.2`, so
+`0.1.1` will not exist as a release and the moduledoc fix recorded below ships inside `0.1.2`.
+The `0.1.1` section is left exactly as written; this note is appended rather than a rewrite.
+
 ## [0.1.1] — unreleased
 
 ### Fixed
