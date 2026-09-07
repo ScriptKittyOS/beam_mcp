@@ -1,17 +1,23 @@
-### PROBE: the new gate docs step, shown failing on the defect it exists for.
+### PROBE: the gate's docs step, shown failing on the defect it exists for.
 ### Population derived the way the mechanism derives it -- mix docs reads compiled beams, so
 ### the probe edits the source and recompiles rather than planting a string.
-### stdio.ex reverted to @moduledoc false, gate run, then restored.
+###
+### RE-RUN in round 6. The first version of this archive recorded 2 warnings; a lane re-ran
+### it and got 6, because a LATER COMMIT IN THE SAME ROUND added CHANGELOG.md to ex_doc
+### extras:, giving the same mutation two more warning sites, each emitted once per
+### formatter. The archive was stale within one round of being written, which is the whole
+### argument for re-running a probe rather than citing one.
 
 --- with @moduledoc false ---
-  format                     pass
-  compile                    pass
-  docs                       FAIL (exit 0, 2 warnings)
+  docs                       FAIL (exit 0, 6 warnings)
+           warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
           warning: documentation references function "BeamMCP.Transport.Stdio.run/1" but it is hidden
+           warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
           warning: documentation references function "BeamMCP.Transport.Stdio.run/1" but it is hidden
+           warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
+           warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
 GATE_EXIT=1
 
 --- restored ---
   docs                       pass
-Gate OK.
-GATE_EXIT=0
+GATE_EXIT=1

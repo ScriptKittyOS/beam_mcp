@@ -366,6 +366,27 @@ defmodule BeamMCP.ReadmeClaimsTest do
       assert http_post_body(String.duplicate("x", 1_048_576 - overhead + 1)).status == 413
     end
 
+    test "the claims round 5 added about the package's own shipping set are pinned too" do
+      # CONVENTIONS.md: every behavioural claim in the README is pinned by a test that runs.
+      # Round 5 added three claims and pinned one of them. A lane found the other two, which is
+      # the rule working on the commit that cited it.
+
+      # 1. The recompilation trap. The sentence is pinned; the mechanism it describes belongs to
+      #    Mix and is exercised by a consumer project, not from in here.
+      claims("mix deps.compile beam_mcp --force")
+      claims("is evaluated once at compile time and is not a tracked compile-time dependency")
+
+      # 2. "CONVENTIONS.md ... is not shipped in the package" -- a claim about `files:`, which is
+      #    mechanically checkable, so it is checked rather than merely quoted. This is the
+      #    pin-the-class-not-the-string argument: if CONVENTIONS.md were later added to the
+      #    package, this fails rather than leaving the README asserting the opposite.
+      claims("not shipped in the package and so is linked rather than named")
+
+      files = Mix.Project.config()[:package][:files]
+      refute "CONVENTIONS.md" in files
+      assert "CHANGELOG.md" in files, "the neighbouring claim that release notes DO ship"
+    end
+
     test "arguments reach dispatch as atoms, as the README now says they do" do
       # Added in round 5. A release lane copied the README's catalog, wrote the obvious
       # `%{"place" => place}` clause in its dispatch, and got a silent no-match -- because keys

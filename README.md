@@ -5,8 +5,9 @@ SPDX-License-Identifier: Apache-2.0
 
 # BeamMCP
 
-A Model Context Protocol server core for the BEAM. Protocol handling, a stdio transport, and
-JSON Schema validation — with the tool catalog and the dispatch function injected by the host.
+A Model Context Protocol server core for the BEAM. Protocol handling, two transports — stdio and
+a stateless Streamable HTTP `Plug` — and JSON Schema validation, with the tool catalog and the
+dispatch function injected by the host.
 
 The package holds no tools, no domain, and no policy. It decides what a well-formed request is
 and refuses one that is not; what a tool *does* is the host's business.

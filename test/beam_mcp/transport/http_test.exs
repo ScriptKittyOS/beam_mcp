@@ -1024,22 +1024,146 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
 
     test "a host tool_catalog's exception does not choose the HTTP status either" do
-      # The second underived site. Reached from mirrored_params/2 during HEADER VALIDATION, one
-      # lookup before the identical call inside dispatch/3 -- so one host function raising one
-      # exception had two HTTP behaviours depending on which lookup fired first.
-      defmodule RaisingCatalog do
+      # The catalog raises ONCE, and that is the whole design of this test.
+      #
+      # The first version raised on every call, so `Server.handle_message/2`'s own lookup raised
+      # too and produced the same 500/-32603 by a different route. It asserted only the status
+      # and the code -- neither of which distinguishes the routes -- so a mutant swallowing the
+      # catalog fault back to `%{}` in `mirrored_params/2` SURVIVED at 133 tests, 0 failures
+      # while serving a lying mirrored header 200 and dispatched. An anchor that cannot move
+      # under the mutation carries no information.
+      #
+      # Raising once separates them: header validation sees the fault, the core's later lookup
+      # succeeds. So if the fault were swallowed, this request would be served rather than
+      # refused -- which is exactly the mutant.
+      defmodule FlakyCatalog do
         @behaviour BeamMCP.ToolCatalog
         @impl true
-        def all, do: raise(Plug.BadRequestError)
+        def all do
+          case Process.put(:flaky_called, true) do
+            nil ->
+              raise Plug.BadRequestError
+
+            true ->
+              [
+                %BeamMCP.ToolSpec{
+                  name: :echo,
+                  command_class: :observe,
+                  mode: :read_only,
+                  description: "Echo.",
+                  input_schema: %{
+                    "type" => "object",
+                    "properties" => %{
+                      "max_rows" => %{"type" => "integer", "x-mcp-header" => "maxRows"}
+                    },
+                    "additionalProperties" => true
+                  }
+                }
+              ]
+          end
+        end
       end
 
-      o = opts(tool_catalog: RaisingCatalog)
-      body = call_body(%{}) |> Map.put("id", 92)
+      Process.delete(:flaky_called)
+      o = opts(tool_catalog: FlakyCatalog)
 
-      conn = post(body, call_headers([]), o)
+      # A header that LIES about the body value: 99 against a body of 42. If mirroring is
+      # silently disabled by the swallowed fault, this is dispatched.
+      body = call_body(%{"max_rows" => 42}) |> Map.put("id", 92)
+      conn = post(body, call_headers([{"mcp-param-maxrows", "99"}]), o)
 
       assert conn.status == 500
       assert body!(conn)["error"]["code"] == -32_603
+
+      # The echoed id is what proves this came from header validation and not from the core:
+      # `authorize/1` faults before the body is read and answer `id: null`, and the commit that
+      # returned the fault rather than throwing it did so precisely "so the id stays available".
+      assert body!(conn)["id"] == 92
+    end
+
+    test "a host tool_catalog that THROWS is answered with the id, not just rescued" do
+      # host_call/1 has a `catch` as well as a `rescue`, and a mutant dropping the `catch`
+      # survived the suite: the throw propagated to call/2's own catch, which answers with
+      # `id: null`. Status and code were identical, so only the id moves under that mutation.
+      defmodule ThrowingCatalog do
+        @behaviour BeamMCP.ToolCatalog
+        @impl true
+        def all do
+          case Process.put(:throwing_called, true) do
+            nil ->
+              throw(:catalog_unavailable)
+
+            true ->
+              [
+                %BeamMCP.ToolSpec{
+                  name: :echo,
+                  command_class: :observe,
+                  mode: :read_only,
+                  description: "Echo.",
+                  input_schema: %{
+                    "type" => "object",
+                    "properties" => %{
+                      "max_rows" => %{"type" => "integer", "x-mcp-header" => "maxRows"}
+                    },
+                    "additionalProperties" => true
+                  }
+                }
+              ]
+          end
+        end
+      end
+
+      Process.delete(:throwing_called)
+      body = call_body(%{"max_rows" => 42}) |> Map.put("id", 93)
+
+      conn =
+        post(
+          body,
+          call_headers([{"mcp-param-maxrows", "99"}]),
+          opts(tool_catalog: ThrowingCatalog)
+        )
+
+      assert conn.status == 500
+      assert body!(conn)["error"]["code"] == -32_603
+      assert body!(conn)["id"] == 93
+    end
+
+    test "a host authorize/1 returning a fault-shaped tuple is a contract violation, not a fault" do
+      # The internal fault sentinel shares a value space with authorize/1's return, whose
+      # contract is open. Tagged with the module and five wide so a host cannot collide with it
+      # by accident; this pins that a host returning the OLD four-element shape is still handled
+      # as "neither :ok nor {:error, _}" -- fail closed with 403, not read as an internal fault.
+      o = opts(authorize: fn _conn -> {:host_fault, :error, %RuntimeError{message: "x"}, []} end)
+
+      conn = post(call_body(%{}), call_headers([]), o)
+
+      assert conn.status == 403
+      assert body!(conn)["error"]["message"] == "Forbidden"
+    end
+
+    test "an exception with no status of its own, raised outside host_call/1, keeps the envelope" do
+      # This drives `call/2`'s rescue and `fault_response/4`'s answer branch, which lost their
+      # only cover when the assert_raise stand-in was deleted: mutants making fault_response/4
+      # never re-raise AND always re-raise both survived at 133 tests, 0 failures, where both
+      # were killed before. The always-re-raise mutant serves a bodyless 500 -- the exact failure
+      # this module exists to avoid -- so this branch is load-bearing, not dead.
+      #
+      # Reached with host DATA rather than a host raise: `annotations(spec.input_schema)` sits in
+      # the `with` body, outside `host_call/1`, so a catalog returning a spec-shaped map that is
+      # not a ToolSpec raises KeyError there.
+      defmodule BadSpecCatalog do
+        @behaviour BeamMCP.ToolCatalog
+        @impl true
+        def all, do: [%{name: :echo}]
+      end
+
+      conn = post(call_body(%{}), call_headers([]), opts(tool_catalog: BadSpecCatalog))
+
+      assert conn.status == 500
+      # A body at all is half the point: the mutant that re-raises everything sends none.
+      assert conn.resp_body != ""
+      assert body!(conn)["error"]["code"] == -32_603
+      assert body!(conn)["jsonrpc"] == "2.0"
     end
 
     # DELETED, AND THE GAP IS RECORDED RATHER THAN REFILLED WITH A STAND-IN.
@@ -1059,9 +1183,26 @@ defmodule BeamMCP.Transport.HTTPTest do
     # 408 for a read timeout. `Plug.Test` produces neither: its `read_body/2` is a
     # `:binary.part` of an in-memory binary.
     #
-    # So the rule is covered by lane s2's probes against a live Bandit listener, archived in
-    # this slice's logs, and NOT by this suite. Closing it needs a Bandit-backed test, which is
-    # new work and is named in the slice record rather than pretended away here.
+    # WHAT IS AND IS NOT COVERED, measured rather than asserted -- the first version of this
+    # comment named only half of what the deletion cost, and a lane measured the rest.
+    #
+    #   fault_response/4 ALWAYS re-raises   -> KILLED, 136 tests, 1 failure
+    #     by "an exception with no status of its own ... keeps the envelope" below. That mutant
+    #     serves a bodyless 500, which is the failure this module exists to avoid, and it
+    #     survived for one round after the stand-in was deleted.
+    #
+    #   fault_response/4 NEVER re-raises    -> SURVIVES, 137 tests, 0 failures
+    #     Still unpinned, and honestly so. Detecting it needs an exception with a non-500
+    #     :plug_status raised by code that is NOT the host's -- which after this round's fix
+    #     means the adapter's read path alone: Bandit.HTTPError at 400 for a malformed transfer
+    #     coding, Plug.TimeoutError at 408 for a read timeout. Plug.Test produces neither; its
+    #     read_body/2 is a :binary.part of an in-memory binary.
+    #
+    # So the answer branch is pinned here and the re-raise branch is not. The re-raise branch is
+    # covered by lane probes against a live Bandit listener, archived in this slice's logs.
+    # Closing it properly needs a Bandit-backed test. That is new work, and it is recorded in
+    # the slice FINDINGS rather than described here as filed -- the last time this comment said
+    # something was filed, grep found exactly one hit and it was the comment.
 
     test "an exception with no status of its own is still answered as -32603" do
       o = opts(dispatch: fn _, _, _ -> raise "ordinary fault" end)
