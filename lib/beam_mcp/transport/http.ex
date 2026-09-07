@@ -411,10 +411,25 @@ if Code.ensure_loaded?(Plug) do
     defp value_matches?(header_value, true), do: header_value == "true"
     defp value_matches?(header_value, false), do: header_value == "false"
 
+    # The SHOULD above is a NUMERIC comparison, and the first implementation of it read
+    # `Float.parse(header_value) == body_value * 1.0`. A float delivers neither half of what
+    # that comparison owes, and both failures were reachable by an unauthenticated caller:
+    #
+    #   TOTALITY   Erlang integers are arbitrary-precision and floats are not, so `body * 1.0`
+    #              raises ArithmeticError above ~1.8e308 -- 310 characters of JSON. The header
+    #              check then crashed into the outer rescue and answered 500 where the
+    #              pre-delta code answered 400, with a stacktrace per request.
+    #   INJECTIVITY Above 2^53 the integer-to-double map is not injective, so 9007199254740993
+    #              and 9007199254740992 are one float. A header naming a DIFFERENT integer than
+    #              the body was accepted and dispatched -- the precise disagreement
+    #              `Mcp-Param-{Name}` exists to prevent.
+    #
+    # Parsing the header to an integer instead is total and exact at every magnitude. Compare
+    # integers as integers; a header that is not an integer literal is simply not a match.
     defp value_matches?(header_value, body_value) when is_integer(body_value) do
-      case Float.parse(header_value) do
-        {parsed, ""} -> parsed == body_value * 1.0
-        _ -> false
+      case integer_header(header_value) do
+        {:ok, value} -> value == body_value
+        :error -> false
       end
     end
 
@@ -423,6 +438,26 @@ if Code.ensure_loaded?(Plug) do
     # and cannot match any header. Returning false rather than interpolating the value is also
     # what keeps an attacker-chosen JSON value out of the refusal message.
     defp value_matches?(_header_value, _body_value), do: false
+
+    # The grammar is JSON's own number grammar, narrowed to the values that are integral: an
+    # optional `-`, digits, and an optional fractional part that is all zeros. `42.0` and `42`
+    # both name 42, which is the equality the spec's example requires.
+    #
+    # It is deliberately no wider than that. `+42`, ` 42`, `42 `, `4_2` and `0x2A` are all
+    # numerically 42 to one parser or another, and every one of them is a spelling JSON itself
+    # cannot produce for the body value being mirrored. Admitting them is how a hop filtering on
+    # the header and this server come to disagree about what was sent -- the same argument that
+    # makes `decode_header_value/2` require the Base64 round trip rather than accept the four
+    # spellings `Base.decode64/1` will take.
+    @integer_header ~r/\A-?\d+(?:\.0+)?\z/
+
+    defp integer_header(value) do
+      if Regex.match?(@integer_header, value) do
+        {:ok, value |> String.split(".") |> hd() |> String.to_integer()}
+      else
+        :error
+      end
+    end
 
     defp all_match?(values, name, body_value) do
       values != [] and

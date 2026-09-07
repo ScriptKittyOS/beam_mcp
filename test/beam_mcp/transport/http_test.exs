@@ -1071,4 +1071,70 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert conn.resp_body == ""
     end
   end
+
+  describe "an integer body value is compared as an integer, not through a float" do
+    # The spec's SHOULD -- "servers SHOULD compare the header value and the body value
+    # numerically rather than as strings (e.g., `42.0` and `42` are considered equal)" -- was
+    # implemented as `Float.parse(header) == body * 1.0`. Erlang integers are arbitrary
+    # precision and floats are not, so that expression is neither total nor injective. Both
+    # halves are pinned here, and so is the allowance that motivated the float in the first
+    # place, because a fix that refuses `42.0` trades one defect for another.
+
+    test "a body integer beyond the float range is refused, not crashed into a 500" do
+      # `body * 1.0` raises ArithmeticError above ~1.8e308, which JSON expresses in 310
+      # characters. Reached here through `_meta` protocolVersion, which `check_protocol_version`
+      # compares before any catalog lookup -- so it needs no tool and no valid name, and the
+      # module's own docs describe this path as possibly unauthenticated.
+      huge = String.to_integer(String.duplicate("9", 400))
+
+      body = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/list",
+        "_meta" => %{@vkey => huge}
+      }
+
+      conn = post(body, [{@hdr, "1"}, {"mcp-method", "tools/list"}])
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+    end
+
+    test "a header naming a different integer above 2^53 is refused" do
+      # Above 2^53 the integer-to-double map is not injective: 9007199254740993 and
+      # 9007199254740992 are distinct integers and one float. Comparing through `* 1.0` makes
+      # `Mcp-Param-{Name}` accept a header that names a different number than the body -- which
+      # is the exact disagreement the header exists to prevent.
+      me = self()
+      o = opts(dispatch: fn n, a, _ -> send(me, {:dispatched, n, a}) && {:ok, a} end)
+      body = call_body(%{"max_rows" => 9_007_199_254_740_993})
+
+      conn = post(body, call_headers([{"mcp-param-maxrows", "9007199254740992"}]), o)
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+      refute_receive {:dispatched, _, _}, 50
+    end
+
+    test "the spec's 42.0 and 42 allowance still holds" do
+      # The reason the float path was written. A fix that compares strings, or that refuses any
+      # header carrying a decimal point, regresses this -- so it is pinned alongside the two
+      # defects rather than left to be rediscovered.
+      body = call_body(%{"max_rows" => 42})
+
+      assert post(body, call_headers([{"mcp-param-maxrows", "42.0"}])).status == 200
+      assert post(body, call_headers([{"mcp-param-maxrows", "42"}])).status == 200
+    end
+
+    test "a header that is not a numeric literal does not match an integer body value" do
+      body = call_body(%{"max_rows" => 42})
+
+      for header <- ["0x2A", " 42", "42 ", "4_2", "", "42abc", "+42"] do
+        conn = post(body, call_headers([{"mcp-param-maxrows", header}]))
+
+        assert conn.status == 400,
+               "#{inspect(header)} is not a spelling of 42 and must not match it"
+      end
+    end
+  end
 end
