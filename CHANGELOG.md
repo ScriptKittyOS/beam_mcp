@@ -69,7 +69,7 @@ suffix into a top-level argument key.
 satisfying value followed by a hostile one — is the same smuggling the MUST above exists to
 stop, and the first version of this transport read only the first value of four of them. There
 is now one read path, `header_values/2`, and one mutant per header proving each is pinned
-(`logs/mutation.md`).
+(`slices/002-streamable-http/logs/mutation.md`, in the repository — slice records are not shipped in the package).
 
 `Mcp-Method` and `Mcp-Name` are validated against the body because the specification says why:
 *"a load balancer routing on the header value while the MCP server executes based on the body
