@@ -77,9 +77,11 @@ to `beam_mcp`, and a host that wants its own name in `initialize` says so.
 
 A tool's schema lives on its `ToolSpec`. `tools/list` advertises **that** schema and
 `tools/call` enforces **that** schema, so the contract a client is shown and the contract it is
-held to cannot drift apart. Argument keys are derived from the schema's `properties`; values
-are passed through unchanged, because turning a string into a domain term is the host's job and
-a generic layer that guesses has acquired someone else's domain.
+held to cannot drift apart. Argument keys are derived from the schema's `properties` and reach
+`dispatch` as **atoms** — a tool declaring `"place"` is dispatched `%{place: "Oslo"}`, not
+`%{"place" => "Oslo"}`. Values are passed through unchanged, because turning a string into a
+domain term is the host's job and a generic layer that guesses has acquired someone else's
+domain.
 
 A `ToolSpec` that omits `input_schema` is a tool with no arguments: it advertises an open
 empty object, so `tools/call` refuses nothing and dispatch is handed `%{}` whatever the client
@@ -96,6 +98,13 @@ validator.
 **HTTP** — `BeamMCP.Transport.HTTP`, a `Plug` serving the `2026-07-28` stateless model at one
 endpoint: no sessions, no `Mcp-Session-Id`, no SSE resumability. `plug` and `bandit` are optional
 dependencies; a stdio-only host does not pull them in.
+
+**If you add `plug` to a host that already has this package compiled, run
+`mix deps.compile beam_mcp --force`.** The module is guarded by `Code.ensure_loaded?(Plug)`,
+which is evaluated once at compile time and is not a tracked compile-time dependency, so adding
+the dependency afterwards does not rebuild this package: `mix compile` reports success and
+`BeamMCP.Transport.HTTP` does not exist. Changing this package's version rebuilds it and needs
+no such step.
 
 ```elixir
 Bandit.child_spec(
@@ -284,7 +293,9 @@ it is required by exactly one revision of five and by neither of ours.
 
 ## Status
 
-Pre-1.0. The API may change. Known gaps are listed above and in `CONVENTIONS.md`, which also
+Pre-1.0. The API may change. Known gaps are listed above and in
+[`CONVENTIONS.md`](https://github.com/ScriptKittyOS/beam_mcp/blob/main/CONVENTIONS.md), which is
+not shipped in the package and so is linked rather than named. It also
 records how this package is developed — the gate takes no baseline, a probe's population is
 derived the way the checked mechanism derives it, and CI is unproven until a run exists.
 

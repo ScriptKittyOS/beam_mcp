@@ -366,6 +366,61 @@ defmodule BeamMCP.ReadmeClaimsTest do
       assert http_post_body(String.duplicate("x", 1_048_576 - overhead + 1)).status == 413
     end
 
+    test "arguments reach dispatch as atoms, as the README now says they do" do
+      # Added in round 5. A release lane copied the README's catalog, wrote the obvious
+      # `%{"place" => place}` clause in its dispatch, and got a silent no-match -- because keys
+      # are atoms. The README said only "derived from the schema's properties", which is true and
+      # does not tell a reader that. The claim is now explicit, so it is pinned.
+      claims("reach\n`dispatch` as **atoms**")
+
+      me = self()
+
+      catalog = fn ->
+        [
+          %BeamMCP.ToolSpec{
+            name: :get_weather,
+            command_class: :observe,
+            mode: :read_only,
+            description: "Read the current weather for a place.",
+            input_schema: %{
+              "type" => "object",
+              "properties" => %{"place" => %{"type" => "string"}},
+              "required" => ["place"]
+            }
+          }
+        ]
+      end
+
+      defmodule WeatherCatalog do
+        @behaviour BeamMCP.ToolCatalog
+        @impl true
+        def all do
+          Process.get(:catalog_fun).()
+        end
+      end
+
+      Process.put(:catalog_fun, catalog)
+
+      state =
+        BeamMCP.Server.new(
+          tool_catalog: WeatherCatalog,
+          dispatch: fn _name, args, _opts ->
+            send(me, {:dispatched, args})
+            {:ok, args}
+          end
+        )
+
+      BeamMCP.Server.handle_message(state, %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/call",
+        "params" => %{"name" => "get_weather", "arguments" => %{"place" => "Oslo"}}
+      })
+
+      assert_receive {:dispatched, %{place: "Oslo"}}
+      refute_receive {:dispatched, %{"place" => _}}, 20
+    end
+
     test "the server-side read before a refusal is the cap itself, not a range" do
       # The README said this number was "between 1.02 MiB and 1.50 MiB across socket-buffer
       # settings", attributed to the client's send buffer. Two quantities were being stated as
