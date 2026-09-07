@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Slice 002 — findings
 
 Three review rounds, eight lanes. This is the record of what was wrong and who found it, kept

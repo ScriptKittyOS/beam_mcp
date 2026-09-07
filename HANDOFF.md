@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # HANDOFF — beam_mcp, slice 002 (stateless Streamable HTTP), release 0.3.0
 
 Rounds 4-7 complete. **Round 4's three publish blockers are closed, and nothing blocks a

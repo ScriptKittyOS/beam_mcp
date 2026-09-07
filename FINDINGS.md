@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # beam_mcp — FINDINGS
 
 Source: Ultraviolet `origin/main` = `778accb82759d3def30b2e1410e1aeb573f76dac`.
