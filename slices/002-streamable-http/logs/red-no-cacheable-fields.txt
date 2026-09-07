@@ -1,0 +1,12 @@
+### RED 2: does a 2026-07-28 tools/list carry the fields that revision REQUIRES?
+### The requirement, quoted from the archived spec (logs/spec-changelog.md):
+###   "Require `ttlMs` and `cacheScope` fields on results returned by `tools/list`,
+###    ... via a new `CacheableResult` interface."
+
+tools/list at 2026-07-28, result keys:
+    _meta
+    resultType
+    tools
+
+  ttlMs present?      false
+  cacheScope present? false

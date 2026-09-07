@@ -3,12 +3,20 @@
 
 defmodule BeamMCP.ReadmeClaimsTest do
   @moduledoc """
-  Every behavioural claim the README makes about this package is pinned here.
+  The README claims listed here are pinned to the sentences they quote.
 
-  `CONVENTIONS.md`: the README states what the package does today, and every behavioural claim
-  in it is pinned by a test that runs. This file is where that rule is discharged, and it is a
-  separate file on purpose -- a reader auditing the rule can read one file rather than grepping
-  a suite, and a claim that loses its test loses it visibly.
+  `CONVENTIONS.md`: every claim listed in this file is pinned to the sentence it quotes; a claim
+  not on the list is not pinned. That is the rule as it stands, and the narrower wording is the
+  point -- an earlier version of both that rule and this moduledoc said *every* behavioural claim
+  in the README was pinned, which promised a completeness no mechanism here delivers. Nothing
+  enumerates the README's claims and proves each has a test.
+
+  So this file catches a listed claim that **moves or disappears**. It does not catch a claim
+  **added without a test**, nor one **contradicted by the prose around it** while the quoted
+  fragment survives. Both gaps are demonstrated in `CONVENTIONS.md` rather than asserted.
+
+  It is a separate file on purpose: a reader auditing the rule reads one file rather than
+  grepping a suite, and a listed claim that loses its test loses it visibly.
 
   **Each test quotes the sentence it pins.** A claim whose quoted text no longer appears in the
   README is a claim that moved without its test, which is the failure the rule exists to catch.
@@ -76,20 +84,138 @@ defmodule BeamMCP.ReadmeClaimsTest do
              "worse than no test, because it reads as coverage."
   end
 
+  describe "what the package ships" do
+    test "CHANGELOG.md is in the Hex files list" do
+      # The red for this was asked of a built tarball, which proves the change. It does not
+      # guard it: CHANGELOG.md could leave `files:` again and nothing would fail. r2's point,
+      # and it is the difference between demonstrating a fix and pinning it.
+      files = Mix.Project.config()[:package][:files]
+
+      assert "CHANGELOG.md" in files,
+             "the changelog is the only document explaining why a version changed, and " <>
+               "without this it does not ship -- no release of this package before 0.2.1 " <>
+               "contained it. Shipped files: #{inspect(files)}"
+    end
+  end
+
   describe "the dependency requirement the README hands a consumer" do
     test "it does not span the wire break this release documents" do
-      claims(~s({:beam_mcp, "~> 0.2"}))
+      requirement = "~> 0.3.0"
+      claims("{:beam_mcp, \"#{requirement}\"}")
 
       version = Mix.Project.config()[:version]
 
-      assert Version.match?(version, "~> 0.2"),
+      assert Version.match?(version, requirement),
              "the README's requirement must admit the version being shipped"
 
-      refute Version.match?("0.1.0", "~> 0.2"),
+      refute Version.match?("0.1.0", requirement),
              "0.1.0 is on the far side of the documented removal of resultType and _meta " <>
                "serverInfo from legacy-declared results. A requirement admitting both sides " <>
                "carries a consumer across that break on a routine deps.update, which is what " <>
                "the minor bump was chosen to prevent."
+
+      # The half that makes this durable. The assertion above pins the break that already
+      # happened; on its own it passes unchanged through the next one, which is precisely
+      # what it exists to prevent. So derive the next break from the policy -- breaks are at
+      # the minor position while this package is 0.x -- rather than naming a version, and the
+      # test keeps meaning the same thing for as long as that policy holds -- see the guard below.
+      %Version{major: major, minor: minor} = Version.parse!(version)
+      next_break = "#{major}.#{minor + 1}.0"
+
+      if major == 0 do
+        refute Version.match?(next_break, requirement),
+               "the README recommends a requirement admitting #{next_break}, which is the next " <>
+                 "minor and therefore the next documented wire break. That is the defect a " <>
+                 "reviewer found in `~> 0.1` during 0.2.0, reproduced one release forward. " <>
+                 "Demonstrated before this assertion existed: with the version set to the next " <>
+                 "minor, this file passed green -- see slices/001c-dependency-pin/logs/red.txt."
+      else
+        # NOT an empty branch. An `if` whose else asserts nothing switches the test off rather
+        # than switching policy, and a lane showed the consequence: at 1.0.0 with a README
+        # recommending `>= 1.0.0` -- which admits 2.0.0 -- the suite went green and the test
+        # named "it does not span the wire break" documented nothing, silently, on the day the
+        # package reached 1.0. At 1.x a minor is compatible under semver, so the break moves to
+        # the major; that is the assertion, and it is a real one.
+        refute Version.match?("#{major + 1}.0.0", requirement),
+               "at #{major}.x the documented break moves to the major version. The README " <>
+                 "recommends a requirement admitting #{major + 1}.0.0."
+      end
+
+      # Guarded on major == 0 deliberately. The break-at-minor policy is a 0.x policy: under
+      # semver proper a minor is a COMPATIBLE release, so at 1.x `~> 1.0` admitting 1.1.0 is
+      # correct and refuting it would make this test demand a wrong requirement. An earlier
+      # version of this assertion was unguarded, and the claim that it "keeps meaning the same
+      # thing after every release" was false at 1.0.0 -- a lane demonstrated it rather than
+      # arguing it. It keeps meaning the same thing for as long as the policy it encodes holds,
+      # which is what an encoded policy can promise.
+    end
+
+    test "EVERY requirement the README offers excludes the next break" do
+      # Derived, not blacklisted. The first version of this test refuted one literal spelling,
+      # and a lane defeated it with three valid alternatives that never write that string --
+      # `override: true` (the option list intervenes before the closing quote-brace), `>= 0.2.0`,
+      # and `~>0.2` without the space -- all admitting the next minor, all green. That is a list
+      # presented as a population, which is the defect this whole slice is about.
+      #
+      # So enumerate what the README actually offers and hold every one of them to the policy.
+      # `[beam_mcp: "~> 0.2"]` is keyword-list sugar for `[{:beam_mcp, "~> 0.2"}]` -- the two
+      # are the SAME Elixir term, so Mix cannot tell them apart, and a reader copying either
+      # gets the same dependency. Both lanes evaded the first version of this scan with the
+      # sugar, and with `{:"beam_mcp", …}` and `{:beam_mcp , …}`. A tuple-shaped pattern was a
+      # narrower population than the thing it claimed to enumerate -- the same defect one level
+      # down from the spelling blacklist it replaced.
+      requirements =
+        ~r/beam_mcp"?\s*[,:]\s*"([^"]+)"/
+        |> Regex.scan(readme())
+        |> Enum.map(fn [_full, req] -> req end)
+
+      assert requirements != [], "the README must offer at least one dependency requirement"
+
+      %Version{major: major, minor: minor} = Version.parse!(Mix.Project.config()[:version])
+
+      for req <- requirements do
+        # Widening the scan over prose means a captured string need not be a requirement at
+        # all -- a JSON manifest line like `{ "beam_mcp": "^0.2.0" }` is caught by the same
+        # pattern. Version.match?/2 would raise InvalidRequirementError with a stacktrace;
+        # this turns that into a diagnosis. The red direction is safe either way, but a check
+        # that crashes tells you less than one that says what it found.
+        case Version.parse_requirement(req) do
+          :error ->
+            flunk(
+              "the README offers `#{req}` where a version requirement is expected, and it is " <>
+                "not a valid one. Either it is a requirement and it is malformed, or the scan " <>
+                "matched something that is not a dependency at all -- the pattern reads prose, " <>
+                "so both are possible and neither should pass silently."
+            )
+
+          {:ok, _} ->
+            :ok
+        end
+
+        assert Version.match?(Mix.Project.config()[:version], req),
+               "the README offers `#{req}`, which does not admit the version being shipped"
+
+        if major == 0 do
+          refute Version.match?("#{major}.#{minor + 1}.0", req),
+                 "the README offers `#{req}`, which admits #{major}.#{minor + 1}.0 -- the next " <>
+                   "minor, and therefore the next documented wire break while this package is " <>
+                   "0.x. Every requirement the README hands a consumer must exclude it, not " <>
+                   "just the one in the install snippet."
+        else
+          refute Version.match?("#{major + 1}.0.0", req),
+                 "at 1.x and beyond a minor is a compatible release, so the break moves to the " <>
+                   "major. The README offers `#{req}`, which admits #{major + 1}.0.0."
+        end
+      end
+    end
+
+    test "the paragraph explaining the tighter pin is still there" do
+      # Acceptance criterion 4. The reasoning exists specifically so a future maintainer does
+      # not tidy `~> 0.2.0` back to the Hex idiom, and a reason that can be deleted silently
+      # does not survive the maintainer it was written for. A lane deleted the whole paragraph
+      # and the suite stayed green.
+      claims("not the more usual")
+      claims("would carry you across the next such break")
     end
   end
 

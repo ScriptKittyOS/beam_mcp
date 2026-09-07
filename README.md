@@ -13,9 +13,16 @@ and refuses one that is not; what a tool *does* is the host's business.
 
 ```elixir
 def deps do
-  [{:beam_mcp, "~> 0.2"}]
+  [{:beam_mcp, "~> 0.3.0"}]
 end
 ```
+
+**`~> 0.3.0`, not the more usual `~> 0.3`.** While this package is `0.x` it documents wire
+breaks at the **minor** position, and it has used that position twice: `0.2.0` removed two
+fields from results for legacy-declared requests, and `0.3.0` adds the HTTP transport and the
+`ttlMs`/`cacheScope` fields `2026-07-28` requires on `tools/list`. `~> 0.3` admits `0.4.0`, so
+it would carry you across the next such break on a routine `mix deps.update`; `~> 0.3.0` does
+not. The tighter form is deliberate and is not an over-pin to be tidied away.
 
 ## Two contracts
 
@@ -81,6 +88,137 @@ sent.
 Validation is a deliberately small subset of JSON Schema — `type`, `properties`, `required`,
 `additionalProperties`, and bounds. It refuses rather than guesses, and it is not a general
 validator.
+
+## Transports
+
+**stdio** — `BeamMCP.Transport.Stdio.run/1`, newline-delimited JSON-RPC over a pipe.
+
+**HTTP** — `BeamMCP.Transport.HTTP`, a `Plug` serving the `2026-07-28` stateless model at one
+endpoint: no sessions, no `Mcp-Session-Id`, no SSE resumability. `plug` and `bandit` are optional
+dependencies; a stdio-only host does not pull them in.
+
+```elixir
+Bandit.child_spec(
+  plug: {BeamMCP.Transport.HTTP,
+         tool_catalog: MyApp.Catalog,
+         dispatch: &MyApp.Dispatch.call/3,
+         authorize: &MyApp.Auth.check/1,
+         allowed_origins: ["https://app.example.com"]},
+  port: 4000,
+  ip: {127, 0, 0, 1}
+)
+```
+
+Or mounted inside an existing router, where `forward` matches on a path prefix and the Plug
+serves everything under it:
+
+```elixir
+defmodule MyApp.Router do
+  use Plug.Router
+  plug :match
+  plug :dispatch
+
+  forward "/mcp",
+    to: BeamMCP.Transport.HTTP,
+    init_opts: [
+      tool_catalog: MyApp.Catalog,
+      dispatch: &MyApp.Dispatch.call/3,
+      authorize: &MyApp.Auth.check/1,
+      allowed_origins: ["https://app.example.com"]
+    ]
+
+  match _, do: send_resp(conn, 404, "")
+end
+```
+
+**`authorize` and `allowed_origins` are required and have no defaults.** Omit either and the Plug
+raises when it is initialised — at start, not on the first request.
+
+That is deliberate. This package cannot decide who may call your tools: it has no view of your
+identity model, and deciding for you would be claiming something it cannot keep. But serving
+`tools/call` to anyone who can reach the port is a confused-deputy surface, and a README sentence
+telling you to authenticate is documentation rather than a control. **A required argument with no
+default is a contract, because you cannot start without answering it.** To accept every caller,
+say so: `authorize: fn _conn -> :ok end`.
+
+**`authorize/1` must not read the request body.** It runs before this Plug reads it, and
+`Plug.Conn.read_body/2` can be called once: a host that consumes the body in `authorize/1`
+leaves the transport nothing to parse, and the request fails as a parse error rather than as
+whatever the host meant. Authorize on the `Plug.Conn` — headers, peer, assigns set by an earlier
+plug — and if a decision genuinely needs the payload, make it in `dispatch/3`, which is handed
+the decoded arguments.
+
+Said plainly, because it is a real limitation and not a preference: **body-signature
+authentication is not possible in `authorize/1`.** The callback runs before the body is read and
+returns `:ok | {:error, reason}`, with no way to hand back the `conn` it read from. A host that
+reads the body there does not get an error — a small request appears to work because the body is
+already in the adapter's buffer, and a larger one hangs until the server's read timeout and then
+returns `408` with the connection dead. Measured: 119 bytes `200`, 16 KiB and 200 KiB both `408`
+after 15.0 s. Today the workarounds are a plug in front of this one that reads the body and re-supplies it,
+or deciding in `dispatch/3`. Whether `authorize/1` should instead run after the body is read, or
+be able to hand the `conn` back, is an open design question on the required-option contract and
+not something this release settles.
+
+### Resources this Plug bounds, and the ones it does not
+
+`@max_body_bytes` caps a single body at 1 MiB. Three things that is **not**:
+
+- It is not an aggregate bound. Each in-flight request at the cap costs about 1.05 MiB, measured
+  linear with no plateau to 8,000 concurrent (+8.16 GiB RSS). The concurrent-request ceiling is
+  your HTTP server's: for `Bandit`/`ThousandIsland` it is `num_acceptors * num_connections`,
+  defaulting to 100 × 16,384 = **1,638,400**. Setting it is the host's capacity decision, and a
+  number this package picked for you would be one it cannot keep.
+- It is not a ceiling on bytes read. It is a floor on what is read before a refusal: a declared
+  32 MiB body had 1,769,325 bytes read before the `413`.
+- It is not a time bound. A slow client is held by `read_body/2`'s `:read_timeout`, which this
+  package does not set and therefore inherits from the server — 15,000 ms under `Bandit`. That is
+  a whole-body deadline rather than a per-read reset, so a drip client is answered `408` at 15 s
+  rather than held indefinitely; 16,500 such connections held 243 MiB while a legitimate request
+  was still served in 0.00 s.
+
+`allowed_origins` is separate because the specification makes validating `Origin` a MUST, to
+prevent DNS rebinding; which origins are legitimate is yours to say. `:any` is available and must
+be chosen deliberately. The specification also says a locally-running server **SHOULD** bind to
+localhost rather than all interfaces — that is your `Bandit` option, above, and this package
+cannot enforce it for you.
+
+**What the header requirement does and does not close.** The transport requires an
+`MCP-Protocol-Version` header on every POST and requires it to match the body, so a request that
+establishes no **protocol era** is malformed and refused — that part of the stdio caveat below
+does not apply here.
+
+It does not close the **lifecycle**. `tools/call` over HTTP runs without `initialize` having been
+seen, because `2026-07-28` has no `initialize` and every request stands alone. That is the
+revision's design rather than a gap, but an earlier draft of this section said "a request with no
+era established is malformed and refused" in a way that read as covering both, and a reviewer was
+right that it claimed more than the code supports. Who may call is `authorize/1`'s question, and
+it is yours.
+
+## What of `2026-07-28` this transport implements
+
+Stated as a list rather than left to be inferred, because a transport that advertises a feature
+and does not enforce it is worse than one that never advertised it.
+
+**Implemented.** One POST endpoint; `MCP-Protocol-Version` required and matched against the
+body's `_meta`; `Mcp-Method`, `Mcp-Name` and `Mcp-Param-{Name}` required where the revision
+requires them and validated against the corresponding body values; `=?base64?…?=` header values
+decoded before comparison; `Origin` validated against a host-supplied allow list; a body size
+bound; `405` on non-POST; `404` for an unimplemented method and `200` with a JSON-RPC error for
+an unknown tool. Every header is checked in **all** of its values, not the first — a duplicated
+header is the smuggling primitive the specification's validation MUST exists to prevent.
+
+`Mcp-Param-{Name}` is enforced because `tool_definition/1` passes a schema's `x-mcp-header`
+annotation through to `tools/list` verbatim. Advertising that a header is authoritative and then
+ignoring it gives a client that believes you a silent divergence between the value it routed on
+and the value that ran.
+
+**Not implemented, by design of the revision.** Sessions, `Mcp-Session-Id`, SSE streaming, and
+SSE resumability — all three removed from this revision's transport; and `initialize`, which the
+revision does not have.
+
+**Not implemented, and yours.** Binding to localhost (a `Bandit` option), TLS, request timeouts
+and connection limits (your HTTP server's settings, not this Plug's), and authentication —
+`authorize/1` is where you put it, and it is required precisely so the decision is yours.
 
 ## What it speaks
 

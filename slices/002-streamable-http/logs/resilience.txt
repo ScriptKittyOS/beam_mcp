@@ -1,0 +1,14 @@
+### RESILIENCE: measured against a real Bandit listener on 127.0.0.1, not the Plug alone.
+### Each row is a command and its observed result. Re-run after the two fixes the first
+### pass found: a host dispatch crash answering with an empty 500, and a 413 poisoning the
+### next request on a keep-alive connection.
+
+before crash:      %{active: 1, workers: 0, supervisors: 1, specs: 1}
+baseline:          {200, "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":\"beam_mcp\",\"version\":\"0.3.0\"}},\"cacheScope\":\"private\",\"resultType\":\"complete\",\"tools\":[{\"annotations\":{\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false,\"readOnlyHint\":true},\"description\":\"Always raises.\",\"inputSchema\":{\"additionalProperties\":true,\"properties\":{},\"type\":\"object\"},\"name\":\"boom\"}],\"ttlMs\":0}}"}
+dispatch RAISES:   {500, "{\"error\":{\"code\":-32603,\"message\":\"Internal error\"},\"id\":2,\"jsonrpc\":\"2.0\"}"}
+after crash:       %{active: 1, workers: 0, supervisors: 1, specs: 1}
+next request:      {200, "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"_meta\":{
+oversized:         {413, "{\"error\":{\"code\":-32600,\"message\":\"Request bod
+after oversized:   %{active: 1, workers: 0, supervisors: 1, specs: 1}
+next after 413 #1:  {200, "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"_meta\":{
+next after 413 #2:  {200, "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"_meta\":{

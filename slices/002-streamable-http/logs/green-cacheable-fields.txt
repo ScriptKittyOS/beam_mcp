@@ -1,0 +1,9 @@
+tools/list at 2026-07-28, result keys:
+    _meta
+    cacheScope
+    resultType
+    tools
+    ttlMs
+
+  ttlMs present?      true
+  cacheScope present? true

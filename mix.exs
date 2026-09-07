@@ -4,7 +4,7 @@
 defmodule BeamMCP.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
   @source_url "https://github.com/ScriptKittyOS/beam_mcp"
 
   def project do
@@ -30,6 +30,11 @@ defmodule BeamMCP.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      # Plug is the transport contract; Bandit is the server the host runs it on. Both are
+      # optional: a host using only the stdio transport must not be made to pull an HTTP
+      # server in, and `optional: true` keeps them out of that host's dependency tree.
+      {:plug, "~> 1.16", optional: true},
+      {:bandit, "~> 1.5", optional: true},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]
@@ -44,7 +49,7 @@ defmodule BeamMCP.MixProject do
     [
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib mix.exs README.md LICENSE NOTICE LICENSES)
+      files: ~w(lib mix.exs README.md CHANGELOG.md LICENSE NOTICE LICENSES)
     ]
   end
 end
