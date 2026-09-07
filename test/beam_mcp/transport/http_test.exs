@@ -1253,25 +1253,28 @@ defmodule BeamMCP.Transport.HTTPTest do
     #
     # WHAT IS AND IS NOT COVERED, measured rather than asserted -- the first version of this
     # comment named only half of what the deletion cost, and a lane measured the rest. The
-    # numbers below were RE-MEASURED for slice 003, on the tree that ships, because the fix for
-    # the lost request id moved the malformed-spec catalog off this branch and onto
-    # `check_param_headers/4`'s. A count carried over from the round that produced it would have
-    # been a label rather than a measurement.
+    # numbers below were RE-MEASURED for slice 003 and then re-measured AGAIN, at 158 tests, on
+    # the tree that actually ships. Both re-measurements were necessary: the first because the
+    # fix for the lost request id moved the malformed-spec catalog off this branch and onto
+    # `check_param_headers/4`'s, the second because a count belonging to the round that produced
+    # it is a label rather than a measurement, which is the defect slice 002 round 7 found in a
+    # table headed "on the tree that ships".
     #
-    #   fault_response/4 ALWAYS re-raises   -> KILLED, 147 tests, 1 failure
+    #   fault_response/4 ALWAYS re-raises   -> KILLED, 158 tests, 1 failure
     #     by "an exception with no status of its own, raised in transport code, keeps the
     #     envelope" ABOVE, which now reaches the branch through the invalid-UTF-8 reflection
     #     rather than through the malformed-spec catalog. That mutant serves a bodyless 500,
     #     which is the failure this module exists to avoid.
-    #     Archived: slices/003-release-0-3-1/logs/mutation-c-M2always.txt
     #
-    #   fault_response/4 NEVER re-raises    -> SURVIVES, 147 tests, 0 failures
+    #   fault_response/4 NEVER re-raises    -> SURVIVES, 158 tests, 0 failures
     #     Still unpinned, and honestly so. Detecting it needs an exception with a non-500
     #     :plug_status raised by code that is NOT the host's -- which means the adapter's read
     #     path alone: Bandit.HTTPError at 400 for a malformed transfer coding, Plug.TimeoutError
     #     at 408 for a read timeout. Plug.Test produces neither; its read_body/2 is a
     #     :binary.part of an in-memory binary.
-    #     Archived: slices/003-release-0-3-1/logs/mutation-c-M2never.txt
+    #
+    #   Both, twice, with their diffs against the pristine file:
+    #     slices/003-release-0-3-1/logs/mutation-round3.txt and the per-mutant logs beside it.
     #
     # So the answer branch is pinned above and the re-raise branch is not. Closing the re-raise
     # branch needs a Bandit-backed test. Slice 003 stands one up for the `connection: close`

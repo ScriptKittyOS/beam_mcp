@@ -681,8 +681,10 @@ if Code.ensure_loaded?(Plug) do
     # DEFECT-DRIVEN, said here because the first version of this comment claimed more than had
     # been measured. Its inputs are the annotation names, paths and types the host wrote, so it
     # belongs on the host's side of the boundary on principle -- but the mutant that leaves it
-    # outside SURVIVES the suite (`slices/003-release-0-3-1/logs/mutation-c-Mc2.txt`, 156 tests,
-    # 0 failures), and it survives because reaching a raise needs a `properties` map whose KEY
+    # outside SURVIVES the suite: `Mc2` in `slices/003-release-0-3-1/logs/mutation-round3.txt`,
+    # 158 tests, 0 failures, twice, re-scored on the tree that ships rather than carried forward
+    # from the round it was first run in. It survives because reaching a raise needs a
+    # `properties` map whose KEY
     # has no `String.Chars` implementation AND a type offence or a name collision to make
     # `annotation_detail/1` interpolate it. No JSON-derived schema can produce that. It is
     # recorded as a survivor with this argument rather than pinned by a contrived test.

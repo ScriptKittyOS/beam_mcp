@@ -1,0 +1,5 @@
+c504d36db97a22bc745c157c7d2e68e3d98479a4
+# tree of commit 11e0b7a, written by: git rev-parse '11e0b7a^{tree}'
+# THIS IS THE TREE ROUND 3 LANE b READ. Round 3's own fixes -- the Bandit harness
+# timeout and the two re-pointed mutation counts -- were applied after the read.
+# HEAD at read time: 11e0b7a9a680729ea402fd463fea57e055b1a2bb
