@@ -87,8 +87,28 @@ fi
 # The limit, stated rather than hidden: source code placed under slices/*/logs/ would escape
 # this step. The count printed beside the verdict is what makes that visible.
 lic_hashes=$(git ls-files -- 'LICENSES/*' | xargs -r sha256sum 2>/dev/null | cut -d' ' -f1 | sort -u)
-declare -A tracked=()
-while read -r f; do tracked["$f"]=1; done < <(git ls-files)
+# THE TRACKED-SET LOOKUP USES NO ASSOCIATIVE ARRAY, AND THAT IS A CORRECTNESS REQUIREMENT
+# RATHER THAN A STYLE ONE. It was `declare -A tracked` with `tracked["$f"]=1`. Bash 3.2 -- the
+# bash every stock macOS ships -- has no `-A`, so `tracked["$f"]` becomes an INDEXED array whose
+# subscript is evaluated as ARITHMETIC. `.formatter.exs` is not an arithmetic expression, the
+# expansion is a fatal error for the enclosing command, and both loops abort at their first
+# offending path. Measured by simulation (round 1, logs/round1.r1.md):
+#
+#     reuse                      pass (10 tracked; 10 in scope, 9 headered + 0 sidecar; excluded 0 archive + 0 licence text)
+#     Gate OK.
+#     EXIT=0
+#
+# `pass` over ten files out of 145, and the gate exits 0 -- which is the exact defect this step
+# was rewritten to remove, reintroduced by the rewrite, on every developer machine running the
+# system bash. Two lines on stderr were the only sign.
+#
+# The replacement is a newline-delimited string tested with a `case` glob: a shell builtin, no
+# subprocess, no arithmetic context, and correct on bash 3.2. It is filled from the SAME
+# `git ls-files` invocation that drives the loop below, so the population and the coverage
+# lookup cannot disagree about what "tracked" means -- which is the whole content of this step.
+# tools/probe_gate_honesty.sh P9 fails if an associative array reappears here.
+tracked_paths=$'\n'$(git ls-files)$'\n'
+is_tracked() { case "$tracked_paths" in *$'\n'"$1"$'\n'*) return 0 ;; esac; return 1; }
 n_tracked=0; n_archive=0; n_lictext=0; n_head=0; n_sidecar=0
 missing=""
 while read -r f; do
@@ -100,7 +120,7 @@ while read -r f; do
   if head -5 "$f" | grep -q 'SPDX-License-Identifier'; then
     n_head=$((n_head + 1)); continue
   fi
-  if [ -n "${tracked[$f.license]-}" ] && head -5 "$f.license" | grep -q 'SPDX-License-Identifier'; then
+  if is_tracked "$f.license" && head -5 "$f.license" | grep -q 'SPDX-License-Identifier'; then
     n_sidecar=$((n_sidecar + 1)); continue
   fi
   # Only files that got this far are hashed: the exclusion is consulted where it decides

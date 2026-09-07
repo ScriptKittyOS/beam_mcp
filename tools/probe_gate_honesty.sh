@@ -195,6 +195,32 @@ SPDX-License-Identifier: Apache-2.0"
 run_gate P8 "unheadered probe-gate-honesty.yaml + a sidecar that is NOT git added"
 unplant_all
 
+echo "=== P9 -- the step must run on the bash a developer actually has ==="
+echo "  Not a plant: an assertion over tools/gate.sh's own text, and it can fail -- put a"
+echo "  \`declare -A\` back on a live line and this probe goes red."
+echo
+echo "  Round 1 measured what the associative array does on bash 3.2, the bash every stock"
+echo "  macOS ships. It has no -A, so \`tracked[\$f]\` is an INDEXED array subscript evaluated"
+echo "  as ARITHMETIC; \`.formatter.exs\` is not an arithmetic expression, the expansion is"
+echo "  fatal to its command, and both loops abort at the first offending path:"
+echo
+echo "      reuse                      pass (10 tracked; 10 in scope, 9 headered + 0 sidecar; excluded 0 archive + 0 licence text)"
+echo "      Gate OK."
+echo "      EXIT=0"
+echo
+echo "  Ten files out of 145, reported as pass, exit 0 -- this step's own defect reintroduced"
+echo "  by the fix for it, with two stderr lines as the only sign. So the construct is barred"
+echo "  rather than commented, and comment lines are stripped before looking, because the"
+echo "  explanation above legitimately contains the string."
+p9_hits=$(grep -vE '^[[:space:]]*#' tools/gate.sh | grep -nE 'declare[[:space:]]+-A|local[[:space:]]+-A|\$\{[A-Za-z_][A-Za-z0-9_]*,,\}|\$\{[A-Za-z_][A-Za-z0-9_]*\^\^\}|mapfile|readarray')
+if [ -z "$p9_hits" ]; then
+  echo "  -- P9: no bash-4-only construct on a live line of tools/gate.sh  ->  pass"
+else
+  echo "  -- P9: bash-4-only construct(s) found on live lines of tools/gate.sh  ->  FAIL"
+  printf '%s\n' "$p9_hits" | sed 's/^/       /'
+fi
+echo
+
 echo "=== what to read ==="
 echo "  P1, P2, P3      reuse must FAIL and NAME the file. Under the four-extension glob all"
 echo "                  three read pass, because the file was never in the population."
@@ -209,3 +235,5 @@ echo "                  Under the shared accumulator it is 0. This is 2b's only 
 echo "  P8              reuse must FAIL and name probe-gate-honesty.yaml. With the sidecar"
 echo "                  tested by [ -f ] it reads pass and counts the sidecar."
 echo "  P0, P6          unchanged by either fix, and recorded as such."
+echo "  P9              must read pass. It is the only probe here that reads the script"
+echo "                  rather than running it, because bash 3.2 is not available to run."
