@@ -177,3 +177,30 @@ set was derived**, so the next reader can re-derive it rather than trust the lis
 The test of the fix is that a new member of the set inherits the behaviour instead of needing a
 new finding. Fixing three of four named header reads and leaving the fourth is how the same defect
 was found twice in code written by the commit that fixed it the first time.
+
+## Deriving from attacker-controlled input is not deriving a population
+
+"Derive the set, do not list it" has been the answer often enough in this repository that the
+next reader will apply it without asking the second question: **derived from what?**
+
+A population derived from the request is not a population. It is the caller choosing what gets
+checked, which is the thing being defended against, wearing the shape of the fix.
+
+The instance this rule comes from: `Mcp-Param-{Name}` headers mirror tool arguments, and the
+transport derived the set to validate by sweeping the `mcp-param-*` headers **the caller sent**.
+That looks like a derivation — no hand-written list, a new header inherits the behaviour — and it
+made the specification's own requirement unenforceable by construction. The rule is *"client omits
+the header but the value is in the body → server MUST reject"*, and a server whose population
+comes from the caller's headers can never see an omission: the caller simply sends nothing and is
+never checked. Two review rounds and a passing suite did not notice, because every test sent the
+header it was testing.
+
+The population had to come from the **tool's `inputSchema`** — the side of the exchange the host
+controls and the client cannot influence. The test to apply:
+
+> If a hostile caller can change what gets validated by changing what it sends, the set was not
+> derived. It was requested.
+
+The same question applies to any set built from headers, query parameters, body keys, filenames or
+metadata: derive from the schema, the manifest, the catalog, the code — the authority — and use
+the request only as the thing measured against it.
