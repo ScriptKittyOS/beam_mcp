@@ -152,5 +152,13 @@ ships.
    them can be an acceptance criterion. Verified by `git diff bee3d26 -- lib/beam_mcp/server.ex`:
    the only changes are `new/1`'s two host-supplied options, the typespec entries for them, and
    the `tools/list` clause.
+
+   **Appended in round 5, not rewritten.** The criterion's CLAIM still holds — `handle_message/2`
+   changes in exactly one clause. Its stated VERIFICATION no longer does: running that command
+   today also shows `+ alias BeamMCP.ToolCatalog`, a blank line after `@modern_version`, and
+   `find_tool/2`'s three clauses collapsed into one delegating to `ToolCatalog.fetch/2`
+   (`26 insertions(+), 13 deletions(-)`). `find_tool/2` is a private helper, so the claim is
+   unaffected; the sentence listing what the diff contains was written when it was true and was
+   never re-checked. That is the fresh-count family in the shape absolutes always take.
 7. Every resilience check in §4 has a command and an observed result.
 8. `./tools/gate.sh` exits 0 with every step line reading `pass`.
