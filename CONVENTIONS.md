@@ -133,3 +133,40 @@ the version signal and the advice defeating it in the same commit.**
 It survived a deliberate sweep for stale version strings because the stale string was `0.1`, not
 the `0.1.2` that changed. That is the whole argument for pinning the *class* with tests rather
 than grepping for the *string*: a grep finds what you already thought of.
+
+## A report owed only at the end is a report a crash deletes
+
+The record is written when each **round** closes, not when the run does. A session that is
+terminated mid-work — a rate limit, a crash, a compaction — takes every unwritten conclusion with
+it, and the work then has to be redone from the tree rather than read from the record.
+
+This is not about diligence. It is about where the finding lives: in the run's memory, it is lost
+by any of the ordinary ways a run ends; in the issue, it survives all of them.
+
+## An anchor that cannot move under the mutation carries no information
+
+A test that pins a fix must be able to **fail** when the fix is removed. Two shapes fail that and
+look identical to a passing suite:
+
+- **The contained anchor.** Asserting `old_count == 0` proves nothing when the replacement embeds
+  the original — the old string is still there, inside the new one. Assert `new_count == 1`, and
+  prove application **by effect**: the mutant must change an observable outcome, not a substring.
+- **The compiler kill.** A mutant that leaves a function or attribute unused is rejected by
+  `--warnings-as-errors` before the suite runs. The build failed; no test did anything. Complete
+  the mutation — remove what it orphans — and re-run, or the table records a kill that never
+  happened.
+
+A survivor that is genuinely equivalent is recorded as a survivor, with the argument for why. The
+alternative is writing a test that asserts an implementation detail so the table can read
+all-killed, which is worse than the survivor: it looks like evidence and is not.
+
+## Every place a mechanism reads the same kind of input is one mechanism
+
+When a defect is "this read handles the input wrongly", the fix is not that read. Derive the set
+of places that read that input — with a command, recorded, so the derivation is repeatable — and
+change all of them, through one path if the comparison allows it. Then say in the record **how the
+set was derived**, so the next reader can re-derive it rather than trust the list.
+
+The test of the fix is that a new member of the set inherits the behaviour instead of needing a
+new finding. Fixing three of four named header reads and leaving the fourth is how the same defect
+was found twice in code written by the commit that fixed it the first time.
