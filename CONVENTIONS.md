@@ -204,3 +204,32 @@ controls and the client cannot influence. The test to apply:
 The same question applies to any set built from headers, query parameters, body keys, filenames or
 metadata: derive from the schema, the manifest, the catalog, the code — the authority — and use
 the request only as the thing measured against it.
+
+## Slice directories own the numbers; features have names and a rank
+
+One sequence of numbers, carried by `slices/NNN-name/`, assigned when a slice **starts**. Nothing
+else in this project is numbered. **A feature is an issue with a name and a position in a ranked
+order, never a number.**
+
+The rule exists because the two namespaces were shared for two days and collided twice in that
+time. `003` named both `slices/003-release-0-3-1/` and an unstarted feature issue titled
+*"003 — provenance-bound tool identity"*. Hours later `004` named both `slices/004-gate-honesty/`,
+which was on a pushed branch with work in it, and a newly filed *"004 — auth as a resource
+server"*.
+
+Neither collision was a mistake in the moment. Both were the same reasonable act — reaching for
+the next free number — performed against two lists that each thought they owned the sequence. That
+is what makes it a convention rather than an incident: **the second collision was committed by
+someone who had just been told about the first**, and it will keep happening as long as two things
+can claim the same number.
+
+The asymmetry is what settles which side keeps the numbers. A slice number is **load-bearing**: it
+is a directory path, a branch name, and a string inside commit messages and archived logs that
+cannot be revised without falsifying the record. A feature's number is **decorative** — the
+ordering is the real content, and a rank expresses it without consuming a name. So the numbers stay
+where they cost something to move, and the ordering lives in the record that can be edited.
+
+A consequence worth stating, because it looks like an omission: **the ranked order lives on the
+board, not in a filename.** Anyone wanting to know what comes next reads the ranking, and a
+reordering is a comment rather than a rename. That is the point — a rename would have to reach into
+the one namespace this rule protects.
