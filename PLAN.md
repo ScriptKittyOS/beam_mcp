@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # beam_mcp — PLAN
 
 **Repository:** `github.com/ScriptKittyOS/beam_mcp` (transferred from `HackTuah` 2026-09-06;
