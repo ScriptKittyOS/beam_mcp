@@ -247,17 +247,26 @@ if Code.ensure_loaded?(Plug) do
     # `slices/003-release-0-3-1/logs/probe-d-bandit-drain-limits.txt`.
     #
     # WHY THIS SHAPE AND NOT `close_after/1` AT EACH SITE. The population is the steps of this
-    # `with`, derived rather than listed:
+    # function, derived rather than listed. Two commands, and what each is for:
     #
+    #     $ grep -n 'defp before_body' -A 10 lib/beam_mcp/transport/http.ex
+    #         -- the steps on the near side of the read, and the read itself
     #     $ grep -n '{:refused,' lib/beam_mcp/transport/http.ex
-    #     $ grep -n '<- check_origin\|<- check_method\|<- authorize\|<- read_body_bounded' \
-    #         lib/beam_mcp/transport/http.ex
+    #         -- every refusal site in the module, to be placed against those steps
     #
-    # Six refusal sites sit at or before the read -- the Origin 403, the 405, `authorize/1`'s
-    # 500, its 403 and its contract-violation 403, and `read_body_bounded/1`'s own 400 -- and
-    # only the 413 called `close_after/1` for itself. Fixing the named ones and leaving the
-    # rest is how the same header defect was found twice in this module already, so a step
-    # added to this `with` inherits the behaviour instead of needing a new finding.
+    # A COUNT IS NOT A CHECK, and this comment says so because the first version of it got the
+    # count wrong. BOTH greps match this comment quoting them, which is a self-correction this
+    # repository has already recorded once and reproduced here. The second returns fourteen
+    # lines, of which three are not refusal sites at all: the quotation above, `handle/2`'s
+    # `else` answering one, and the line just below that closes one. Read where each of the
+    # rest lands; do not count them.
+    #
+    # SEVEN refusal sites are at or before the body read: the Origin 403, the 405,
+    # `authorize/1`'s 500, its 403 and its contract-violation 403, and `read_body_bounded/1`'s
+    # own 413 and 400. Exactly one of the seven -- the 413 -- called `close_after/1` for
+    # itself; the other six did not. Fixing the named ones and leaving the rest is how the same
+    # header defect was found twice in this module already, so a step added to this function
+    # inherits the behaviour instead of needing a new finding.
     #
     # `decode/2` and everything after it are on the far side: the body is read by then, the
     # connection is clean, and a refusal there keeps it. That is pinned in both directions.
@@ -373,7 +382,7 @@ if Code.ensure_loaded?(Plug) do
 
         # No `close_after/1` here any more, and that is not a behaviour change: this refusal
         # goes out through `before_body/2`, which closes on every refusal in front of the
-        # decode. A second copy of the rule beside one of its six sites is how the first five
+        # decode. A second copy of the rule beside one of its seven sites is how the other six
         # got missed.
         {:more, _partial, conn} ->
           {:refused, conn, 413,
@@ -666,9 +675,17 @@ if Code.ensure_loaded?(Plug) do
     #   host tool_catalog returns a malformed spec     500  -32603  id=nil
     #
     # One host bug, two envelopes, decided by which line it landed on. The line is not the
-    # boundary; the host is. `check_annotations/2` is inside too, because its inputs are the
-    # annotation names, paths and types the host wrote, and a schema whose `properties` keys
-    # are not strings raises in `Enum.join/2` there.
+    # boundary; the host is.
+    #
+    # `check_annotations/2` is inside too, and THAT HALF IS DEFENSIVE RATHER THAN
+    # DEFECT-DRIVEN, said here because the first version of this comment claimed more than had
+    # been measured. Its inputs are the annotation names, paths and types the host wrote, so it
+    # belongs on the host's side of the boundary on principle -- but the mutant that leaves it
+    # outside SURVIVES the suite (`slices/003-release-0-3-1/logs/mutation-c-Mc2.txt`, 156 tests,
+    # 0 failures), and it survives because reaching a raise needs a `properties` map whose KEY
+    # has no `String.Chars` implementation AND a type offence or a name collision to make
+    # `annotation_detail/1` interpolate it. No JSON-derived schema can produce that. It is
+    # recorded as a survivor with this argument rather than pinned by a contrived test.
     #
     # `ToolCatalog.fetch/2` returning anything but `{:ok, spec}` still falls through this
     # `with` unchanged, to the caller's `_ -> []`: a tool this catalog does not have mirrors
