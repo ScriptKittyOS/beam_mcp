@@ -1,0 +1,21 @@
+# The bash 3.2 simulation from round 1, lane r1. The ONLY change from tools/gate.sh at
+# commit 6a30cb2 is 'declare -A tracked=()' -> 'declare -a tracked=()', which is what bash
+# 3.2 leaves you with because it has no -A.
+
+$ bash gate.bash3.sh   (stdout)
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (10 tracked; 10 in scope, 9 headered + 0 sidecar; excluded 0 archive + 0 licence text)
+  licence files              pass
+Gate OK.
+
+EXIT=0
+
+$ bash gate.bash3.sh   (stderr, in its entirety)
+/tmp/claude-1000/-home-aylac-Projects-beam-mcp/7e6cdf96-6bae-44c9-9851-e53830c64eb4/scratchpad/gate.bash3.sh: line 91: .formatter.exs: syntax error: operand expected (error token is ".formatter.exs")
+/tmp/claude-1000/-home-aylac-Projects-beam-mcp/7e6cdf96-6bae-44c9-9851-e53830c64eb4/scratchpad/gate.bash3.sh: line 103: LICENSE.license: syntax error: invalid arithmetic operator (error token is ".license")
