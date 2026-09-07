@@ -1,0 +1,30 @@
+bandit 1.12.5  thousand_island 1.5.0
+
+== unread request body pad = 0 bytes ==
+
+19:19:34.107 [info] beam_mcp: refused by host authorize/1: :nope
+
+19:19:34.113 [info] beam_mcp: refused by host authorize/1: :nope
+  authorize 403 (pre-read refusal)               responses=2  connection-close=false
+  200 control                                    responses=2  connection-close=false
+  405 (PUT, pre-read refusal)                    responses=2  connection-close=false
+
+== unread request body pad = 100000 bytes ==
+
+19:19:36.546 [info] beam_mcp: refused by host authorize/1: :nope
+
+19:19:36.547 [info] beam_mcp: refused by host authorize/1: :nope
+  authorize 403 (pre-read refusal)               responses=2  connection-close=false
+  200 control                                    responses=2  connection-close=false
+  405 (PUT, pre-read refusal)                    responses=2  connection-close=false
+
+== unread request body pad = 1000000 bytes ==
+
+19:19:38.980 [info] beam_mcp: refused by host authorize/1: :nope
+
+19:19:39.024 [info] beam_mcp: refused by host authorize/1: :nope
+  authorize 403 (pre-read refusal)               responses=2  connection-close=false
+  200 control                                    responses=2  connection-close=false
+  405 (PUT, pre-read refusal)                    responses=2  connection-close=false
+
+PROBE_EXIT=0

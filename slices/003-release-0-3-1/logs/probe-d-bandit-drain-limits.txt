@@ -1,0 +1,15 @@
+== a refused request whose body EXCEEDS bandit's 8_000_000-byte drain cap ==
+
+19:21:57.150 [info] beam_mcp: refused by host authorize/1: :nope
+
+19:21:57.177 [error] ** (Bandit.HTTPError) Unable to read remaining data in request body
+  authorize 403, 9000160-byte body                     responses=1  socket=closed
+
+== a refused request that DECLARES more body than it sends (a slow/truncated client) ==
+
+19:21:57.184 [info] beam_mcp: refused by host authorize/1: :nope
+  authorize 403, declares +5MB, sends 160              responses=1  socket=open
+
+== control: an ordinary 200, complete body ==
+  200, two pipelined                                   responses=2  socket=open
+PROBE_EXIT=0

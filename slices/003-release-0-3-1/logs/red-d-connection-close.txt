@@ -1,0 +1,114 @@
+Running ExUnit with seed: 341598, max_cases: 64
+
+..
+
+  1) test a live listener: what a refusal does to the connection a 405 ends the connection instead of draining the body it refused (BeamMCP.Transport.HTTPBanditTest)
+     test/beam_mcp/transport/http_bandit_test.exs:271
+     Expected truthy, got false
+     code: assert closes?(bytes)
+     arguments:
+
+         # 1
+         "HTTP/1.1 405 Method Not Allowed\r\ndate: Mon, 07 Sep 2026 23:23:35 GMT\r\ncontent-length: 97\r\nvary: accept-encoding\r\ncache-control: max-age=0, private, must-revalidate\r\nallow: POST\r\ncontent-type: application/json; charset=utf-8\r\n\r\n{\"error\":{\"code\":-32600,\"message\":\"Method not allowed: PUT; use POST\"},\"id\":null,\"jsonrpc\":\"2.0\"}"
+
+     stacktrace:
+       test/beam_mcp/transport/http_bandit_test.exs:281: (test)
+
+
+19:23:36.587 [info] beam_mcp: refused by host authorize/1: :nope
+
+
+  2) test a live listener: what a refusal does to the connection an authorize refusal ends the connection instead of draining the body it refused (BeamMCP.Transport.HTTPBanditTest)
+     test/beam_mcp/transport/http_bandit_test.exs:236
+     Expected truthy, got false
+     code: assert closes?(bytes)
+     arguments:
+
+         # 1
+         "HTTP/1.1 403 Forbidden\r\ndate: Mon, 07 Sep 2026 23:23:36 GMT\r\ncontent-length: 73\r\nvary: accept-encoding\r\ncache-control: max-age=0, private, must-revalidate\r\ncontent-type: application/json; charset=utf-8\r\n\r\n{\"error\":{\"code\":-32600,\"message\":\"Forbidden\"},\"id\":null,\"jsonrpc\":\"2.0\"}"
+
+     stacktrace:
+       test/beam_mcp/transport/http_bandit_test.exs:242: (test)
+
+
+19:23:37.297 [error] ** (RuntimeError) authorize exploded
+    test/beam_mcp/transport/http_bandit_test.exs:249: anonymous fn/1 in BeamMCP.Transport.HTTPBanditTest."test a live listener: what a refusal does to the connection an authorize that raises ends the connection instead of draining the body"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:924: BeamMCP.Transport.HTTP.host_call/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:303: BeamMCP.Transport.HTTP.authorize/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:221: BeamMCP.Transport.HTTP.handle/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    (bandit 1.12.5) lib/bandit/pipeline.ex:129: Bandit.Pipeline.call_plug!/2
+    (bandit 1.12.5) lib/bandit/pipeline.ex:42: Bandit.Pipeline.run/5
+    (bandit 1.12.5) lib/bandit/http1/handler.ex:23: Bandit.HTTP1.Handler.handle_data/3
+    (bandit 1.12.5) lib/bandit/delegating_handler.ex:18: Bandit.DelegatingHandler.handle_data/3
+    (bandit 1.12.5) lib/bandit/delegating_handler.ex:8: Bandit.DelegatingHandler.handle_continue/2
+    (stdlib 7.1) gen_server.erl:2424: :gen_server.try_handle_continue/3
+    (stdlib 7.1) gen_server.erl:2291: :gen_server.loop/4
+    (stdlib 7.1) proc_lib.erl:333: :proc_lib.init_p_do_apply/3
+
+
+
+  3) test a live listener: what a refusal does to the connection an authorize that raises ends the connection instead of draining the body (BeamMCP.Transport.HTTPBanditTest)
+     test/beam_mcp/transport/http_bandit_test.exs:246
+     Expected truthy, got false
+     code: assert closes?(bytes)
+     arguments:
+
+         # 1
+         "HTTP/1.1 500 Internal Server Error\r\ndate: Mon, 07 Sep 2026 23:23:36 GMT\r\ncontent-length: 78\r\nvary: accept-encoding\r\ncache-control: max-age=0, private, must-revalidate\r\ncontent-type: application/json; charset=utf-8\r\n\r\n{\"error\":{\"code\":-32603,\"message\":\"Internal error\"},\"id\":null,\"jsonrpc\":\"2.0\"}"
+
+     stacktrace:
+       test/beam_mcp/transport/http_bandit_test.exs:254: (test)
+
+
+
+  4) test a live listener: what a refusal does to the connection an Origin refusal ends the connection instead of draining the body it refused (BeamMCP.Transport.HTTPBanditTest)
+     test/beam_mcp/transport/http_bandit_test.exs:222
+     Expected truthy, got false
+     code: assert closes?(bytes)
+     arguments:
+
+         # 1
+         "HTTP/1.1 403 Forbidden\r\ndate: Mon, 07 Sep 2026 23:23:37 GMT\r\ncontent-length: 82\r\nvary: accept-encoding\r\ncache-control: max-age=0, private, must-revalidate\r\ncontent-type: application/json; charset=utf-8\r\n\r\n{\"error\":{\"code\":-32600,\"message\":\"Origin not allowed\"},\"id\":null,\"jsonrpc\":\"2.0\"}"
+
+     stacktrace:
+       test/beam_mcp/transport/http_bandit_test.exs:229: (test)
+
+.
+19:23:38.722 [error] beam_mcp: authorize/1 must return :ok or {:error, reason}, got: :yes_please
+
+
+  5) test a live listener: what a refusal does to the connection an authorize breaking its contract ends the connection instead of draining (BeamMCP.Transport.HTTPBanditTest)
+     test/beam_mcp/transport/http_bandit_test.exs:258
+     Expected truthy, got false
+     code: assert closes?(bytes)
+     arguments:
+
+         # 1
+         "HTTP/1.1 403 Forbidden\r\ndate: Mon, 07 Sep 2026 23:23:38 GMT\r\ncontent-length: 73\r\nvary: accept-encoding\r\ncache-control: max-age=0, private, must-revalidate\r\ncontent-type: application/json; charset=utf-8\r\n\r\n{\"error\":{\"code\":-32600,\"message\":\"Forbidden\"},\"id\":null,\"jsonrpc\":\"2.0\"}"
+
+     stacktrace:
+       test/beam_mcp/transport/http_bandit_test.exs:267: (test)
+
+
+19:23:39.481 [info] beam_mcp: refused by host authorize/1: :nope
+
+19:23:39.484 [error] ** (Bandit.HTTPError) Unable to read remaining data in request body
+
+
+  6) test a live listener: what a refusal does to the connection a refusal over the adapter's drain cap now announces the close it always did (BeamMCP.Transport.HTTPBanditTest)
+     test/beam_mcp/transport/http_bandit_test.exs:285
+     Expected truthy, got false
+     code: assert closes?(bytes)
+     arguments:
+
+         # 1
+         "HTTP/1.1 403 Forbidden\r\ndate: Mon, 07 Sep 2026 23:23:39 GMT\r\ncontent-length: 73\r\nvary: accept-encoding\r\ncache-control: max-age=0, private, must-revalidate\r\ncontent-type: application/json; charset=utf-8\r\n\r\n{\"error\":{\"code\":-32600,\"message\":\"Forbidden\"},\"id\":null,\"jsonrpc\":\"2.0\"}"
+
+     stacktrace:
+       test/beam_mcp/transport/http_bandit_test.exs:301: (test)
+
+
+Finished in 5.1 seconds (0.00s async, 5.1s sync)
+9 tests, 6 failures
+TEST_EXIT=2
