@@ -5,11 +5,11 @@
 recorded: slices/test-slice/signoff/round1.r1.signoff
   verdict: approve
   tree:    4e42d919befc267dfc80037ac28b20a310eca20c
-  commit:  532ec43fcb2acc55c7c121bcf1eda12507dc7241
+  commit:  b2cec138a15081ca0e1d6503a25217dde47592d7
 recorded: slices/test-slice/signoff/round1.r2.signoff
   verdict: approve
   tree:    4e42d919befc267dfc80037ac28b20a310eca20c
-  commit:  532ec43fcb2acc55c7c121bcf1eda12507dc7241
+  commit:  b2cec138a15081ca0e1d6503a25217dde47592d7
     the two records name the same tree:
       tree: 4e42d919befc267dfc80037ac28b20a310eca20c
 == signoff verify: slices/test-slice ==
@@ -85,8 +85,8 @@ recorded: slices/test-slice/signoff/round1.r2.signoff
      has to be what refuses, or nothing does.
     under the excluded directory HEAD now carries:
       120000 blob 5f9d404e87aee2fcf79e187883f038a1017c2de0	slices/test-slice/signoff/anything.sh
-      100644 blob dde554613cb802fcdd48fcf39de7c8c55650b9f3	slices/test-slice/signoff/round1.r1.signoff
-      100644 blob b4266d067672a31c9500d79bbb940298cdf08fde	slices/test-slice/signoff/round1.r2.signoff
+      100644 blob 41b69ff98018f4a3a9f3f145c0b6933729673b2e	slices/test-slice/signoff/round1.r1.signoff
+      100644 blob 268cfd5764d055434ac823e9942bea60d06ba96a	slices/test-slice/signoff/round1.r2.signoff
     SIGNOFF REFUSED -- slices/test-slice/signoff/anything.sh is a symbolic link. slices/test-slice/signoff/ is excluded from the reviewed tree, so a link out of it carries content no review sees.
   S8   AS EXPECTED  (want nonzero, got exit 1)  an exclusion a link walks through is not an exclusion
 
@@ -137,3 +137,4 @@ recorded: slices/test-slice/signoff/round1.r2.signoff
   probes as expected: 9
   probes disagreeing: 0
   mutants surviving:  0
+PROBE_SIGNOFF_EXIT=0

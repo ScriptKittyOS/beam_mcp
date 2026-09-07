@@ -186,21 +186,128 @@ population is the whole tree.
 
 ---
 
+## Task 2 — `tools/signoff.sh` (SCR-265)
+
+Motivated by two record gaps measured in this repository's own shipped slices, not by a
+requirement document:
+
+    $ git ls-files -- 'slices/001b-ping-guard/logs/round*' | grep -vc '\.tree$'   ->  16
+    $ git ls-files -- 'slices/001b-ping-guard/logs/*.tree'  | wc -l               ->   0
+
+    $ git ls-files -- 'slices/002-streamable-http/logs/round4.*'
+      slices/002-streamable-http/logs/round4.r1.tree     <- a tree nobody gave a verdict on
+      slices/002-streamable-http/logs/round4.r2.tree     <- a tree nobody gave a verdict on
+      slices/002-streamable-http/logs/round4.s1.md
+      slices/002-streamable-http/logs/round4.s1.tree
+
+Sixteen verdicts bound to no tree; three pins of which two certify nothing. Same defect from
+opposite ends, so **a record is one file carrying both facts** — a verdict without a tree does
+not parse, a tree without a verdict is not a record, and there is no pairing step to get wrong.
+Neither archive is repaired: they are the evidence.
+
+Nine probes (S1–S9), all as expected, and two mutations, neither surviving. Transcript:
+`logs/probe-signoff.txt`.
+
+Not wired into `gate.sh` or CI, with the reason stated in the script's own header rather than
+left to be inferred.
+
+---
+
+## The rounds
+
+Three rounds, two lanes each, closing rule as stated at the top of this file.
+
+| round | lane | verdict | finding | tree bound |
+|---|---|---|---|---|
+| 1 | r1 | changes-required | **R1-A** `gate.sh` reports `pass` over 10 of 145 files on bash 3.2. **R1-B** a symlink walks through `signoff/`'s whitelist | `9a7998d1…` |
+| 1 | r2 | changes-required | **R1-C** `verify` can never pass on a slice that runs rounds | `9a7998d1…` |
+| 2 | r1 | changes-required | **R2-A** the signoff exclusion depended on which `grep` is first on `PATH` | `7ae4f833…` |
+| 2 | r2 | changes-required | **R2-B** the harness scored a mutation that had never been applied | `7ae4f833…` |
+| 3 | r1 | approve | nothing blocking; `gate.sh` and both harnesses re-run clean | shipped tree |
+| 3 | r2 | approve | nothing blocking; every FINDINGS claim re-derived from its transcript | shipped tree |
+
+Every finding above was found by **using** a tool, not by reading it. That is the one pattern
+across the rounds worth keeping: three of the five are the slice's own subject — a mechanism
+reporting on something it had not looked at — reappearing inside the fixes for it.
+
+- **R1-A** is the subject exactly: the population fix reintroduced `pass` over an unlooked-at
+  population, on every stock macOS, with two stderr lines as the only sign.
+- **R2-B** is the subject one level up: the *harness* reported on a mutant it had never applied,
+  and reported it as a **survivor** — the direction that costs the most, because a survivor
+  reads as a real finding and gets acted on.
+- **R1-C** and **R2-A** are the same shape pointing the other way: a check that can only refuse.
+  `CONVENTIONS.md` says a check that cannot fail "reads as coverage and is not". A check that
+  cannot pass reads as rigour and is not, and its one stable outcome is to be switched off.
+
+The gate at the shipped tree, every step line read rather than the exit code
+(`logs/gate-round3.txt`):
+
+    == beam_mcp gate ==
+      format                     pass
+      compile                    pass
+      test                       pass
+      credo                      pass
+      optional deps              pass
+      docs                       pass
+      reuse                      pass (160 tracked; 53 in scope, 51 headered + 2 sidecar; excluded 105 archive + 2 licence text)
+      licence files              pass
+    Gate OK.
+    GATE_EXIT=0
+
+---
+
 ## Open, recorded rather than fixed
 
-- **`slices/*/logs/` is outside the REUSE step.** Source code placed there escapes it. The
-  exclusion is counted and printed on every run so it cannot grow quietly, but the limit is
-  real. Stated in `gate.sh` itself rather than only here.
+- **Both lanes of every round were run by the same agent.** Subagent spawning was withheld for
+  this run, so "two independent lanes" here means two passes with different remits and different
+  evidence, not two parties. A lane cannot be independent of itself. This is the weakest thing
+  about the record and it is stated first for that reason.
+
+- **A tree pin cannot live inside the tree it pins, and `logs/round<N>.<lane>.tree` therefore
+  cannot be made self-consistent.** Committing round 3's `.tree` file changes the tree that file
+  names. So `logs/round3.*.tree` holds `38e1d07c…`, the review tree the round-3 lanes read at
+  commit `12345d6`, while `signoff/round3.*.signoff` binds the shipped tree — and the two differ
+  by exactly the commit that adds the round-3 record. This is not a defect to fix; it is the
+  structural reason `signoff/` is excluded from the reviewed tree and the manual `logs/*.tree`
+  practice slice 002 invented is not the mechanism. It was found by using the tool on the slice
+  that builds it, which is what `PLAN.md` §4 said that use was for.
+
+- **The ordering of "review, record, fix" had to be recovered rather than followed, in both
+  rounds 1 and 2.** `record` binds the tree in front of it, so a record written after its own
+  round's fixes have landed names a tree no lane read. Round 1 was recovered with `git stash`,
+  round 2 from a detached checkout of the reviewed commit. Both records are correct; the
+  process that produced them was not, twice, and the tool caught neither because both recoveries
+  were done by hand. The mechanism this suggests — `record` taking the commit it binds — was not
+  built, because designing it after two hand recoveries is a change nobody has reviewed.
+
+- **`slices/*/logs/` is outside the REUSE step.** Source placed there escapes it. The exclusion
+  is counted and printed on every run so it cannot grow quietly, but the limit is real and is
+  stated in `gate.sh` itself.
+
 - **`archive_sweep.sh` exits non-zero on `main`** after the SCR-263 fix at `3eddb8a`, because
   three of slice 001b's archives have drifted from a tree that has since moved. That is drift,
-  named rather than silenced. Re-capturing those archives is slice 001b's record to change, not
-  this slice's, and the script is therefore **not** wired into `gate.sh` or CI.
-- **`HANDOFF.md` was touched by this slice for its SPDX header only** — five inserted lines,
-  zero deleted, verified by `git diff --cached --stat`. Its *content* belongs to the concurrent
-  `slice/003-release-0-3-1`, which is fixing it. The merge-time overlap is that branch owner's
-  to resolve; the coordinator has been told.
-- **`PLAN.md` §5 prescribes six commits; this slice made fewer**, collapsing "derive the
-  population" and "the licence verdict is its own" into one `tools/gate.sh` commit. The reason
-  §5 gives for the ordering — *"so no commit leaves the gate red"* — is satisfied: the coverage
-  commit lands first and the gate is green at every commit on the branch. Recorded because the
-  divergence is from the plan, not from the reason.
+  named rather than silenced. Re-capturing those archives is slice 001b's record to change, and
+  the script is therefore **not** wired into `gate.sh` or CI.
+
+- **`HANDOFF.md` was touched for its SPDX header only** — five inserted lines, zero deleted,
+  verified with `git diff --cached --stat`. Its *content* belongs to the concurrent
+  `slice/003-release-0-3-1`. The merge-time overlap is that branch owner's to resolve.
+
+- **`PLAN.md` §4's `verify` table is departed from**, per R1-C: the highest round decides and
+  earlier rounds are history. The plan text is left as written. What is not relaxed: every
+  record must still parse, in every round.
+
+- **`PLAN.md` §5 prescribes six commits; this slice made more, and grouped differently.** The
+  reason §5 gives — *"so no commit leaves the gate red"* — holds: the coverage commit lands
+  first and the gate is green at every commit on the branch.
+
+- **`PLAN.md` §3 (SCR-249, the four `mix docs` honesty questions) was not investigated.** It is
+  marked time-boxed and optional in the plan, and the three rounds went to the findings above
+  instead. Nothing was changed in that step, and no claim is made about it.
+
+- **`probe_signoff.sh` uses `${id,,}`, a bash 4 construct.** R1-A's fix covers `gate.sh`, which
+  is the gate step; the probe is a developer tool and was left. Recorded so the inconsistency is
+  not read as an oversight.
+
+- **`signoff.sh` cannot know whether a reviewer read anything.** It records which tree a verdict
+  is about. The hash is written by the party it certifies.
