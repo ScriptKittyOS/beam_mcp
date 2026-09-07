@@ -1,0 +1,11 @@
+1d27f1a0cd3265f45cd7ef0ca64ea10f584f6e2a
+# tree of commit b821818, written by: git rev-parse 'b821818^{tree}'
+#
+# THIS IS THE TREE LANE a READ. The working tree has since moved: lane a's own finding
+# (an overstated comment on tool_annotations/2, see round1.a.md) was corrected after the
+# read, so a diff run now shows that correction and nothing else. Recorded rather than
+# claimed clean:
+#   $ git diff b821818 --stat -- lib test
+#    lib/beam_mcp/transport/http.ex | 14 +++++++++++---
+#    1 file changed, 11 insertions(+), 3 deletions(-)
+# HEAD at read time: b82181892363d2029d73aa723c1309e13a880e19

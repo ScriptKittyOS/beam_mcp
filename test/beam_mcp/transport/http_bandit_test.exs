@@ -205,16 +205,17 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     # reads the same kind of input is one mechanism". The set is the steps of `before_body/2`
     # in `lib/beam_mcp/transport/http.ex`, and it was derived with:
     #
+    #     $ grep -n 'defp before_body' -A 10 lib/beam_mcp/transport/http.ex
     #     $ grep -n '{:refused,' lib/beam_mcp/transport/http.ex
-    #     $ grep -n '<- check_origin\|<- check_method\|<- authorize\|<- read_body_bounded' \
-    #         lib/beam_mcp/transport/http.ex
     #
-    # The first lists every refusal site; the second says which `with` step each belongs to and
-    # where the body read sits among them. SIX sites are at or before the read -- the Origin
-    # 403, the 405, `authorize/1`'s 500, its 403 and its contract-violation 403, and
-    # `read_body_bounded/1`'s own 400 -- of which only the 413 already closed. The brief this
-    # work came from named three; the derivation found six, which is the whole argument for
-    # deriving.
+    # The first shows the steps on the near side of the body read and the read itself; the
+    # second lists every refusal site in the module, to be placed against those steps. Three of
+    # the second grep's fourteen hits are not sites -- the comment quoting itself, `handle/2`'s
+    # `else`, and `before_body/2`'s own close -- so the hits are read, not counted.
+    #
+    # SEVEN sites are at or before the read: the Origin 403, the 405, `authorize/1`'s 500, its
+    # 403 and its contract-violation 403, and `read_body_bounded/1`'s own 413 and 400. Exactly
+    # one, the 413, already closed. The brief this work came from named three.
     #
     # A case per STEP, with the sites named, because a step is what a future change adds -- and
     # a step added to `before_body/2` inherits the behaviour without needing a new finding.

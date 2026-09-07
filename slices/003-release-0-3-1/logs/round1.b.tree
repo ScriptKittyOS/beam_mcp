@@ -1,0 +1,7 @@
+1d27f1a0cd3265f45cd7ef0ca64ea10f584f6e2a
+# tree of commit b821818, written by: git rev-parse 'b821818^{tree}'
+#
+# THIS IS THE TREE LANE b READ -- the same tree lane a read, before either lane's fixes
+# were applied. Lane b additionally read the two commit messages c54046a..b821818 and every
+# log under slices/003-release-0-3-1/logs/ as of that commit.
+# HEAD at read time: b82181892363d2029d73aa723c1309e13a880e19
