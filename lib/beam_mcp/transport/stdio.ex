@@ -2,10 +2,38 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule BeamMCP.Transport.Stdio do
-  @moduledoc false
+  @moduledoc """
+  The stdio transport: newline-delimited JSON-RPC on standard input and output.
+
+  This is the transport an MCP client launches as a child process, and `run/1` is the whole of
+  its public surface. It reads one JSON message per line, hands it to `BeamMCP.Server`, and
+  writes the response as one line. A message that cannot be decoded is answered `-32700` and the
+  loop continues; end of input ends it.
+
+  Responses are always newline-delimited. A request may arrive under the older `Content-Length`
+  framing and is read, because a client that speaks it is not wrong to try — but nothing is
+  written back in that form.
+
+  Whoever can write to this transport already has the host's privileges, which is why the
+  package does not authenticate here and `BeamMCP.Transport.HTTP` requires an `:authorize`
+  option with no default.
+
+      BeamMCP.Transport.Stdio.run(
+        tool_catalog: MyApp.Catalog,
+        dispatch: &MyApp.Dispatch.call/3,
+        server_name: "my-app"
+      )
+
+  Options are `BeamMCP.Server.new/1`'s; `:tool_catalog` is required.
+  """
 
   alias BeamMCP.Server
 
+  @doc """
+  Runs the read/answer loop on standard input and output until end of input.
+
+  Blocks the calling process. Options are passed to `BeamMCP.Server.new/1`.
+  """
   @spec run(keyword()) :: :ok
   def run(opts \\ []) do
     loop(Server.new(opts))

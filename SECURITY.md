@@ -61,12 +61,21 @@ The package's own code, `lib/`:
 Recorded so they are not reported as discoveries, and so their status is not mistaken for
 ignorance of them:
 
-- **Error payloads carry `inspect/1` output**, so Elixir term syntax reaches the wire. It is a
-  boundary defect, it is tracked, and it is fixed before the first release.
-- **The package is pre-1.0 and unpublished.** No version has shipped, so there is no supported
-  release to backport a fix to yet.
+- **The package is pre-1.0.** The API may still change between minor versions, and while it is
+  `0.x` a security fix may arrive in a release that also carries a wire change. The changelog
+  entry says so when it does.
 
 ## Supported versions
 
-None yet — nothing is published. When a release exists, this section will name which versions
-receive fixes.
+Fixes land on the latest published minor. Earlier minors are not backported, and while the
+package is `0.x` a fix may arrive in a release that also carries a wire change — the changelog
+entry says so when it does.
+
+| version | supported |
+|---|---|
+| `0.3.x` | yes |
+| `0.2.x` | no — superseded |
+| `0.1.x` | no — superseded |
+
+This table names what a single maintainer can actually keep. Read it with the acknowledgement
+and assessment windows above, which are the commitments that matter more.

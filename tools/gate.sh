@@ -30,6 +30,23 @@ step "credo"    mix credo --strict
 # artefact in a throwaway consumer project, because a compile that "succeeded" is not evidence.
 step "optional deps" bash tools/probe_optional_deps.sh
 
+# `mix docs` EXITS 0 ON A WARNING, so its status is not a verdict and this step reads its output.
+#
+# A hidden module referenced by the docs shipped in 0.1.0 as `BeamMCP.Server`, and the CHANGELOG
+# entry recording that also recorded why nothing caught it: "a hidden module is not a compile
+# warning and the gate does not run `mix docs`". The gate then did not run mix docs for two more
+# releases, and 0.3.0's first cut reproduced the defect on `BeamMCP.Transport.Stdio` -- the
+# transport the README documents as the entry point. Fixing the instance twice and the mechanism
+# never is what this step is for.
+docs_out=$(mix docs 2>&1); docs_rc=$?
+docs_warnings=$(printf '%s\n' "$docs_out" | grep -c 'warning:')
+if [ "$docs_rc" -eq 0 ] && [ "$docs_warnings" -eq 0 ]; then
+  note "docs" "pass"
+else
+  note "docs" "FAIL (exit $docs_rc, $docs_warnings warnings)"
+  printf '%s\n' "$docs_out" | sed 's/^/      /'; fail=1
+fi
+
 # REUSE: every tracked file that can carry a comment carries an SPDX identifier.
 # Derived from the tracked set, never from a hand list.
 missing=$(git ls-files -- '*.ex' '*.exs' '*.sh' '*.yml' | while read -r f; do

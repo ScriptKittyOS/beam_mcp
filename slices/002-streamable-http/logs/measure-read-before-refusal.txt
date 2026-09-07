@@ -1,6 +1,6 @@
 ### The read-before-refusal measurement, settling the README sentence r2 flagged.
 ### Written by the command that produced it. Script:
-###   scratchpad/measure_body.exs -- a Bandit listener on 127.0.0.1:4931 whose plug calls
+###   tools/measure_body.exs -- a Bandit listener on 127.0.0.1:4931 whose plug calls
 ###   Plug.Conn.read_body(conn, length: 1_048_576) and reports byte_size of the partial,
 ###   and a raw :gen_tcp client that writes 64 KiB chunks against a declared 32 MiB
 ###   Content-Length, counting what it wrote before the response arrived.
@@ -44,3 +44,10 @@ default     7798784 (7.438 MiB) 1048576
 65536       1245184 (1.188 MiB) 1048576
 262144      2031616 (1.938 MiB) 1048576
 1048576     2031616 (1.938 MiB) 1048576
+
+### CORRECTION, appended 2026-09-07 rather than rewritten.
+### This header first named the producing script as `scratchpad/measure_body.exs`, the path it
+### ran from before it was tracked. The committed script is `tools/measure_body.exs`. A lane
+### found it: an archive labelled as written by the command that produced it must name a command
+### a reader can actually run, or the label is doing no work. The DATA above is untouched -- it
+### is the bytes that run produced, and only the path in the header was wrong.

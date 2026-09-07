@@ -116,6 +116,36 @@ authentication contract under release pressure is how the wrong one ships perman
 `README.md` now recommends `{:beam_mcp, "~> 0.3.0"}`. `~> 0.3` admits `0.4.0`, and this package
 documents wire breaks at the **minor** position while it is `0.x`.
 
+### Changed — a host's exception no longer chooses the HTTP status
+
+**Read this if a host tool, `authorize/1` or `tool_catalog` raises an exception carrying a
+`:plug_status`** — `Plug.BadRequestError`, or Ecto's `NoResultsError` at 404, for instance. In
+`0.2.0` there was no HTTP transport, so this is new behaviour rather than changed behaviour, but
+it changed twice during this release and the second shape is what ships:
+
+    a host tool raising Plug.BadRequestError
+      -> HTTP 400, empty body, no JSON-RPC error object
+    now
+      -> HTTP 500, {"jsonrpc":"2.0","id":<the request id>,"error":{"code":-32603,...}}
+
+An exception carrying a status means the **server** is signalling — Bandit raises
+`Bandit.HTTPError` for a malformed transfer coding and its pipeline turns that into the response.
+An exception out of **host** code carries no such authority however it is annotated, and letting
+it through dropped the envelope on a path the protocol requires one, with no `id` to correlate
+and no body to parse.
+
+The rule is applied at every point host code runs in the request path — `authorize/1`,
+`BeamMCP.ToolCatalog.fetch/2` and `BeamMCP.Server.handle_message/2` — and that population is
+derived by grep rather than listed, because listing it is how the first cut of this fix covered
+one of the three and shipped a comment claiming all of them.
+
+### Added — `BeamMCP.ToolCatalog.fetch/2` is public API
+
+One lookup answers "which tool does this name mean" for both the core and the HTTP transport's
+header validation. Two lookups would be two answers, which is the disagreement the mirrored-header
+mechanism exists to prevent. Its `@spec` says `{:ok, t} | :error` and three host-authored catalog
+shapes raise instead; that is filed, not fixed here.
+
 ### Fixed — two failure modes found by measuring rather than by reasoning
 
 - **A failure in the host's dispatch answered with an empty `500`.** It now answers
@@ -127,6 +157,23 @@ documents wire breaks at the **minor** position while it is `0.x`.
   still producing the bare empty `500` this entry claimed had been eliminated — and `exit` is
   the shape that matters most, because **a `GenServer.call` timeout exits**, which is what a
   host calling a backend hits first. Now `catch`, covering all three.
+
+- **`BeamMCP.Transport.Stdio` was documented.** It carried `@moduledoc false` — inherited from
+  the tree it was extracted from, where it was internal — while `README.md` documents `run/1` as
+  the entry point. Left alone, `0.3.0` would have published hexdocs in which the stdio transport
+  is absent and the new HTTP transport beside it renders, which reads as deliberate.
+
+  **This is the second instance of one defect: `BeamMCP.Server` shipped hidden in `0.1.0`.** The
+  entry recording that one also recorded why nothing caught it — "a hidden module is not a
+  compile warning and the gate does not run `mix docs`" — and the gate still did not, for two
+  more releases. So `tools/gate.sh` now has a `docs` step, and it reads `mix docs`'s **output**
+  rather than its exit code, because `mix docs` exits `0` on a warning:
+
+      docs    FAIL (exit 0, 2 warnings)
+
+  That line is from the probe in `slices/002-streamable-http/logs/probe-docs-gate.txt`, which
+  reverts the moduledoc, shows the gate red, and restores it. Fixing an instance twice and the
+  mechanism never is what the step is for.
 
 - **The `403` for a refused caller carried the host's refusal reason.** `authorize/1` returns
   `{:error, term}`, and that term was `inspect`ed into the response body — on the one branch

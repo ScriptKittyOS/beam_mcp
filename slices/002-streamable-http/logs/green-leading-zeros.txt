@@ -1,0 +1,174 @@
+Compiling 1 file (.ex)
+Generated beam_mcp app
+Running ExUnit with seed: 201511, max_cases: 64
+
+    warning: use Plug.Test is deprecated. Please use `import Plug.Test` and `import Plug.Conn` directly instead.
+
+    │
+ 12 │   use Plug.Test
+    │   ~~~~~~~~~~~~~
+    │
+    └─ test/beam_mcp/transport/http_test.exs:12: BeamMCP.Transport.HTTPTest (module)
+
+..
+15:52:17.477 [error] ** (throw) :thrown_secret
+    test/beam_mcp/transport/http_test.exs:383: anonymous fn/3 in BeamMCP.Transport.HTTPTest."test the host's dispatch failing in ways rescue alone does not catch throw and exit are answered, not left as an empty 500"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:213: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:159: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:798: BeamMCP.Transport.HTTP.do_dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:729: BeamMCP.Transport.HTTP.dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:389: anonymous fn/2 in BeamMCP.Transport.HTTPTest."test the host's dispatch failing in ways rescue alone does not catch throw and exit are answered, not left as an empty 500"/1
+    (elixir 1.19.2) lib/enum.ex:2520: Enum."-reduce/3-lists^foldl/2-0-"/3
+    test/beam_mcp/transport/http_test.exs:382: BeamMCP.Transport.HTTPTest."test the host's dispatch failing in ways rescue alone does not catch throw and exit are answered, not left as an empty 500"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+
+15:52:17.479 [error] ** (exit) :kaboom_secret
+    test/beam_mcp/transport/http_test.exs:384: anonymous fn/3 in BeamMCP.Transport.HTTPTest."test the host's dispatch failing in ways rescue alone does not catch throw and exit are answered, not left as an empty 500"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:213: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:159: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:798: BeamMCP.Transport.HTTP.do_dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:729: BeamMCP.Transport.HTTP.dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:389: anonymous fn/2 in BeamMCP.Transport.HTTPTest."test the host's dispatch failing in ways rescue alone does not catch throw and exit are answered, not left as an empty 500"/1
+    (elixir 1.19.2) lib/enum.ex:2520: Enum."-reduce/3-lists^foldl/2-0-"/3
+    test/beam_mcp/transport/http_test.exs:382: BeamMCP.Transport.HTTPTest."test the host's dispatch failing in ways rescue alone does not catch throw and exit are answered, not left as an empty 500"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.......
+15:52:17.534 [info] beam_mcp: refused by host authorize/1: %{expected_bearer: "s3cr3t-token", db: "postgres://u:pw@10.0.0.5/prod"}
+....
+15:52:17.535 [error] ** (RuntimeError) ordinary fault
+    test/beam_mcp/transport/http_test.exs:1067: anonymous fn/3 in BeamMCP.Transport.HTTPTest."test an exception that carries its own HTTP status belongs to the server, not to us an exception with no status of its own is still answered as -32603"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:213: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:159: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:798: BeamMCP.Transport.HTTP.do_dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:729: BeamMCP.Transport.HTTP.dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:1068: BeamMCP.Transport.HTTPTest."test an exception that carries its own HTTP status belongs to the server, not to us an exception with no status of its own is still answered as -32603"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+..
+15:52:17.536 [error] ** (RuntimeError) authorize exploded: bearer s3cr3t-token
+    test/beam_mcp/transport/http_test.exs:772: anonymous fn/1 in BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:771: BeamMCP.Transport.HTTP.host_call/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:303: BeamMCP.Transport.HTTP.authorize/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:221: BeamMCP.Transport.HTTP.handle/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:778: anonymous fn/1 in BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (elixir 1.19.2) lib/enum.ex:1688: Enum."-map/2-lists^map/1-1-"/2
+    test/beam_mcp/transport/http_test.exs:777: BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+
+15:52:17.536 [error] ** (throw) :authorize_threw
+    test/beam_mcp/transport/http_test.exs:773: anonymous fn/1 in BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:771: BeamMCP.Transport.HTTP.host_call/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:303: BeamMCP.Transport.HTTP.authorize/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:221: BeamMCP.Transport.HTTP.handle/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:778: anonymous fn/1 in BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (elixir 1.19.2) lib/enum.ex:1688: Enum."-map/2-lists^map/1-1-"/2
+    (elixir 1.19.2) lib/enum.ex:1688: Enum."-map/2-lists^map/1-1-"/2
+    test/beam_mcp/transport/http_test.exs:777: BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+
+15:52:17.536 [error] ** (exit) :authorize_exited
+    test/beam_mcp/transport/http_test.exs:774: anonymous fn/1 in BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:771: BeamMCP.Transport.HTTP.host_call/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:303: BeamMCP.Transport.HTTP.authorize/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:221: BeamMCP.Transport.HTTP.handle/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:778: anonymous fn/1 in BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (elixir 1.19.2) lib/enum.ex:1688: Enum."-map/2-lists^map/1-1-"/2
+    (elixir 1.19.2) lib/enum.ex:1688: Enum."-map/2-lists^map/1-1-"/2
+    test/beam_mcp/transport/http_test.exs:777: BeamMCP.Transport.HTTPTest."test the whole request path is inside the rescue, not just dispatch a host authorize/1 that raises, throws or exits is answered, not left as a bare 500"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.
+15:52:17.536 [error] ** (RuntimeError) SECRET internal detail
+    test/beam_mcp/transport/http_test.exs:292: anonymous fn/3 in BeamMCP.Transport.HTTPTest."test a crash in the host's dispatch and leaks nothing about the host to the caller"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:213: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:159: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:798: BeamMCP.Transport.HTTP.do_dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:729: BeamMCP.Transport.HTTP.dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:295: BeamMCP.Transport.HTTPTest."test a crash in the host's dispatch and leaks nothing about the host to the caller"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.
+15:52:17.541 [error] ** (Plug.BadRequestError) could not process the request due to client error
+    test/beam_mcp/transport/http_test.exs:1033: BeamMCP.Transport.HTTPTest.RaisingCatalog.all/0
+    (beam_mcp 0.3.0) lib/beam_mcp/tool_catalog.ex:29: BeamMCP.ToolCatalog.fetch/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:771: BeamMCP.Transport.HTTP.host_call/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:582: BeamMCP.Transport.HTTP.mirrored_params/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:535: BeamMCP.Transport.HTTP.check_param_headers/4
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:496: BeamMCP.Transport.HTTP.check_headers/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:224: BeamMCP.Transport.HTTP.handle/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:1039: BeamMCP.Transport.HTTPTest."test an exception that carries its own HTTP status belongs to the server, not to us a host tool_catalog's exception does not choose the HTTP status either"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.
+15:52:17.541 [info] beam_mcp: refused by host authorize/1: :nope
+.............
+15:52:17.600 [error] beam_mcp: authorize/1 must return :ok or {:error, reason}, got: false
+...
+15:52:17.703 [error] ** (Plug.BadRequestError) could not process the request due to client error
+    test/beam_mcp/transport/http_test.exs:1017: anonymous fn/1 in BeamMCP.Transport.HTTPTest."test an exception that carries its own HTTP status belongs to the server, not to us a host authorize/1's exception does not choose the HTTP status either"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:771: BeamMCP.Transport.HTTP.host_call/1
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:303: BeamMCP.Transport.HTTP.authorize/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:221: BeamMCP.Transport.HTTP.handle/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:1020: BeamMCP.Transport.HTTPTest."test an exception that carries its own HTTP status belongs to the server, not to us a host authorize/1's exception does not choose the HTTP status either"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.................
+15:52:17.860 [error] ** (RuntimeError) host dispatch exploded
+    test/beam_mcp/transport/http_test.exs:279: anonymous fn/3 in BeamMCP.Transport.HTTPTest."test a crash in the host's dispatch answers with a JSON-RPC internal error, not an empty 500"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:213: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:159: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:798: BeamMCP.Transport.HTTP.do_dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:729: BeamMCP.Transport.HTTP.dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:282: BeamMCP.Transport.HTTPTest."test a crash in the host's dispatch answers with a JSON-RPC internal error, not an empty 500"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+...................
+15:52:17.914 [error] ** (RuntimeError) ordinary fault
+    test/beam_mcp/transport/http_test.exs:1078: anonymous fn/3 in BeamMCP.Transport.HTTPTest."test an exception that carries its own HTTP status belongs to the server, not to us a dispatch crash answers with the request's id, not nil"/1
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:213: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/server.ex:159: BeamMCP.Server.handle_message/2
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:798: BeamMCP.Transport.HTTP.do_dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:729: BeamMCP.Transport.HTTP.dispatch/3
+    (beam_mcp 0.3.0) lib/beam_mcp/transport/http.ex:185: BeamMCP.Transport.HTTP.call/2
+    test/beam_mcp/transport/http_test.exs:1081: BeamMCP.Transport.HTTPTest."test an exception that carries its own HTTP status belongs to the server, not to us a dispatch crash answers with the request's id, not nil"/1
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:528: ExUnit.Runner.exec_test/2
+    (stdlib 7.1) timer.erl:599: :timer.tc/2
+    (ex_unit 1.19.2) lib/ex_unit/runner.ex:450: anonymous fn/6 in ExUnit.Runner.spawn_test_monitor/4
+
+.......
+Finished in 0.7 seconds (0.7s async, 0.00s sync)
+77 tests, 0 failures
