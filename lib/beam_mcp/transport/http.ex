@@ -47,16 +47,19 @@ if Code.ensure_loaded?(Plug) do
 
     ## What it enforces
 
-    | requirement | behaviour |
-    |---|---|
-    | `MCP-Protocol-Version` on every POST | missing -> `400`, `-32020` |
-    | header must match the body's `_meta` | mismatch -> `400`, `-32020` |
-    | `Mcp-Method` on every request | missing or mismatched -> `400`, `-32020` |
-    | `Mcp-Name` on `tools/call` | missing or mismatched -> `400`, `-32020` |
-    | unsupported version | `400`, `-32022` |
-    | invalid `Origin` | `403` |
-    | non-POST | `405` |
-    | unknown method | `404`, `-32601` |
+    The list lives in **one place**: the README's "What of `2026-07-28` this transport
+    implements" section, which `test/beam_mcp/readme_claims_test.exs` pins. A copy of it stood
+    here until a round-3 lane found it stale -- the CHANGELOG's copy of the same table was
+    updated in the same diff that left this one behind, so the package shipped two enforcement
+    tables that disagreed, and the one in the code was the wrong one.
+
+    In summary, and deliberately without the detail that would make this a third copy: every
+    standard header the revision requires is required and validated against the body, in **all**
+    of a header's values rather than the first; `Mcp-Param-{Name}` is validated against the
+    parameters the tool's own schema marks with `x-mcp-header`; refusals are `400` with `-32020`
+    (`-32022` for an unsupported version); a bad `Origin` is `403`; a non-POST is `405`; an
+    unimplemented method is `404`; and an unknown *tool* is `200` carrying a JSON-RPC error,
+    because the endpoint is there and the argument was wrong.
 
     `Mcp-Method` and `Mcp-Name` are validated against the body because the specification says
     why: a load balancer may route on the header while the server executes the body.
@@ -84,6 +87,7 @@ if Code.ensure_loaded?(Plug) do
     require Logger
 
     alias BeamMCP.Server
+    alias BeamMCP.ToolCatalog
 
     @modern_version "2026-07-28"
     @version_meta_key "io.modelcontextprotocol/protocolVersion"
@@ -93,6 +97,20 @@ if Code.ensure_loaded?(Plug) do
     # unauthenticated caller controls.
     @max_body_bytes 1_048_576
     @method_not_found "Method not found:"
+
+    # Removed from the protocol by 2026-07-28: the stateless change deleted the handshake
+    # ("make MCP stateless: remove the initialize / notifications/initialized handshake") and
+    # SEP-2575 deleted ping.
+    #
+    # This lives in the TRANSPORT and not in the core on purpose. The core is dual-era and its
+    # `initialize` clause deliberately outranks `_meta`, because over stdio an initialize IS the
+    # era discriminator -- that rule is documented and stdio hosts depend on it. Over HTTP there
+    # is no such choice to make: this Plug stamps every request `2026-07-28`, so a method that
+    # revision does not have is not found here, whatever the core would do with it on another
+    # carrier. Before this, `initialize` over HTTP was answered 200 with
+    # `protocolVersion: "2025-11-25"` -- a caller declaring the modern revision handed a
+    # different revision's version number, while the README said it was not implemented.
+    @removed_in_modern ["ping", "initialize", "notifications/initialized"]
 
     # This Plug's own options; everything else in the keyword list belongs to Server.new/1.
     # Derived by exclusion rather than by naming what to keep: a `Keyword.take` list silently
@@ -139,7 +157,13 @@ if Code.ensure_loaded?(Plug) do
       # and failed later, at the first tools/list, as an UndefinedFunctionError from inside the
       # request path. An option contract that only rejects `nil` moves the error to a worse
       # place rather than preventing it.
-      unless is_atom(catalog) and catalog != nil and Code.ensure_loaded?(catalog) and
+      # `Code.ensure_compiled/1`, not `ensure_loaded?/1`: a host whose catalog module lives in
+      # the same project has not been loaded when its own supervision tree is being built, so
+      # `ensure_loaded?` raised ArgumentError at build time naming a perfectly valid catalog.
+      # An option contract that rejects correct configurations is worse than the truthiness
+      # check it replaced.
+      unless is_atom(catalog) and catalog != nil and
+               match?({:module, _}, Code.ensure_compiled(catalog)) and
                function_exported?(catalog, :all, 0) do
         raise ArgumentError, """
         BeamMCP.Transport.HTTP requires a :tool_catalog option: a module implementing the
@@ -161,8 +185,18 @@ if Code.ensure_loaded?(Plug) do
       handle(conn, opts)
     rescue
       exception ->
-        Logger.error(Exception.format(:error, exception, __STACKTRACE__))
-        crash_response(conn)
+        # An exception carrying a status is the SERVER SIGNALLING, not a fault: Bandit raises
+        # Bandit.HTTPError with plug_status :request_timeout for a read timeout and
+        # :bad_request for a malformed transfer coding, and its own pipeline turns that into
+        # the response. Catching it turned a 408 into a 500, a 400 into a 500, and every
+        # stalled connection into an unauthenticated 5xx with an error-level stacktrace -- a
+        # regression this rescue introduced by widening to cover the crash class.
+        #
+        # The test is Plug.Exception.status/1, Plug's own protocol, which reads any exception's
+        # :plug_status field. It therefore holds for adapters other than Bandit and needs no
+        # reference to a module that may not be loaded. 500 means "carries no status of its
+        # own", which is the only case this transport should be answering for.
+        fault_response(conn, exception, __STACKTRACE__, nil)
     catch
       kind, reason ->
         Logger.error(Exception.format(kind, reason, __STACKTRACE__))
@@ -187,7 +221,7 @@ if Code.ensure_loaded?(Plug) do
            {:ok, conn} <- authorize(conn, opts.authorize),
            {:ok, body, conn} <- read_body_bounded(conn),
            {:ok, conn, message} <- decode(conn, body),
-           {:ok, conn} <- check_headers(conn, message) do
+           {:ok, conn} <- check_headers(conn, message, opts) do
         dispatch(conn, message, opts)
       else
         # Every step returns the conn it was handed, and every refusal answers on THAT conn.
@@ -200,6 +234,27 @@ if Code.ensure_loaded?(Plug) do
 
     # Answering a crash must not itself crash: the payload is a constant, so there is nothing
     # in it that can fail to encode.
+    # An exception carrying a status is the SERVER SIGNALLING, not a fault: Bandit raises
+    # Bandit.HTTPError with plug_status :request_timeout for a read timeout and :bad_request
+    # for a malformed transfer coding, and its own pipeline turns that into the response.
+    # Catching it turned a 408 into a 500, a 400 into a 500, and every stalled connection into
+    # an unauthenticated 5xx with an error-level stacktrace -- a regression introduced by
+    # widening the rescue to cover the crash class, and measured against the previous commit
+    # rather than argued.
+    #
+    # The test is Plug.Exception.status/1, Plug's own protocol, which reads any exception's
+    # :plug_status. It therefore holds for adapters other than Bandit and needs no reference to
+    # a module that may not be loaded. 500 means "carries no status of its own", which is the
+    # only case this transport should be answering for.
+    defp fault_response(conn, exception, stacktrace, id) do
+      if Plug.Exception.status(exception) == 500 do
+        Logger.error(Exception.format(:error, exception, stacktrace))
+        send_json(conn, 500, error(id, -32_603, "Internal error"))
+      else
+        reraise exception, stacktrace
+      end
+    end
+
     defp crash_response(conn) do
       send_json(conn, 500, %{
         "jsonrpc" => "2.0",
@@ -305,55 +360,82 @@ if Code.ensure_loaded?(Plug) do
     # different sources of truth (e.g., a load balancer routing on the header value while the
     # MCP server executes based on the body value)."
     #
-    # "When rejecting a request due to header validation failure, servers MUST return HTTP
-    # status 400 Bad Request and MUST include a JSON-RPC error response using -32020
-    # [HeaderMismatch] ... or required headers are missing/malformed."
+    # Two derivations, and getting the second one wrong is what round 3 found.
     #
-    # EVERY header read in this module goes through `header_values/2` and is compared with
-    # `all_match?/2`. That is deliberate and it is the second attempt: the first version fixed
-    # multi-value validation for `Origin` and then wrote three new single-value reads in the
-    # same commit, so a duplicate `Mcp-Method` -- good value first, hostile value second --
-    # returned 200 and ran the body's method. An attacker controls both values, so single-value
-    # validation lets them satisfy this server while showing the hop in front something else,
-    # which is exactly the smuggling the spec text above exists to stop.
+    # WHICH HEADERS ARE READ is derived from the code: `header_values/2` is the only caller of
+    # `get_req_header/2`, and every comparison is `Enum.all?` over all values. A header whose
+    # first value satisfies this server while a later one is what the hop in front routes on is
+    # the smuggling the text above exists to stop, and the first version of this module read
+    # only the first value of four headers.
     #
-    # The set is derived rather than listed: `grep -n 'get_req_header' lib/beam_mcp/transport/http.ex`
-    # returns only `header_values/2` and the `mcp-param-` sweep. A fourth header added later
-    # inherits the behaviour instead of needing a fifth finding.
+    # WHICH MIRRORED PARAMETERS ARE REQUIRED is derived from the tool's `inputSchema`, NOT from
+    # the headers the caller happened to send. Deriving it from the request looked like the
+    # same "derive the population" move and is the opposite of it: the spec's fourth
+    # server-behaviour row is "client omits header but value is in body -> server MUST reject",
+    # which is unenforceable if the caller's own headers define the set. Omitting
+    # `Mcp-Param-Region` while the body carried `region` returned 200 and dispatched.
     defp header_values(conn, name), do: get_req_header(conn, name)
 
-    # "Servers MUST decode an encoded Mcp-Name or Mcp-Param-{Name} value before comparing it to
-    # the corresponding request body value during Server Validation." Tool names are only
-    # SHOULD-constrained to header-safe characters and this package constrains them not at all,
-    # so a conforming client calling a tool named `:"café_search"` MUST use this form -- and
-    # before this, could never satisfy the comparison, with the spec's advised recovery
-    # (re-read tools/list and retry) unable to help because the client was already correct.
-    defp decode_header_value("=?base64?" <> rest) do
-      case String.split(rest, "?=", parts: 2) do
-        [encoded, ""] ->
-          case Base.decode64(encoded) do
-            {:ok, decoded} -> decoded
-            :error -> "=?base64?" <> rest
-          end
+    # "For headers that permit the Base64 sentinel encoding (Mcp-Name and Mcp-Param-{Name}),
+    # servers MUST decode encoded values before comparing them to the body value."
+    #
+    # THAT SET AND NO OTHER. Decoding it everywhere let `Mcp-Method: =?base64?dG9vbHMvY2FsbA==?=`
+    # satisfy this server while a gateway filtering on `Mcp-Method` saw an opaque token -- the
+    # fix for one MUST reopening the exact hole the other MUST closes.
+    defp decodable?("mcp-name"), do: true
+    defp decodable?("mcp-param-" <> _), do: true
+    defp decodable?(_name), do: false
 
-        _ ->
-          "=?base64?" <> rest
+    defp decode_header_value(name, value) do
+      with true <- decodable?(name),
+           "=?base64?" <> rest <- value,
+           [encoded, ""] <- String.split(rest, "?=", parts: 2),
+           {:ok, decoded} <- Base.decode64(encoded),
+           # Base.decode64/1 accepts non-canonical trailing bits, so `ZWNobw==`, `ZWNobx==`,
+           # `ZWNoby==` and `ZWNobz==` all decode to "echo" -- four spellings of one value, and
+           # a hop comparing bytes disagrees with a server comparing decoded values. Re-encoding
+           # and requiring the round trip admits exactly one.
+           ^encoded <- Base.encode64(decoded) do
+        decoded
+      else
+        _ -> value
       end
     end
 
-    defp decode_header_value(value), do: value
+    # "When validating integer parameter values, servers SHOULD compare the header value and the
+    # body value numerically rather than as strings (e.g., `42.0` and `42` are considered
+    # equal)." String comparison refused a conforming client that wrote the number differently.
+    defp value_matches?(header_value, body_value) when is_binary(body_value),
+      do: header_value == body_value
 
-    defp all_match?(values, expected) do
-      values != [] and Enum.all?(values, &(decode_header_value(&1) == expected))
+    defp value_matches?(header_value, true), do: header_value == "true"
+    defp value_matches?(header_value, false), do: header_value == "false"
+
+    defp value_matches?(header_value, body_value) when is_integer(body_value) do
+      case Float.parse(header_value) do
+        {parsed, ""} -> parsed == body_value * 1.0
+        _ -> false
+      end
     end
 
-    defp check_headers(conn, message) do
+    # `x-mcp-header` "MUST only be applied to parameters with primitive types (integer, string,
+    # boolean)", so a map, a list, a float or a null body value cannot be a mirrored parameter
+    # and cannot match any header. Returning false rather than interpolating the value is also
+    # what keeps an attacker-chosen JSON value out of the refusal message.
+    defp value_matches?(_header_value, _body_value), do: false
+
+    defp all_match?(values, name, body_value) do
+      values != [] and
+        Enum.all?(values, &value_matches?(decode_header_value(name, &1), body_value))
+    end
+
+    defp check_headers(conn, message, opts) do
       id = message["id"]
 
       with :ok <- check_protocol_version(conn, message, id),
            :ok <- check_method_header(conn, message, id),
            :ok <- check_name_header(conn, message, id),
-           :ok <- check_param_headers(conn, message, id) do
+           :ok <- check_param_headers(conn, message, id, opts) do
         {:ok, conn}
       else
         {:mismatch, status, payload} -> {:refused, conn, status, payload}
@@ -362,11 +444,15 @@ if Code.ensure_loaded?(Plug) do
 
     # Notifications carry no id, and the revision says in terms that "header requirements for
     # notification POSTs are not defined by this revision". Requiring Mcp-Method on them would
-    # be this transport inventing a rule and refusing conforming clients.
+    # be this transport inventing a rule and refusing conforming clients. The exemption is a
+    # relaxation of a MUST, so it is pinned in both directions: a notification without the
+    # header is served, and a notification WITH a lying header is still refused.
     defp check_method_header(conn, message, id) do
-      if Map.has_key?(message, "id"),
-        do: check_named(conn, "mcp-method", message["method"], id),
-        else: :ok
+      cond do
+        Map.has_key?(message, "id") -> check_named(conn, "mcp-method", message["method"], id)
+        header_values(conn, "mcp-method") == [] -> :ok
+        true -> check_named(conn, "mcp-method", message["method"], id)
+      end
     end
 
     # "Mcp-Name | params.name or params.uri | tools/call, resources/read, prompts/get".
@@ -377,40 +463,107 @@ if Code.ensure_loaded?(Plug) do
 
     defp check_name_header(_conn, _message, _id), do: :ok
 
-    # Mcp-Param-{Name} mirrors a tool argument into a header, opted into by a tool's schema via
-    # `x-mcp-header`. `tool_definition/1` passes that annotation through to `tools/list`
-    # verbatim, so a host can turn the feature on and conforming clients then MUST mirror the
-    # parameters -- and a transport that advertises the contract and does not enforce it is
-    # worse than one that never advertised it, because a client trusting the advertisement gets
-    # silent divergence between what it sent and what ran. A lane measured
-    # `Mcp-Param-Region: us-west1` against a body saying `eu-west1` returning 200 with dispatch.
+    # `x-mcp-header` marks a tool parameter to be mirrored into `Mcp-Param-{Name}`. The
+    # annotation carries the NAME PORTION of the header and points at a property path -- "a
+    # chain of properties keys", which the spec permits to be nested -- so the mapping is
+    # schema -> header, and cannot be recovered by lowercasing a header suffix into a top-level
+    # argument key. Doing that refused conforming clients whose annotation name differed from
+    # the property key, or was not all-lowercase, or was nested, with no recovery available to
+    # a client that was already correct.
     #
-    # The population is derived from the request rather than from the schema: every
-    # `mcp-param-*` header present must match the argument of that name.
-    defp check_param_headers(conn, message, id) do
-      conn.req_headers
-      |> Enum.filter(fn {name, _} -> String.starts_with?(name, "mcp-param-") end)
-      |> Enum.map(fn {name, _} -> name end)
-      |> Enum.uniq()
-      |> Enum.reduce_while(:ok, fn header, :ok ->
-        arg_name = String.replace_prefix(header, "mcp-param-", "")
+    # Headers not named by the schema are ignored: "intermediate servers that do not recognize
+    # an Mcp-Param-{Name} header MUST forward it and otherwise ignore it".
+    defp check_param_headers(conn, message, id, opts) do
+      message
+      |> mirrored_params(opts)
+      |> Enum.reduce_while(:ok, fn {_key, {name, path}}, :ok ->
+        header = "mcp-param-" <> String.downcase(name)
+        values = header_values(conn, header)
+        body_value = value_at(arguments(message), path)
 
-        case check_named(conn, header, argument(message, arg_name), id) do
-          :ok -> {:cont, :ok}
-          mismatch -> {:halt, mismatch}
+        cond do
+          # "Parameter value is null" / "parameter not in arguments" -> "server MUST NOT expect
+          # the header".
+          is_nil(body_value) and values == [] ->
+            {:cont, :ok}
+
+          is_nil(body_value) ->
+            {:halt, param_error(id, name, "was sent, but the body carries no such value")}
+
+          # "Client omits header but value is in body | non-conforming client | server MUST
+          # reject the request."
+          values == [] ->
+            {:halt, param_error(id, name, "is required: the body carries a value to mirror")}
+
+          all_match?(values, header, body_value) ->
+            {:cont, :ok}
+
+          true ->
+            {:halt, param_error(id, name, "does not match the corresponding request body value")}
         end
       end)
     end
 
+    # One lookup, `BeamMCP.ToolCatalog.fetch/2`, is what the core uses to decide whether a tool
+    # is callable. The transport asks the same question of the same function: two lookups would
+    # be two answers to "which tool does this name mean", which is the disagreement this whole
+    # header mechanism exists to prevent.
+    defp mirrored_params(%{"method" => "tools/call"} = message, opts) do
+      with name when is_binary(name) <- param(message, "name"),
+           catalog when not is_nil(catalog) <- opts.server_opts[:tool_catalog],
+           {:ok, spec} <- ToolCatalog.fetch(catalog, name) do
+        annotations(spec.input_schema)
+      else
+        _ -> %{}
+      end
+    end
+
+    defp mirrored_params(_message, _opts), do: %{}
+
+    # Keyed by the case-folded name because "x-mcp-header values MUST be case-insensitively
+    # unique", and field names are case-insensitive; the original spelling is carried alongside
+    # so the refusal can name the header the client was told to send.
+    defp annotations(schema), do: annotations(schema, [])
+
+    defp annotations(%{"properties" => properties}, path) when is_map(properties) do
+      Enum.reduce(properties, %{}, fn {key, subschema}, acc ->
+        acc =
+          case is_map(subschema) and subschema["x-mcp-header"] do
+            name when is_binary(name) and name != "" ->
+              Map.put(acc, String.downcase(name), {name, path ++ [key]})
+
+            _ ->
+              acc
+          end
+
+        # Recursion runs through `properties` and nothing else: the chain "MUST NOT pass
+        # through items, oneOf, anyOf, allOf, not, if/then/else or $ref".
+        Map.merge(acc, annotations(subschema, path ++ [key]))
+      end)
+    end
+
+    defp annotations(_schema, _path), do: %{}
+
+    defp arguments(%{"params" => %{"arguments" => %{} = arguments}}), do: arguments
+    defp arguments(_message), do: %{}
+
+    defp value_at(value, []), do: value
+
+    defp value_at(%{} = value, [key | rest]), do: value_at(Map.get(value, key), rest)
+
+    defp value_at(_value, _path), do: nil
+
+    defp param_error(id, name, complaint),
+      do: {:mismatch, 400, header_error(id, "Mcp-Param-#{name} header #{complaint}")}
+
     defp check_named(conn, header_name, body_value, id) do
       values = header_values(conn, header_name)
-      expected = to_comparable(body_value)
 
       cond do
         values == [] ->
           {:mismatch, 400, header_error(id, "Missing #{header_name} header; it is required")}
 
-        all_match?(values, expected) ->
+        all_match?(values, header_name, body_value) ->
           :ok
 
         true ->
@@ -422,24 +575,11 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    # Body values are attacker-chosen JSON and need not be strings. Interpolating one into a
-    # message raised `Protocol.UndefinedError` for String.Chars before this existed -- another
-    # crash on the refusal path, which is now also inside the rescue, but a refusal should not
-    # depend on the rescue to be a refusal.
-    defp to_comparable(value) when is_binary(value), do: value
-    defp to_comparable(value) when is_number(value), do: to_string(value)
-    defp to_comparable(value) when is_boolean(value), do: to_string(value)
-    defp to_comparable(nil), do: nil
-    defp to_comparable(_other), do: :unmatchable
-
     # `params` is any JSON value once the body is an object. Reaching into a non-map raised in
-    # `Access.get/3` -- the same defect as the `_meta` guard three functions above, found by two
-    # lanes in code written by the commit that added that guard.
+    # `Access.get/3` -- the same defect as the `_meta` guard below, found by two lanes in code
+    # written by the commit that added that guard.
     defp param(%{"params" => %{} = params}, key), do: params[key]
     defp param(_message, _key), do: nil
-
-    defp argument(%{"params" => %{"arguments" => %{} = args}}, key), do: args[key]
-    defp argument(message, key), do: param(message, key)
 
     defp check_protocol_version(conn, message, id) do
       values = header_values(conn, @protocol_header)
@@ -449,7 +589,7 @@ if Code.ensure_loaded?(Plug) do
           {:mismatch, 400, header_error(id, "_meta must be a JSON object when present")}
 
         body_version ->
-          compare_versions(values, to_comparable(body_version), id)
+          compare_versions(values, body_version, id)
       end
     end
 
@@ -468,13 +608,18 @@ if Code.ensure_loaded?(Plug) do
        header_error(id, "Missing #{@protocol_header} header; it is required on every POST")}
     end
 
+    # Two comparisons, and BOTH read every value. The second one is the only check on a body
+    # that carries no `_meta`, and it was pinned by nothing: a mutant making it first-value-only
+    # survived the suite that claimed one mutant per header read.
     defp compare_versions(values, body_version, id) do
+      unsupported = Enum.reject(values, &(&1 == @modern_version))
+
       cond do
-        not is_nil(body_version) and not all_match?(values, body_version) ->
+        not is_nil(body_version) and not all_match?(values, @protocol_header, body_version) ->
           {:mismatch, 400,
            header_error(id, "#{@protocol_header} header does not match the body value")}
 
-        not Enum.all?(values, &(&1 == @modern_version)) ->
+        unsupported != [] ->
           {:mismatch, 400,
            %{
              "jsonrpc" => "2.0",
@@ -482,7 +627,13 @@ if Code.ensure_loaded?(Plug) do
              "error" => %{
                "code" => -32_022,
                "message" => "Unsupported protocol version",
-               "data" => %{"supported" => [@modern_version], "requested" => List.first(values)}
+               "data" => %{
+                 "supported" => [@modern_version],
+                 # The values actually refused, not `List.first/1` of everything sent: with two
+                 # headers the old payload could report a `requested` version that is in its own
+                 # `supported` list, which reads as a server contradicting itself.
+                 "requested" => unsupported
+               }
              }
            }}
 
@@ -505,12 +656,23 @@ if Code.ensure_loaded?(Plug) do
       do_dispatch(conn, message, opts)
     rescue
       exception ->
-        Logger.error(Exception.format(:error, exception, __STACKTRACE__))
-        send_json(conn, 500, error(message["id"], -32_603, "Internal error"))
+        # Same rule as call/2's, through the same function. This rescue is kept inside that one
+        # only because it knows `message["id"]` by now and a crash before decoding does not --
+        # and a second copy of the rule is how the status-swallowing regression survived being
+        # fixed in the outer one.
+        fault_response(conn, exception, __STACKTRACE__, message["id"])
     catch
       kind, reason ->
         Logger.error(Exception.format(kind, reason, __STACKTRACE__))
         send_json(conn, 500, error(message["id"], -32_603, "Internal error"))
+    end
+
+    defp do_dispatch(conn, %{"method" => method} = message, _opts)
+         when method in @removed_in_modern do
+      case message["id"] do
+        nil -> send_resp(conn, 202, "")
+        id -> send_json(conn, 404, error(id, -32_601, "#{@method_not_found} #{method}"))
+      end
     end
 
     defp do_dispatch(conn, message, opts) do

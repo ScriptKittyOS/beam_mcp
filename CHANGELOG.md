@@ -49,13 +49,21 @@ DNS rebinding. `:any` is available and must be chosen deliberately.
 | header must match the body's `_meta` | mismatch -> `400`, `-32020` |
 | `Mcp-Method` on every request (**not** on notifications, which the revision leaves undefined) | missing or mismatched -> `400`, `-32020` |
 | `Mcp-Name` on `tools/call` | missing or mismatched -> `400`, `-32020` |
-| `Mcp-Param-{Name}` mirroring a tool argument | mismatched or naming an absent argument -> `400`, `-32020` |
-| an encoded header value is decoded before comparison | `=?base64?…?=` on `Mcp-Name` / `Mcp-Param-{Name}` |
+| `Mcp-Param-{Name}` for every parameter the tool's schema marks `x-mcp-header` | mismatched, or omitted while the body carries the value -> `400`, `-32020` |
+| an encoded header value is decoded before comparison | `=?base64?…?=`, on `Mcp-Name` and `Mcp-Param-{Name}` **only** — the two headers the specification scopes it to |
+| `initialize`, `notifications/initialized`, `ping` | `404`, `-32601` — deleted by this revision |
 | unsupported version | `400`, `-32022` |
 | invalid `Origin` | `403` |
 | unknown **method** | `404`, `-32601` |
 | unknown **tool** | `200` with `-32601` in the body — a live endpoint, a bad argument |
 | non-POST (a SHOULD, not a MUST) | `405` with `Allow: POST` |
+
+The mirrored-parameter population is derived from **the tool's `inputSchema`**, not from the
+headers the caller sent. The specification's fourth server-behaviour row is *"client omits header
+but value is in body → server MUST reject"*, which is unenforceable if the caller's own headers
+define what gets checked; and `x-mcp-header` carries a header **name portion** pointing at a
+property path that may be nested, so the mapping cannot be recovered by lowercasing a header
+suffix into a top-level argument key.
 
 **Every header is validated in all of its values, not the first.** A duplicated header — a
 satisfying value followed by a hostile one — is the same smuggling the MUST above exists to

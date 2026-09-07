@@ -3,6 +3,7 @@
 
 defmodule BeamMCP.Server do
   alias BeamMCP.Schema
+  alias BeamMCP.ToolCatalog
 
   @moduledoc """
   The protocol core: one message in, one response out, no process and no state of its own.
@@ -45,6 +46,7 @@ defmodule BeamMCP.Server do
   # sessions; 2025-11-25 and earlier open with initialize. The spec calls a server serving
   # both "dual-era" and fixes the discriminator: modern per-request _meta, or initialize.
   @modern_version "2026-07-28"
+
   @legacy_version "2025-11-25"
   @supported_versions [@modern_version, @legacy_version]
 
@@ -297,16 +299,7 @@ defmodule BeamMCP.Server do
 
   # One lookup governs both paths: a tool is callable exactly when the injected catalog names
   # it, and the spec it returns carries the schema that will be enforced.
-  defp find_tool(state, name) when is_binary(name) do
-    Enum.find_value(state.tool_catalog.all(), :error, fn spec ->
-      if Atom.to_string(spec.name) == name, do: {:ok, spec}
-    end)
-  end
-
-  defp find_tool(state, name) when is_atom(name),
-    do: find_tool(state, Atom.to_string(name))
-
-  defp find_tool(_state, _name), do: :error
+  defp find_tool(state, name), do: ToolCatalog.fetch(state.tool_catalog, name)
 
   # The advertised schema is the contract. Validate the wire form -- string keys, as the
   # client sent them -- before normalising, so `required` and `additionalProperties`

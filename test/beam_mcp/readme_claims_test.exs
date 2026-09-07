@@ -29,6 +29,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
   use ExUnit.Case, async: true
 
   alias BeamMCP.Server
+  alias BeamMCP.Transport.HTTP
 
   @modern "2026-07-28"
   @legacy "2025-11-25"
@@ -333,5 +334,94 @@ defmodule BeamMCP.ReadmeClaimsTest do
       assert r["error"]["code"] == -32_022
       assert r["error"]["data"]["supported"] == [@modern, @legacy]
     end
+  end
+
+  describe "the HTTP transport's README claims" do
+    test "the numbers in the resource section are pinned to the sentences that state them" do
+      # A round-3 lane measured every number in this section and found three wrong. None of them
+      # was pinned -- the section was added without a single entry here -- and the three wrong
+      # ones were the two-line claims, the kind that look too small to need a test.
+      claims("caps a single body at 1 MiB")
+      claims("about 1.05 MiB")
+      claims("num_acceptors * num_connections")
+      claims("1,638,400")
+      claims("15,000 ms under `Bandit`")
+      claims("whole-body deadline rather than a per-read reset")
+      claims("It does not bound **headers**")
+    end
+
+    test "the 1 MiB cap is the number the code enforces" do
+      # The sentence and the constant are pinned to each other: 1,048,576 in and 200 out,
+      # 1,048,577 in and 413 out. A cap that drifts from its documented value fails here rather
+      # than in a host's logs.
+      assert readme() =~ "caps a single body at 1 MiB"
+
+      # Sized so the ENCODED REQUEST is exactly at the cap and exactly one byte over it, since
+      # the cap is on the body the transport reads, not on the padding inside it.
+      overhead = byte_size(request_body(""))
+
+      assert http_post_body(String.duplicate("x", 1_048_576 - overhead)).status == 200
+      assert http_post_body(String.duplicate("x", 1_048_576 - overhead + 1)).status == 413
+    end
+
+    test "the implements/does-not-implement list matches what the transport does" do
+      claims("=?base64?…?=` header values")
+      claims("`Mcp-Param-{Name}`")
+      claims("`404` with `-32601`")
+      claims("no sessions, no `Mcp-Session-Id`, no SSE resumability")
+
+      # The claim that the handshake is not implemented is the one a lane caught being false:
+      # `initialize` returned 200 with the LEGACY protocol version while this sentence stood.
+      assert readme() =~ "the `initialize` /"
+      assert readme() =~ "refused** here rather than merely absent"
+
+      # The core is dual-era and still serves these on stdio -- that is the README's point, and
+      # the reason the refusal lives in the transport. Asserted so the sentence explaining the
+      # split is pinned to a core that actually still answers them.
+      state = Server.new(tool_catalog: Catalog, dispatch: fn _, a, _ -> {:ok, a} end)
+
+      {_state, initialize} =
+        Server.handle_message(state, %{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "initialize"
+        })
+
+      assert initialize["result"]["protocolVersion"] == @legacy
+    end
+
+    test "the authorize/1 body limitation is stated with its measured failure mode" do
+      claims("body-signature\nauthentication is not possible in `authorize/1`")
+      claims("119 bytes `200`, 16 KiB and 200 KiB both `408`")
+      claims("open design question")
+    end
+  end
+
+  defp request_body(payload) do
+    Jason.encode!(%{
+      "jsonrpc" => "2.0",
+      "id" => 1,
+      "method" => "tools/call",
+      "params" => %{"name" => "echo", "arguments" => %{"pad" => payload}}
+    })
+  end
+
+  defp http_post_body(payload) do
+    body = request_body(payload)
+
+    :post
+    |> Plug.Test.conn("/mcp", body)
+    |> Plug.Conn.put_req_header("content-type", "application/json")
+    |> Plug.Conn.put_req_header("mcp-protocol-version", @modern)
+    |> Plug.Conn.put_req_header("mcp-method", "tools/call")
+    |> Plug.Conn.put_req_header("mcp-name", "echo")
+    |> HTTP.call(
+      HTTP.init(
+        tool_catalog: Catalog,
+        dispatch: fn _n, a, _o -> {:ok, a} end,
+        authorize: fn _conn -> :ok end,
+        allowed_origins: :any
+      )
+    )
   end
 end
