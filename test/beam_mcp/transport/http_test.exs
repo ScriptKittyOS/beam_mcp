@@ -1501,4 +1501,158 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert post(body, call_headers([{"mcp-param-loose", "other"}]), o).status == 400
     end
   end
+
+  describe "x-mcp-header values MUST be case-insensitively unique (SCR-275)" do
+    # Found by the round-4 security lane on slice 002, filed as SCR-275 and not fixed then.
+    # `annotations/2` accumulated into a map keyed by `String.downcase(name)`, so two properties
+    # annotated `Dup` and `DUP` produced ONE entry: `Map.put` dropped a sibling and `Map.merge`
+    # let a nested annotation overwrite an outer one. The lane's exploit, against a live Bandit:
+    #
+    #     $ curl ... -H 'Mcp-Param-Dup: B' \
+    #         --data-binary '{...,"arguments":{"alpha":"A","beta":"B"}}'
+    #     {"id":1,...,"structuredContent":{"alpha":"A","beta":"B"}}
+    #     HTTP 200
+    #
+    # `beta` was mirrored and checked; `alpha` carried a value, was annotated, had no header,
+    # and passed -- so the MUST at `check_param_headers` was not enforced for it. Which of the
+    # two survived depended on map iteration order, so it was not predictable from reading the
+    # schema.
+
+    defmodule CollidingCatalog do
+      @behaviour BeamMCP.ToolCatalog
+      @impl true
+      def all do
+        [
+          %BeamMCP.ToolSpec{
+            name: :collide,
+            command_class: :observe,
+            mode: :read_only,
+            description: "Collide.",
+            input_schema: %{
+              "type" => "object",
+              "properties" => %{
+                "alpha" => %{"type" => "string", "x-mcp-header" => "Dup"},
+                "beta" => %{"type" => "string", "x-mcp-header" => "DUP"}
+              }
+            }
+          }
+        ]
+      end
+    end
+
+    defmodule NestedCollisionCatalog do
+      @behaviour BeamMCP.ToolCatalog
+      @impl true
+      def all do
+        [
+          %BeamMCP.ToolSpec{
+            name: :collide,
+            command_class: :observe,
+            mode: :read_only,
+            description: "Collide.",
+            input_schema: %{
+              "type" => "object",
+              "properties" => %{
+                "alpha" => %{"type" => "string", "x-mcp-header" => "Dup"},
+                "outer" => %{
+                  "type" => "object",
+                  "properties" => %{
+                    "inner" => %{"type" => "string", "x-mcp-header" => "dup"}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      end
+    end
+
+    defp collide_body(args) do
+      msg("tools/call", %{"params" => %{"name" => "collide", "arguments" => args}})
+    end
+
+    defp collide_headers(extra) do
+      [{@hdr, @modern}, {"mcp-method", "tools/call"}, {"mcp-name", "collide"}] ++ extra
+    end
+
+    test "two properties whose annotations collide are a host fault, not a caller error" do
+      me = self()
+
+      o =
+        opts(
+          tool_catalog: CollidingCatalog,
+          dispatch: fn n, a, _ -> send(me, {:dispatched, n, a}) && {:ok, a} end
+        )
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn =
+            post(
+              collide_body(%{"alpha" => "A", "beta" => "B"}),
+              collide_headers([{"mcp-param-dup", "B"}]),
+              o
+            )
+
+          assert conn.status == 500,
+                 "one header cannot mirror two properties. Enforcing both against it refuses " <>
+                   "a caller who wrote the header exactly as tools/list advertised, and " <>
+                   "enforcing one of them serves a weaker contract than was advertised. The " <>
+                   "definition is invalid and the host is the party who can fix it."
+
+          assert body!(conn)["error"]["code"] == -32_603
+          refute conn.resp_body =~ "Dup"
+          refute conn.resp_body =~ "alpha"
+        end)
+
+      assert log =~ "Dup"
+      assert log =~ "DUP"
+      assert log =~ "collide"
+
+      # The half the lane's exploit measured: neither property is served unchecked.
+      refute_receive {:dispatched, _, _}, 50
+    end
+
+    test "the collision is refused however the caller writes the header, or omits it" do
+      # The verdict is a property of the schema. A caller who supplies both spellings, or
+      # neither, gets the same answer -- otherwise the check is being decided by the request.
+      o = opts(tool_catalog: CollidingCatalog)
+      body = collide_body(%{"alpha" => "A", "beta" => "B"})
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert post(body, collide_headers([]), o).status == 500
+        assert post(body, collide_headers([{"mcp-param-dup", "A"}]), o).status == 500
+
+        assert post(body, collide_headers([{"mcp-param-dup", "A"}, {"mcp-param-dup", "B"}]), o).status ==
+                 500
+      end)
+    end
+
+    test "a nested annotation colliding with an outer one is the same fault" do
+      # This is the `Map.merge` half rather than the `Map.put` half: the nested walk's result
+      # was merged over the accumulator, so a nested annotation silently won.
+      o = opts(tool_catalog: NestedCollisionCatalog)
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        conn =
+          post(
+            collide_body(%{"alpha" => "A", "outer" => %{"inner" => "B"}}),
+            collide_headers([{"mcp-param-dup", "B"}]),
+            o
+          )
+
+        assert conn.status == 500
+      end)
+    end
+
+    test "two DIFFERENT annotation names on one tool are not a collision" do
+      # The control. A check that refused every tool with more than one annotated parameter
+      # would pass all three tests above and break the mechanism entirely -- and the standard
+      # catalog this file uses has three annotations, so this is asserted rather than assumed.
+      assert post(
+               call_body(%{"region" => "eu-west1"}),
+               call_headers([{"mcp-param-region", "eu-west1"}])
+             ).status ==
+               200
+    end
+  end
 end

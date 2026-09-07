@@ -541,8 +541,8 @@ if Code.ensure_loaded?(Plug) do
         # it was wrong in both halves: it named the wrong party, and it named them about a
         # header no caller could ever get right. Same answer as any other host fault -- 500,
         # nothing in the body, the diagnosis in the log where the party who can fix it looks.
-        {__MODULE__, :invalid_annotation, tool, offences} ->
-          Logger.error(fn -> invalid_annotation_message(tool, offences) end)
+        {__MODULE__, :invalid_annotation, tool, detail} ->
+          Logger.error(fn -> invalid_annotation_message(tool, detail) end)
           {:mismatch, 500, error(id, -32_603, "Internal error")}
 
         params ->
@@ -589,7 +589,7 @@ if Code.ensure_loaded?(Plug) do
            catalog when not is_nil(catalog) <- opts.server_opts[:tool_catalog],
            {:ok, spec} <- host_call(fn -> ToolCatalog.fetch(catalog, name) end),
            entries = annotations(spec.input_schema),
-           :ok <- check_annotation_types(name, entries) do
+           :ok <- check_annotations(name, entries) do
         entries
       else
         # A host catalog that RAISES is not a catalog with no such tool, and collapsing the two
@@ -601,7 +601,7 @@ if Code.ensure_loaded?(Plug) do
         # draft matched the invalid-annotation case as a bare non-empty list, and `params.name`
         # being a JSON array — caller-controlled — reaches this `else` as exactly that.
         {__MODULE__, :host_fault, _k, _r, _st} = fault -> fault
-        {__MODULE__, :invalid_annotation, _tool, _offences} = invalid -> invalid
+        {__MODULE__, :invalid_annotation, _tool, _detail} = invalid -> invalid
         _ -> []
       end
     end
@@ -661,23 +661,73 @@ if Code.ensure_loaded?(Plug) do
     # the mistake this check exists to stop making in the other direction.
     @annotatable_types ~w(string integer boolean)
 
+    # TWO MUSTs, ONE DERIVATION. Both are decided from the schema and neither from the request,
+    # so the verdict on a tool is the same whatever the caller sends -- which is the test in
+    # CONVENTIONS.md: if a hostile caller can change what gets checked by changing what it
+    # sends, the set was requested rather than derived.
+    defp check_annotations(tool, entries) do
+      with :ok <- check_annotation_types(tool, entries) do
+        check_annotation_uniqueness(tool, entries)
+      end
+    end
+
     defp check_annotation_types(tool, entries) do
       case Enum.filter(entries, fn {_name, _path, type} ->
              not is_nil(type) and type not in @annotatable_types
            end) do
-        [] -> :ok
-        offences -> {__MODULE__, :invalid_annotation, tool, offences}
+        [] ->
+          :ok
+
+        offences ->
+          invalid(
+            tool,
+            "x-mcp-header MUST only be applied to parameters with primitive types (integer, " <>
+              "string, boolean), and " <>
+              Enum.map_join(offences, "; ", fn {name, path, type} ->
+                "#{Enum.join(path, ".")} is #{inspect(type)} and carries x-mcp-header " <>
+                  inspect(name)
+              end)
+          )
       end
     end
 
-    defp invalid_annotation_message(tool, offences) do
-      detail =
-        Enum.map_join(offences, "; ", fn {name, path, type} ->
-          "#{Enum.join(path, ".")} is #{inspect(type)} and carries x-mcp-header #{inspect(name)}"
-        end)
+    # "x-mcp-header values MUST be case-insensitively unique." Enforcing two properties against
+    # one header refuses a caller who wrote the header exactly as `tools/list` advertised it,
+    # and enforcing one of them serves a weaker contract than was advertised. Neither is a
+    # request this server can answer, so the tool is refused and the host is told which two
+    # properties collide -- by their property paths, since the annotation names are by
+    # definition the same word twice.
+    defp check_annotation_uniqueness(tool, entries) do
+      collisions =
+        entries
+        |> Enum.group_by(fn {name, _path, _type} -> String.downcase(name) end)
+        |> Enum.filter(fn {_folded, group} -> length(group) > 1 end)
 
-      "beam_mcp: tool #{inspect(tool)} cannot be called: x-mcp-header MUST only be applied to " <>
-        "parameters with primitive types (integer, string, boolean), and #{detail}. " <>
+      case collisions do
+        [] ->
+          :ok
+
+        groups ->
+          invalid(
+            tool,
+            "x-mcp-header values MUST be case-insensitively unique, and " <>
+              Enum.map_join(groups, "; ", &collision_detail/1)
+          )
+      end
+    end
+
+    defp collision_detail({folded, group}) do
+      "#{inspect(folded)} is carried by " <> Enum.map_join(group, ", ", &annotation_detail/1)
+    end
+
+    defp annotation_detail({name, path, _type}) do
+      "#{Enum.join(path, ".")} (#{inspect(name)})"
+    end
+
+    defp invalid(tool, detail), do: {__MODULE__, :invalid_annotation, tool, detail}
+
+    defp invalid_annotation_message(tool, detail) do
+      "beam_mcp: tool #{inspect(tool)} cannot be called: #{detail}. " <>
         "Every call to this tool is refused until the schema is corrected."
     end
 
