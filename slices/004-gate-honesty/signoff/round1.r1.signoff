@@ -1,0 +1,14 @@
+# A review verdict and the tree it is about, in one file, because this repository has
+# shipped 16 verdicts bound to no tree and 2 trees carrying no verdict. Written by
+# tools/signoff.sh; the tree is HEAD's tree with slices/*/signoff/ removed.
+#
+# This records WHICH tree the verdict is about. It cannot show that anyone read it.
+
+slice: slices/004-gate-honesty
+round: 1
+lane: r1
+verdict: changes-required
+tree: 9a7998d1ae1f2d8ca8b4a422b0c579c24f4aae1b
+commit: 6a30cb2d0459a62f4704ce7a0ee8949f43f19ccf
+recorded: 2026-09-07T23:34:10Z
+note: R1-A: gate.sh reports pass over 10 of 145 files on bash 3.2; R1-B: a symlink walks through signoff/'s whitelist
