@@ -155,6 +155,15 @@ if [ "$cmd" = "record" ]; then
     If this lane is revising, record the revision as the next round."
   fi
   {
+    # The record is a tracked file, so the REUSE step demands an identifier in its first five
+    # lines. It is emitted by the tool rather than added afterwards, because a *.license sidecar
+    # -- the other way to cover a file whose bytes should not move -- cannot live here: verify's
+    # own whitelist admits nothing but *.signoff and verify.txt, and widening that whitelist to
+    # let a sidecar in would widen it for everything else too. Measured red before this line
+    # existed: slices/004-gate-honesty/logs/red-signoff-records-unheadered.txt.
+    echo "# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC"
+    echo "# SPDX-License-Identifier: Apache-2.0"
+    echo "#"
     echo "# A review verdict and the tree it is about, in one file, because this repository has"
     echo "# shipped 16 verdicts bound to no tree and 2 trees carrying no verdict. Written by"
     echo "# tools/signoff.sh; the tree is HEAD's tree with slices/*/signoff/ removed."
