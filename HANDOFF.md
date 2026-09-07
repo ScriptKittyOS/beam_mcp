@@ -5,8 +5,13 @@ SPDX-License-Identifier: Apache-2.0
 
 # HANDOFF — beam_mcp, slice 003 (the live 002 findings), release 0.3.1
 
-Two review rounds complete at the time this was written, with a third to close on the release
-commit itself. Tag and publish are owner steps — never `mix hex.publish`, never push a tag.
+Tag and publish are owner steps — never `mix hex.publish`, never push a tag.
+
+**How many review rounds this had is recorded below, in the round table of
+`slices/003-release-0-3-1/FINDINGS.md`, and not summarised here.** The first draft of this line
+said "two rounds complete" while one was, which is a claim of review that had not happened
+sitting in the file a reader trusts for exactly that. The table is written as each round closes;
+it is the answer.
 
 ## State
 

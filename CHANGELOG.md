@@ -13,11 +13,15 @@ All notable changes to this project are documented here. The format follows
 
 Four defects in the HTTP transport, all found by slice 002's review lanes and all filed rather
 than fixed at the time. No wire break: `~> 0.3.0` admits this release and still excludes the
-next one, measured with Elixir's own `Version` module rather than recalled —
-`slices/003-release-0-3-1/logs/measure-version-requirement.txt`:
+next one, measured with Elixir's own `Version` module rather than recalled. The whole row, not
+an extract of it — an abridged quotation is not a quotation:
 
-    requirement   0.3.0    0.3.1    0.4.0
-    ~> 0.3.0      true     true     false
+    requirement   0.1.0    0.2.0    0.3.0    0.3.1    0.4.0    1.0.0
+    ~> 0.3.0      false    false    true     true     false    false
+
+Written by the run that produced it, in
+`slices/003-release-0-3-1/logs/measure-version-requirement.txt` **in the repository — slice
+records are not shipped in the package**, and the same is true of every `slices/…` path below.
 
 ### Fixed
 
@@ -57,8 +61,7 @@ next one, measured with Elixir's own `Version` module rather than recalled —
 
 ### Known gaps
 
-Recorded rather than fixed, with the measurement, in
-`slices/003-release-0-3-1/FINDINGS.md`:
+Recorded rather than fixed, with the measurement, in `slices/003-release-0-3-1/FINDINGS.md`:
 
 - **Invalid UTF-8 in `MCP-Protocol-Version` turns a caller's own `400` into a `500`.** The bytes
   are echoed into the refusal's `data.requested`, so encoding the refusal raises. It is answered

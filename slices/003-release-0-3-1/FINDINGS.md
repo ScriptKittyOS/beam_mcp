@@ -51,6 +51,8 @@ mattered, the verdict says so.
 |---|---|---|---|---|---|
 | 1 | a | `1d27f1a` | 1 (A1) | 2 (A2, A3) | changes required, made |
 | 1 | b | `1d27f1a` | 2 (B1, B2) | 1 (B3) | changes required, made |
+| 2 | a | `bae1fca` | — | — | no changes required |
+| 2 | b | `bae1fca` | 3 (B4, B5, B6) | — | changes required, made |
 
 ### Round 1 — three record defects in code that behaves correctly
 
@@ -79,6 +81,53 @@ quoted in `round1.b.md`.
 held on the first round of this slice.** The code was sound. Every blocker was a record.
 
 Gate at round 1 close: `logs/gate-round1.txt`, all eight step lines `pass`, `GATE_EXIT=0`.
+
+### Round 2 — the release commit, and the record moved again
+
+Both lanes read `8c296d8`, tree `bae1fca`: the release commit, with `mix.exs` at `0.3.1`, the two
+new README claims and their tests, the `[0.3.1]` changelog section and the rewritten handoff.
+
+**Lane a required no changes.** It existed to answer one question -- whether a README-claim test
+is an anchor or a quotation with an assertion stapled to it -- and answered it by mutation rather
+than by reading:
+
+    Mr1  @annotatable_types widened to admit number/object/array (the (a) defect restored)
+         KILLED   158 tests, 4 failures    logs/mutation-r-Mr1.txt
+    Mr2  uniqueness grouped by the original name, not the case-folded one (the (b) defect
+         restored in the shape that looks most like a tidy-up)
+         KILLED   158 tests, 3 failures    logs/mutation-r-Mr2.txt
+
+`Mr1`'s four kills include the new README-claim test itself, so the claim is anchored by
+behaviour and not only by its own quotation.
+
+**Lane b found three, all in the record and all in the same direction: a document claiming a
+little more than had happened.**
+
+**B4 — a claim of review that had not happened.** `HANDOFF.md` opened with "Two review rounds
+complete at the time this was written". One was. The second was the round that found the
+sentence. This is the class `CONVENTIONS.md` names as the worst member of its family, in the file
+a reader trusts for exactly that number. Fixed by deleting the summary rather than correcting it:
+the round table below is written as each round closes and is now named as the answer, so there is
+one place that can be right instead of two that can disagree.
+
+**B5 — the changelog cited slice records without saying they do not ship.** `CHANGELOG.md` is in
+`files:` and is an ex_doc extra, so `slices/003-release-0-3-1/…` resolves to nothing where it is
+read. Commit `a01e68d` fixed this for the previous release and set the form; the new section used
+the path and dropped the statement. Fixed once for the section.
+
+**B6 — a quoted table was abridged.** The changelog showed three of the measurement's six
+columns. The numbers were right and the abridgement dropped exactly the columns that do not bear
+on this release, which is the flattering direction. `CONVENTIONS.md`'s derivation for the
+verbatim-archive rule is eight hand-copied verdicts of which four were abridged; this is that
+shape at small scale, in the file a consumer reads. Fixed to the whole row.
+
+**Two rounds, five blocking findings, none of them in `lib/`.** Round 1: a justification nobody
+measured, an off-by-one in a derived population, a derivation command that no longer worked.
+Round 2: a review claimed that had not happened, an unresolvable path, an abridged quotation.
+The code was sound in both rounds. That is slice 002's pattern -- the failure moving one level
+away from the code -- arriving at the record and staying there.
+
+Gate at round 2 close: `logs/gate-round2.txt`, all eight step lines `pass`, `GATE_EXIT=0`.
 
 ## Open, recorded rather than fixed
 
