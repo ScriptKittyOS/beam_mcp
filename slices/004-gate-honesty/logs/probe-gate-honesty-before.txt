@@ -1,0 +1,98 @@
+=== the population, as the REUSE step derives it ===
+  $ git ls-files | wc -l
+  123
+  This is the whole of the derivation. Everything below is planted into THIS set or
+  deliberately outside it.
+
+=== P0 -- the control, and it is the probe failing rather than the check ===
+  An unheadered probe.yaml that is NOT git added. The step derives its population from
+  git ls-files, so the file does not exist as far as the check is concerned and the step
+  is RIGHT to say pass. Recorded so no later probe here can be read as proof by accident.
+  -- P0: unheadered probe-gate-honesty.yaml, NOT git added
+     in the population?  $ git ls-files | grep -c '^probe\|^PROBE'  ->  0
+     reuse line        :  reuse                      pass (25 commentable files)
+     licence files line:  licence files              pass
+     licence files line count: 1   (0 means the step printed NOTHING)
+     other steps not pass: 0   (so the objection above is this step, not a side effect)
+     GATE_EXIT=0
+
+=== P1 -- .yaml, git added. The extension the old glob ('*.yml') was one letter from ===
+  -- P1: unheadered probe-gate-honesty.yaml, git added
+     in the population?  $ git ls-files | grep -c '^probe\|^PROBE'  ->  1
+     reuse line        :  reuse                      pass (25 commentable files)
+     licence files line:  licence files              pass
+     licence files line count: 1   (0 means the step printed NOTHING)
+     other steps not pass: 0   (so the objection above is this step, not a side effect)
+     GATE_EXIT=0
+
+=== P2 -- no extension at all. Nothing a glob on extensions can ever reach ===
+  -- P2: unheadered extensionless PROBEGATEHONESTY, git added
+     in the population?  $ git ls-files | grep -c '^probe\|^PROBE'  ->  1
+     reuse line        :  reuse                      pass (25 commentable files)
+     licence files line:  licence files              pass
+     licence files line count: 1   (0 means the step printed NOTHING)
+     other steps not pass: 0   (so the objection above is this step, not a side effect)
+     GATE_EXIT=0
+
+=== P3 -- .md. Every other .md in this tree carries a header; this step never read one ===
+  -- P3: unheadered probe-gate-honesty.md, git added
+     in the population?  $ git ls-files | grep -c '^probe\|^PROBE'  ->  1
+     reuse line        :  reuse                      pass (25 commentable files)
+     licence files line:  licence files              pass
+     licence files line count: 1   (0 means the step printed NOTHING)
+     other steps not pass: 0   (so the objection above is this step, not a side effect)
+     GATE_EXIT=0
+
+=== P4 -- the same .yaml with a .license sidecar. Proves P1's FAIL is about the missing
+    identifier and not about the extension, and that the sidecar route actually works ===
+  -- P4: unheadered probe-gate-honesty.yaml + a sidecar carrying the identifier
+     in the population?  $ git ls-files | grep -c '^probe\|^PROBE'  ->  2
+     reuse line        :  reuse                      pass (25 commentable files)
+     licence files line:  licence files              pass
+     licence files line count: 1   (0 means the step printed NOTHING)
+     other steps not pass: 0   (so the objection above is this step, not a side effect)
+     GATE_EXIT=0
+
+=== P5 -- THE ONE THAT MATTERS FOR THE SECOND DEFECT ===
+  A missing licence file AND an earlier step already red. That pair is the only input
+  that distinguishes a step-local verdict from one guarded by the shared accumulator:
+  with `[ "$fail" -eq 0 ] && note "licence files" "pass"`, the line VANISHES. Not a
+  wrong verdict -- no verdict, in a script whose header promises every step reports one.
+  Watch 'licence files line count'. Zero is the defect.
+
+  The plant here is an unheadered .sh and NOT the .yaml used above, deliberately: .sh is
+  in the OLD four-extension population as well as the new one, so this probe turns the
+  reuse step red under both versions of the script and the only thing that changes
+  between the before and after runs is the licence-files guard. A probe whose plant is
+  invisible to the version it is comparing against measures two changes at once.
+  -- P5: unheadered probe-gate-honesty.sh (reuse red under BOTH populations) + NOTICE renamed away
+     in the population?  $ git ls-files | grep -c '^probe\|^PROBE'  ->  1
+     reuse line        :  reuse                      FAIL -- no SPDX-License-Identifier:
+     licence files line:  licence files              FAIL -- NOTICE missing
+     licence files line count: 1   (0 means the step printed NOTHING)
+     other steps not pass: 0   (so the objection above is this step, not a side effect)
+     GATE_EXIT=1
+     named by the step: probe-gate-honesty.sh
+
+=== P6 -- the control for P5: a missing licence file with NOTHING else red ===
+  This case worked before the fix and works after it. It is here so the table shows what
+  is not new coverage, rather than letting P5's result stand for both.
+  -- P6: LICENSE renamed away, nothing else planted
+     in the population?  $ git ls-files | grep -c '^probe\|^PROBE'  ->  0
+     reuse line        :  reuse                      pass (25 commentable files)
+     licence files line:  licence files              FAIL -- LICENSE missing
+     licence files line count: 1   (0 means the step printed NOTHING)
+     other steps not pass: 0   (so the objection above is this step, not a side effect)
+     GATE_EXIT=1
+
+=== what to read ===
+  P1, P2, P3      reuse must FAIL and NAME the file. Under the four-extension glob all
+                  three read pass, because the file was never in the population.
+  P4              reuse must pass -- the sidecar is the covering mechanism, not an
+                  exception to the population.
+  P5              'licence files line count' must be 1 and the line must read FAIL.
+                  Under the shared accumulator it is 0.
+  P0, P6          unchanged by either fix, and recorded as such.
+
+=== cleanup ===
+  git status --porcelain (tracked): empty. Every plant is reverted.

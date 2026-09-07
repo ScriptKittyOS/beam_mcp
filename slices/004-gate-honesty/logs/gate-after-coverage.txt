@@ -1,0 +1,11 @@
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (125 tracked; 44 in scope, 42 headered + 2 sidecar; excluded 79 archive + 2 licence text)
+  licence files              pass
+Gate OK.
+GATE_EXIT=0

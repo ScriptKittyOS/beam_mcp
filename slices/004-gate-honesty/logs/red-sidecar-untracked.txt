@@ -1,0 +1,31 @@
+# The sidecar half of the REUSE step is a FILESYSTEM test, not a tracked-set test.
+# gate.sh: [ -f "$f.license" ] && head -5 "$f.license" | grep -q SPDX-License-Identifier
+# The population is git ls-files; the COVERAGE is [ -f ]. An untracked sidecar covers a
+# tracked file on this disk and does not exist in a fresh clone or in CI.
+
+$ printf 'key: value\n' > probe-sidecar.yaml ; git add -f probe-sidecar.yaml
+$ printf 'SPDX-...\n' > probe-sidecar.yaml.license      # deliberately NOT git added
+$ git ls-files | grep -c '^probe-sidecar.yaml.license$'  ->  0
+$ git ls-files | grep -c '^probe-sidecar.yaml$'          ->  1
+
+$ ./tools/gate.sh   (reuse + licence files lines, and the exit code)
+  reuse                      pass (126 tracked; 45 in scope, 42 headered + 3 sidecar; excluded 79 archive + 2 licence text)
+  licence files              pass
+GATE_EXIT=0
+
+== after the fix: the same plant, the same commands ==
+$ git ls-files | grep -c '^probe-sidecar.yaml.license$'  ->  0
+$ git ls-files | grep -c '^probe-sidecar.yaml$'          ->  1
+$ ./tools/gate.sh
+  reuse                      FAIL (126 tracked; 45 in scope, 42 headered + 2 sidecar; excluded 79 archive + 2 licence text)
+  licence files              pass
+      no SPDX-License-Identifier in the file or in a <path>.license sidecar:
+        probe-sidecar.yaml
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1
+-- now git add the sidecar, nothing else changes --
+$ git add -f probe-sidecar.yaml.license ; ./tools/gate.sh
+  reuse                      pass (127 tracked; 46 in scope, 43 headered + 3 sidecar; excluded 79 archive + 2 licence text)
+  licence files              pass
+GATE_EXIT=0
