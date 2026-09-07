@@ -1,23 +1,86 @@
-### PROBE: the gate's docs step, shown failing on the defect it exists for.
-### Population derived the way the mechanism derives it -- mix docs reads compiled beams, so
-### the probe edits the source and recompiles rather than planting a string.
+### PROBE: the gate's docs step, shown failing on the defect it exists for, then green.
 ###
-### RE-RUN in round 6. The first version of this archive recorded 2 warnings; a lane re-ran
-### it and got 6, because a LATER COMMIT IN THE SAME ROUND added CHANGELOG.md to ex_doc
-### extras:, giving the same mutation two more warning sites, each emitted once per
-### formatter. The archive was stale within one round of being written, which is the whole
-### argument for re-running a probe rather than citing one.
+### CAPTURED WHOLE. The previous version of this file was piped through grep, so when the
+### restored run exited 1 -- credo was red on nested-module test fixtures, fixed later in
+### the same commit -- the filter hid the credo FAIL line and the archive showed a PASSING
+### docs step beside a FAILING exit code, with nothing explaining it. That is the
+### read-the-step-line-not-the-exit-code confusion inverted, inside the file offered as
+### proof, and a filtered transcript is not a verbatim archive. Round 7 lane v1 found it.
+###
+### mix docs reads compiled beams, so the probe edits the source and recompiles rather than
+### planting a string.
 
---- with @moduledoc false ---
+MUTATION: BeamMCP.Transport.Stdio reverted to @moduledoc false
+
+========== GATE, with the moduledoc reverted ==========
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
   docs                       FAIL (exit 0, 6 warnings)
+      Generating docs...
            warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
+           │
+       176 │ - **`BeamMCP.Transport.Stdio` was documented.** It carried `@moduledoc false` — inherited from
+           │ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+           │
+           └─ CHANGELOG.md:176: (file)
+      
           warning: documentation references function "BeamMCP.Transport.Stdio.run/1" but it is hidden
+          │
+       97 │ **stdio** — `BeamMCP.Transport.Stdio.run/1`, newline-delimited JSON-RPC over a pipe.
+          │ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          │
+          └─ README.md:97: (file)
+      
            warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
+           │
+       383 │   `BeamMCP.Transport.Stdio`, `BeamMCP.Schema`, `BeamMCP.ToolSpec` (`083838e`).
+           │   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+           │
+           └─ CHANGELOG.md:383: (file)
+      
           warning: documentation references function "BeamMCP.Transport.Stdio.run/1" but it is hidden
+          │
+       97 │ **stdio** — `BeamMCP.Transport.Stdio.run/1`, newline-delimited JSON-RPC over a pipe.
+          │ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          │
+          └─ README.md:97: (file)
+      
            warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
+           │
+       176 │ - **`BeamMCP.Transport.Stdio` was documented.** It carried `@moduledoc false` — inherited from
+           │ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+           │
+           └─ CHANGELOG.md:176: (file)
+      
            warning: documentation references module "BeamMCP.Transport.Stdio" but it is hidden
+           │
+       383 │   `BeamMCP.Transport.Stdio`, `BeamMCP.Schema`, `BeamMCP.ToolSpec` (`083838e`).
+           │   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+           │
+           └─ CHANGELOG.md:383: (file)
+      
+      View html docs at "doc/index.html"
+      View markdown docs at "doc/llms.txt"
+      View epub docs at "doc/BeamMCP.epub"
+  reuse                      pass (24 commentable files)
+GATE FAILED.
 GATE_EXIT=1
 
---- restored ---
+MUTATION REVERTED
+
+========== GATE, restored ==========
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
   docs                       pass
-GATE_EXIT=1
+  reuse                      pass (24 commentable files)
+  licence files              pass
+Gate OK.
+GATE_EXIT=0

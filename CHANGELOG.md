@@ -139,9 +139,20 @@ The rule is applied at every point host code runs in the request path — `autho
 derived by grep rather than listed, because listing it is how the first cut of this fix covered
 one of the three and shipped a comment claiming all of them.
 
-**The `id` differs on one limb, and the diagram above does not show it.** `authorize/1` runs
-before the body is read, so there is no id to echo and that response carries `"id":null`. The
-other two answer with the request's id.
+**The `id` is echoed on some of these limbs and not others, and the diagram above shows only
+the common case.** Measured:
+
+    host tool raises (dispatch/3)                    500  -32603  id echoed
+    host tool_catalog RAISES (header validation)     500  -32603  id echoed
+    host tool_catalog returns a malformed spec       500  -32603  id null
+    host authorize/1 raises                          500  -32603  id null
+
+`authorize/1` runs before the body is read, so there is genuinely no id to echo. The malformed-
+spec case is different and is an inconsistency rather than a necessity: the spec is read at
+`annotations(spec.input_schema)`, which sits outside `host_call/1`, so a host DATA fault escapes
+to `call/2`'s rescue where the id is not known — while a host RAISE two lines earlier is caught
+and answered with it. Recorded rather than fixed here, because moving that read inside
+`host_call/1` changes which rescue answers and wants its own red.
 
 ### Added — `BeamMCP.ToolCatalog.fetch/2` is public API
 
