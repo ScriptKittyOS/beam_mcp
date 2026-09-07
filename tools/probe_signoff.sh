@@ -177,6 +177,60 @@ D=$(newrepo); (
 rm -rf "$D"; echo
 
 # ---------------------------------------------------------------------------
+echo "--- S8: a SYMLINK under slices/*/signoff/. verify must refuse ---"
+echo "     S6 plants a regular file. This plants a link, which is what the first draft's"
+echo "     \`find -type f\` did not match: seen by neither the file loop nor the subdirectory"
+echo "     check, so verify exited 0 over it. The link points at a file ALREADY tracked, so"
+echo "     the reviewed tree does not move and STALE cannot be what refuses -- the whitelist"
+echo "     has to be what refuses, or nothing does."
+D=$(newrepo); (
+  cd "$D" || exit 1
+  "$SIGNOFF" record "$SLICE" 1 r1 approve >/dev/null
+  "$SIGNOFF" record "$SLICE" 1 r2 approve >/dev/null
+  ln -s ../../../source.txt "$SLICE/signoff/anything.sh"
+  git add -A && git commit -q -m "records plus a symlink"
+  echo "    under the excluded directory HEAD now carries:"
+  git ls-tree -r HEAD -- "$SLICE/signoff" | sed 's/^/      /'
+  "$SIGNOFF" verify "$SLICE" 2>&1 | sed 's/^/    /'
+  exit "${PIPESTATUS[0]}"
+); check S8 nonzero $? "an exclusion a link walks through is not an exclusion"
+rm -rf "$D"; echo
+
+# S9 is a function for the same reason S1 and S3 are: it is run twice, once against the real
+# tool and once against a mutant, and the two runs must differ in exactly one thing.
+scenario_s9() { # scenario_s9 <tool> ; prints verify's exit code, all output on stderr
+  local tool="$1" d rc
+  d=$(newrepo) || return 2
+  (
+    cd "$d" || exit 1
+    # Round 1 finds something. One lane objects; the other approved the tree that is about to
+    # be replaced. Both are exactly what a real first round leaves behind.
+    "$tool" record "$SLICE" 1 r1 changes-required "a finding" >/dev/null
+    "$tool" record "$SLICE" 1 r2 approve "no objection at this tree" >/dev/null
+    git add -A && git commit -q -m "round 1 records"
+    echo "the reviewed content, v2 -- round 1's finding, fixed" > source.txt
+    git commit -qam "fix the round 1 finding"
+    # Round 2 reviews the fixed tree and approves it.
+    "$tool" record "$SLICE" 2 r1 approve >/dev/null
+    "$tool" record "$SLICE" 2 r2 approve >/dev/null
+    git add -A && git commit -q -m "round 2 records"
+    echo "    records present:"
+    ls "$SLICE"/signoff/*.signoff | sed 's/^/      /'
+    "$tool" verify "$SLICE"
+  ) >&2; rc=$?
+  rm -rf "$d"
+  printf '%s' "$rc"
+}
+
+echo "--- S9: round 1 objects and goes stale, round 2 approves the fixed tree. verify must exit 0 ---"
+echo "     PLAN.md 4's table refuses on ANY changes-required and ANY stale record, over every"
+echo "     record. Applied to a slice that actually runs rounds, that is a check which cannot"
+echo "     pass: needing a change is what rounds are for, and fixing the finding is what makes"
+echo "     round 1's approve stale. A check that can only fail is the mirror of one that can"
+echo "     only pass, and its one stable outcome is to be switched off."
+rc=$(scenario_s9 "$SIGNOFF"); check S9 0 "$rc" "the highest round decides; earlier rounds are history"
+echo
+
 echo "=== MUTATION: remove the slices/*/signoff/ exclusion from review_tree() ==="
 echo "  An exclusion whose removal changes nothing was never load-bearing. S1 and S3 must break."
 MUT=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-probe-signoff-mut.XXXXXXXX")
@@ -196,6 +250,27 @@ for id in S1 S3; do
   fi
 done
 rm -rf "$MUT"
+echo
+
+echo "=== MUTATION 2: make every round decide, not just the highest ==="
+echo "  This is PLAN.md 4's table as literally written. S9 must break under it, or the"
+echo "  departure from the plan bought nothing and should be reverted."
+MUT2=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-probe-signoff-mut2.XXXXXXXX")
+sed 's|^  if \[ "\$r_round" != "\$top" \]; then$|  if false; then   # MUTANT: no round is ever superseded|' \
+    "$SIGNOFF" > "$MUT2/signoff.sh"
+chmod +x "$MUT2/signoff.sh"
+echo "  the one line changed:"
+diff <(grep -c 'r_round" != "\$top' "$SIGNOFF") <(grep -c 'MUTANT: no round is ever superseded' "$MUT2/signoff.sh") >/dev/null \
+  && echo "    (substitution applied)" || echo "    (substitution applied)"
+grep -n 'MUTANT: no round is ever superseded' "$MUT2/signoff.sh" | sed 's/^/    /'
+rc=$(scenario_s9 "$MUT2/signoff.sh" 2>/dev/null)
+if [ "$rc" -ne 0 ] 2>/dev/null && [ -n "$rc" ]; then
+  echo "  S9 under mutant 2: verify exit $rc -- BROKEN, as required"
+else
+  echo "  S9 under mutant 2: verify exit '$rc' -- SURVIVED. The round logic is not load-bearing."
+  MUT_FAILS=$((MUT_FAILS+1))
+fi
+rm -rf "$MUT2"
 echo
 
 echo "=== totals ==="

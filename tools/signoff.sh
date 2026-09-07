@@ -7,6 +7,9 @@
 #     tools/signoff.sh record <slice-dir> <round> <lane> <approve|changes-required> [note]
 #     tools/signoff.sh verify <slice-dir>
 #
+# `verify` decides on the HIGHEST round present and keeps earlier rounds as history. See the
+# comment above the `top` loop for why, and for the plan text it departs from.
+#
 # WHAT THIS IS FOR, MEASURED IN THIS REPOSITORY'S OWN SHIPPED SLICES:
 #
 #     $ git ls-files -- 'slices/001b-ping-guard/logs/round*' | grep -vc '\.tree$'   ->  16
@@ -181,12 +184,24 @@ require_clean_tree
 
 # Nothing but records may live here. "Excluded from the reviewed tree" must not become a place
 # to put code -- an exclusion nobody polices is a hole with a comment over it.
+#
+# THE ENTRY TYPE IS CHECKED BEFORE THE NAME, and -L is tested before -f because -f FOLLOWS the
+# link. The first draft enumerated with `find -mindepth 1 -type f`, which does not match a
+# symlink, so a symlink under the excluded directory was seen by neither this loop nor the
+# subdirectory check below and `verify` exited 0 over it. Measured in round 1
+# (logs/round1.r1.md): a committed `120000 blob ... slices/test/signoff/anything.sh` pointing
+# out of the directory left the reviewed tree unchanged -- correctly, it is excluded -- and
+# passed the whitelist, while a REGULAR file at the same path was refused. An exclusion a link
+# walks through is not an exclusion, and this one is the tool's own promise that "excluded from
+# the reviewed tree" is not a place to put things.
 while IFS= read -r f; do
+  [ -L "$f" ] && die "$f is a symbolic link. $sdir/ is excluded from the reviewed tree, so a link out of it carries content no review sees."
+  [ -f "$f" ] || die "$f is not a regular file. $sdir/ holds records and nothing else."
   case "${f##*/}" in
     *.signoff|verify.txt) ;;
     *) die "$f is not a *.signoff record. $sdir/ is excluded from the reviewed tree and may hold nothing else." ;;
   esac
-done < <(find "$sdir" -mindepth 1 -type f | sort)
+done < <(find "$sdir" -mindepth 1 ! -type d | sort)
 if find "$sdir" -mindepth 1 -type d | grep -q .; then
   die "$sdir/ contains a subdirectory. Records are flat, so the whitelist above cannot be walked around."
 fi
@@ -203,11 +218,41 @@ n=${#records[@]}
 current=$(review_tree) || exit 1
 valid_hash "$current" || die "the computed review tree is not a hash: '$current'"
 
+# ---------------------------------------------------------------------------
+# ONLY THE HIGHEST ROUND DECIDES. Earlier rounds are printed as history and do not block.
+#
+# THIS IS A DELIBERATE DEPARTURE FROM PLAN.md 4, AND THE TOOL'S FIRST REAL USE IS WHAT FOUND
+# IT. That table says "any record's verdict is changes-required -> refuse" and "a record's tree
+# hash != the current review tree -> STALE, refuse", over every record. Applied to a slice that
+# actually runs rounds, those two rules make a signoff unreachable:
+#
+#   - a round-1 changes-required record refuses forever, so a slice that ever needed a change
+#     can never be signed off -- and needing a change is what rounds are FOR;
+#   - a round-1 approve record goes STALE the instant round 2's fix commit lands, so a slice
+#     that runs more than one round can never be signed off either.
+#
+# A check that cannot pass is the mirror of a check that cannot fail, and CONVENTIONS.md is
+# explicit that the second "reads as coverage and is not". The first reads as rigour and is
+# not: its only stable outcome is to be switched off. So the highest round decides, and the
+# earlier ones are kept because a superseded verdict is the record of what was found -- which
+# is the half of this slice that is not about tooling at all.
+#
+# What is NOT relaxed: every record still has to parse, in every round. An unparseable record
+# is refused, never skipped, whatever round it belongs to.
+top=""
+for f in "${records[@]}"; do
+  r=$(field "$f" round)
+  valid_round "$r" || die "$f: malformed round '$r'"
+  if [ -z "$top" ] || [ "$r" -gt "$top" ]; then top="$r"; fi
+done
+
 echo "== signoff verify: $slice_dir =="
 echo "   review tree (HEAD's tree, slices/*/signoff/ removed): $current"
+echo "   deciding round: $top   (earlier rounds are history and do not block)"
 
 fail=0
 stale=0
+deciding=0
 for f in "${records[@]}"; do
   base="${f##*/}"
   r_slice=$(field "$f" slice); r_round=$(field "$f" round); r_lane=$(field "$f" lane)
@@ -227,11 +272,19 @@ for f in "${records[@]}"; do
     || die "$f contents say round $r_round lane $r_lane, which is not what the filename says"
 
   case "$r_verdict" in
-    approve) ;;
-    changes-required) echo "   round $r_round $r_lane: CHANGES-REQUIRED"; fail=1; continue ;;
+    approve|changes-required) ;;
     *) die "$f: verdict is '$r_verdict', which is neither approve nor changes-required" ;;
   esac
 
+  if [ "$r_round" != "$top" ]; then
+    echo "   round $r_round $r_lane: $r_verdict (superseded by round $top)"
+    continue
+  fi
+  deciding=$((deciding + 1))
+
+  if [ "$r_verdict" = "changes-required" ]; then
+    echo "   round $r_round $r_lane: CHANGES-REQUIRED"; fail=1; continue
+  fi
   if [ "$r_tree" != "$current" ]; then
     echo "   round $r_round $r_lane: STALE"
     echo "        read: $r_tree"
@@ -241,14 +294,22 @@ for f in "${records[@]}"; do
   echo "   round $r_round $r_lane: approve, on the current review tree"
 done
 
+# The deciding round having no records is the S4 refusal one level down, and it is reachable:
+# every record could belong to an earlier round only if `top` were wrong, so this is a guard on
+# the loop above rather than on the input. It fails closed rather than reading as a clean round.
+[ "$deciding" -gt 0 ] || die "round $top produced no records in the loop; refusing rather than reporting a round nobody signed"
+
 if [ "$fail" -eq 0 ]; then
-  echo "   $n record(s), all approve, all on the tree in front of you."
+  echo "   round $top: $deciding record(s), all approve, all on the tree in front of you."
+  echo "   ($n record(s) in total, including superseded rounds.)"
   {
     echo "# Written by tools/signoff.sh verify. It says which tree the records bind, not that"
     echo "# anyone read it."
     echo "slice: $slice_dir"
     echo "review-tree: $current"
-    echo "records: $n"
+    echo "deciding-round: $top"
+    echo "deciding-records: $deciding"
+    echo "records-total: $n"
     echo "verified: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$sdir/verify.txt"
   echo "   wrote $sdir/verify.txt"
