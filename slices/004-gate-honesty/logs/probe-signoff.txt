@@ -5,24 +5,27 @@
 recorded: slices/test-slice/signoff/round1.r1.signoff
   verdict: approve
   tree:    4e42d919befc267dfc80037ac28b20a310eca20c
-  commit:  ff3cbb18b58e5202231bf99d08c5fa5276627aab
+  commit:  2c3d9ccad032d9ccdab19811ca917aeddf32dea7
 recorded: slices/test-slice/signoff/round1.r2.signoff
   verdict: approve
   tree:    4e42d919befc267dfc80037ac28b20a310eca20c
-  commit:  ff3cbb18b58e5202231bf99d08c5fa5276627aab
+  commit:  2c3d9ccad032d9ccdab19811ca917aeddf32dea7
     the two records name the same tree:
       tree: 4e42d919befc267dfc80037ac28b20a310eca20c
 == signoff verify: slices/test-slice ==
    review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+   deciding round: 1   (earlier rounds are history and do not block)
    round 1 r1: approve, on the current review tree
    round 1 r2: approve, on the current review tree
-   2 record(s), all approve, all on the tree in front of you.
+   round 1: 2 record(s), all approve, all on the tree in front of you.
+   (2 record(s) in total, including superseded rounds.)
    wrote slices/test-slice/signoff/verify.txt
   S1   AS EXPECTED  (want 0, got exit 0)  committing the records must not invalidate them
 
 --- S2: S1, then a real commit changing a tracked file. verify must refuse, both STALE ---
     == signoff verify: slices/test-slice ==
        review tree (HEAD's tree, slices/*/signoff/ removed): 0047ec9c5e1556ebe9096bd7a4306fb93e328925
+       deciding round: 1   (earlier rounds are history and do not block)
        round 1 r1: STALE
             read: 4e42d919befc267dfc80037ac28b20a310eca20c
             now:  0047ec9c5e1556ebe9096bd7a4306fb93e328925
@@ -39,9 +42,11 @@ recorded: slices/test-slice/signoff/round1.r2.signoff
       slices/test-slice/signoff/verify.txt
 == signoff verify: slices/test-slice ==
    review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+   deciding round: 1   (earlier rounds are history and do not block)
    round 1 r1: approve, on the current review tree
    round 1 r2: approve, on the current review tree
-   2 record(s), all approve, all on the tree in front of you.
+   round 1: 2 record(s), all approve, all on the tree in front of you.
+   (2 record(s) in total, including superseded rounds.)
    wrote slices/test-slice/signoff/verify.txt
   S3   AS EXPECTED  (want 0, got exit 0)  a commit inside the excluded directory must not move the reviewed tree
 
@@ -53,6 +58,7 @@ recorded: slices/test-slice/signoff/round1.r2.signoff
 --- S5: one approve, one changes-required. verify must refuse ---
     == signoff verify: slices/test-slice ==
        review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+       deciding round: 1   (earlier rounds are history and do not block)
        round 1 r1: approve, on the current review tree
        round 1 r2: CHANGES-REQUIRED
     SIGNOFF REFUSED -- slices/test-slice is not signed off.
@@ -66,22 +72,67 @@ recorded: slices/test-slice/signoff/round1.r2.signoff
 --- S7: a record with its 'tree:' line deleted. verify must REFUSE, not skip ---
     == signoff verify: slices/test-slice ==
        review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+       deciding round: 1   (earlier rounds are history and do not block)
        round 1 r1: approve, on the current review tree
     SIGNOFF REFUSED -- slices/test-slice/signoff/round1.r2.signoff has no 'tree:' line. An unparseable record is refused, never skipped.
   S7   AS EXPECTED  (want nonzero, got exit 1)  a skipped record is a member the population lost quietly
+
+--- S8: a SYMLINK under slices/*/signoff/. verify must refuse ---
+     S6 plants a regular file. This plants a link, which is what the first draft's
+     `find -type f` did not match: seen by neither the file loop nor the subdirectory
+     check, so verify exited 0 over it. The link points at a file ALREADY tracked, so
+     the reviewed tree does not move and STALE cannot be what refuses -- the whitelist
+     has to be what refuses, or nothing does.
+    under the excluded directory HEAD now carries:
+      120000 blob 5f9d404e87aee2fcf79e187883f038a1017c2de0	slices/test-slice/signoff/anything.sh
+      100644 blob 247a99b1c8bf07b8baa07280fd498d488ae6d71d	slices/test-slice/signoff/round1.r1.signoff
+      100644 blob ac85d10dfe2a53033823265ae84d3c1b78959f26	slices/test-slice/signoff/round1.r2.signoff
+    SIGNOFF REFUSED -- slices/test-slice/signoff/anything.sh is a symbolic link. slices/test-slice/signoff/ is excluded from the reviewed tree, so a link out of it carries content no review sees.
+  S8   AS EXPECTED  (want nonzero, got exit 1)  an exclusion a link walks through is not an exclusion
+
+--- S9: round 1 objects and goes stale, round 2 approves the fixed tree. verify must exit 0 ---
+     PLAN.md 4's table refuses on ANY changes-required and ANY stale record, over every
+     record. Applied to a slice that actually runs rounds, that is a check which cannot
+     pass: needing a change is what rounds are for, and fixing the finding is what makes
+     round 1's approve stale. A check that can only fail is the mirror of one that can
+     only pass, and its one stable outcome is to be switched off.
+    records present:
+      slices/test-slice/signoff/round1.r1.signoff
+      slices/test-slice/signoff/round1.r2.signoff
+      slices/test-slice/signoff/round2.r1.signoff
+      slices/test-slice/signoff/round2.r2.signoff
+== signoff verify: slices/test-slice ==
+   review tree (HEAD's tree, slices/*/signoff/ removed): daf98e4b2a4db5f4967a381c3b33f9814e29a4be
+   deciding round: 2   (earlier rounds are history and do not block)
+   round 1 r1: changes-required (superseded by round 2)
+   round 1 r2: approve (superseded by round 2)
+   round 2 r1: approve, on the current review tree
+   round 2 r2: approve, on the current review tree
+   round 2: 2 record(s), all approve, all on the tree in front of you.
+   (4 record(s) in total, including superseded rounds.)
+   wrote slices/test-slice/signoff/verify.txt
+  S9   AS EXPECTED  (want 0, got exit 0)  the highest round decides; earlier rounds are history
 
 === MUTATION: remove the slices/*/signoff/ exclusion from review_tree() ===
   An exclusion whose removal changes nothing was never load-bearing. S1 and S3 must break.
   the one line changed:
     1c1
-    < 74:  git ls-tree -r -z --name-only HEAD | grep -z -E '^slices/[^/]+/signoff/' > "$list"
+    < 77:  git ls-tree -r -z --name-only HEAD | grep -z -E '^slices/[^/]+/signoff/' > "$list"
     ---
-    > 74:  : > "$list"   # MUTANT: exclude nothing
+    > 77:  : > "$list"   # MUTANT: exclude nothing
   S1 under the mutant: verify exit 1 -- BROKEN, as required
   S3 under the mutant: verify exit 1 -- BROKEN, as required
 
+=== MUTATION 2: make every round decide, not just the highest ===
+  This is PLAN.md 4's table as literally written. S9 must break under it, or the
+  departure from the plan bought nothing and should be reverted.
+  the one line changed:
+    (substitution applied)
+    288:  if false; then   # MUTANT: no round is ever superseded
+  S9 under mutant 2: verify exit 1 -- BROKEN, as required
+
 === totals ===
-  probes as expected: 7
+  probes as expected: 9
   probes disagreeing: 0
   mutants surviving:  0
 PROBE_SIGNOFF_EXIT=0

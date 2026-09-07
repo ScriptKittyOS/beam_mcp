@@ -1,0 +1,14 @@
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      FAIL (152 tracked; 51 in scope, 47 headered + 2 sidecar; excluded 99 archive + 2 licence text)
+      no SPDX-License-Identifier in the file or in a <path>.license sidecar:
+        slices/004-gate-honesty/signoff/round1.r1.signoff
+        slices/004-gate-honesty/signoff/round1.r2.signoff
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
 # A review verdict and the tree it is about, in one file, because this repository has
 # shipped 16 verdicts bound to no tree and 2 trees carrying no verdict. Written by
 # tools/signoff.sh; the tree is HEAD's tree with slices/*/signoff/ removed.
