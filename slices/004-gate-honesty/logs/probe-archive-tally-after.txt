@@ -1,0 +1,98 @@
+=== the population, as the tally derives it, BEFORE the plant ===
+  $ git ls-files -- "slices/001b-ping-guard/logs/*" | wc -l
+  29
+  $ git ls-files -- "slices/001b-ping-guard/logs/mutation-*"
+    slices/001b-ping-guard/logs/mutation-a.txt
+    slices/001b-ping-guard/logs/mutation-b.txt
+    slices/001b-ping-guard/logs/mutation-readme-a.txt
+    slices/001b-ping-guard/logs/mutation-readme-b.txt
+
+=== the plant: a tracked rename inside that population ===
+  $ git mv slices/001b-ping-guard/logs/mutation-a.txt slices/001b-ping-guard/logs/mutation-c.txt
+
+=== the population AFTER the plant, from the same command ===
+  $ git ls-files -- "slices/001b-ping-guard/logs/*" | wc -l
+  29
+  $ git ls-files -- "slices/001b-ping-guard/logs/mutation-*"
+    slices/001b-ping-guard/logs/mutation-b.txt
+    slices/001b-ping-guard/logs/mutation-c.txt
+    slices/001b-ping-guard/logs/mutation-readme-a.txt
+    slices/001b-ping-guard/logs/mutation-readme-b.txt
+
+  The count is unchanged. mutation-c.txt is enumerated and is classified by nothing:
+  the sweep's mutation loop is `for m in a b`, so it still calls verdict() for the
+  now-absent mutation-a.txt. One file left the population, another took its slot, and
+  the two counts the tally compares are both unchanged.
+
+=== ./tools/archive_sweep.sh under the plant ===
+  SWEEP_EXIT=1
+
+  -- every verdict line --
+    => full-suite.txt           DIFFERS  (the diff above is the difference)
+    => green-negotiation.txt    RAW      (0 differing lines above)
+    => gate.txt                 DIFFERS  (the diff above is the difference)
+    => probe-after.txt          DIFFERS  (the diff above is the difference)
+    => red.txt                  RAW      (banner + code: + stacktrace: + Finished in, all present)
+    => mutation-a.txt           DIFFERS  (a mark is missing; a filtered capture would look like this)
+    => mutation-b.txt           RAW      (banner + code: + stacktrace: + Finished in, all present)
+    => mutation-readme-a.txt    RAW      (banner + code: + stacktrace: + Finished in, all present)
+    => mutation-readme-b.txt    RAW      (banner + code: + stacktrace: + Finished in, all present)
+    => spec-basic-versioning.md RAW      (re-fetched from https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning.md)
+    => spec-changelog.md        RAW      (re-fetched from https://modelcontextprotocol.io/specification/2026-07-28/changelog.md)
+    => spec-legacy-basic.md     RAW      (re-fetched from https://modelcontextprotocol.io/specification/2025-11-25/basic.md)
+    => archive-sweep.txt        RAW      (self: named check above, not an assertion)
+    => ENUMERATED BUT NOT CLASSIFIED -- unclassified is NOT the same as RAW:
+    => CLASSIFIED BUT NOT ENUMERATED -- a verdict was printed for a path that is not in
+
+  -- the closing tally, verbatim --
+  === CLOSING TALLY -- names, because counts were the loophole ===
+    Round 5 enumerated red.txt and classified it nowhere: 19 listed, 18 classified, and
+    the output still read as a clean sweep because nothing counted. A file could drop out
+    QUIETLY -- CONVENTIONS.md's own worst shape, and this script's header says a list is
+    not a population.
+  
+    Counting closed one shape and left another. 'Every enumerated file is classified' is a
+    claim about NAMES, and two integers cannot carry it: rename one file inside the
+    population and the loop above still hands a verdict to the name that left, so both
+    integers are unchanged and the tally reads BALANCES over a file nothing looked at.
+    Measured, not imagined -- ./tools/probe_archive_tally.sh renames mutation-a.txt to
+    mutation-c.txt and the counting version printed 'enumerated : 29 / classified : 29 /
+    TALLY BALANCES' while giving mutation-a.txt a verdict though the file did not exist.
+  
+    So the comparison is now between two SETS OF PATHS, printed in BOTH directions.
+    The second direction is the one a counter can never see.
+    enumerated : 29
+    classified : 29  (13 verdicts + 16 authored lane reports)
+    => ENUMERATED BUT NOT CLASSIFIED -- unclassified is NOT the same as RAW:
+         slices/001b-ping-guard/logs/mutation-c.txt
+    => CLASSIFIED BUT NOT ENUMERATED -- a verdict was printed for a path that is not in
+       the population. Either the file left the tracked set or a hand-written loop names
+       something that does not exist:
+         slices/001b-ping-guard/logs/mutation-a.txt
+       Do not read this sweep as clean.
+  
+  === EXIT STATUS ===
+    SWEEP FAILED: at least one DIFFERS, UNCHECKED, or tally mismatch above.
+    A DIFFERS is not by itself evidence of fabrication. This script re-runs each command
+    against the CURRENT tree, so an archive captured at an earlier tree differs because
+    the tree moved. What the exit status now says is 'a human must read this', which is
+    what it always should have said and did not.
+
+  -- is mutation-c.txt CLASSIFIED anywhere? Count verdict lines, not mentions: the
+     file is named once by the population echo at the top of the sweep, and a mention
+     is not a classification -- which is the distinction this whole probe is about. --
+  $ grep -c '=> .*mutation-c' <sweep output>
+  0
+  -- and is mutation-a.txt still given a verdict, though it does not exist? --
+  $ grep '=> .*mutation-a' <sweep output>
+      => mutation-a.txt           DIFFERS  (a mark is missing; a filtered capture would look like this)
+
+=== VERDICT OF THIS PROBE ===
+  A tally that compares names must FAIL here and name both directions:
+    mutation-c.txt  enumerated, classified nowhere
+    mutation-a.txt  classified, no longer enumerated
+  A tally that compares counts reports TALLY BALANCES and exits 0.
+  Read the two lines above, not this sentence.
+
+=== cleanup: the plant is reverted and the tree is asserted clean ===
+  git status --porcelain (tracked): empty. The tree is as it was.

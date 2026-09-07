@@ -1,0 +1,19 @@
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      FAIL (123 tracked; 42 in scope, 35 headered + 0 sidecar; excluded 79 archive + 2 licence text)
+      no SPDX-License-Identifier in the file or in a <path>.license sidecar:
+        .gitignore
+        FINDINGS.md
+        HANDOFF.md
+        NOTICE
+        PLAN.md
+        mix.lock
+        slices/002-streamable-http/FINDINGS.md
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1
