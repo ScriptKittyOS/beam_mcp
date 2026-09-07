@@ -216,10 +216,7 @@ if Code.ensure_loaded?(Plug) do
     # class, including whatever nobody has thought of yet -- which is the point, because the
     # inputs are attacker-chosen and the list of them is not knowable.
     defp handle(conn, opts) do
-      with {:ok, conn} <- check_origin(conn, opts.allowed_origins),
-           {:ok, conn} <- check_method(conn),
-           {:ok, conn} <- authorize(conn, opts.authorize),
-           {:ok, body, conn} <- read_body_bounded(conn),
+      with {:ok, body, conn} <- before_body(conn, opts),
            {:ok, conn, message} <- decode(conn, body),
            {:ok, conn} <- check_headers(conn, message, opts) do
         dispatch(conn, message, opts)
@@ -229,6 +226,52 @@ if Code.ensure_loaded?(Plug) do
         # answered on the pre-`read_body` conn and Bandit framed the next request's bytes as
         # this one's unread body. Size-dependent, so every small test passed.
         {:refused, conn, status, payload} -> send_json(conn, status, payload)
+      end
+    end
+
+    # THE REQUEST PATH SPLITS AT THE BODY READ, and this function is that split rather than a
+    # list of the sites on the near side of it.
+    #
+    # A refusal issued before the body has been read answers on a conn with a body still on the
+    # wire. The adapter then reads it on the server's behalf: Bandit's `ensure_completed/1`
+    # drains up to 8_000_000 bytes, waiting up to its 15_000 ms read timeout, so a caller
+    # refused by `authorize/1` -- on the one branch this module's own docs call possibly
+    # unauthenticated -- still gets the server to read megabytes for it. Above that cap the
+    # drain fails, the adapter logs "Unable to read remaining data in request body" and drops
+    # the connection, and the response that preceded it said nothing about the connection
+    # ending, so a client with a pipelined request loses it silently.
+    #
+    # `connection: close` is how a response declines both. Bandit reads it in
+    # `handle_keepalive/3`, sets `keepalive: false`, and `ensure_completed/1` then returns
+    # without reading anything. Measured both ways in
+    # `slices/003-release-0-3-1/logs/probe-d-bandit-drain-limits.txt`.
+    #
+    # WHY THIS SHAPE AND NOT `close_after/1` AT EACH SITE. The population is the steps of this
+    # `with`, derived rather than listed:
+    #
+    #     $ grep -n '{:refused,' lib/beam_mcp/transport/http.ex
+    #     $ grep -n '<- check_origin\|<- check_method\|<- authorize\|<- read_body_bounded' \
+    #         lib/beam_mcp/transport/http.ex
+    #
+    # Six refusal sites sit at or before the read -- the Origin 403, the 405, `authorize/1`'s
+    # 500, its 403 and its contract-violation 403, and `read_body_bounded/1`'s own 400 -- and
+    # only the 413 called `close_after/1` for itself. Fixing the named ones and leaving the
+    # rest is how the same header defect was found twice in this module already, so a step
+    # added to this `with` inherits the behaviour instead of needing a new finding.
+    #
+    # `decode/2` and everything after it are on the far side: the body is read by then, the
+    # connection is clean, and a refusal there keeps it. That is pinned in both directions.
+    defp before_body(conn, opts) do
+      result =
+        with {:ok, conn} <- check_origin(conn, opts.allowed_origins),
+             {:ok, conn} <- check_method(conn),
+             {:ok, conn} <- authorize(conn, opts.authorize) do
+          read_body_bounded(conn)
+        end
+
+      case result do
+        {:refused, conn, status, payload} -> {:refused, close_after(conn), status, payload}
+        ok -> ok
       end
     end
 
@@ -328,8 +371,12 @@ if Code.ensure_loaded?(Plug) do
         {:ok, body, conn} ->
           {:ok, body, conn}
 
+        # No `close_after/1` here any more, and that is not a behaviour change: this refusal
+        # goes out through `before_body/2`, which closes on every refusal in front of the
+        # decode. A second copy of the rule beside one of its six sites is how the first five
+        # got missed.
         {:more, _partial, conn} ->
-          {:refused, close_after(conn), 413,
+          {:refused, conn, 413,
            error(nil, -32_600, "Request body exceeds #{@max_body_bytes} bytes")}
 
         {:error, reason} ->
@@ -981,8 +1028,10 @@ if Code.ensure_loaded?(Plug) do
       |> send_resp(status, Jason.encode!(payload))
     end
 
-    # Refusing an oversized body leaves the connection with an unread remainder. Closing makes
-    # the refusal clean rather than leaving a socket whose next request is misframed.
+    # Refusing before the body is read leaves the connection with an unread remainder. Saying
+    # so makes the refusal clean rather than leaving the adapter to drain a body this server
+    # has already declined, or to drop the connection without telling the client. One caller,
+    # `before_body/2`, which is the whole population -- see the derivation there.
     defp close_after(conn), do: put_resp_header(conn, "connection", "close")
 
     defp header_error(id, message) do
