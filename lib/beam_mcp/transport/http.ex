@@ -301,7 +301,7 @@ if Code.ensure_loaded?(Plug) do
     # by definition unauthenticated. The reason goes to the log, where the host can see it.
     defp authorize(conn, authorize_fun) do
       case host_call(fn -> authorize_fun.(conn) end) do
-        {:host_fault, kind, reason, stacktrace} ->
+        {__MODULE__, :host_fault, kind, reason, stacktrace} ->
           Logger.error(Exception.format(kind, reason, stacktrace))
           {:refused, conn, 500, error(nil, -32_603, "Internal error")}
 
@@ -533,7 +533,7 @@ if Code.ensure_loaded?(Plug) do
     # an Mcp-Param-{Name} header MUST forward it and otherwise ignore it".
     defp check_param_headers(conn, message, id, opts) do
       case mirrored_params(message, opts) do
-        {:host_fault, kind, reason, stacktrace} ->
+        {__MODULE__, :host_fault, kind, reason, stacktrace} ->
           Logger.error(Exception.format(kind, reason, stacktrace))
           {:mismatch, 500, error(id, -32_603, "Internal error")}
 
@@ -586,7 +586,7 @@ if Code.ensure_loaded?(Plug) do
         # into %{} would let a raising catalog silently disable header mirroring — the check
         # would pass because it inspected nothing. The fault is returned so the caller answers
         # it, rather than thrown, so the id stays available.
-        {:host_fault, _kind, _reason, _stacktrace} = fault -> fault
+        {__MODULE__, :host_fault, _k, _r, _st} = fault -> fault
         _ -> %{}
       end
     end
@@ -765,14 +765,27 @@ if Code.ensure_loaded?(Plug) do
     # function raising one exception had two behaviours depending on which catalog lookup fired
     # first, which is the disagreement the single-lookup discipline exists to prevent.
     #
-    # So every call OUT to host code goes through here, and `grep -c host_call` is the check
-    # that the population is still complete.
+    # Two of those three go through here. The third, `Server.handle_message/2`, is covered by
+    # `dispatch/3`'s own rescue instead, because that is where the request id is known.
+    #
+    # AN EARLIER VERSION OF THIS COMMENT SAID "every call OUT to host code goes through here,
+    # and `grep -c host_call` is the check that the population is still complete." Both halves
+    # were wrong, and two round-6 lanes said so: `Server.handle_message/2` is a bare call, and
+    # the prescribed grep returns 5 because it counts this comment describing itself -- which is
+    # a self-correction already recorded once in this slice's FINDINGS.md, repeated in the
+    # commit that cited it. The check is the derivation grep above, run against the three names,
+    # and reading where each lands. A count is not a check.
+    #
+    # The tuple is tagged with `__MODULE__` and is five elements wide because `authorize/1`'s
+    # return contract is open: a host returning a bare `{:host_fault, _, _, _}` was read as an
+    # internal fault and answered 500, where it had previously hit the `other` branch and been
+    # refused 403 with a log naming the contract.
     defp host_call(fun) do
       fun.()
     rescue
-      exception -> {:host_fault, :error, exception, __STACKTRACE__}
+      exception -> {__MODULE__, :host_fault, :error, exception, __STACKTRACE__}
     catch
-      kind, reason -> {:host_fault, kind, reason, __STACKTRACE__}
+      kind, reason -> {__MODULE__, :host_fault, kind, reason, __STACKTRACE__}
     end
 
     defp host_fault(conn, kind, reason, stacktrace, id) do

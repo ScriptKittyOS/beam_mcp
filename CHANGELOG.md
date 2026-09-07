@@ -139,6 +139,10 @@ The rule is applied at every point host code runs in the request path — `autho
 derived by grep rather than listed, because listing it is how the first cut of this fix covered
 one of the three and shipped a comment claiming all of them.
 
+**The `id` differs on one limb, and the diagram above does not show it.** `authorize/1` runs
+before the body is read, so there is no id to echo and that response carries `"id":null`. The
+other two answer with the request's id.
+
 ### Added — `BeamMCP.ToolCatalog.fetch/2` is public API
 
 One lookup answers "which tool does this name mean" for both the core and the HTTP transport's
@@ -169,7 +173,7 @@ shapes raise instead; that is filed, not fixed here.
   more releases. So `tools/gate.sh` now has a `docs` step, and it reads `mix docs`'s **output**
   rather than its exit code, because `mix docs` exits `0` on a warning:
 
-      docs    FAIL (exit 0, 2 warnings)
+      docs    FAIL (exit 0, 6 warnings)
 
   That line is from the probe in `slices/002-streamable-http/logs/probe-docs-gate.txt`, which
   reverts the moduledoc, shows the gate red, and restores it. Fixing an instance twice and the
@@ -300,6 +304,14 @@ The `0.1.1` section below is left exactly as written. This note is appended rath
 rewrite, per the corrections-are-appended rule.
 
 ## [0.1.1] — unreleased
+
+> **This version does not exist and never will, and from `0.3.0` this file is published on
+> hexdocs, so that sentence now needs to be visible here rather than only in the note above.**
+> `0.1.1` was numbered on `main`, never released, and its one change shipped inside `0.2.0` —
+> verifiable without leaving the registry: `BeamMCP.Server` renders at
+> `hexdocs.pm/beam_mcp/0.2.0` and 404s at `0.1.0`. The heading is left as written, per the
+> corrections-are-appended rule; this note is the correction.
+
 
 ### Fixed
 

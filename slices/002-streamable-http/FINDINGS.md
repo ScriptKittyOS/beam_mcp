@@ -109,3 +109,47 @@ host can **start**.
 `logs/mutation.md` — 23 mutants across three rounds, each asserted applied before scoring, with
 one recorded equivalent survivor and three compiler-kill completions. `logs/round{1,2,3}.*.md` —
 the lanes' own reports. `logs/gate-round{2,3}.txt` — the gate at each boundary.
+
+## Round 6 — the regression was in the anchors, not the code
+
+Rounds 1-4's pattern was a fix reintroducing a defect. Round 5's fixes were **correct** and two
+of their anchors could not move, which is the same failure one level up: the suite reported them
+pinned and they were not.
+
+    M8  mirrored_params/2 swallows the host fault to %{}     round 5: SURVIVED 133/0
+    M2  fault_response/4 always re-raises                    round 5: SURVIVED 133/0
+
+M8's live behaviour under the mutant was `Mcp-Param-MaxRows: 99` against a body of `42` served
+**200 and dispatched**, with the omitted-header MUST unenforced — the exact disagreement the
+mirrored-header mechanism exists to prevent, at a green suite.
+
+Why the anchors could not move: the catalog fixture raised on *every* call, so the core's own
+lookup raised too and produced the same status and code by a different route, and the test
+asserted only status and code. The echoed `id` is what separates the routes, and it was not
+asserted — although "so the id stays available" was the stated reason for returning the fault
+rather than throwing it. Both are fixed by a catalog that raises **once**; scoring is in
+`logs/mutation-round6.txt`, five mutants, all killed.
+
+## Open, recorded rather than fixed
+
+**1. `fault_response/4`'s re-raise branch is unpinned.** Measured: the mutant that never
+re-raises survives at `137 tests, 0 failures`. Detecting it needs a non-500 `:plug_status`
+exception from code that is not the host's, which after round 5 means the adapter's read path
+alone — `Bandit.HTTPError` at 400, `Plug.TimeoutError` at 408. `Plug.Test` produces neither.
+**Closing it needs a Bandit-backed test.** This is the item the deleted stand-in's comment
+claimed was "filed"; it is filed here, and the difference between those two sentences is the
+whole reason this section exists.
+
+**2. Refusals that fire before `read_body/2` answer on a conn with an unread body and no
+`connection: close`.** Bandit then drops the connection, so a pipelined second request is not
+answered. Measured by lane s3:
+
+    ok authorize (baseline, 200)              second-request-answered=True
+    authorize raises -> 500                   second-request-answered=False
+    catalog raises (after read_body) -> 500   second-request-answered=True
+
+Pre-existing, not a round-5 regression: it applies equally to the `403` for a bad Origin, the
+`403` for a refused caller and the `405`, all of which predate this round. It fails **closed** —
+no misframing, no smuggling — which is why it is filed rather than blocking.
+`read_body_bounded/1`'s `413` already calls `close_after/1`; the pre-read refusals could do the
+same. Same family as round 1's keep-alive finding.

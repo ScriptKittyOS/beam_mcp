@@ -61,9 +61,7 @@ The package's own code, `lib/`:
 Recorded so they are not reported as discoveries, and so their status is not mistaken for
 ignorance of them:
 
-- **The package is pre-1.0.** The API may still change between minor versions, and while it is
-  `0.x` a security fix may arrive in a release that also carries a wire change. The changelog
-  entry says so when it does.
+- **The package is pre-1.0.** The API may still change between minor versions.
 
 ## Supported versions
 

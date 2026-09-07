@@ -1,0 +1,30 @@
+### Round 6 -- the new tests scored by mutation, on the tree that ships.
+### Each mutant is applied to lib/, compiled with --warnings-as-errors --force so a compiler
+### kill is never scored as a test kill, then measured with mix test.
+###
+### Round 5 shipped two of these anchors unable to move: M8 and M2 both SURVIVED at
+### 133 tests, 0 failures, and M8's live behaviour was a lying mirrored header served 200
+### and dispatched. Found by lane s3.
+
+BASELINE:
+136 tests, 0 failures
+
+--- M8 ---
+mutant: mirrored_params/2 swallows the host fault to %{}
+136 tests, 2 failures
+
+--- M6 ---
+mutant: check_param_headers/4 loses its fault case
+136 tests, 2 failures
+
+--- M2 ---
+mutant: fault_response/4 always re-raises (the bodyless-500 shape)
+136 tests, 1 failure
+
+--- M3 ---
+mutant: host_call/1 loses its catch (throw/exit lose the id)
+136 tests, 1 failure
+
+--- M4 ---
+mutant: authorize/2 loses its fault clause
+136 tests, 2 failures
