@@ -1,0 +1,46 @@
+### The read-before-refusal measurement, settling the README sentence r2 flagged.
+### Written by the command that produced it. Script:
+###   scratchpad/measure_body.exs -- a Bandit listener on 127.0.0.1:4931 whose plug calls
+###   Plug.Conn.read_body(conn, length: 1_048_576) and reports byte_size of the partial,
+###   and a raw :gen_tcp client that writes 64 KiB chunks against a declared 32 MiB
+###   Content-Length, counting what it wrote before the response arrived.
+###
+### A = server-side: byte_size of read_body/2's partial before the refusal
+### B = wire-side: bytes the client wrote before the response arrived
+
+--- run 1 ---
+declared Content-Length: 33554432 bytes (32 MiB)
+sndbuf      B: client wrote     A: server read before refusing
+default     3538944 (3.375 MiB) 1048576
+4096        1441792 (1.375 MiB) 1048576
+16384       1507328 (1.438 MiB) 1048576
+65536       1769472 (1.688 MiB) 1048576
+262144      2359296 (2.25 MiB)  1048576
+1048576     2818048 (2.688 MiB) 1048576
+--- run 2 ---
+declared Content-Length: 33554432 bytes (32 MiB)
+sndbuf      B: client wrote     A: server read before refusing
+default     5570560 (5.313 MiB) 1048576
+4096        1638400 (1.563 MiB) 1048576
+16384       1179648 (1.125 MiB) 1048576
+65536       1638400 (1.563 MiB) 1048576
+262144      2752512 (2.625 MiB) 1048576
+1048576     1310720 (1.25 MiB)  1048576
+--- run 3 ---
+declared Content-Length: 33554432 bytes (32 MiB)
+sndbuf      B: client wrote     A: server read before refusing
+default     6553600 (6.25 MiB)  1048576
+4096        1703936 (1.625 MiB) 1048576
+16384       1966080 (1.875 MiB) 1048576
+65536       1376256 (1.313 MiB) 1048576
+262144      2752512 (2.625 MiB) 1048576
+1048576     2228224 (2.125 MiB) 1048576
+--- run 4 ---
+declared Content-Length: 33554432 bytes (32 MiB)
+sndbuf      B: client wrote     A: server read before refusing
+default     7798784 (7.438 MiB) 1048576
+4096        1638400 (1.563 MiB) 1048576
+16384       1638400 (1.563 MiB) 1048576
+65536       1245184 (1.188 MiB) 1048576
+262144      2031616 (1.938 MiB) 1048576
+1048576     2031616 (1.938 MiB) 1048576

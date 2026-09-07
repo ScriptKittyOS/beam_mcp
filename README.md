@@ -168,12 +168,13 @@ not something this release settles.
   your HTTP server's: for `Bandit`/`ThousandIsland` it is `num_acceptors * num_connections`,
   defaulting to 100 × 16,384 = **1,638,400**. Setting it is the host's capacity decision, and a
   number this package picked for you would be one it cannot keep.
-- It is not a ceiling on bytes read. It is a floor on what is read before a refusal: a declared
-  32 MiB body is refused after somewhat more than 1 MiB has crossed the wire, measured between
-  1.02 MiB and 1.50 MiB across socket-buffer settings. The spread is the **client's** send
-  buffer, not a property of this package, so treat the excess as "about one more buffer's
-  worth" rather than as a number to design against. An earlier draft of this line quoted a
-  single exact byte count, which a lane could not reproduce.
+- It is not a ceiling on bytes read. What the **server** reads before refusing is the cap
+  itself: a declared 32 MiB body is refused after `read_body/2` returns a partial of exactly
+  **1,048,576 bytes**, constant across six socket-buffer settings and four runs. How much the
+  **client** got onto the wire by then is a different quantity and not a property of this
+  package — the same 24 measurements put it between 1.125 MiB and 7.438 MiB, varying run to run
+  at one fixed buffer size — so there is no number to design against there, only the
+  server-side constant above.
 - It is not a time bound. A slow client is held by `read_body/2`'s `:read_timeout`, which this
   package does not set and therefore inherits from the server — 15,000 ms under `Bandit`. That is
   a whole-body deadline rather than a per-read reset, so a drip client is answered `408` at 15 s

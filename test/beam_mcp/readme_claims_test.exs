@@ -343,6 +343,8 @@ defmodule BeamMCP.ReadmeClaimsTest do
       # ones were the two-line claims, the kind that look too small to need a test.
       claims("caps a single body at 1 MiB")
       claims("about 1.05 MiB")
+      claims("a partial of exactly")
+      claims("constant across six socket-buffer settings and four runs")
       claims("num_acceptors * num_connections")
       claims("1,638,400")
       claims("15,000 ms under `Bandit`")
@@ -362,6 +364,38 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
       assert http_post_body(String.duplicate("x", 1_048_576 - overhead)).status == 200
       assert http_post_body(String.duplicate("x", 1_048_576 - overhead + 1)).status == 413
+    end
+
+    test "the server-side read before a refusal is the cap itself, not a range" do
+      # The README said this number was "between 1.02 MiB and 1.50 MiB across socket-buffer
+      # settings", attributed to the client's send buffer. Two quantities were being stated as
+      # one. What the SERVER reads is `read_body/2`'s partial, and it is the cap exactly, at
+      # every buffer size and on every run. What the CLIENT gets onto the wire before the
+      # refusal arrives is neither in that range nor a function of the buffer -- measured 1.4 to
+      # 7.4 MiB, varying run to run at a fixed size -- so the README no longer quotes it as a
+      # package property and this test pins the half that is one.
+      #
+      # Pinned mechanically rather than by sentence alone, because the previous two drafts of
+      # this line were both wrong and both survived a reader.
+      conn =
+        :post
+        |> Plug.Test.conn("/mcp", String.duplicate("x", 3 * 1_048_576))
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+
+      assert {:more, partial, _conn} = Plug.Conn.read_body(conn, length: 1_048_576)
+      assert byte_size(partial) == 1_048_576
+
+      # `read_body/2` returning EXACTLY `:length` rather than rounding up to `:read_length` is
+      # someone else's contract, and the README sentence depends on it. Measured across four
+      # lengths (100, 65_536, 1_048_576, 1_500_000): exact at every one. Pinned here so a Plug
+      # release that started rounding would fail this rather than quietly falsify the README.
+      assert readme() =~ "a partial of exactly"
+
+      # And the documented number is the one the transport refuses on, so the sentence cannot
+      # drift from @max_body_bytes without a failure here.
+      conn = http_post_body(String.duplicate("x", 2 * 1_048_576))
+      assert conn.status == 413
+      assert Jason.decode!(conn.resp_body)["error"]["message"] =~ "1048576"
     end
 
     test "the implements/does-not-implement list matches what the transport does" do
