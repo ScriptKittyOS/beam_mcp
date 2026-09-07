@@ -34,11 +34,42 @@ norm() {
 # so a failing line read "DIFFERS (empty diff above = identical)" -- a parenthetical asserting
 # a result the run had just contradicted. A printed claim the run did not compute is the exact
 # defect this instrument exists to catch, and it was inside the instrument (r2 round-5, 2a).
-CLASSIFIED=0
-verdict() { # verdict <file> <rc> <pass-note> <fail-note>
-  CLASSIFIED=$((CLASSIFIED + 1))
-  if [ "$2" -eq 0 ]; then printf '  => %-24s RAW      %s\n' "$1" "$3"
-  else printf '  => %-24s DIFFERS  %s\n' "$1" "${4:-see the diff above}"; fi
+#
+# THE VERDICT NOW REACHES THE EXIT STATUS. Until this was fixed a DIFFERS printed and the
+# script exited 0, so anything reading the status -- which is what wiring this into gate.sh or
+# CI would do -- read a clean sweep over archives the run had just shown did not match.
+# Measured on 31bcbff: three of thirteen verdicts were DIFFERS and SWEEP_EXIT was 0.
+#
+# AND THE VERDICT RECORDS THE PATH IT CLASSIFIED, not merely that one more file was classified.
+# The closing tally compared two integers under the words "every enumerated file is classified",
+# which is a claim about names. A rename inside the population leaves both integers unchanged,
+# and the tally then read BALANCES over a file classified by nothing -- while handing a verdict
+# to a file that no longer existed (tools/probe_archive_tally.sh).
+SWEEP_FAIL=0
+verdict() { # verdict <path> <rc> <pass-note> <fail-note>
+  printf '%s\n' "$1" >> "$W/classified"
+  if [ "$2" -eq 0 ]; then printf '  => %-24s RAW      %s\n' "$(basename "$1")" "$3"
+  else printf '  => %-24s DIFFERS  %s\n' "$(basename "$1")" "${4:-see the diff above}"
+       SWEEP_FAIL=1
+  fi
+}
+
+# A third outcome, and it is not a pass. gate.sh's header says a step that cannot measure
+# something says so rather than passing; the same rule holds here. UNCHECKED records the name --
+# so the file is not ALSO reported as unclassified, which would be two complaints about one
+# gap -- and it fails the run.
+unchecked() { # unchecked <path> <why>
+  printf '%s\n' "$1" >> "$W/classified"
+  printf '  => %-24s UNCHECKED %s\n' "$(basename "$1")" "$2"
+  SWEEP_FAIL=1
+}
+
+# Authored files are classified too, by being named as authored. One list, so the closing tally
+# compares one set against one set rather than adding two counters and hoping.
+authored() { # authored <path>
+  printf '%s\n' "$1" >> "$W/classified"
+  printf '%s\n' "$1" >> "$W/authored"
+  printf '  %-28s written by its own reviewer lane; not a command capture\n' "$(basename "$1")"
 }
 
 # An empty diff and a diff that never ran are indistinguishable on the page. So report the
@@ -92,23 +123,23 @@ echo "=== CAPTURES: test and gate logs ==="
 echo "-- full-suite.txt: diff vs a fresh 'mix test', seed+timing normalised on BOTH sides --"
 mix test > "$W/full.out" 2>&1
 showdiff <(norm "$W/full.out") <(norm "$L/full-suite.txt"); rc=$?
-verdict full-suite.txt $rc "(0 differing lines above; seed/timing/compile normalised)" "(the diff above is the difference)"
+verdict "$L/full-suite.txt" $rc "(0 differing lines above; seed/timing/compile normalised)" "(the diff above is the difference)"
 echo
 echo "-- green-negotiation.txt: same command, same normalisation --"
 mix test test/beam_mcp/negotiation_test.exs > "$W/green.out" 2>&1
 showdiff <(norm "$W/green.out") <(norm "$L/green-negotiation.txt"); rc=$?
-verdict green-negotiation.txt $rc "(0 differing lines above)" "(the diff above is the difference)"
+verdict "$L/green-negotiation.txt" $rc "(0 differing lines above)" "(the diff above is the difference)"
 echo
 echo "-- gate.txt: no normalisation, the gate emits nothing variable --"
 ./tools/gate.sh > "$W/gate.out" 2>&1
 showdiff "$W/gate.out" "$L/gate.txt"; rc=$?
-verdict gate.txt $rc "(0 differing lines above; no normalisation applied)" "(the diff above is the difference)"
+verdict "$L/gate.txt" $rc "(0 differing lines above; no normalisation applied)" "(the diff above is the difference)"
 echo
 echo "=== CAPTURES: the probe ==="
 echo "-- probe-after.txt vs a WARM fresh run of the tracked probe, no normalisation --"
 mix run tools/probe_ping.exs > "$W/probe.out" 2>&1
 showdiff "$W/probe.out" "$L/probe-after.txt"; rc=$?
-verdict probe-after.txt $rc "(byte-identical to a warm run)" "(the diff above is the difference)"
+verdict "$L/probe-after.txt" $rc "(byte-identical to a warm run)" "(the diff above is the difference)"
 echo "  NOTE, and the direction matters: against a COLD _build the same command emits extra"
 echo "  dependency-compile lines, so the archive would have FEWER lines than that run."
 echo "  Fewer-lines-than-the-run is the SIGNATURE OF FILTERING -- it is exactly what was"
@@ -127,9 +158,9 @@ echo "  Reproducing it needs lib/beam_mcp/server.ex reverted to base/main, which
 echo "  must not do to the working tree. Checked instead for the marks a filtered capture"
 echo "  cannot have:"
 if marks "$L/red.txt"; then
-  verdict red.txt 0 "(banner + code: + stacktrace: + Finished in, all present)" ""
+  verdict "$L/red.txt" 0 "(banner + code: + stacktrace: + Finished in, all present)" ""
 else
-  verdict red.txt 1 "" "(a mark is missing; a filtered capture would look like this)"
+  verdict "$L/red.txt" 1 "" "(a mark is missing; a filtered capture would look like this)"
 fi
 echo
 
@@ -141,9 +172,9 @@ for m in a b; do
   echo "  must not create in the working tree. Checked instead for the marks a filtered"
   echo "  capture cannot have -- the ExUnit banner and a complete failure body:"
   if marks "$f"; then
-    verdict "mutation-$m.txt" 0 "(banner + code: + stacktrace: + Finished in, all present)" ""
+    verdict "$f" 0 "(banner + code: + stacktrace: + Finished in, all present)" ""
   else
-    verdict "mutation-$m.txt" 1 "" "(a mark is missing; a filtered capture would look like this)"
+    verdict "$f" 1 "" "(a mark is missing; a filtered capture would look like this)"
   fi
 done
 echo
@@ -155,9 +186,9 @@ for m in a b; do
   [ -f "$f" ] || continue
   echo "-- mutation-readme-$m.txt --"
   if marks "$f"; then
-    verdict "mutation-readme-$m.txt" 0 "(banner + code: + stacktrace: + Finished in, all present)" ""
+    verdict "$f" 0 "(banner + code: + stacktrace: + Finished in, all present)" ""
   else
-    verdict "mutation-readme-$m.txt" 1 "" "(a mark is missing; a filtered capture would look like this)"
+    verdict "$f" 1 "" "(a mark is missing; a filtered capture would look like this)"
   fi
 done
 echo
@@ -169,9 +200,9 @@ echo "(the first version of this script did) is what would excuse never checking
 fetch_check() { # fetch_check <archive> <url>
   if curl -sSL --fail "$2" -o "$W/$(basename $1)" 2>/dev/null; then
     showdiff "$W/$(basename $1)" "$1"; rc=$?
-    verdict "$(basename $1)" $rc "(re-fetched from $2)"
+    verdict "$1" $rc "(re-fetched from $2)" "(the diff above is the difference)"
   else
-    printf '  => %-24s UNCHECKED (fetch failed; offline)\n' "$(basename $1)"
+    unchecked "$1" "(fetch failed; offline -- NOT a pass, and it fails this run)"
   fi
 }
 fetch_check "$L/spec-basic-versioning.md" "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning.md"
@@ -180,7 +211,7 @@ fetch_check "$L/spec-legacy-basic.md"     "https://modelcontextprotocol.io/speci
 echo
 echo "=== AUTHORED: the lane reports ==="
 for f in $(git ls-files -- "$L/round*.md"); do
-  printf '  %-28s written by its own reviewer lane; not a command capture\n' "$(basename $f)"
+  authored "$f"
 done
 echo
 echo "=== archive-sweep.txt itself ==="
@@ -191,23 +222,75 @@ printf '     reproduce     : ./tools/archive_sweep.sh > %s 2>&1\n' "$L/archive-s
 echo "     then diff that against the tracked file. A reader who doubts any verdict above"
 echo "     re-runs that one line; the script is tracked, so the bytes that produced this"
 echo "     output are in the tree next to it."
-verdict archive-sweep.txt 0 "(self: named check above, not an assertion)" ""
+verdict "$L/archive-sweep.txt" 0 "(self: named check above, not an assertion)" ""
 echo
 
-echo "=== CLOSING TALLY -- the structural fix, not an instance fix ==="
+echo "=== CLOSING TALLY -- names, because counts were the loophole ==="
 echo "  Round 5 enumerated red.txt and classified it nowhere: 19 listed, 18 classified, and"
 echo "  the output still read as a clean sweep because nothing counted. A file could drop out"
 echo "  QUIETLY -- CONVENTIONS.md's own worst shape, and this script's header says a list is"
-echo "  not a population. So the population and the classifications are now counted and"
-echo "  compared, and disagreement is a FAILURE of this script rather than a silent gap."
-ENUM=$(git ls-files -- "$L/*" | wc -l)
-AUTH=$(git ls-files -- "$L/round*.md" | wc -l)
+echo "  not a population."
+echo
+echo "  Counting closed one shape and left another. 'Every enumerated file is classified' is a"
+echo "  claim about NAMES, and two integers cannot carry it: rename one file inside the"
+echo "  population and the loop above still hands a verdict to the name that left, so both"
+echo "  integers are unchanged and the tally reads BALANCES over a file nothing looked at."
+echo "  Measured, not imagined -- ./tools/probe_archive_tally.sh renames mutation-a.txt to"
+echo "  mutation-c.txt and the counting version printed 'enumerated : 29 / classified : 29 /"
+echo "  TALLY BALANCES' while giving mutation-a.txt a verdict though the file did not exist."
+echo
+echo "  So the comparison is now between two SETS OF PATHS, printed in BOTH directions."
+echo "  The second direction is the one a counter can never see."
+git ls-files -- "$L/*" | sort > "$W/enumerated"
+touch "$W/classified" "$W/authored"
+sort "$W/classified" > "$W/classified.sorted"
+sort -u "$W/classified" > "$W/classified.uniq"
+ENUM=$(wc -l < "$W/enumerated")
+CLS=$(wc -l < "$W/classified.uniq")
+AUTH=$(sort -u "$W/authored" | wc -l)
 printf '  enumerated : %s\n  classified : %s  (%s verdicts + %s authored lane reports)\n' \
-       "$ENUM" "$((CLASSIFIED + AUTH))" "$CLASSIFIED" "$AUTH"
-if [ "$ENUM" -eq "$((CLASSIFIED + AUTH))" ]; then
-  echo "  => TALLY BALANCES: every enumerated file is classified."
+       "$ENUM" "$CLS" "$((CLS - AUTH))" "$AUTH"
+
+tally_bad=0
+missing=$(comm -23 "$W/enumerated" "$W/classified.uniq")
+extra=$(comm -13 "$W/enumerated" "$W/classified.uniq")
+dupes=$(uniq -d "$W/classified.sorted")
+if [ -n "$missing" ]; then
+  tally_bad=1
+  echo "  => ENUMERATED BUT NOT CLASSIFIED -- unclassified is NOT the same as RAW:"
+  printf '%s\n' "$missing" | sed 's/^/       /'
+fi
+if [ -n "$extra" ]; then
+  tally_bad=1
+  echo "  => CLASSIFIED BUT NOT ENUMERATED -- a verdict was printed for a path that is not in"
+  echo "     the population. Either the file left the tracked set or a hand-written loop names"
+  echo "     something that does not exist:"
+  printf '%s\n' "$extra" | sed 's/^/       /'
+fi
+if [ -n "$dupes" ]; then
+  tally_bad=1
+  echo "  => CLASSIFIED TWICE -- one file cannot answer for two:"
+  printf '%s\n' "$dupes" | sed 's/^/       /'
+fi
+if [ "$tally_bad" -eq 0 ]; then
+  echo "  => TALLY BALANCES: the classified set and the enumerated set are the same names."
 else
-  echo "  => TALLY FAILS: $((ENUM - CLASSIFIED - AUTH)) enumerated file(s) unclassified."
-  echo "     Unclassified is NOT the same as RAW. Do not read this sweep as clean."
+  echo "     Do not read this sweep as clean."
+  SWEEP_FAIL=1
+fi
+echo
+
+# The exit status is the sweep's verdict, and until this line existed it was not. A DIFFERS
+# printed and the script exited 0.
+echo "=== EXIT STATUS ==="
+if [ "$SWEEP_FAIL" -eq 0 ]; then
+  echo "  SWEEP OK: every enumerated file is classified by name, and every classification is RAW."
+  exit 0
+else
+  echo "  SWEEP FAILED: at least one DIFFERS, UNCHECKED, or tally mismatch above."
+  echo "  A DIFFERS is not by itself evidence of fabrication. This script re-runs each command"
+  echo "  against the CURRENT tree, so an archive captured at an earlier tree differs because"
+  echo "  the tree moved. What the exit status now says is 'a human must read this', which is"
+  echo "  what it always should have said and did not."
   exit 1
 fi
