@@ -104,3 +104,50 @@ It is now inside `call/2`'s and looks redundant. It is kept because it is not: i
 `message["id"]`, which is known by then, while `crash_response/1` answers with `id: nil` because a
 crash before decoding has no id to use. Removing it would silently downgrade every dispatch-time
 crash to an unidentifiable error response.
+
+## Corrections to the round-2 table above
+
+Two things in this file were wrong, both found by round 3, and both are the kind that make a
+record read as stronger evidence than it is. They are corrected here rather than edited away.
+
+**"One mutant per header read" was one mutant per header NAME.** `compare_versions/3` performs
+*two* value comparisons on `MCP-Protocol-Version` — one against the body's `_meta`, one against
+the supported set — and mutant 2 pinned only the first. A first-value-only mutant on the second
+comparison **survived the entire suite**, and that branch is the only version check that runs on
+a body carrying no `_meta`, which is every request that does not declare its era in the body. So
+the round-2 headline was false in exactly the way the round-2 finding was: a set counted by the
+names I had in mind rather than by what the code does. Round 3 makes both comparisons read every
+value and pins the second one directly (mutant 18).
+
+**The derivation grep was misreported.** This file and the code comment both said
+`grep -n 'get_req_header'` returns "only `header_values/2` and the `mcp-param-` sweep". It does
+not: the sweep does not call `get_req_header` at all — it reads `conn.req_headers` — and the grep
+also matches the comment describing itself. The claim the argument actually needs is over two
+patterns, `get_req_header\|req_headers`, and the honest statement of the result is: one
+definition, one call site, one `req_headers` sweep, plus the comments that name them. A
+completeness argument resting on a command whose output is quoted wrongly is not a completeness
+argument.
+
+## Round 3 — mutants for the round-3 fixes
+
+Same harness and rules; baseline in the copy **126 tests, 0 failures** before and after.
+
+| # | mutant | result | killed by |
+|---|--------|--------|-----------|
+| 14 | status-aware rescue reverted (swallow every exception again) | KILLED 1/126 | `it is re-raised rather than answered as -32603` |
+| 15 | Base64 sentinel decoded for every header again | KILLED 1/126 | `Mcp-Method is NOT decoded` |
+| 16 | round-trip check dropped, non-canonical Base64 accepted | KILLED 1/126 | `a non-canonical Base64 encoding is not accepted as a second spelling` |
+| 17 | mirrored-parameter population no longer read from the schema | KILLED **8**/126 | the eight `Mcp-Param` tests |
+| 18 | second version comparison reads only the first value | KILLED 2/126 | both `two comparisons` tests |
+| 19 | nested annotation paths not walked | KILLED 1/126 | `an annotated property at a nested path is read at that path` |
+| 20 | omitted-but-present-in-body no longer refused | KILLED 1/126 | `a header the schema requires and the client omits is refused` |
+| 21 | integer compared as a string again | KILLED 1/126 | `an integer parameter is compared numerically` |
+| 22 | notification with a lying `Mcp-Method` accepted again | KILLED 1/126 | `a notification WITH a lying Mcp-Method is still refused` |
+| 23 | `@removed_in_modern` emptied | KILLED 1/126 | `initialize, notifications/initialized and ping are all method-not-found` |
+
+**Mutant 17 needed three completions, not one.** Replacing the schema lookup orphaned the
+`ToolCatalog` alias; removing that orphaned `annotations/1` and `annotations/2`. Each time,
+`--warnings-as-errors` failed the build and the suite never ran, and each time the naive reading
+of that is a kill. This is the third instance of the compiler-kill family in this slice, and it is
+now a rule in `CONVENTIONS.md`. The completed mutant is killed by **eight** tests — the strongest
+kill in the table, and it would have been recorded as a one-line compile failure.

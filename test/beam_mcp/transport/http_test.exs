@@ -26,7 +26,29 @@ defmodule BeamMCP.Transport.HTTPTest do
           name: :echo,
           command_class: :observe,
           mode: :read_only,
-          description: "Echo."
+          description: "Echo.",
+          # The mirrored-parameter population comes from HERE, not from the caller's headers.
+          # Four shapes on purpose, because the first implementation derived the argument key by
+          # lowercasing the header suffix and every one of these breaks that:
+          #   region     -> "Region"      name portion differs from the key only in case
+          #   max_rows   -> "maxRows"     name portion is not the key at all
+          #   nested     -> "Nested"      the value lives at a nested properties path
+          #   plain      -> (none)        not annotated: no header is expected or accepted
+          input_schema: %{
+            "type" => "object",
+            "properties" => %{
+              "region" => %{"type" => "string", "x-mcp-header" => "Region"},
+              "max_rows" => %{"type" => "integer", "x-mcp-header" => "maxRows"},
+              "plain" => %{"type" => "string"},
+              "outer" => %{
+                "type" => "object",
+                "properties" => %{
+                  "inner" => %{"type" => "string", "x-mcp-header" => "Nested"}
+                }
+              }
+            },
+            "additionalProperties" => true
+          }
         }
       ]
     end
@@ -773,6 +795,280 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert conn.state == :sent
       assert conn.status == 400
       assert body!(conn)["error"]["code"] == -32_020
+    end
+  end
+
+  describe "the Base64 sentinel is decoded for the headers that permit it, and no others" do
+    test "Mcp-Method is NOT decoded" do
+      # "For headers that permit the Base64 sentinel encoding (Mcp-Name and Mcp-Param-{Name}),
+      # servers MUST decode encoded values." Mcp-Method is not in that set. Decoding it let
+      # `Mcp-Method: =?base64?dG9vbHMvY2FsbA==?=` satisfy this server while a gateway filtering
+      # on Mcp-Method saw an opaque token -- the fix for one MUST reopening the hole the other
+      # MUST closes.
+      body = call_body(%{})
+      encoded = "=?base64?" <> Base.encode64("tools/call") <> "?="
+
+      conn = post(body, [{@hdr, @modern}, {"mcp-method", encoded}, {"mcp-name", "echo"}])
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+    end
+
+    test "MCP-Protocol-Version is NOT decoded" do
+      encoded = "=?base64?" <> Base.encode64(@modern) <> "?="
+      body = msg("tools/list")
+
+      assert post(body, [{@hdr, encoded}, {"mcp-method", "tools/list"}]).status == 400
+    end
+
+    test "a non-canonical Base64 encoding is not accepted as a second spelling" do
+      # Base.decode64/1 accepts non-canonical trailing bits, so ZWNobw==, ZWNobx==, ZWNoby==
+      # and ZWNobz== all decode to "echo". Four spellings of one value means a hop comparing
+      # bytes and a server comparing decoded values disagree, which is the whole vulnerability.
+      body = call_body(%{})
+
+      for variant <- ["ZWNobx==", "ZWNoby==", "ZWNobz=="] do
+        conn =
+          post(body, [
+            {@hdr, @modern},
+            {"mcp-method", "tools/call"},
+            {"mcp-name", "=?base64?" <> variant <> "?="}
+          ])
+
+        assert conn.status == 400, "#{variant} was accepted as a spelling of echo"
+      end
+
+      canonical = "=?base64?" <> Base.encode64("echo") <> "?="
+
+      assert post(body, [{@hdr, @modern}, {"mcp-method", "tools/call"}, {"mcp-name", canonical}]).status ==
+               200
+    end
+  end
+
+  describe "the mirrored-parameter population comes from the tool's schema" do
+    test "a header the schema requires and the client omits is refused" do
+      # The spec's fourth server-behaviour row: "Client omits header but value is in body |
+      # non-conforming client | Server MUST reject the request." Deriving the population from
+      # the caller's own headers made this unenforceable by construction -- the caller decided
+      # what would be checked -- and it returned 200 with dispatch.
+      me = self()
+      o = opts(dispatch: fn n, a, _ -> send(me, {:dispatched, n, a}) && {:ok, a} end)
+      body = call_body(%{"region" => "eu-west1"})
+
+      conn = post(body, call_headers([]), o)
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+      refute_receive {:dispatched, _, _}, 50
+    end
+
+    test "the annotation's name portion is the header name, not the lowercased argument key" do
+      # `max_rows` is annotated "maxRows". Deriving the argument key by lowercasing the header
+      # suffix looked for an argument called `maxrows`, found nothing, and refused a conforming
+      # client with no recovery available to it -- it was already correct.
+      body = call_body(%{"max_rows" => 10})
+
+      assert post(body, call_headers([{"mcp-param-maxrows", "10"}])).status == 200
+    end
+
+    test "an annotated property at a nested path is read at that path" do
+      # "Nested object properties are permitted as long as every step in the chain is a
+      # properties key."
+      body = call_body(%{"outer" => %{"inner" => "deep"}})
+
+      assert post(body, call_headers([{"mcp-param-nested", "deep"}])).status == 200
+      assert post(body, call_headers([{"mcp-param-nested", "shallow"}])).status == 400
+    end
+
+    test "a header the schema does not name is ignored, not refused" do
+      # "Intermediate servers that do not recognize an Mcp-Param-{Name} header MUST forward it
+      # and otherwise ignore it." `plain` is a real argument that is NOT annotated, so no
+      # header is expected for it and an unrecognized one is not this server's business.
+      body = call_body(%{"plain" => "value"})
+
+      assert post(body, call_headers([{"mcp-param-plain", "anything-at-all"}])).status == 200
+      assert post(body, call_headers([{"mcp-param-unheard-of", "x"}])).status == 200
+    end
+
+    test "an argument absent from the body expects no header, and refuses one" do
+      body = call_body(%{})
+
+      assert post(body, call_headers([])).status == 200
+      assert post(body, call_headers([{"mcp-param-region", "eu-west1"}])).status == 400
+    end
+
+    test "several mirrored parameters are all checked, not just the first" do
+      # The loop over the annotations was pinned by nothing: every test sent exactly one header.
+      body = call_body(%{"region" => "eu-west1", "max_rows" => 10})
+
+      assert post(
+               body,
+               call_headers([{"mcp-param-region", "eu-west1"}, {"mcp-param-maxrows", "10"}])
+             ).status == 200
+
+      assert post(
+               body,
+               call_headers([{"mcp-param-region", "eu-west1"}, {"mcp-param-maxrows", "99"}])
+             ).status == 400
+
+      assert post(
+               body,
+               call_headers([{"mcp-param-region", "us-west1"}, {"mcp-param-maxrows", "10"}])
+             ).status == 400
+    end
+
+    test "a mirrored parameter is read from arguments, never from params" do
+      # `argument/2` fell back to `params`, so Mcp-Param-Region could be satisfied by a
+      # `params.region` that the tool never receives: the header agreed with something, and the
+      # something was not what ran.
+      body =
+        msg("tools/call", %{
+          "params" => %{"name" => "echo", "arguments" => %{}, "region" => "eu-west1"}
+        })
+
+      assert post(body, call_headers([{"mcp-param-region", "eu-west1"}])).status == 400
+    end
+
+    test "an integer parameter is compared numerically, not as a string" do
+      # "Servers SHOULD compare the header value and the body value numerically rather than as
+      # strings (e.g. 42.0 and 42 are considered equal)."
+      body = call_body(%{"max_rows" => 42})
+
+      assert post(body, call_headers([{"mcp-param-maxrows", "42"}])).status == 200
+      assert post(body, call_headers([{"mcp-param-maxrows", "42.0"}])).status == 200
+      assert post(body, call_headers([{"mcp-param-maxrows", "43"}])).status == 400
+      assert post(body, call_headers([{"mcp-param-maxrows", "forty-two"}])).status == 400
+    end
+
+    test "a refusal names the schema's header, never the caller's string" do
+      body = call_body(%{"region" => "eu-west1"})
+      hostile = "<script>alert(1)</script>"
+
+      conn = post(body, call_headers([{"mcp-param-region", hostile}]))
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["message"] =~ "Mcp-Param-Region"
+      refute conn.resp_body =~ "script"
+      refute conn.resp_body =~ "eu-west1"
+    end
+  end
+
+  describe "the notification exemption is a relaxation, so it is pinned both ways" do
+    test "a notification without Mcp-Method is served" do
+      notification = %{"jsonrpc" => "2.0", "method" => "exit", "_meta" => %{@vkey => @modern}}
+
+      assert post(notification, [{@hdr, @modern}]).status == 202
+    end
+
+    test "a notification WITH a lying Mcp-Method is still refused" do
+      # The revision leaves header requirements for notification POSTs undefined, which is a
+      # reason not to REQUIRE the header -- not a reason to accept one that disagrees with the
+      # body. An id-less request with a lying Mcp-Method was answered 202.
+      notification = %{"jsonrpc" => "2.0", "method" => "exit", "_meta" => %{@vkey => @modern}}
+
+      conn = post(notification, [{@hdr, @modern}, {"mcp-method", "tools/call"}])
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+    end
+  end
+
+  describe "the protocol-version header has two comparisons and both read every value" do
+    test "a second, unsupported version is refused on a body carrying no _meta" do
+      # The mutation table claimed one mutant per header read and had one per header NAME. This
+      # branch -- the only version check that runs when the body has no `_meta` -- was pinned by
+      # nothing, and a first-value-only mutant survived the whole suite.
+      body = %{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list"}
+
+      conn =
+        post_dup(body, [
+          {@hdr, @modern},
+          {@hdr, "1999-01-01"},
+          {"mcp-method", "tools/list"}
+        ])
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_022
+    end
+
+    test "the unsupported-version payload reports what was refused, not what was sent first" do
+      # `requested` was `List.first(values)`, so with two headers the server could name a
+      # version that appears in its own `supported` list -- a payload contradicting itself.
+      body = %{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list"}
+
+      conn =
+        post_dup(body, [{@hdr, @modern}, {@hdr, "1999-01-01"}, {"mcp-method", "tools/list"}])
+
+      data = body!(conn)["error"]["data"]
+      assert data["requested"] == ["1999-01-01"]
+      refute @modern in data["requested"]
+    end
+  end
+
+  describe "an exception that carries its own HTTP status belongs to the server, not to us" do
+    test "it is re-raised rather than answered as -32603" do
+      # Bandit signals a read timeout and a malformed transfer coding by raising
+      # Bandit.HTTPError, whose plug_status the adapter turns into 408 or 400. Widening the
+      # rescue to cover the crash class swallowed those: 408 became 500, 400 became 500, and
+      # every stalled connection became an unauthenticated 5xx with a stacktrace.
+      o = opts(dispatch: fn _, _, _ -> raise Plug.BadRequestError end)
+
+      assert_raise Plug.BadRequestError, fn ->
+        post(call_body(%{}), call_headers([]), o)
+      end
+    end
+
+    test "an exception with no status of its own is still answered as -32603" do
+      o = opts(dispatch: fn _, _, _ -> raise "ordinary fault" end)
+      conn = post(call_body(%{}), call_headers([]), o)
+
+      assert conn.status == 500
+      assert body!(conn)["error"]["code"] == -32_603
+    end
+
+    test "a dispatch crash answers with the request's id, not nil" do
+      # dispatch/3 keeps its own rescue inside call/2's precisely because it knows the id by
+      # then. Nothing asserted that, so removing it would have silently downgraded every
+      # dispatch-time crash to an unidentifiable error response.
+      o = opts(dispatch: fn _, _, _ -> raise "ordinary fault" end)
+      body = call_body(%{}) |> Map.put("id", 4242)
+
+      conn = post(body, call_headers([]), o)
+
+      assert body!(conn)["id"] == 4242
+    end
+  end
+
+  describe "methods the modern revision removed are not reachable over HTTP" do
+    test "initialize, notifications/initialized and ping are all method-not-found" do
+      # The transport stamps every request as `2026-07-28`, and that revision deleted the
+      # handshake. `initialize` was nevertheless served by the legacy handler and answered
+      # `protocolVersion: "2025-11-25"` with HTTP 200 -- an HTTP caller could open a handshake
+      # the declared revision does not have and be told a different revision's version number,
+      # while the README said `initialize` was not implemented.
+      for method <- ["initialize", "ping"] do
+        conn = post(msg(method))
+
+        assert conn.status == 404, "#{method} was served"
+        assert body!(conn)["error"]["code"] == -32_601
+        refute conn.resp_body =~ "2025-11-25"
+      end
+    end
+
+    test "the notification form of the handshake is not served either" do
+      notification = %{
+        "jsonrpc" => "2.0",
+        "method" => "notifications/initialized",
+        "_meta" => %{@vkey => @modern}
+      }
+
+      conn = post(notification, [{@hdr, @modern}, {"mcp-method", "notifications/initialized"}])
+
+      # 202, because JSON-RPC forbids answering a notification and the HTTP status is the only
+      # answer available -- but it is accepted-and-discarded at the transport, never handed to
+      # the core, so it cannot open a handshake the declared revision does not have.
+      assert conn.status == 202
+      assert conn.resp_body == ""
     end
   end
 end

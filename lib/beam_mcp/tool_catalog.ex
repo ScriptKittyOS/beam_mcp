@@ -12,4 +12,24 @@ defmodule BeamMCP.ToolCatalog do
   """
 
   @callback all() :: [BeamMCP.ToolSpec.t()]
+
+  @doc """
+  Finds the spec a tool name refers to, or `:error`.
+
+  One lookup, used by every caller that has to answer "which tool does this name mean". The
+  core uses it to decide whether a `tools/call` is callable at all; the HTTP transport uses it
+  to read the `x-mcp-header` annotations it must validate against. Two implementations of this
+  question would be two answers, which is precisely the header-versus-body disagreement the
+  transport's validation exists to prevent.
+  """
+  @spec fetch(module(), String.t() | atom()) :: {:ok, BeamMCP.ToolSpec.t()} | :error
+  def fetch(catalog, name) when is_atom(name), do: fetch(catalog, Atom.to_string(name))
+
+  def fetch(catalog, name) when is_atom(catalog) and is_binary(name) do
+    Enum.find_value(catalog.all(), :error, fn spec ->
+      if Atom.to_string(spec.name) == name, do: {:ok, spec}
+    end)
+  end
+
+  def fetch(_catalog, _name), do: :error
 end

@@ -169,12 +169,20 @@ not something this release settles.
   defaulting to 100 × 16,384 = **1,638,400**. Setting it is the host's capacity decision, and a
   number this package picked for you would be one it cannot keep.
 - It is not a ceiling on bytes read. It is a floor on what is read before a refusal: a declared
-  32 MiB body had 1,769,325 bytes read before the `413`.
+  32 MiB body is refused after somewhat more than 1 MiB has crossed the wire, measured between
+  1.02 MiB and 1.50 MiB across socket-buffer settings. The spread is the **client's** send
+  buffer, not a property of this package, so treat the excess as "about one more buffer's
+  worth" rather than as a number to design against. An earlier draft of this line quoted a
+  single exact byte count, which a lane could not reproduce.
 - It is not a time bound. A slow client is held by `read_body/2`'s `:read_timeout`, which this
   package does not set and therefore inherits from the server — 15,000 ms under `Bandit`. That is
   a whole-body deadline rather than a per-read reset, so a drip client is answered `408` at 15 s
-  rather than held indefinitely; 16,500 such connections held 243 MiB while a legitimate request
-  was still served in 0.00 s.
+  rather than held indefinitely. That makes slow connections a **transient** rather than a hold:
+  they cost memory for at most the timeout, and a legitimate request was still served in under
+  0.01 s with 12,000 of them in flight.
+
+- It does not bound **headers**. `@max_body_bytes` is a body limit; the number and size of
+  request headers are your HTTP server's settings, inherited the same way the read timeout is.
 
 `allowed_origins` is separate because the specification makes validating `Origin` a MUST, to
 prevent DNS rebinding; which origins are legitimate is yours to say. `:any` is available and must
@@ -213,8 +221,16 @@ ignoring it gives a client that believes you a silent divergence between the val
 and the value that ran.
 
 **Not implemented, by design of the revision.** Sessions, `Mcp-Session-Id`, SSE streaming, and
-SSE resumability — all three removed from this revision's transport; and `initialize`, which the
-revision does not have.
+SSE resumability — all removed from this revision's transport; and the `initialize` /
+`notifications/initialized` handshake, which `2026-07-28` deleted along with `ping`.
+
+Those three are **refused** here rather than merely absent: `404` with `-32601`. The distinction
+is not pedantry. The package's core is dual-era and its `initialize` clause deliberately
+outranks `_meta`, because over stdio an `initialize` *is* the era discriminator — so before this
+was refused at the transport, an HTTP caller declaring `2026-07-28` could send `initialize` and
+receive `200` with `protocolVersion: "2025-11-25"`, a different revision's version number, while
+this section said it was not implemented. The refusal lives in the transport and not in the core
+because HTTP is the carrier that stamps every request modern; stdio's dual-era rule is untouched.
 
 **Not implemented, and yours.** Binding to localhost (a `Bandit` option), TLS, request timeouts
 and connection limits (your HTTP server's settings, not this Plug's), and authentication —
