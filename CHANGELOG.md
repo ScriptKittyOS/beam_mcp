@@ -9,6 +9,65 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — unreleased
+
+Four defects in the HTTP transport, all found by slice 002's review lanes and all filed rather
+than fixed at the time. No wire break: `~> 0.3.0` admits this release and still excludes the
+next one, measured with Elixir's own `Version` module rather than recalled —
+`slices/003-release-0-3-1/logs/measure-version-requirement.txt`:
+
+    requirement   0.3.0    0.3.1    0.4.0
+    ~> 0.3.0      true     true     false
+
+### Fixed
+
+- **An `x-mcp-header` annotation on a non-primitive parameter is the host's fault.** The
+  revision allows the annotation only on `integer`, `string` and `boolean`, and
+  `value_matches?/2` assumed that MUST rather than checking it — so an annotated `number`,
+  `object` or `array` could never match any header. Omitting the header was refused as
+  *"required: the body carries a value to mirror"* and supplying one as *"does not match"*: the
+  tool was advertised through `tools/list`, was permanently uncallable, and the `400` blamed the
+  caller for the host's schema. It is now `500` with `-32603`, the diagnosis goes to the log
+  naming the tool and the annotation, and nothing about it reaches the caller. A property with
+  no declared type is left alone.
+
+- **Colliding `x-mcp-header` names are refused rather than silently collapsed.** The revision
+  requires the values to be case-insensitively unique. The annotation set was accumulated into a
+  map keyed by the case-folded name, so `Dup` and `DUP` collapsed to one entry — `Map.put` lost
+  the sibling and a nested annotation could overwrite an outer one. One annotated property was
+  then never checked at all, and which one survived depended on map iteration order. The set is
+  now a list keyed by nothing, and a collision is refused as a host fault like the above.
+
+- **A host catalog returning a malformed spec now answers with the request's id.** A host
+  catalog that *raised* was answered inside the envelope with the id; the same host catalog
+  returning a spec-shaped map that is not a `%ToolSpec{}` raised `KeyError` on the
+  `spec.input_schema` read one line later, escaped to the outer rescue and answered `id: null`.
+  One host bug got two envelopes depending on which line it landed on. The spec read, the schema
+  walk and the annotation check now all sit inside the same guarded call.
+
+- **A refusal issued before the request body is read carries `connection: close`.** Only the
+  `413` did. The other six pre-read refusal sites — the `Origin` `403`, the `405`,
+  `authorize/1`'s `500`, its `403` and its contract-violation `403`, and the body read's own
+  `400` — answered on a connection whose body was still on the wire and said nothing about it,
+  so the adapter read that body anyway on behalf of a caller already refused (`Bandit` drains
+  up to 8 MB, waiting up to its read timeout), and past that limit dropped the connection with
+  nothing said to the client. All seven now answer through one path, so a step added in front
+  of the body read inherits the behaviour. A refusal issued *after* the body is read keeps the
+  connection.
+
+### Known gaps
+
+Recorded rather than fixed, with the measurement, in
+`slices/003-release-0-3-1/FINDINGS.md`:
+
+- **Invalid UTF-8 in `MCP-Protocol-Version` turns a caller's own `400` into a `500`.** The bytes
+  are echoed into the refusal's `data.requested`, so encoding the refusal raises. It is answered
+  inside the envelope and nothing leaks, but the status names the wrong party and the host's log
+  takes a stacktrace per request.
+- **`fault_response/4`'s re-raise branch is still unpinned.** Unchanged by this release.
+- **`read_body_bounded/1`'s `{:error, reason}` `400` has no test**, and now carries the new
+  close behaviour untested with it.
+
 ## [0.3.0] — 2026-09-07
 
 ### Added — stateless Streamable HTTP transport

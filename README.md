@@ -195,6 +195,16 @@ not something this release settles.
 - It does not bound **headers**. `@max_body_bytes` is a body limit; the number and size of
   request headers are your HTTP server's settings, inherited the same way the read timeout is.
 
+**A refusal issued before the body is read ends the connection, and says so.** The `Origin`
+`403`, the `405`, `authorize/1`'s refusals and the `413` above all answer while the request body
+is still on the wire, so each carries `connection: close`. Without it your HTTP server reads
+that body anyway, on behalf of a caller this Plug has already refused — `Bandit` drains up to
+8 MB, waiting up to its read timeout to do it — and past that it gives up and drops the
+connection with nothing said to the client. A refusal issued *after* the body has been read
+keeps the connection, because by then there is nothing left to drain. What this does not do is
+get a pipelined second request answered: it cannot, and declining to read a refused caller's
+body is the point.
+
 `allowed_origins` is separate because the specification makes validating `Origin` a MUST, to
 prevent DNS rebinding; which origins are legitimate is yours to say. `:any` is available and must
 be chosen deliberately. The specification also says a locally-running server **SHOULD** bind to
@@ -230,6 +240,16 @@ header is the smuggling primitive the specification's validation MUST exists to 
 annotation through to `tools/list` verbatim. Advertising that a header is authoritative and then
 ignoring it gives a client that believes you a silent divergence between the value it routed on
 and the value that ran.
+
+**An `x-mcp-header` annotation the specification forbids is the host's fault, not the caller's.**
+The revision allows the annotation only on primitive parameters — integer, string, boolean — and
+requires its values to be case-insensitively unique. A schema breaking either is refused,
+`500` with `-32603`, and the diagnosis names the tool and the offending annotation in the log.
+Nothing about it reaches the caller: the request was well formed and it is the server that is
+misconfigured. Every call to that tool is refused until the schema is corrected, rather than a
+subset of what `tools/list` advertised being enforced silently. A property with **no** declared
+type is left alone, because it cannot be judged from the schema and judging it on the caller's
+value instead would turn a wrong-shaped request into a host fault.
 
 **Not implemented, by design of the revision.** Sessions, `Mcp-Session-Id`, SSE streaming, and
 SSE resumability — all removed from this revision's transport; and the `initialize` /

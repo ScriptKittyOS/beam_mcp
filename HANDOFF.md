@@ -3,78 +3,104 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF — beam_mcp, slice 002 (stateless Streamable HTTP), release 0.3.0
+# HANDOFF — beam_mcp, slice 003 (the live 002 findings), release 0.3.1
 
-Rounds 4-7 complete. **Round 4's three publish blockers are closed, and nothing blocks a
-publish.** Tag and publish are owner steps — never `mix hex.publish`, never push a tag.
+Two review rounds complete at the time this was written, with a third to close on the release
+commit itself. Tag and publish are owner steps — never `mix hex.publish`, never push a tag.
 
 ## State
 
-- Branch `slice/002-streamable-http`, HEAD **`bdb032f`**, tree **`450d9f7f`**.
-- Gate green: format, compile, test, credo, optional deps, **docs**, reuse (24 commentable
-  files), licence files. Every step line reads `pass`. `logs/gate-round7.txt`.
-- **138 tests, 0 failures.** Was 126 at the handoff.
-- Version `0.3.0`, unreleased. `0.2.0` is published and is not amended.
+- Branch `slice/003-release-0-3-1`, based on `main` at `31bcbff`.
+- **No head hash is written here.** The last handoff named `bdb032f` and it was stale within the
+  hour, because a hash written into the file it describes cannot include the commit that writes
+  it. The commits are listed below by subject; `git log main..slice/003-release-0-3-1` is the
+  authority for their hashes.
+- Gate green: format, compile, test, credo, optional deps, docs, reuse (25 commentable files),
+  licence files. Every step line reads `pass`, read as lines and not as an exit code.
+  `slices/003-release-0-3-1/logs/gate-release.txt`.
+- **158 tests, 0 failures.** Was 146 when this slice's second half began, 138 at the 0.2.x-era
+  handoff.
+- Version **`0.3.1`**, unreleased. **`0.3.0` is published on Hex and tagged `v0.3.0`**, and its
+  changelog section is dated and not amended.
 
-## What the four rounds produced
+## What this slice produced
 
-    8d4d8c8  integer header values compared as integers      round 4 blockers 1 and 2
-    00b6242  a host tool's exception stays in the envelope    round 4 blocker 3
-    c0036d3  the read-before-refusal measurement              round 4's open question
-    dad94ee  every host call routed through one rule          round 5
-    c2e3fdf  atom keys and the recompilation step, stated     round 5
-    5bc49ad  round 5's anchors made able to move              round 6
-    bdb032f  probe captured whole, mutants re-scored          round 7
+    (a)  an x-mcp-header on a non-primitive property is the host's fault
+    (b)  colliding x-mcp-header names are refused, not silently collapsed
+    (c)  a malformed host spec keeps the request id, like a raising host catalog
+    (d)  a refusal issued before the body read ends the connection and says so
+         round 1: three claims about correct code corrected
+         0.3.1 — the release commit: mix.exs, CHANGELOG, README, this file
 
-**The pattern is worth reading before the next slice.** Rounds 1-4 each found a fix
-reintroducing a defect. Round 5's fixes were correct and two of their test anchors could not
-move — the suite reported them pinned and they were not. Round 6 fixed the anchors and got the
-records about them wrong. Round 7 found no defect in `lib/` at all: both its blockers were
-record-integrity defects. The failure keeps moving one level away from the code — defect, then
-test, then record — and at each level the same three rules catch it: derive the population,
-quote the count from output, capture the whole output.
+All four were review findings from slice 002, filed rather than fixed at the time. Each carries
+its own red, demonstrated and archived before its fix, and each anchor is scored by mutation on
+the tree that ships.
 
-`slices/002-streamable-http/FINDINGS.md` carries the round-by-round table.
+**A new instrument.** `test/beam_mcp/transport/http_bandit_test.exs` drives the transport against
+a real Bandit listener on a real socket with real pipelining. Everything else in the suite goes
+through `Plug.Test`, whose `read_body/2` is a `:binary.part` of an in-memory binary — it can
+neither block nor fail, and there is no connection for a refusal to leave in a bad state. Two
+gaps in slice 002's findings were recorded there as not closable without this. It closes one.
+
+**The pattern held again, one level up.** Round 1's two lanes found **no defect in `lib/`**. All
+three blocking findings were claims *about* the code that were false: a justification nobody had
+measured, an off-by-one in a derived population, and a published derivation command that returned
+nothing on the tree it described. Slice 002 recorded the failure moving one level away from the
+code each round — defect, then test anchor, then record. It started at the record here.
 
 ## Owner decisions still open
 
-1. **The pinning policy (SCR-266).** The README says `{:beam_mcp, "~> 0.3.0"}` and that is
-   correct. Whether `~> 0.MINOR.0` is the *rule* while `0.x` breaks at the minor is undecided,
-   and the release is the moment the recommendation ships.
-2. **Should release notes ship in the tarball (SCR-269)?** They do now — `CHANGELOG.md` is in
-   `files:` and in ex_doc `extras:`. Reversible before the tag.
-3. **Sequencing.** `SECURITY.md`'s supported-versions table says `0.2.x — superseded`. That is
-   true the moment `0.3.0` is on Hex and wrong for any window between merging to `main` and
-   publishing. **Publish and merge together, or merge second.**
-4. **Date the `[0.3.0]` heading** at tag time. It reads `unreleased`, correctly, until then.
+1. **`SECURITY.md`'s supported-versions table.** Unchanged by this slice; check it still says
+   what you want for a `0.3.x` patch before the tag.
+2. **Date the `[0.3.1]` heading** at tag time. It reads `unreleased`, correctly, until then.
+3. **The README version pin does not move, and that was measured rather than assumed.**
+   `~> 0.3.0` admits `0.3.1` and still excludes `0.4.0`, so the recommendation is already right
+   for a patch. `slices/003-release-0-3-1/logs/measure-version-requirement.txt`:
+
+        requirement   0.1.0    0.2.0    0.3.0    0.3.1    0.4.0    1.0.0
+        ~> 0.3.0      false    false    true     true     false    false
+
+   `readme_claims_test.exs` derives the next break from `mix.exs` and refutes it, so this stays
+   true by test rather than by memory.
 
 ## Known gaps, recorded rather than fixed
 
-- **`fault_response/4`'s re-raise branch is unpinned.** Measured: the never-re-raise mutant
-  survives. Detecting it needs a non-500 `:plug_status` exception from code that is not the
-  host's, which now means the adapter's read path alone; `Plug.Test` produces neither shape.
-  **Needs a Bandit-backed test.**
-- **Pre-read refusals answer without `connection: close`**, so Bandit drops the connection and a
-  pipelined second request goes unanswered. Pre-existing — it applies equally to the Origin
-  `403`, the authorize `403` and the `405` — and it fails closed.
-- **A host DATA fault loses the request id** where a host RAISE two lines earlier keeps it,
-  because `annotations(spec.input_schema)` is read outside `host_call/1`. Measured table in
-  `logs/probe-fault-ids.txt`. Moving that read inside `host_call/1` is mutant M13 and wants its
-  own red.
+Every one of these is in `slices/003-release-0-3-1/FINDINGS.md` with its measurement.
+
+- **Invalid UTF-8 in `MCP-Protocol-Version` turns a caller's own `400` into a `500`.** The bytes
+  are echoed into the refusal's `data.requested`, so `Jason.encode!` raises inside `send_json/3`
+  in `handle/2`'s `else` — outside every inner rescue. Answered inside the envelope, nothing
+  leaks, but the status names the wrong party and the host's log takes an error-level stacktrace
+  per request on a path `authorize/1` may leave unauthenticated. **Found while looking for a
+  replacement anchor and reported rather than folded in**; it is a third defect in a slice scoped
+  to two.
+- **`fault_response/4`'s re-raise branch is still unpinned**, and the never-re-raise mutant still
+  survives. The owner scoped it out of this slice. The instrument it needs now exists.
+- **`check_annotations/2` inside `host_call/1` is unpinned and is a recorded survivor.** The
+  mutant leaving it outside survives, because reaching a difference needs a `properties` map key
+  with no `String.Chars` implementation *and* a type offence or a name collision. No JSON-derived
+  schema can produce that. Recorded with the argument rather than pinned by a contrived test.
+- **`read_body_bounded/1`'s `{:error, reason}` `400` has no test**, and now carries the new close
+  behaviour untested with it. `Plug.Test` cannot produce the shape and Bandit raises instead of
+  returning it.
+- **A bodyless non-POST now costs a connection.** `GET /mcp` leaves nothing unread, so closing on
+  it buys nothing. Deciding per request would reintroduce the per-site reasoning that left six of
+  seven sites unfixed; the trade is taken deliberately.
+- **A correction to slice 002's record.** Lane s3 measured `second-request-answered=False` for a
+  pre-read refusal. On bandit 1.12.5 that does not reproduce at ordinary body sizes — the adapter
+  drains and the second request IS answered. The defect is real above the drain cap and in what
+  the server is made to read below it; the symptom named for it was not this adapter's.
 - **`authorize/1` cannot read the body**, so body-signature auth is structurally impossible and
-  fails as a hang rather than an error. Documented; the post-read hook is deferred to `0.4.0`.
+  fails as a hang. Documented in the README; the post-read hook is deferred.
 - **`readme_claims_test.exs` does not deliver what `CONVENTIONS.md` asks.** The rule says every
   behavioural README claim is pinned; the file pins every claim *listed in it*, and nothing
-  derives the claim set. Stated in that file's moduledoc. Closing it needs a mechanism or an
-  owner decision to narrow the rule.
-- Three FILE findings from round 4 are on the board: colliding `x-mcp-header` names (SCR-275),
-  an `x-mcp-header` on a non-primitive property, and `ToolCatalog.fetch/2`'s `@spec` honesty.
-  The last two could not be filed — the Linear workspace is at its free issue limit — and are
-  recorded verbatim in a comment on SCR-253.
+  derives the claim set. Stated in that file's moduledoc, unchanged by this slice.
+- `ToolCatalog.fetch/2`'s `@spec` honesty, and the unpinned both-eras `ttlMs`/`cacheScope`
+  emission, are on the board.
 
-## To release
+## To release 0.3.1
 
-1. Merge to `main` (PR; the ruleset requires two green checks).
-2. Date the `[0.3.0]` heading.
-3. `mix hex.publish`, then tag `v0.3.0` signed — or tag first and publish immediately after.
-   Note the GitHub ruleset targets **branches, not tags**, so a tag push is unprotected.
+1. Merge the PR to `main` (the ruleset requires two green checks).
+2. Date the `[0.3.1]` heading.
+3. `mix hex.publish`, then tag `v0.3.1` signed — or tag first and publish immediately after.
+   The GitHub ruleset targets **branches, not tags**, so a tag push is unprotected.
