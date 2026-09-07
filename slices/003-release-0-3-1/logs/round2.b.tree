@@ -1,0 +1,5 @@
+bae1fcaeb73b2146bf8b1ee49b79bd1bcd817988
+# tree of commit 8c296d8, the release commit, written by: git rev-parse '8c296d8^{tree}'
+# THIS IS THE TREE ROUND 2 LANE b READ. Round 2's own fixes were applied after the read;
+# a diff run later shows those and nothing else.
+# HEAD at read time: 8c296d85a96d9d1f0c67eb2c120d71580526e5bb

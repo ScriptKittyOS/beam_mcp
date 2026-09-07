@@ -196,8 +196,8 @@ not something this release settles.
   request headers are your HTTP server's settings, inherited the same way the read timeout is.
 
 **A refusal issued before the body is read ends the connection, and says so.** The `Origin`
-`403`, the `405`, `authorize/1`'s refusals and the `413` above all answer while the request body
-is still on the wire, so each carries `connection: close`. Without it your HTTP server reads
+`403`, the `405`, `authorize/1`'s refusals and the body-cap `413` are all issued before this
+Plug has read the request body, so each carries `connection: close`. Without it your server reads
 that body anyway, on behalf of a caller this Plug has already refused — `Bandit` drains up to
 8 MB, waiting up to its read timeout to do it — and past that it gives up and drops the
 connection with nothing said to the client. A refusal issued *after* the body has been read
