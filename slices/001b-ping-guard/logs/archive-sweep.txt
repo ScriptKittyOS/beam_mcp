@@ -1,0 +1,144 @@
+=== POPULATION, derived from the tracked set rather than listed ===
+  slices/001b-ping-guard/logs/archive-sweep.txt
+  slices/001b-ping-guard/logs/full-suite.txt
+  slices/001b-ping-guard/logs/gate.txt
+  slices/001b-ping-guard/logs/green-negotiation.txt
+  slices/001b-ping-guard/logs/mutation-a.txt
+  slices/001b-ping-guard/logs/mutation-b.txt
+  slices/001b-ping-guard/logs/probe-after.txt
+  slices/001b-ping-guard/logs/red.txt
+  slices/001b-ping-guard/logs/round1.r1.md
+  slices/001b-ping-guard/logs/round1.r2.md
+  slices/001b-ping-guard/logs/round2.r1.md
+  slices/001b-ping-guard/logs/round2.r2.md
+  slices/001b-ping-guard/logs/round3.r1.md
+  slices/001b-ping-guard/logs/round3.r2.md
+  slices/001b-ping-guard/logs/round4.r1.md
+  slices/001b-ping-guard/logs/round4.r2.md
+  slices/001b-ping-guard/logs/round5.r1.md
+  slices/001b-ping-guard/logs/round5.r2.md
+  slices/001b-ping-guard/logs/round6.r1.md
+  slices/001b-ping-guard/logs/round6.r2.md
+  slices/001b-ping-guard/logs/spec-basic-versioning.md
+  slices/001b-ping-guard/logs/spec-changelog.md
+  slices/001b-ping-guard/logs/spec-legacy-basic.md
+
+Two kinds of file live here, and only one kind can be diffed against a command:
+  CAPTURES     - a command wrote them; re-run the command and compare bytes.
+                 Includes the spec-*.md files: 'curl -o' IS the command and the
+                 upstream page IS the source, so they are checkable, not prose.
+  AUTHORED     - the round*.md lane reports. Each was written by the reviewer that
+                 is its source. Nothing to re-run; they must simply never be
+                 labelled the output of a command.
+
+=== warming the build so comparisons do not depend on _build state ===
+  $ mix compile --force ; mix test --exclude all   (output discarded; only the
+  build state matters here, and a cold build emits compile lines no archive contains)
+
+=== CAPTURES: test and gate logs ===
+-- full-suite.txt: diff vs a fresh 'mix test', seed+timing normalised on BOTH sides --
+     comparison: 0 differing line(s), diff exit=0
+  => full-suite.txt           RAW      (0 differing lines above; seed/timing/compile normalised)
+
+-- green-negotiation.txt: same command, same normalisation --
+     comparison: 0 differing line(s), diff exit=0
+  => green-negotiation.txt    RAW      (0 differing lines above)
+
+-- gate.txt: no normalisation, the gate emits nothing variable --
+     comparison: 0 differing line(s), diff exit=0
+  => gate.txt                 RAW      (0 differing lines above; no normalisation applied)
+
+=== CAPTURES: the probe ===
+-- probe-after.txt vs a WARM fresh run of the tracked probe, no normalisation --
+     comparison: 0 differing line(s), diff exit=0
+  => probe-after.txt          RAW      (byte-identical to a warm run)
+  NOTE, and the direction matters: against a COLD _build the same command emits extra
+  dependency-compile lines, so the archive would have FEWER lines than that run.
+  Fewer-lines-than-the-run is the SIGNATURE OF FILTERING -- it is exactly what was
+  found in instances #2 and #3 -- so it is never on its own an acquittal. What
+  acquits this file is the byte-identical match against a warm run above.
+
+=== CAPTURES: red.txt, the red half of red-before-green ===
+  RESTORED in round 6. The round-4 sweep classified this file; the round-5 rewrite
+  enumerated it and classified it nowhere, so a reader scanning for DIFFERS got a clean
+  bill over a population the instrument had not finished. An unclassified file is not a
+  RAW file. That is CONVENTIONS.md's 'proves nothing, and proves it quietly' shape, and
+  it is the coverage regression r2 blocked round 5 on -- inside the round that promised
+  the population.
+  Not re-runnable here: it is the failing state BEFORE the fix, and lib/ is now fixed.
+  Reproducing it needs lib/beam_mcp/server.ex reverted to base/main, which this script
+  must not do to the working tree. Checked instead for the marks a filtered capture
+  cannot have:
+    seed banner : 1
+    stacktrace: : 2
+    code:       : 2
+    Finished in : 1
+    tests, line : 12 tests, 2 failures
+  => red.txt                  RAW      (banner + code: + stacktrace: + Finished in, all present)
+
+=== CAPTURES: the two mutation logs ===
+-- mutation-a.txt --
+  not re-run here: reproducing it needs a mutated copy of lib/, which this script
+  must not create in the working tree. Checked instead for the marks a filtered
+  capture cannot have -- the ExUnit banner and a complete failure body:
+    seed banner : 1
+    stacktrace: : 1
+    code:       : 1
+    Finished in : 1
+    tests, line : 15 tests, 1 failure
+  => mutation-a.txt           RAW      (banner + code: + stacktrace: + Finished in, all present)
+-- mutation-b.txt --
+  not re-run here: reproducing it needs a mutated copy of lib/, which this script
+  must not create in the working tree. Checked instead for the marks a filtered
+  capture cannot have -- the ExUnit banner and a complete failure body:
+    seed banner : 1
+    stacktrace: : 1
+    code:       : 1
+    Finished in : 1
+    tests, line : 15 tests, 1 failure
+  => mutation-b.txt           RAW      (banner + code: + stacktrace: + Finished in, all present)
+
+=== CAPTURES: the three specification pages, re-fetched and diffed against upstream ===
+These are the only files whose source lives OUTSIDE the tree, so they are the only
+ones a diff can check against an independent authority. Grouping them with prose
+(the first version of this script did) is what would excuse never checking them.
+     comparison: 0 differing line(s), diff exit=0
+  => spec-basic-versioning.md RAW      (re-fetched from https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning.md)
+     comparison: 0 differing line(s), diff exit=0
+  => spec-changelog.md        RAW      (re-fetched from https://modelcontextprotocol.io/specification/2026-07-28/changelog.md)
+     comparison: 0 differing line(s), diff exit=0
+  => spec-legacy-basic.md     RAW      (re-fetched from https://modelcontextprotocol.io/specification/2025-11-25/basic.md)
+
+=== AUTHORED: the lane reports ===
+  round1.r1.md                 written by its own reviewer lane; not a command capture
+  round1.r2.md                 written by its own reviewer lane; not a command capture
+  round2.r1.md                 written by its own reviewer lane; not a command capture
+  round2.r2.md                 written by its own reviewer lane; not a command capture
+  round3.r1.md                 written by its own reviewer lane; not a command capture
+  round3.r2.md                 written by its own reviewer lane; not a command capture
+  round4.r1.md                 written by its own reviewer lane; not a command capture
+  round4.r2.md                 written by its own reviewer lane; not a command capture
+  round5.r1.md                 written by its own reviewer lane; not a command capture
+  round5.r2.md                 written by its own reviewer lane; not a command capture
+  round6.r1.md                 written by its own reviewer lane; not a command capture
+  round6.r2.md                 written by its own reviewer lane; not a command capture
+
+=== archive-sweep.txt itself ===
+  A file cannot diff itself while being written, so this entry NAMES ITS CHECK rather
+  than asserting a conclusion -- the thing this script's own header forbids:
+     script sha256 : de9747241aa99b48a936e79c232edbac91f18e824b94ecf025353be45b5bcb54
+     reproduce     : ./tools/archive_sweep.sh > slices/001b-ping-guard/logs/archive-sweep.txt 2>&1
+     then diff that against the tracked file. A reader who doubts any verdict above
+     re-runs that one line; the script is tracked, so the bytes that produced this
+     output are in the tree next to it.
+  => archive-sweep.txt        RAW      (self: named check above, not an assertion)
+
+=== CLOSING TALLY -- the structural fix, not an instance fix ===
+  Round 5 enumerated red.txt and classified it nowhere: 19 listed, 18 classified, and
+  the output still read as a clean sweep because nothing counted. A file could drop out
+  QUIETLY -- CONVENTIONS.md's own worst shape, and this script's header says a list is
+  not a population. So the population and the classifications are now counted and
+  compared, and disagreement is a FAILURE of this script rather than a silent gap.
+  enumerated : 23
+  classified : 23  (11 verdicts + 12 authored lane reports)
+  => TALLY BALANCES: every enumerated file is classified.

@@ -1,0 +1,28 @@
+Compiling 5 files (.ex)
+Generated beam_mcp app
+Running ExUnit with seed: 924753, max_cases: 64
+
+....
+
+  1) test state threads through both era branches shutdown declaring 2026-07-28 through _meta still sets shutdown? (BeamMCP.NegotiationTest)
+     test/beam_mcp/negotiation_test.exs:190
+     Expected truthy, got false
+     code: assert Server.shutdown?(send_for_state(modern("shutdown")))
+     arguments:
+
+         # 1
+         %{
+           server_name: "beam_mcp",
+           dispatch: #Function<0.370214/3 in BeamMCP.NegotiationTest.state/0>,
+           dispatch_opts: [],
+           initialized?: false,
+           shutdown?: false,
+           tool_catalog: BeamMCP.NegotiationTest.Catalog
+         }
+
+     stacktrace:
+       test/beam_mcp/negotiation_test.exs:191: (test)
+
+..........
+Finished in 0.03 seconds (0.03s async, 0.00s sync)
+15 tests, 1 failure

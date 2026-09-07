@@ -42,6 +42,11 @@ defmodule BeamMCP.NegotiationTest do
 
   defp send_msg(msg), do: state() |> Server.handle_message(msg) |> elem(1)
 
+  # send_msg/1 throws the state away, so nothing it drives can catch a branch that returns
+  # the wrong state. shutdown is the only request method that changes state and it reaches
+  # both era branches, so it is the input that covers them.
+  defp send_for_state(msg), do: state() |> Server.handle_message(msg) |> elem(0)
+
   defp modern(method, extra \\ %{}) do
     Map.merge(
       %{
@@ -52,6 +57,21 @@ defmodule BeamMCP.NegotiationTest do
           "io.modelcontextprotocol/protocolVersion" => @modern,
           "io.modelcontextprotocol/clientCapabilities" => %{}
         }
+      },
+      extra
+    )
+  end
+
+  # The same modern carrier, declaring the legacy revision. The specification's own retry
+  # advice on -32022 produces exactly this message: pick from `supported` and retry the
+  # request. `supported` here is ["2026-07-28", "2025-11-25"].
+  defp legacy_meta(method, extra \\ %{}) do
+    Map.merge(
+      %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => method,
+        "_meta" => %{"io.modelcontextprotocol/protocolVersion" => @legacy}
       },
       extra
     )
@@ -147,6 +167,57 @@ defmodule BeamMCP.NegotiationTest do
 
       assert r["error"]["code"] == -32_601,
              "ping was removed in 2026-07-28; the legacy handler must not inherit it"
+    end
+
+    test "a ping declaring 2025-11-25 through _meta is answered" do
+      r = send_msg(legacy_meta("ping"))
+
+      assert r["result"] == %{},
+             "ping exists in 2025-11-25. This server advertises 2025-11-25 in " <>
+               "server/discover and lists it in the -32022 `supported` payload, and the " <>
+               "specification tells a client to pick from that list and retry the request " <>
+               "— which produces this message. Refusing it refuses a revision we advertise."
+    end
+  end
+
+  describe "state threads through both era branches" do
+    test "shutdown declaring 2025-11-25 through _meta still sets shutdown?" do
+      assert Server.shutdown?(send_for_state(legacy_meta("shutdown"))),
+             "the legacy branch returns the recursion's tuple whole; if it returned the " <>
+               "pre-recursion state instead, the transport would never stop"
+    end
+
+    test "shutdown declaring 2026-07-28 through _meta still sets shutdown?" do
+      assert Server.shutdown?(send_for_state(modern("shutdown")))
+    end
+
+    test "a ping at either revision leaves the state alone" do
+      refute Server.shutdown?(send_for_state(legacy_meta("ping")))
+      refute Server.shutdown?(send_for_state(modern("ping")))
+    end
+  end
+
+  describe "the result envelope follows the declared revision, not the carrier" do
+    test "a 2026-07-28 result carries resultType and serverInfo _meta" do
+      r = send_msg(modern("tools/list"))
+
+      assert r["result"]["resultType"] == "complete"
+      assert r["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]
+    end
+
+    test "a result for a request declaring 2025-11-25 carries neither" do
+      r = send_msg(legacy_meta("tools/list"))
+
+      assert r["result"]["tools"], "the request is still served"
+
+      refute r["result"]["resultType"],
+             "resultType was added in 2026-07-28; the spec says clients MUST treat results " <>
+               "from earlier-protocol servers that omit it as \"complete\", so emitting it " <>
+               "on a 2025-11-25 result claims a revision the client did not ask for"
+
+      refute r["result"]["_meta"],
+             "the serverInfo _meta key is a 2026-07-28 addition and does not belong on a " <>
+               "result answering a request that declared 2025-11-25"
     end
   end
 
