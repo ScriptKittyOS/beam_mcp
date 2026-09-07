@@ -63,22 +63,38 @@ die() { echo "SIGNOFF REFUSED -- $*" >&2; exit 1; }
 # Probe S3 proves the exclusion is load-bearing rather than asserting it, and the mutation on
 # this tool removes the exclusion and requires S1 and S3 to break.
 #
-# The paths are enumerated from HEAD with an anchored expression rather than handed to a git
-# pathspec glob, because a git pathspec `*` matches `/` and `slices/*/signoff` would therefore
-# also match `slices/a/b/signoff`. This slice is about populations being derived the way the
-# mechanism derives them; a wildcard whose reach is wider than the sentence describing it is
-# the same defect in miniature.
+# THE EXCLUSION USES A SHELL GLOB AND `git rm --cached`, WITH NO PATHSPEC AND NO `grep`.
+#
+# It is not a git pathspec because a git pathspec `*` matches `/`, so `slices/*/signoff` would
+# also match `slices/a/b/signoff` -- a wildcard reaching wider than the sentence describing it.
+# `git ls-tree` also rejects `:(glob)` magic, which is the one pathspec form that would mean
+# what the sentence says, and a plain `slices/*/signoff/*` pathspec returned NOTHING on this
+# tree when it was tried.
+#
+# It is not `git ls-tree -r -z ... | grep -z -E ...` either, and that draft shipped as far as
+# round 2. `grep -z` means `--null-data` to GNU grep and `--decompress` to ugrep, and BOTH are
+# installed here -- `grep --help` on this PATH resolves to ugrep 7.8.4, while /usr/bin/grep is
+# GNU grep 3.11. A script whose exclusion depends on which grep is first on PATH is depending
+# on something nobody checked, which is the family of defect this whole slice is about. When
+# such a filter silently matches nothing the exclusion vanishes, every record reads STALE, and
+# a tool that always refuses gets switched off -- R1-C's failure by another route.
+#
+# A shell glob does not cross `/`, so `slices/*/signoff` means exactly what it looks like, and
+# `git rm -r --cached -- <dir>` needs no pattern at all. The stated limit: this iterates
+# directories present in the WORKING TREE. A signoff directory in HEAD but deleted on disk would
+# be missed -- and cannot be reached, because require_clean_tree refuses on a deleted tracked
+# file before this function is called.
 review_tree() {
   local idx list rc
   git rev-parse --verify -q HEAD >/dev/null || die "HEAD does not resolve; there is no tree to bind"
   idx=$(mktemp "${TMPDIR:-/tmp}/beam_mcp-signoff-idx.XXXXXXXX") || die "cannot create a scratch index"
   list=$(mktemp "${TMPDIR:-/tmp}/beam_mcp-signoff-list.XXXXXXXX") || die "cannot create a temp file"
   GIT_INDEX_FILE="$idx" git read-tree HEAD || { rm -f "$idx" "$list"; die "git read-tree HEAD failed"; }
-  git ls-tree -r -z --name-only HEAD | grep -z -E '^slices/[^/]+/signoff/' > "$list"
-  if [ -s "$list" ]; then
-    GIT_INDEX_FILE="$idx" git update-index -z --force-remove --stdin < "$list" \
-      || { rm -f "$idx" "$list"; die "could not remove the signoff paths from the scratch index"; }
-  fi
+  for d in slices/*/signoff; do
+    [ -d "$d" ] || continue
+    GIT_INDEX_FILE="$idx" git rm -r -q --cached --ignore-unmatch -- "$d" \
+      || { rm -f "$idx" "$list"; die "could not remove $d from the scratch index"; }
+  done
   GIT_INDEX_FILE="$idx" git write-tree; rc=$?
   rm -f "$idx" "$list"
   [ "$rc" -eq 0 ] || die "git write-tree failed; refusing to bind an unmeasured tree"

@@ -231,16 +231,31 @@ echo "     only pass, and its one stable outcome is to be switched off."
 rc=$(scenario_s9 "$SIGNOFF"); check S9 0 "$rc" "the highest round decides; earlier rounds are history"
 echo
 
+# EVERY MUTATION IS ASSERTED TO HAVE APPLIED. This is not defensive tidiness: round 2 moved the
+# exclusion from `git ls-tree | grep -z` to a shell glob, the mutant's sed no longer matched
+# anything, and the probe cheerfully ran the UNMUTATED script and scored S1 and S3 as SURVIVORS.
+# CONVENTIONS.md names that shape -- "a mutation reported as applied but never applied" -- and a
+# survivor is the expensive direction to be wrong in, because it reads as a real finding.
+mutate() { # mutate <name> <sed-expression> ; prints the mutant's path, or exits
+  local name="$1" expr="$2" dir
+  dir=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-probe-signoff-$name.XXXXXXXX") || exit 2
+  sed "$expr" "$SIGNOFF" > "$dir/signoff.sh"
+  if cmp -s "$SIGNOFF" "$dir/signoff.sh"; then
+    echo "  MUTATION $name DID NOT APPLY -- the sed matched nothing. Refusing to score it." >&2
+    FAILS=$((FAILS+1)); rm -rf "$dir"; return 1
+  fi
+  chmod +x "$dir/signoff.sh"
+  echo "  the one line changed:" >&2
+  diff "$SIGNOFF" "$dir/signoff.sh" | sed 's/^/    /' >&2
+  printf '%s' "$dir"
+}
+
 echo "=== MUTATION: remove the slices/*/signoff/ exclusion from review_tree() ==="
 echo "  An exclusion whose removal changes nothing was never load-bearing. S1 and S3 must break."
-MUT=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-probe-signoff-mut.XXXXXXXX")
-sed 's|^  git ls-tree -r -z --name-only HEAD .*$|  : > "$list"   # MUTANT: exclude nothing|' \
-    "$SIGNOFF" > "$MUT/signoff.sh"
-chmod +x "$MUT/signoff.sh"
-echo "  the one line changed:"
-diff <(grep -n 'ls-tree -r -z' "$SIGNOFF") <(grep -n 'MUTANT' "$MUT/signoff.sh") | sed 's/^/    /'
+MUT=$(mutate mut1 's|^  for d in slices/\*/signoff; do$|  for d in /nonexistent-mutant-path; do   # MUTANT: exclude nothing|') || MUT=""
 MUT_FAILS=0
 for id in S1 S3; do
+  [ -n "$MUT" ] || { MUT_FAILS=$((MUT_FAILS+1)); echo "  $id: not scored, mutation did not apply"; continue; }
   rc=$("scenario_${id,,}" "$MUT/signoff.sh" 2>/dev/null)
   if [ "$rc" -ne 0 ] 2>/dev/null && [ -n "$rc" ]; then
     echo "  $id under the mutant: verify exit $rc -- BROKEN, as required"
@@ -255,20 +270,17 @@ echo
 echo "=== MUTATION 2: make every round decide, not just the highest ==="
 echo "  This is PLAN.md 4's table as literally written. S9 must break under it, or the"
 echo "  departure from the plan bought nothing and should be reverted."
-MUT2=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-probe-signoff-mut2.XXXXXXXX")
-sed 's|^  if \[ "\$r_round" != "\$top" \]; then$|  if false; then   # MUTANT: no round is ever superseded|' \
-    "$SIGNOFF" > "$MUT2/signoff.sh"
-chmod +x "$MUT2/signoff.sh"
-echo "  the one line changed:"
-diff <(grep -c 'r_round" != "\$top' "$SIGNOFF") <(grep -c 'MUTANT: no round is ever superseded' "$MUT2/signoff.sh") >/dev/null \
-  && echo "    (substitution applied)" || echo "    (substitution applied)"
-grep -n 'MUTANT: no round is ever superseded' "$MUT2/signoff.sh" | sed 's/^/    /'
+MUT2=$(mutate mut2 's|^  if \[ "\$r_round" != "\$top" \]; then$|  if false; then   # MUTANT: no round is ever superseded|') || MUT2=""
+if [ -z "$MUT2" ]; then
+  MUT_FAILS=$((MUT_FAILS+1)); echo "  S9: not scored, mutation did not apply"; rc=0
+else
 rc=$(scenario_s9 "$MUT2/signoff.sh" 2>/dev/null)
 if [ "$rc" -ne 0 ] 2>/dev/null && [ -n "$rc" ]; then
   echo "  S9 under mutant 2: verify exit $rc -- BROKEN, as required"
 else
   echo "  S9 under mutant 2: verify exit '$rc' -- SURVIVED. The round logic is not load-bearing."
   MUT_FAILS=$((MUT_FAILS+1))
+fi
 fi
 rm -rf "$MUT2"
 echo
