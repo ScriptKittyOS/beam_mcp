@@ -1355,4 +1355,150 @@ defmodule BeamMCP.Transport.HTTPTest do
       end
     end
   end
+
+  describe "an x-mcp-header annotation the specification forbids is the host's fault" do
+    # "x-mcp-header MUST only be applied to parameters with primitive types (integer, string,
+    # boolean)" -- quoted in this module's own comment at http.ex:439-441, beside a catch-all
+    # that assumed it rather than checking it.
+    #
+    # A host that annotates a `number` has made an easy mistake: the spec names `integer`, and
+    # JSON Schema's neighbouring type is `number`. What the transport did with it was refuse
+    # every call to that tool, in both directions -- omit the header and it is "required: the
+    # body carries a value to mirror", supply one and it "does not match the corresponding
+    # request body value" -- so the tool is advertised in tools/list, is permanently uncallable,
+    # and the 400 blames the caller for the host's schema.
+
+    defmodule FloatAnnotationCatalog do
+      @behaviour BeamMCP.ToolCatalog
+      @impl true
+      def all do
+        [
+          %BeamMCP.ToolSpec{
+            name: :echo,
+            command_class: :observe,
+            mode: :read_only,
+            description: "Echo.",
+            input_schema: %{
+              "type" => "object",
+              "properties" => %{"ratio" => %{"type" => "number", "x-mcp-header" => "Ratio"}}
+            }
+          }
+        ]
+      end
+    end
+
+    defmodule ObjectAnnotationCatalog do
+      @behaviour BeamMCP.ToolCatalog
+      @impl true
+      def all do
+        [
+          %BeamMCP.ToolSpec{
+            name: :echo,
+            command_class: :observe,
+            mode: :read_only,
+            description: "Echo.",
+            input_schema: %{
+              "type" => "object",
+              "properties" => %{
+                "obj" => %{
+                  "type" => "object",
+                  "x-mcp-header" => "Obj",
+                  "properties" => %{"k" => %{"type" => "string"}}
+                }
+              }
+            }
+          }
+        ]
+      end
+    end
+
+    test "an annotated `number` property is answered as a host fault, not as the caller's error" do
+      me = self()
+
+      o =
+        opts(
+          tool_catalog: FloatAnnotationCatalog,
+          dispatch: fn n, a, _ -> send(me, {:dispatched, n, a}) && {:ok, a} end
+        )
+
+      body = call_body(%{"ratio" => 1.5})
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn = post(body, call_headers([{"mcp-param-ratio", "1.5"}]), o)
+
+          assert conn.status == 500,
+                 "a schema the specification forbids is the host's bug. Refusing the caller " <>
+                   "with 400 tells them to fix a header they wrote correctly, and no header " <>
+                   "they can write will ever satisfy it."
+
+          assert body!(conn)["error"]["code"] == -32_603
+          assert body!(conn)["error"]["message"] == "Internal error"
+
+          # The caller learns nothing about the host's schema: not the property, not the
+          # annotation name, not the value they sent.
+          refute conn.resp_body =~ "ratio"
+          refute conn.resp_body =~ "Ratio"
+          refute conn.resp_body =~ "1.5"
+        end)
+
+      # The diagnosis goes where the party who can fix it will see it.
+      assert log =~ "Ratio"
+      assert log =~ "echo"
+
+      refute_receive {:dispatched, _, _}, 50
+    end
+
+    test "the refusal does not depend on the caller sending the header" do
+      # Both directions were closed before, and both must now land on the same answer: the
+      # verdict is a property of the SCHEMA, so it cannot depend on what the caller sent.
+      o = opts(tool_catalog: FloatAnnotationCatalog)
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert post(call_body(%{"ratio" => 1.5}), call_headers([]), o).status == 500
+      end)
+    end
+
+    test "an annotated `object` property is the same fault" do
+      o = opts(tool_catalog: ObjectAnnotationCatalog)
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        conn = post(call_body(%{"obj" => %{"k" => "v"}}), call_headers([]), o)
+
+        assert conn.status == 500
+        assert body!(conn)["error"]["code"] == -32_603
+      end)
+    end
+
+    test "a property with no declared type is left alone" do
+      # The scope limit, pinned so it cannot be widened by accident. A property carrying no
+      # "type" cannot be judged from the schema, and judging it on the caller's VALUE instead
+      # would turn a caller sending the wrong shape into a host fault -- the wrong side of the
+      # boundary, and the mistake this fix exists to stop making in the other direction.
+      defmodule UntypedAnnotationCatalog do
+        @behaviour BeamMCP.ToolCatalog
+        @impl true
+        def all do
+          [
+            %BeamMCP.ToolSpec{
+              name: :echo,
+              command_class: :observe,
+              mode: :read_only,
+              description: "Echo.",
+              input_schema: %{
+                "type" => "object",
+                "properties" => %{"loose" => %{"x-mcp-header" => "Loose"}}
+              }
+            }
+          ]
+        end
+      end
+
+      o = opts(tool_catalog: UntypedAnnotationCatalog)
+      body = call_body(%{"loose" => "v"})
+
+      assert post(body, call_headers([{"mcp-param-loose", "v"}]), o).status == 200
+      assert post(body, call_headers([{"mcp-param-loose", "other"}]), o).status == 400
+    end
+  end
 end

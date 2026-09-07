@@ -537,6 +537,14 @@ if Code.ensure_loaded?(Plug) do
           Logger.error(Exception.format(kind, reason, stacktrace))
           {:mismatch, 500, error(id, -32_603, "Internal error")}
 
+        # A schema the specification forbids is the HOST's bug, and answering the caller 400 for
+        # it was wrong in both halves: it named the wrong party, and it named them about a
+        # header no caller could ever get right. Same answer as any other host fault -- 500,
+        # nothing in the body, the diagnosis in the log where the party who can fix it looks.
+        {__MODULE__, :invalid_annotation, tool, offences} ->
+          Logger.error(fn -> invalid_annotation_message(tool, offences) end)
+          {:mismatch, 500, error(id, -32_603, "Internal error")}
+
         params ->
           check_each_param(conn, message, id, params)
       end
@@ -544,7 +552,7 @@ if Code.ensure_loaded?(Plug) do
 
     defp check_each_param(conn, message, id, params) do
       params
-      |> Enum.reduce_while(:ok, fn {_key, {name, path}}, :ok ->
+      |> Enum.reduce_while(:ok, fn {name, path, _type}, :ok ->
         header = "mcp-param-" <> String.downcase(name)
         values = header_values(conn, header)
         body_value = value_at(arguments(message), path)
@@ -579,43 +587,99 @@ if Code.ensure_loaded?(Plug) do
     defp mirrored_params(%{"method" => "tools/call"} = message, opts) do
       with name when is_binary(name) <- param(message, "name"),
            catalog when not is_nil(catalog) <- opts.server_opts[:tool_catalog],
-           {:ok, spec} <- host_call(fn -> ToolCatalog.fetch(catalog, name) end) do
-        annotations(spec.input_schema)
+           {:ok, spec} <- host_call(fn -> ToolCatalog.fetch(catalog, name) end),
+           entries = annotations(spec.input_schema),
+           :ok <- check_annotation_types(name, entries) do
+        entries
       else
         # A host catalog that RAISES is not a catalog with no such tool, and collapsing the two
-        # into %{} would let a raising catalog silently disable header mirroring — the check
+        # into [] would let a raising catalog silently disable header mirroring — the check
         # would pass because it inspected nothing. The fault is returned so the caller answers
         # it, rather than thrown, so the id stays available.
+        #
+        # Both fault shapes are matched by their own tag rather than by their SHAPE. An earlier
+        # draft matched the invalid-annotation case as a bare non-empty list, and `params.name`
+        # being a JSON array — caller-controlled — reaches this `else` as exactly that.
         {__MODULE__, :host_fault, _k, _r, _st} = fault -> fault
-        _ -> %{}
+        {__MODULE__, :invalid_annotation, _tool, _offences} = invalid -> invalid
+        _ -> []
       end
     end
 
-    defp mirrored_params(_message, _opts), do: %{}
+    defp mirrored_params(_message, _opts), do: []
 
-    # Keyed by the case-folded name because "x-mcp-header values MUST be case-insensitively
-    # unique", and field names are case-insensitive; the original spelling is carried alongside
-    # so the refusal can name the header the client was told to send.
+    # ONE ENTRY PER ANNOTATED PROPERTY, and a list rather than a map keyed by the case-folded
+    # name. The key was the defect: `Map.put` dropped a sibling annotated with the same name in
+    # another case and `Map.merge` let a nested one overwrite an outer one, so a property could
+    # be annotated, published to clients through `tools/list`, and never checked — silently, and
+    # with which of the two survived decided by map iteration order.
+    #
+    # A property path is unique by construction, so nothing here can be lost by another
+    # property's name. The declared type travels with the entry because the validity of an
+    # annotation is a property of the SCHEMA, and deriving it in a second walk would be two
+    # answers to one question.
+    #
+    # The original spelling is carried so a refusal can name the header the client was told to
+    # send; the case-folded form is derived at the point of comparison, where HTTP needs it.
     defp annotations(schema), do: annotations(schema, [])
 
     defp annotations(%{"properties" => properties}, path) when is_map(properties) do
-      Enum.reduce(properties, %{}, fn {key, subschema}, acc ->
-        acc =
+      Enum.flat_map(properties, fn {key, subschema} ->
+        here =
           case is_map(subschema) and subschema["x-mcp-header"] do
             name when is_binary(name) and name != "" ->
-              Map.put(acc, String.downcase(name), {name, path ++ [key]})
+              [{name, path ++ [key], subschema["type"]}]
 
             _ ->
-              acc
+              []
           end
 
         # Recursion runs through `properties` and nothing else: the chain "MUST NOT pass
         # through items, oneOf, anyOf, allOf, not, if/then/else or $ref".
-        Map.merge(acc, annotations(subschema, path ++ [key]))
+        here ++ annotations(subschema, path ++ [key])
       end)
     end
 
-    defp annotations(_schema, _path), do: %{}
+    defp annotations(_schema, _path), do: []
+
+    # "The x-mcp-header annotation MUST only be applied to parameters with primitive types
+    # (integer, string, boolean)." The catch-all in `value_matches?/2` assumed that MUST rather
+    # than checking it, so an annotated `number`, `object` or `array` could never match any
+    # header: omit the header and the request is refused as "required: the body carries a value
+    # to mirror", supply one and it is refused as "does not match". The tool was advertised,
+    # permanently uncallable, and the 400 blamed the caller for the host's schema. A host
+    # annotating a `number` is the likely instance, because the spec names `integer` and JSON
+    # Schema's neighbouring type is `number`.
+    #
+    # The vocabulary is this package's own: `BeamMCP.Schema.check_type/3` recognises exactly
+    # "string", "integer", "number", "boolean", "object" and "array", and the transport
+    # specification permits an annotation on three of them.
+    #
+    # A property with NO declared type is left alone rather than refused. It cannot be judged
+    # from the schema, and judging it on the caller's VALUE instead would make a caller who
+    # sends the wrong shape into a host fault — the wrong side of the trust boundary, which is
+    # the mistake this check exists to stop making in the other direction.
+    @annotatable_types ~w(string integer boolean)
+
+    defp check_annotation_types(tool, entries) do
+      case Enum.filter(entries, fn {_name, _path, type} ->
+             not is_nil(type) and type not in @annotatable_types
+           end) do
+        [] -> :ok
+        offences -> {__MODULE__, :invalid_annotation, tool, offences}
+      end
+    end
+
+    defp invalid_annotation_message(tool, offences) do
+      detail =
+        Enum.map_join(offences, "; ", fn {name, path, type} ->
+          "#{Enum.join(path, ".")} is #{inspect(type)} and carries x-mcp-header #{inspect(name)}"
+        end)
+
+      "beam_mcp: tool #{inspect(tool)} cannot be called: x-mcp-header MUST only be applied to " <>
+        "parameters with primitive types (integer, string, boolean), and #{detail}. " <>
+        "Every call to this tool is refused until the schema is corrected."
+    end
 
     defp arguments(%{"params" => %{"arguments" => %{} = arguments}}), do: arguments
     defp arguments(_message), do: %{}
