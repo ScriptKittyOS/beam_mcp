@@ -1,0 +1,11 @@
+Elixir 1.19.2
+
+requirement   0.1.0    0.2.0    0.3.0    0.3.1    0.4.0    1.0.0  
+~> 0.1        true     true     true     true     true     false  
+~> 0.2        false    true     true     true     true     false  
+~> 0.3        false    false    true     true     true     false  
+~> 0.3.0      false    false    true     true     false    false  
+~> 0.3.1      false    false    false    true     false    false  
+
+mix.exs @version today: 0.3.0
+PROBE_EXIT=0

@@ -529,6 +529,75 @@ defmodule BeamMCP.ReadmeClaimsTest do
       claims("119 bytes `200`, 16 KiB and 200 KiB both `408`")
       claims("open design question")
     end
+
+    test "a forbidden x-mcp-header annotation is the host's fault, as the README now says" do
+      # Slice 003 (a) and (b). QUOTED AND EXERCISED, not quoted alone: a quote-only pin catches
+      # a sentence that moves and misses a sentence that becomes false, which is the gap this
+      # file's own moduledoc records. So the sentence is held to the code as well as to itself.
+      claims("is the host's fault, not the caller's")
+      claims("`500` with `-32603`")
+      claims("until the schema is corrected")
+
+      defmodule ForbiddenAnnotationCatalog do
+        @behaviour BeamMCP.ToolCatalog
+
+        @impl true
+        def all do
+          [
+            %BeamMCP.ToolSpec{
+              name: :echo,
+              command_class: :observe,
+              mode: :read_only,
+              description: "Echo.",
+              input_schema: %{
+                "type" => "object",
+                # `number` is the likely host mistake, because the revision names `integer`
+                # and JSON Schema's neighbouring type is `number`.
+                "properties" => %{"ratio" => %{"type" => "number", "x-mcp-header" => "Ratio"}},
+                "additionalProperties" => true
+              }
+            }
+          ]
+        end
+      end
+
+      conn = http_request(tool_catalog: ForbiddenAnnotationCatalog)
+
+      assert conn.status == 500
+      assert Jason.decode!(conn.resp_body)["error"]["code"] == -32_603
+      assert Jason.decode!(conn.resp_body)["error"]["message"] == "Internal error"
+
+      # "nothing about it reaches the caller" is the half a status check would miss.
+      refute conn.resp_body =~ "Ratio"
+      refute conn.resp_body =~ "ratio"
+      refute conn.resp_body =~ "number"
+    end
+
+    test "a refusal before the body read ends the connection, as the README now says" do
+      # Slice 003 (d). The deep pinning is BY EFFECT against a live Bandit listener, in
+      # `test/beam_mcp/transport/http_bandit_test.exs`. What is held here is that the README's
+      # sentences are still true of the code -- both of them, including the second, which is
+      # what stops the claim being satisfied by a server that closes on everything.
+      claims("ends the connection, and says so")
+      claims("so each carries `connection: close`")
+      claims("keeps the connection, because by then there is nothing left to drain")
+
+      # BEFORE the read: an Origin this host's allow list refuses.
+      refused =
+        http_request(
+          [allowed_origins: ["https://good.example"]],
+          [{"origin", "https://evil.example"}]
+        )
+
+      assert refused.status == 403
+      assert Plug.Conn.get_resp_header(refused, "connection") == ["close"]
+
+      # AFTER the read: a parse error. The body is read by then, so the connection stands.
+      parse_error = http_request([], [], "{not json")
+
+      assert parse_error.status == 400
+      assert Plug.Conn.get_resp_header(parse_error, "connection") == []
+    end
   end
 
   defp request_body(payload) do
@@ -557,5 +626,36 @@ defmodule BeamMCP.ReadmeClaimsTest do
         allowed_origins: :any
       )
     )
+  end
+
+  # A `tools/call` POST with the option set, the extra headers and the raw body a test needs.
+  # `http_post_body/1` above is the size-sweep form and is left alone: it varies one thing and
+  # is quoted by the cap tests, so folding it into this would make those read worse.
+  defp http_request(opts_extra, extra_headers \\ [], raw_body \\ nil) do
+    headers =
+      [
+        {"content-type", "application/json"},
+        {"mcp-protocol-version", @modern},
+        {"mcp-method", "tools/call"},
+        {"mcp-name", "echo"}
+      ] ++ extra_headers
+
+    conn =
+      Enum.reduce(headers, Plug.Test.conn(:post, "/mcp", raw_body || request_body("")), fn
+        {key, value}, acc -> Plug.Conn.put_req_header(acc, key, value)
+      end)
+
+    opts =
+      Keyword.merge(
+        [
+          tool_catalog: Catalog,
+          dispatch: fn _n, a, _o -> {:ok, a} end,
+          authorize: fn _conn -> :ok end,
+          allowed_origins: :any
+        ],
+        opts_extra
+      )
+
+    HTTP.call(conn, HTTP.init(opts))
   end
 end
