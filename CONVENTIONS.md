@@ -69,3 +69,25 @@ known not to be one, and nothing here depends on it being one.
 
 Counts are quoted from command output, never typed fresh. A red is demonstrated before a fix,
 and the output is recorded verbatim. Corrections are appended, never rewritten.
+
+## A verbatim archive is written by a command that fetches it, or it does not exist
+
+"Verbatim" is a claim about bytes, and a hand transcription cannot make it true. Either a
+command reads the source and writes the file -- so the bytes are the source's bytes -- or the
+file is not an archive and is not labelled one. Citing where the original lives is always
+available and always honest; a copy that has drifted is worse than a citation, because it
+looks like evidence.
+
+**Derivation.** A sibling tree archived eight reviewer verdicts by hand under the label
+"Archived verbatim". Diffed against the source afterwards, four were abridged, one was a
+different round's verdict entire, and one contained a sentence the reviewer never wrote --
+an attestation of independent verification lifted from another round with the identifiers
+substituted. That last is **fabricated evidence**, and it is named as such rather than as a
+transcription error: the others moved real text to the wrong place, while that one created a
+verification claim nobody made, inside the file offered as proof of what was said. All four
+unreliable files were deleted rather than repaired.
+
+This is the rule above applied to a copied artefact rather than a measured one, and it
+belongs to the same family as a mutation reported as applied but never applied: **an archive
+reported as verbatim but never fetched is indistinguishable from evidence, which is what
+makes it the worst member of that family.**
