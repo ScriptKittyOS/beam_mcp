@@ -5,6 +5,8 @@
   slices/001b-ping-guard/logs/green-negotiation.txt
   slices/001b-ping-guard/logs/mutation-a.txt
   slices/001b-ping-guard/logs/mutation-b.txt
+  slices/001b-ping-guard/logs/mutation-readme-a.txt
+  slices/001b-ping-guard/logs/mutation-readme-b.txt
   slices/001b-ping-guard/logs/probe-after.txt
   slices/001b-ping-guard/logs/red.txt
   slices/001b-ping-guard/logs/round1.r1.md
@@ -19,6 +21,8 @@
   slices/001b-ping-guard/logs/round5.r2.md
   slices/001b-ping-guard/logs/round6.r1.md
   slices/001b-ping-guard/logs/round6.r2.md
+  slices/001b-ping-guard/logs/round7.r1.md
+  slices/001b-ping-guard/logs/round7.r2.md
   slices/001b-ping-guard/logs/spec-basic-versioning.md
   slices/001b-ping-guard/logs/spec-changelog.md
   slices/001b-ping-guard/logs/spec-legacy-basic.md
@@ -98,6 +102,24 @@ Two kinds of file live here, and only one kind can be diffed against a command:
     tests, line : 15 tests, 1 failure
   => mutation-b.txt           RAW      (banner + code: + stacktrace: + Finished in, all present)
 
+=== CAPTURES: the README-claim mutation logs ===
+  Same treatment as the mutation logs above and for the same reason: reproducing them
+  needs a mutated README or lib/, which this script must not create in the working tree.
+-- mutation-readme-a.txt --
+    seed banner : 1
+    stacktrace: : 1
+    code:       : 1
+    Finished in : 1
+    tests, line : 8 tests, 1 failure
+  => mutation-readme-a.txt    RAW      (banner + code: + stacktrace: + Finished in, all present)
+-- mutation-readme-b.txt --
+    seed banner : 1
+    stacktrace: : 2
+    code:       : 2
+    Finished in : 1
+    tests, line : 8 tests, 2 failures
+  => mutation-readme-b.txt    RAW      (banner + code: + stacktrace: + Finished in, all present)
+
 === CAPTURES: the three specification pages, re-fetched and diffed against upstream ===
 These are the only files whose source lives OUTSIDE the tree, so they are the only
 ones a diff can check against an independent authority. Grouping them with prose
@@ -122,11 +144,13 @@ ones a diff can check against an independent authority. Grouping them with prose
   round5.r2.md                 written by its own reviewer lane; not a command capture
   round6.r1.md                 written by its own reviewer lane; not a command capture
   round6.r2.md                 written by its own reviewer lane; not a command capture
+  round7.r1.md                 written by its own reviewer lane; not a command capture
+  round7.r2.md                 written by its own reviewer lane; not a command capture
 
 === archive-sweep.txt itself ===
   A file cannot diff itself while being written, so this entry NAMES ITS CHECK rather
   than asserting a conclusion -- the thing this script's own header forbids:
-     script sha256 : de9747241aa99b48a936e79c232edbac91f18e824b94ecf025353be45b5bcb54
+     script sha256 : c2686bb80cf66045f62dc647b6826e5fef58cd51c4611202c641a21c492bdc63
      reproduce     : ./tools/archive_sweep.sh > slices/001b-ping-guard/logs/archive-sweep.txt 2>&1
      then diff that against the tracked file. A reader who doubts any verdict above
      re-runs that one line; the script is tracked, so the bytes that produced this
@@ -139,6 +163,6 @@ ones a diff can check against an independent authority. Grouping them with prose
   QUIETLY -- CONVENTIONS.md's own worst shape, and this script's header says a list is
   not a population. So the population and the classifications are now counted and
   compared, and disagreement is a FAILURE of this script rather than a silent gap.
-  enumerated : 23
-  classified : 23  (11 verdicts + 12 authored lane reports)
+  enumerated : 27
+  classified : 27  (13 verdicts + 14 authored lane reports)
   => TALLY BALANCES: every enumerated file is classified.

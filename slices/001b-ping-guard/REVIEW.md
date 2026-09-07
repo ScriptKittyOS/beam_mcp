@@ -7,7 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 
 ## There is no mechanical binding in this repository, and this file is not one
 
-`tools/` contains `gate.sh` and nothing else. **There is no `tools/signoff.sh`**, no
+`tools/` holds `gate.sh`, `probe_ping.exs` and `archive_sweep.sh` — a quality gate and two
+evidence instruments. **There is no `tools/signoff.sh`**, no
 `Reviewed-diff` commit trailer, no index-hash check, and no hook that refuses a commit whose
 diff no reviewer saw. Nothing in this repository's gates or CI reads this file.
 
@@ -222,9 +223,56 @@ rounds in which that was not true.
 test` is empty. Both lanes' `lib/` conclusions rest on bytes they read at `867f28ce`; that
 sentence is the coding agent's inference from the empty diff, not a lane's attestation.
 
-Verdicts land in `logs/round4.r1.md` and `logs/round4.r2.md`. **If those files are absent, round
-4 did not complete and this slice is not signed off.** Read absence as absence; this file is a
-record of what was reviewed, never a substitute for a verdict.
+## Rounds 4, 5, 6 — and the verdict that ended them
+
+    round 4  76452890   r1: changes required   r2: approve
+    round 5  de326400   r1: changes required   r2: changes required
+    round 6  d9b0c01e   r1: approve            r2: approve
+
+Rounds 4 and 5 were spent on the **instrument** rather than the evidence: a sweep that shipped a
+stale verdict, was untracked and so unre-runnable, compared four of seventeen files, filed three
+fetched pages as prose so never checked them, and — in the rewrite that fixed all of that —
+dropped `red.txt`, the one archive whose acquittal cannot rest on a diff at all. Round 6 added a
+closing tally that exits 1 when the population and the classifications disagree, scored by
+mutation rather than asserted.
+
+Both lanes approved tree `d9b0c01e`. Committed as `a05e018`, PR #7, CI green on both checks.
+
+## Round 7 — the version, and why it is its own round
+
+**Owner decision, 2026-09-07: the release is `0.2.0`, not `0.1.2`.**
+
+That touches `mix.exs` and `CHANGELOG.md`, which are **tracked**, so the tree moves away from
+`d9b0c01e` — the tree both lanes actually read. A sign-off held against `d9b0c01e` does not
+cover these bytes, and claiming it did would be attesting a tree nobody reviewed. Hence a
+bounded round rather than an amendment.
+
+**A correction to how that risk is usually described here.** There is no `tools/signoff.sh` in
+this repository to refuse such a sign-off, re-derived rather than re-asserted:
+
+    $ git ls-files tools/
+    tools/archive_sweep.sh
+    tools/gate.sh
+    tools/probe_ping.exs
+
+The opening section's load-bearing half — no signoff mechanism — holds. Its other half said
+`tools/` contained `gate.sh` "and nothing else", which stopped being true in round 4 and again in
+round 5 when lane findings added the other two, and round 7 re-certified it without running the
+command above. That is the fresh-count family in the shape absolutes always take: written true,
+never re-checked, and read as background rather than as measurement. Nothing mechanical would have stopped an amendment; the round happens because the rule is
+being followed, not because a tool enforces it. Worth stating plainly, because "the tool would
+have refused" is a comfortable thing to believe about a control that does not exist here.
+
+Scope, fixed before dispatch and bounded to exactly this: `mix.exs`; the `CHANGELOG` heading,
+its now-wrong patch rationale, and the `0.1.1` note; the regenerated `probe-after.txt` and
+sweep, since `@server_version` is compiled from `mix.exs`; and the round-7 records. **No `lib/`,
+no `test/`, and no change to the `### Changed` heading** — the owner took the semver argument
+from that heading, so softening it now that the number agrees would delete the reasoning that
+produced the decision.
+
+Verdicts land in `logs/round7.r1.md` and `logs/round7.r2.md`. **If those files are absent, round
+7 did not complete and the version bump is not signed off.** Read absence as absence; this file
+is a record of what was reviewed, never a substitute for a verdict.
 
 ## What the coding agent did not do
 

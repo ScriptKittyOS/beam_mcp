@@ -9,7 +9,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.2] — unreleased
+## [0.2.0] — unreleased
 
 ### Changed — two fields are REMOVED from results for legacy-declared requests
 
@@ -21,16 +21,40 @@ answering such a request no longer carries `resultType` or `_meta`
 
     0.1.0:  tools/list + _meta 2025-11-25
       -> {"result":{"_meta":{"io.modelcontextprotocol/serverInfo":{...}},"resultType":"complete","tools":[...]}}
-    0.1.2:  tools/list + _meta 2025-11-25
+    0.2.0:  tools/list + _meta 2025-11-25
       -> {"result":{"tools":[...]}}
 
-A client that reads `result.resultType` on that path gets `nil` after what is numbered a patch
-release. It is numbered a patch because `0.y.z` is outside semver's compatibility contract and
-because the removed fields were never correct — they announced a revision the client did not
-ask for. **Neither of those makes the wire change smaller**, and the honest signal for a
-published package where the JSON *is* the API would arguably be `0.2.0`. Recorded here as the
-removal it is so the number is not the only thing a reader has to go on. Raised by review;
-the version choice is the owner's at publish time.
+A client that reads `result.resultType` on that path gets `nil`. **That is why this is `0.2.0`
+and not a patch.**
+
+The argument for a patch was available and is rejected: `0.y.z` sits outside semver's
+compatibility contract, and the removed fields were never correct — they announced a revision
+the client did not ask for. Neither of those makes the wire change smaller. For a published
+package the JSON *is* the API. For a client declaring `2025-11-25`: **a method that was
+refused now answers** (`ping`), and **results on that path have lost two fields**. A `0.1.0`
+consumer could have depended on either.
+
+The field removal is the breaking-shaped half and is the whole case for the bump; the `ping`
+change is additive and is not an argument for it.
+
+**This paragraph had the direction backwards and it is worth saying where that came from.** It
+read "a method that answered now refuses", which is true of no method in this release. That
+sentence was one of the two grounds given for choosing `0.2.0`, and it travelled from the
+decision through to this file without anyone checking it — the second ground, the field removal,
+is correct and carries the decision on its own. A reviewer caught it by enumerating every method
+for a client declaring `2025-11-25` on both this tree and `0.1.0`'s, rather than by reading any
+of the places it was written down:
+
+    ping         0.1.0: REFUSED -32601      0.2.0: answered
+    every other method: unchanged status on both
+
+Recorded rather than quietly reworded, because a false statement about wire behaviour in a
+published package's changelog is the paragraph a consumer reads to decide whether to upgrade,
+and because the correction strengthens the case for `0.2.0` rather than weakening it. The minor bump is the honest signal, and the
+`### Changed` heading above stays exactly as it was written when the number still disagreed
+with it.
+
+Owner decision, 2026-09-07.
 
 Requests declaring `2026-07-28`, and requests with no `_meta` at all, are unaffected.
 
@@ -65,11 +89,20 @@ Requests declaring `2026-07-28`, and requests with no `_meta` at all, are unaffe
   which produces exactly this message. `_meta` fixes statelessness; the revision it names
   fixes the semantics.
 
-### Note on `0.1.1`
+### Note on `0.1.1` — why the published versions jump `0.1.0` -> `0.2.0`
 
-`0.1.1` reached `main` and was **never published to Hex**. `mix.exs` now reads `0.1.2`, so
-`0.1.1` will not exist as a release and the moduledoc fix recorded below ships inside `0.1.2`.
-The `0.1.1` section is left exactly as written; this note is appended rather than a rewrite.
+**`0.1.1` does not exist as a release and never will.** It reached `main`, was never published
+to Hex, and `mix.exs` now reads `0.2.0`. Its one change — a moduledoc for `BeamMCP.Server`,
+which shipped hidden in `0.1.0` — **ships inside this release**, and its entry is kept below
+under its original heading rather than being folded up or deleted.
+
+So a reader comparing Hex to this file sees `0.1.0` then `0.2.0`, with a `0.1.1` section in
+between that names no release. That is the whole explanation, stated here rather than left as a
+gap to be reconstructed: the number was taken on `main`, the release it was taken for never
+happened, and the work it covered is in `0.2.0`.
+
+The `0.1.1` section below is left exactly as written. This note is appended rather than a
+rewrite, per the corrections-are-appended rule.
 
 ## [0.1.1] — unreleased
 

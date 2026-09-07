@@ -13,7 +13,7 @@ and refuses one that is not; what a tool *does* is the host's business.
 
 ```elixir
 def deps do
-  [{:beam_mcp, "~> 0.1"}]
+  [{:beam_mcp, "~> 0.2"}]
 end
 ```
 

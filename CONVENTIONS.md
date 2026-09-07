@@ -91,3 +91,45 @@ This is the rule above applied to a copied artefact rather than a measured one, 
 belongs to the same family as a mutation reported as applied but never applied: **an archive
 reported as verbatim but never fetched is indistinguishable from evidence, which is what
 makes it the worst member of that family.**
+
+## The README states what the package does today, and every behavioural claim in it is pinned
+
+Two halves, and the second is what makes the first survive.
+
+**The README moves in the slice that changes the behaviour**, not after it. A slice that changes
+what the package does and leaves the README describing the old behaviour has shipped a false
+statement to the artifact a consumer reads first — `mix.exs` puts `README.md` in the Hex package
+`files:` list and makes it the ex_doc landing page, so after `mix.exs` it is the most-read live
+file in the tree.
+
+**Every behavioural claim in it is pinned by a test that runs.** `test/beam_mcp/readme_claims_test.exs`
+is where that is discharged: one file, so a reader auditing the rule reads one file rather than
+grepping a suite, and each test **quotes the README sentence it pins** and asserts that sentence
+is still present. A claim that moves without its test fails loudly; a test pinning a sentence
+nobody makes any more fails too, because a test guarding a deleted claim reads as coverage while
+guarding nothing.
+
+**Derivation, and it is two failures rather than one.**
+
+The first is the ordinary one. A slice fixed a version-blind clause and updated the inline
+comment, and left the `@moduledoc` — the module's published documentation — still stating the
+rule the change deleted. A reviewer made it a blocking finding. The same slice then replaced a
+README paragraph that overstated a rule with another paragraph that overstated it, in the fix
+for the first.
+
+The second is the one that produced this rule. Releasing that work as `0.2.0` — a minor bump
+chosen specifically so a consumer *could* pin away from a documented wire break — the README
+still recommended `{:beam_mcp, "~> 0.1"}`. Measured with Elixir's own `Version` module rather
+than recalled:
+
+    ~> 0.1     0.1.0=true   0.2.0=true      <- spans the break
+    ~> 0.2     0.1.0=false  0.2.0=true      <- does not
+
+Nothing was broken: a new user copying the snippet installs the right version. The defect is the
+other direction — a consumer who copied it at `0.1.0` is carried across the break by a routine
+`mix deps.update`, with no change to their own requirement and no signal. **The release shipped
+the version signal and the advice defeating it in the same commit.**
+
+It survived a deliberate sweep for stale version strings because the stale string was `0.1`, not
+the `0.1.2` that changed. That is the whole argument for pinning the *class* with tests rather
+than grepping for the *string*: a grep finds what you already thought of.

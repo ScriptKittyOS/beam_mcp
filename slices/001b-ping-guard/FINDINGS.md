@@ -302,6 +302,12 @@ both exceptions explicitly, and the `server/discover` gap is recorded below.
 
 ## Semver — raised by r2, and left open for the owner
 
+> **Superseded 2026-09-07: the owner chose `0.2.0`.** This section is left exactly as written,
+> as a record of round 2's state, in the same form `PLAN.md`'s Version section carries. The
+> asymmetry between them was r2's round-7 finding 3 — this is prose asserting a question is
+> open, which round 7's own classification of deliberate non-sweeps did not reach, which is how
+> it slipped.
+
 r2 accepted `0.1.2` but insisted the removal be labelled, which it now is under its own
 `### Changed` head. Its argument for `0.2.0` is recorded there rather than resolved here: for a
 published package the wire JSON is the API, and two fields disappear from a path that produced
@@ -394,3 +400,189 @@ like that morning". Recorded because that is the reason the third instance was c
 
 **No change to `lib/` or `test/` in rounds 3 or 4.** Both lanes' `lib/` conclusions stand on
 bytes they read at `867f28ce`.
+
+---
+
+# Round 7 — the version decision, and one thing it is worth noticing about it
+
+**Owner decision, 2026-09-07: `0.2.0`, not `0.1.2`.** `mix.exs` and the `CHANGELOG` heading and
+rationale change with it. No `lib/`, no `test/`.
+
+## What the record got right, and what that cost
+
+The `### Changed` heading was written in round 2 while the version still read `0.1.2`, because
+r2 refused to let a wire-visible field removal ship under `### Fixed` with no removal label. It
+recorded the argument for `0.2.0` *and left the number to the owner* rather than resolving it.
+
+The owner then took the argument from that heading. So the sequence was: a reviewer insisted the
+change be described accurately under a number it disagreed with; the description was written
+honestly anyway; and the number moved to match the description. **The heading is unchanged in
+this round** — softening it now that the number agrees would delete the reasoning that produced
+the decision, and would leave a reader unable to see why `0.2.0` was chosen.
+
+That is the argument for describing a change accurately even when you cannot pick its label:
+the accurate description is what lets someone with the authority to pick the label do it well.
+
+## The `0.1.1` gap, now stated rather than left to be reconstructed
+
+A reader comparing Hex to the `CHANGELOG` sees `0.1.0`, then a `0.1.1` section naming no
+release, then `0.2.0`. The `CHANGELOG` now says why in terms: the number was taken on `main`,
+the release it was taken for never happened, and the moduledoc fix it covered ships inside
+`0.2.0`. The `0.1.1` section is kept under its original heading rather than folded up.
+
+## Stale `0.1.2` strings that are deliberately not fixed
+
+    $ grep -rn '0\.1\.2' --include='*.md' . | grep -v _build | grep -v deps/
+
+returns hits in **eight** files. The description that stood here named six of them, omitting
+`PLAN.md` — which has more hits than any other file — and `REVIEW.md` (r1 round-7, finding 3).
+Both are legitimate: `PLAN.md`'s include its superseded `## Version` section, left as written,
+and `REVIEW.md`'s is the round-7 decision line itself. A sentence whose whole job is to account
+for every remaining hit should not account for six of eight, and the fix is to read the command's
+output rather than to summarise it from memory. **They stay.**
+The lane reports are immutable archives of what each reviewer read at the time — a lane that
+measured `beam_mcp version: 0.1.2` in round 2 did measure that, and rewriting it would falsify
+an archive to make the tree look consistent. The historical rows in the tables above are the
+same. The live artifacts move. **Naming that set correctly took two attempts**, and r1's round-7
+finding 2 is why: the first version named `mix.exs`, the `CHANGELOG` entry and
+`probe-after.txt`, and was wrong in both directions.
+
+Derived from the delta rather than listed:
+
+    $ git diff --stat <approved tree> <round-7 tree> -- slices/001b-ping-guard/logs/
+     full-suite.txt        | 4 ++--
+     green-negotiation.txt | 4 ++--
+     probe-after.txt       | 4 ++--
+
+`full-suite.txt` and `green-negotiation.txt` also moved — new seed, new timings — and neither
+contains a version string, so the stated reason ("`serverInfo` is read from `mix.exs`") does not
+explain them. Re-taking every run-log when the tree moves is the right discipline and is the fix
+for instance #1; it simply is not what the record said was done, or why. And in the other
+direction `README.md` was a live artifact that should have moved and did not — its dependency
+snippet still read `~> 0.1`, which r1 made its round-7 blocking finding.
+
+`archive-sweep.txt` is *not* in the delta: re-running the sweep reproduces byte-identical bytes
+because its output carries no version string. So "regenerated" is defensible for it, but listing
+it among the things that changed while the two logs that did change went unnamed got the scope
+backwards in both directions.
+
+This is the corrections-are-appended rule applied to a version bump, and it is worth stating
+because the tidy-looking action — sweep every `0.1.2` to `0.2.0` — is the wrong one.
+
+---
+
+# Round 8 — the release number, and the README rule it exposed
+
+## Both lanes blocked, on different live artifacts
+
+| lane | finding |
+|---|---|
+| r2 | `CHANGELOG` stated the wire-behaviour change **backwards** |
+| r1 | `README` recommended `{:beam_mcp, "~> 0.1"}` — a requirement spanning the break |
+
+**r2's.** The rationale read "a method that answered now refuses for a client declaring
+`2025-11-25`". r2 enumerated every method on this tree and on `0.1.0`'s: exactly one changed
+status, `ping`, and it went **refused → answered**. Zero went answered → refused.
+
+That sentence was **one of the two grounds given for choosing `0.2.0`**, and it travelled from
+the decision through a relay into this record without anyone checking it. It is recorded against
+where it came from rather than against this seat, and the decision still stands on its other
+ground — the field removal, which is the whole breaking-shaped case. The corrected clause is
+r2's and is stronger: *a method that refused now answers, and results on that path have lost two
+fields; a consumer could have depended on either.*
+
+Worth stating plainly: a reviewer measured and contradicted a premise that had been agreed at
+three levels above it. That is the review working in the direction it is hardest to work.
+
+**r1's.** `README.md` recommended `~> 0.1`. Verified with Elixir's own `Version` module rather
+than recalled:
+
+    ~> 0.1     0.1.0=true   0.2.0=true     <- spans the break
+    ~> 0.2     0.1.0=false  0.2.0=true
+
+Nothing is broken — a new user copying it installs the right version. The defect is the other
+direction: a consumer who copied it at `0.1.0` is carried across the documented break by a
+routine `mix deps.update`, with no change to their own requirement and no signal. **The release
+would have shipped the version signal and the advice defeating it in the same commit.**
+
+It survived a deliberate sweep because **the stale string was `0.1`, not the `0.1.2` that
+changed**. A grep finds what you already thought of.
+
+## The rule that came out of it
+
+`CONVENTIONS.md` now carries it, and `test/beam_mcp/readme_claims_test.exs` discharges it: every
+behavioural claim in the README is pinned by a test that **quotes the sentence it pins** and
+asserts that sentence is still present. A claim that moves without its test fails; so does a test
+guarding a claim nobody makes any more, which would otherwise read as coverage while guarding
+nothing.
+
+Three claims had been stated in the README and held by nothing: `server/discover` and
+`initialize` being matched before the era switch and undecorated; the session being tracked and
+never enforced, with `tools/call` served bare; and `tools/call`/`shutdown` at both eras. The
+second is the SCR-255 security property, stated as a contract and previously guaranteed by
+nothing.
+
+## Scored by mutation — and one mutation whose source check was uninformative
+
+    MUTANT A: README dependency reverted to "~> 0.1"
+      match before: 1, old remaining: 0
+      1) ... the README no longer contains the sentence this test pins
+      8 tests, 1 failure     REAL_EXIT=2
+
+    MUTANT B: tools/call refused unless initialized?  (falsifies "served bare")
+      match before: 1, old remaining: 1      <- NOT zero, and that is fine
+      8 tests, 3 failures    REAL_EXIT=2
+
+**Mutant B's `old remaining: 1` is not a failed mutation.** The replacement clause embeds the
+original line, so the source-level count could not fall to zero and carried no information. What
+proves the mutant applied is the **effect** — three tests going red, including the two pinning
+the claim. This is SCR-259's rule reached from the other side: assert the effect, not only the
+match count. A source check that cannot distinguish applied from unapplied is exactly as good as
+no check, and reporting `old remaining: 1` as a failure would have been as wrong as reporting an
+unapplied mutant as a survivor.
+
+## Base re-derived rather than assumed
+
+PR #7 merged while this round was in flight. The merge method is rebase, so `main` carries
+`0332c41` — a **rewritten** commit, not this branch's `a05e018`, which is therefore not an
+ancestor of `main`. Checked rather than assumed:
+
+    git rev-parse a05e018^{tree}     a866ad8de07a2706735c025e98a3305c083e011b
+    git rev-parse origin/main^{tree} a866ad8de07a2706735c025e98a3305c083e011b
+    git diff a05e018 origin/main     (empty)
+
+Identical trees, so the content landed exactly and the local commit was a duplicate. The branch
+was reset onto `origin/main` and the release work continues as `slice/001b-release-0-2-0`.
+`main` currently carries the fix under `0.1.2`; this branch moves it to `0.2.0`.
+
+## The tally caught its author, on its first live encounter
+
+The closing tally added in round 6 exists because a rewrite silently dropped `red.txt` from the
+sweep. Its first encounter with a genuinely new file was this round, and it fired:
+
+    enumerated : 26
+    classified : 25  (11 verdicts + 14 authored lane reports)
+    => TALLY FAILS: 1 enumerated file(s) unclassified.
+    sweep exit=1
+
+The unclassified file was `mutation-readme.txt`, which **I had just added and not taught the
+sweep about** — precisely the round-5 regression, committed again by the same author who built
+the guard against it, one round later. Without the tally it would have gone past exactly as
+before: nothing else in the output changes, and every printed verdict stays `RAW`.
+
+**And the file it caught was worse than unclassified.** Inspecting it once the tally forced the
+question: it was built with `{ … } | tee` wrapping `mix test … | grep -E`, so it was a filtered
+capture — **instance #4 of the archive family**, in a log created to prove tests that pin claims
+against being unfalsifiable. Deleted and re-taken as `mutation-readme-a.txt` and
+`mutation-readme-b.txt`, each `mix test … > file 2>&1`, no pipe, both carrying the seed banner
+and complete failure bodies.
+
+So the tally did not merely catch a bookkeeping slip. **It surfaced a defect of the class the
+whole instrument exists for, in a file whose existence nobody but the author knew about**, by
+refusing to balance. That is the difference between a check that reports in a column and a check
+that fails: the column would have said `RAW` for every file it looked at and said nothing at all
+about the one it did not.
+
+Recorded because the honest reading is not "the guard worked". It is that the same author
+reintroduced the same defect one round after building the guard, and the only reason it is in
+this paragraph rather than in the tree is that the guard was built to fail rather than to report.

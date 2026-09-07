@@ -1,5 +1,5 @@
-Running ExUnit with seed: 627805, max_cases: 64
+Running ExUnit with seed: 685989, max_cases: 64
 
-.......................................
-Finished in 1.1 seconds (0.06s async, 1.1s sync)
-39 tests, 0 failures
+...............................................
+Finished in 1.0 seconds (0.05s async, 0.9s sync)
+47 tests, 0 failures
