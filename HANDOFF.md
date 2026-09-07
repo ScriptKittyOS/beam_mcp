@@ -1,77 +1,75 @@
-# HANDOFF — beam_mcp, slice 002 (stateless Streamable HTTP)
+# HANDOFF — beam_mcp, slice 002 (stateless Streamable HTTP), release 0.3.0
 
-Stopped mid-round-4 at the owner's request, after a session rate limit killed two of the three
-lanes. Nothing is tagged, nothing is published.
+Rounds 4-7 complete. **Round 4's three publish blockers are closed, and nothing blocks a
+publish.** Tag and publish are owner steps — never `mix hex.publish`, never push a tag.
 
 ## State
 
-- Branch `slice/002-streamable-http`, HEAD **`68e113e`**, tree **`89f7a25`**.
-- Gate green at HEAD: format, compile, **126 tests**, credo, optional-deps probe, reuse, licences.
-- Working tree clean except the round-4 lane artefacts, which this commit adds.
+- Branch `slice/002-streamable-http`, HEAD **`bdb032f`**, tree **`450d9f7f`**.
+- Gate green: format, compile, test, credo, optional deps, **docs**, reuse (24 commentable
+  files), licence files. Every step line reads `pass`. `logs/gate-round7.txt`.
+- **138 tests, 0 failures.** Was 126 at the handoff.
 - Version `0.3.0`, unreleased. `0.2.0` is published and is not amended.
 
-## Round 4 — incomplete, and it found three publish blockers before it stopped
+## What the four rounds produced
 
-Three lanes launched on tree `89f7a25` (scope: `git diff ebaaed0 HEAD`). All three recorded that
-tree hash, so all three read the same bytes.
+    8d4d8c8  integer header values compared as integers      round 4 blockers 1 and 2
+    00b6242  a host tool's exception stays in the envelope    round 4 blocker 3
+    c0036d3  the read-before-refusal measurement              round 4's open question
+    dad94ee  every host call routed through one rule          round 5
+    c2e3fdf  atom keys and the recompilation step, stated     round 5
+    5bc49ad  round 5's anchors made able to move              round 6
+    bdb032f  probe captured whole, mutants re-scored          round 7
 
-- **s1 — completed. VERDICT: changes required. Three findings BLOCK PUBLISH, three FILE.**
-  Report: `slices/002-streamable-http/logs/round4.s1.md`.
-- **r1 — killed by the rate limit** after writing only `round4.r1.tree`. No report. Its brief was
-  the mutant 14–23 re-run and the new tests' honesty. **Re-run it.**
-- **r2 — killed by the rate limit** after writing `round4.r2.tree` and one partial result, below.
-  Its brief was release readiness: tarball, docs warnings, and the README example run verbatim.
-  **Re-run it — no lane has yet read the shipped artefact as a package rather than as a diff.**
+**The pattern is worth reading before the next slice.** Rounds 1-4 each found a fix
+reintroducing a defect. Round 5's fixes were correct and two of their test anchors could not
+move — the suite reported them pinned and they were not. Round 6 fixed the anchors and got the
+records about them wrong. Round 7 found no defect in `lib/` at all: both its blockers were
+record-integrity defects. The failure keeps moving one level away from the code — defect, then
+test, then record — and at each level the same three rules catch it: derive the population,
+quote the count from output, capture the whole output.
 
-### The three blockers (all in the round-3 fixes, all measured against `ebaaed0`)
+`slices/002-streamable-http/FINDINGS.md` carries the round-by-round table.
 
-1. **`value_matches?/2` crashes on an attacker-chosen integer** — `http.ex:414-419`. An
-   unauthenticated `500` with an error-level stacktrace where the pre-delta code returned `400`.
-2. **`value_matches?/2` accepts a *different* integer** — same function. `Float.parse(h) == body * 1.0`
-   compares IEEE-754 doubles, and above 2^53 that map is not injective, so distinct integers
-   collide. `Mcp-Param-{Name}` stops preventing the header/body disagreement it exists for.
-   Pre-delta `400`, now `200` and dispatched.
-3. **`fault_response/4` is right for `call/2` and wrong for `dispatch/3`** — `http.ex:249-256`,
-   reached from `:663`. It re-raises an exception a *host tool* raised, escaping the JSON-RPC
-   envelope. The status-aware rule belongs on the adapter's own exceptions, not on the host's.
+## Owner decisions still open
 
-Filed, not blocking: colliding `x-mcp-header` names collapse silently (F4); an annotation on a
-non-primitive property makes a tool permanently uncallable with no explanation (F5);
-`ToolCatalog.fetch/2`'s `@spec` is not honest now that it is public API (F6).
+1. **The pinning policy (SCR-266).** The README says `{:beam_mcp, "~> 0.3.0"}` and that is
+   correct. Whether `~> 0.MINOR.0` is the *rule* while `0.x` breaks at the minor is undecided,
+   and the release is the moment the recommendation ships.
+2. **Should release notes ship in the tarball (SCR-269)?** They do now — `CHANGELOG.md` is in
+   `files:` and in ex_doc `extras:`. Reversible before the tag.
+3. **Sequencing.** `SECURITY.md`'s supported-versions table says `0.2.x — superseded`. That is
+   true the moment `0.3.0` is on Hex and wrong for any window between merging to `main` and
+   publishing. **Publish and merge together, or merge second.**
+4. **Date the `[0.3.0]` heading** at tag time. It reads `unreleased`, correctly, until then.
 
-**s1 confirms the three things it was asked to verify by exploit are fixed and holding:** Base64
-decoding is correctly scoped to `Mcp-Name`/`Mcp-Param-*`, the omitted-header MUST is enforced, and
-the second rescue copy does reach `fault_response/4`. Finding 3 is that third fix applied to the
-copy it does not fit.
+## Known gaps, recorded rather than fixed
 
-### One partial measurement from r2, which contradicts a line I wrote
+- **`fault_response/4`'s re-raise branch is unpinned.** Measured: the never-re-raise mutant
+  survives. Detecting it needs a non-500 `:plug_status` exception from code that is not the
+  host's, which now means the adapter's read path alone; `Plug.Test` produces neither shape.
+  **Needs a Bandit-backed test.**
+- **Pre-read refusals answer without `connection: close`**, so Bandit drops the connection and a
+  pipelined second request goes unanswered. Pre-existing — it applies equally to the Origin
+  `403`, the authorize `403` and the `405` — and it fails closed.
+- **A host DATA fault loses the request id** where a host RAISE two lines earlier keeps it,
+  because `annotations(spec.input_schema)` is read outside `host_call/1`. Measured table in
+  `logs/probe-fault-ids.txt`. Moving that read inside `host_call/1` is mutant M13 and wants its
+  own red.
+- **`authorize/1` cannot read the body**, so body-signature auth is structurally impossible and
+  fails as a hang rather than an error. Documented; the post-read hook is deferred to `0.4.0`.
+- **`readme_claims_test.exs` does not deliver what `CONVENTIONS.md` asks.** The rule says every
+  behavioural README claim is pinned; the file pins every claim *listed in it*, and nothing
+  derives the claim set. Stated in that file's moduledoc. Closing it needs a mechanism or an
+  owner decision to narrow the rule.
+- Three FILE findings from round 4 are on the board: colliding `x-mcp-header` names (SCR-275),
+  an `x-mcp-header` on a non-primitive property, and `ToolCatalog.fetch/2`'s `@spec` honesty.
+  The last two could not be filed — the Linear workspace is at its free issue limit — and are
+  recorded verbatim in a comment on SCR-253.
 
-r2 reported, before dying: **the server-side read before refusal is a constant 1,048,576 bytes,
-not a range.** `README.md` currently says 1.02–1.50 MiB and attributes the spread to the client's
-socket buffer. That sentence was already corrected once this slice — it began as a single exact
-byte count a lane could not reproduce. **Do not fix it from this note.** Re-measure it, decide
-whether the number is a server property or a client artefact, and pin whatever survives in
-`readme_claims_test.exs`.
+## To release
 
-## Next steps, in order
-
-1. Fix the three blockers. Blockers 1 and 2 are one function; write the integer comparison so it
-   is exact (compare integers as integers, and treat a header that is not an exact integer literal
-   as a non-match) rather than routing through floats.
-2. Re-run lanes r1 and r2 on the resulting tree. s1 does not need re-running unless the fixes
-   touch what it cleared.
-3. Settle the read-before-refusal number and pin it.
-4. Then, and only then, the slice closes. **Tag and publish are owner steps** — never
-   `mix hex.publish`, never push a tag.
-
-## Standing context
-
-The base rate is the reason rounds keep being justified, not caution: round 2's blockers were both
-reintroductions of shapes fixed in the same commit; two of round 3's three highest were regressions
-caused by round 2's fixes; and round 4 has now found three more in round 3's fixes. Every round so
-far has found a regression introduced by the previous round's fixes. `slices/002-streamable-http/FINDINGS.md`
-carries that table and the attributions.
-
-Evidence lives in `slices/002-streamable-http/logs/`: `mutation.md` (23 mutants across three
-rounds, with two corrections to its own earlier claims), `round{1,2,3}.*.md`, `round4.s1.md`, and
-the gate captures.
+1. Merge to `main` (PR; the ruleset requires two green checks).
+2. Date the `[0.3.0]` heading.
+3. `mix hex.publish`, then tag `v0.3.0` signed — or tag first and publish immediately after.
+   Note the GitHub ruleset targets **branches, not tags**, so a tag push is unprotected.
