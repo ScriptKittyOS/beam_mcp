@@ -1006,16 +1006,44 @@ defmodule BeamMCP.Transport.HTTPTest do
   end
 
   describe "an exception that carries its own HTTP status belongs to the server, not to us" do
-    test "it is re-raised rather than answered as -32603" do
+    test "one reaching call/2's rescue is re-raised rather than answered as -32603" do
       # Bandit signals a read timeout and a malformed transfer coding by raising
       # Bandit.HTTPError, whose plug_status the adapter turns into 408 or 400. Widening the
       # rescue to cover the crash class swallowed those: 408 became 500, 400 became 500, and
       # every stalled connection became an unauthenticated 5xx with a stacktrace.
-      o = opts(dispatch: fn _, _, _ -> raise Plug.BadRequestError end)
+      #
+      # THIS TEST CHANGED, and the change is the point rather than an accident of making a
+      # suite pass. It used to raise from `dispatch:`, which put the status rule on the HOST's
+      # exceptions -- the defect the test above now pins. The rule belongs to call/2's rescue,
+      # so the raise moves to a step inside that rescue and outside dispatch/3's.
+      #
+      # `authorize:` is the nearest such step reachable under Plug.Test, which cannot make
+      # `read_body` raise the way Bandit does. It is a stand-in for the adapter signal, and an
+      # imperfect one: authorize/1 is also the host's, so this pins that a status-carrying
+      # exception from a NON-dispatch step still propagates, not that a host authorize/1 ought
+      # to be able to choose an HTTP status. That question is filed, not settled here.
+      o = opts(authorize: fn _conn -> raise Plug.BadRequestError end)
 
       assert_raise Plug.BadRequestError, fn ->
         post(call_body(%{}), call_headers([]), o)
       end
+    end
+
+    test "a host tool's exception is answered in the envelope even when it carries a status" do
+      # BLOCKER 3. `fault_response/4` is right for call/2's rescue and wrong for dispatch/3's.
+      # The status test asks "did the SERVER signal this?", and for an exception raised by the
+      # HOST's dispatch the answer is no whatever :plug_status it happens to carry. Re-raising
+      # it lets a host tool choose the HTTP status of a JSON-RPC call and escape the envelope
+      # entirely -- the client gets a bare 400 from the adapter where the protocol requires a
+      # JSON-RPC error object.
+      o = opts(dispatch: fn _, _, _ -> raise Plug.BadRequestError end)
+      body = call_body(%{}) |> Map.put("id", 77)
+
+      conn = post(body, call_headers([]), o)
+
+      assert conn.status == 500
+      assert body!(conn)["error"]["code"] == -32_603
+      assert body!(conn)["id"] == 77
     end
 
     test "an exception with no status of its own is still answered as -32603" do
