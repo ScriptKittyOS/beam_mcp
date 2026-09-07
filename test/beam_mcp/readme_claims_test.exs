@@ -371,9 +371,13 @@ defmodule BeamMCP.ReadmeClaimsTest do
       # settings", attributed to the client's send buffer. Two quantities were being stated as
       # one. What the SERVER reads is `read_body/2`'s partial, and it is the cap exactly, at
       # every buffer size and on every run. What the CLIENT gets onto the wire before the
-      # refusal arrives is neither in that range nor a function of the buffer -- measured 1.4 to
-      # 7.4 MiB, varying run to run at a fixed size -- so the README no longer quotes it as a
-      # package property and this test pins the half that is one.
+      # refusal arrives is neither in that range nor a function of the buffer -- measured 1.125
+      # to 7.438 MiB, varying run to run at a fixed size -- so the README no longer quotes it as
+      # a package property and this test pins the half that is one.
+      #
+      # That range read "1.4 to 7.4 MiB" until a lane checked it against the archive this same
+      # commit added, where five of the 24 rows fall below 1.4. Counts are quoted from output,
+      # never typed -- and this one was typed while the README beside it was correct.
       #
       # Pinned mechanically rather than by sentence alone, because the previous two drafts of
       # this line were both wrong and both survived a reader.
@@ -385,10 +389,18 @@ defmodule BeamMCP.ReadmeClaimsTest do
       assert {:more, partial, _conn} = Plug.Conn.read_body(conn, length: 1_048_576)
       assert byte_size(partial) == 1_048_576
 
-      # `read_body/2` returning EXACTLY `:length` rather than rounding up to `:read_length` is
-      # someone else's contract, and the README sentence depends on it. Measured across four
-      # lengths (100, 65_536, 1_048_576, 1_500_000): exact at every one. Pinned here so a Plug
-      # release that started rounding would fail this rather than quietly falsify the README.
+      # WHAT THIS ASSERTION DOES AND DOES NOT COVER, corrected after two lanes read it.
+      #
+      # It measures `Plug.Adapters.Test.Conn`, whose `read_body/2` is a `:binary.part` of an
+      # in-memory binary and never consults `:read_length` at all. The README's number came from
+      # BANDIT, against a real listener. So if Bandit's `read_body/2` started rounding up to
+      # `:read_length`, the README would become false and this assertion would still pass.
+      #
+      # It is kept because it is not vacuous -- mutating the adapter to overshoot `:length` by
+      # one read fails it, and mutating `@max_body_bytes` fails the transport assertion below --
+      # but it pins the cap, not the adapter contract. The claim's real evidence is
+      # `tools/measure_body.exs` and its archive; closing the gap needs a Bandit-backed test,
+      # which is named in the slice record rather than implied here.
       assert readme() =~ "a partial of exactly"
 
       # And the documented number is the one the transport refuses on, so the sentence cannot

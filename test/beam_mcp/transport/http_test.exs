@@ -1006,45 +1006,62 @@ defmodule BeamMCP.Transport.HTTPTest do
   end
 
   describe "an exception that carries its own HTTP status belongs to the server, not to us" do
-    test "one reaching call/2's rescue is re-raised rather than answered as -32603" do
-      # Bandit signals a read timeout and a malformed transfer coding by raising
-      # Bandit.HTTPError, whose plug_status the adapter turns into 408 or 400. Widening the
-      # rescue to cover the crash class swallowed those: 408 became 500, 400 became 500, and
-      # every stalled connection became an unauthenticated 5xx with a stacktrace.
+    test "a host authorize/1's exception does not choose the HTTP status either" do
+      # ROUND 5, FOUND BY TWO LANES INDEPENDENTLY. The rule was applied to dispatch/3 and the
+      # comment beside it claimed "every exception, throw and exit out of the host". The
+      # population was LISTED, not derived. Derived by command, host-supplied code runs at three
+      # sites in the request path -- authorize/1, ToolCatalog.fetch/2 and Server.handle_message/2
+      # -- and only the third was inside the rescue that was fixed.
       #
-      # THIS TEST CHANGED, and the change is the point rather than an accident of making a
-      # suite pass. It used to raise from `dispatch:`, which put the status rule on the HOST's
-      # exceptions -- the defect the test above now pins. The rule belongs to call/2's rescue,
-      # so the raise moves to a step inside that rescue and outside dispatch/3's.
-      #
-      # `authorize:` is the nearest such step reachable under Plug.Test, which cannot make
-      # `read_body` raise the way Bandit does. It is a stand-in for the adapter signal, and an
-      # imperfect one: authorize/1 is also the host's, so this pins that a status-carrying
-      # exception from a NON-dispatch step still propagates, not that a host authorize/1 ought
-      # to be able to choose an HTTP status. That question is filed, not settled here.
+      # authorize/1 is the branch this module's own docs call possibly unauthenticated.
       o = opts(authorize: fn _conn -> raise Plug.BadRequestError end)
-
-      assert_raise Plug.BadRequestError, fn ->
-        post(call_body(%{}), call_headers([]), o)
-      end
-    end
-
-    test "a host tool's exception is answered in the envelope even when it carries a status" do
-      # BLOCKER 3. `fault_response/4` is right for call/2's rescue and wrong for dispatch/3's.
-      # The status test asks "did the SERVER signal this?", and for an exception raised by the
-      # HOST's dispatch the answer is no whatever :plug_status it happens to carry. Re-raising
-      # it lets a host tool choose the HTTP status of a JSON-RPC call and escape the envelope
-      # entirely -- the client gets a bare 400 from the adapter where the protocol requires a
-      # JSON-RPC error object.
-      o = opts(dispatch: fn _, _, _ -> raise Plug.BadRequestError end)
-      body = call_body(%{}) |> Map.put("id", 77)
+      body = call_body(%{}) |> Map.put("id", 91)
 
       conn = post(body, call_headers([]), o)
 
       assert conn.status == 500
       assert body!(conn)["error"]["code"] == -32_603
-      assert body!(conn)["id"] == 77
     end
+
+    test "a host tool_catalog's exception does not choose the HTTP status either" do
+      # The second underived site. Reached from mirrored_params/2 during HEADER VALIDATION, one
+      # lookup before the identical call inside dispatch/3 -- so one host function raising one
+      # exception had two HTTP behaviours depending on which lookup fired first.
+      defmodule RaisingCatalog do
+        @behaviour BeamMCP.ToolCatalog
+        @impl true
+        def all, do: raise(Plug.BadRequestError)
+      end
+
+      o = opts(tool_catalog: RaisingCatalog)
+      body = call_body(%{}) |> Map.put("id", 92)
+
+      conn = post(body, call_headers([]), o)
+
+      assert conn.status == 500
+      assert body!(conn)["error"]["code"] == -32_603
+    end
+
+    # DELETED, AND THE GAP IS RECORDED RATHER THAN REFILLED WITH A STAND-IN.
+    #
+    # A test here used to assert that a status-carrying exception is re-raised, and it raised
+    # from `authorize:` to do it. Both round-5 lanes found the same thing: `authorize/1` is the
+    # HOST's, so that test pinned the very defect the tests above now fix, and a green suite
+    # recorded the un-fixed half as correct. Its comment said the question was "filed, not
+    # settled here"; `grep -rn -i filed` returned exactly one hit, the comment itself. Nothing
+    # was filed. That is a claim of evidence that was never produced, which CONVENTIONS.md names
+    # as the worst member of its family, so the test is deleted rather than reworded.
+    #
+    # It is not replaced, because after the fix there is nothing left in this suite that can
+    # reach the re-raise. `fault_response/4` is now reached only from `call/2`'s rescue, and the
+    # only non-host code under it that raises a status-carrying exception is the adapter's read
+    # path -- `Bandit.HTTPError` at 400 for a malformed transfer coding, `Plug.TimeoutError` at
+    # 408 for a read timeout. `Plug.Test` produces neither: its `read_body/2` is a
+    # `:binary.part` of an in-memory binary.
+    #
+    # So the rule is covered by lane s2's probes against a live Bandit listener, archived in
+    # this slice's logs, and NOT by this suite. Closing it needs a Bandit-backed test, which is
+    # new work and is named in the slice record rather than pretended away here.
 
     test "an exception with no status of its own is still answered as -32603" do
       o = opts(dispatch: fn _, _, _ -> raise "ordinary fault" end)
@@ -1157,7 +1174,14 @@ defmodule BeamMCP.Transport.HTTPTest do
     test "a header that is not a numeric literal does not match an integer body value" do
       body = call_body(%{"max_rows" => 42})
 
-      for header <- ["0x2A", " 42", "42 ", "4_2", "", "42abc", "+42"] do
+      # `" 42"` and `"42 "` were here and are gone: measured against a real Bandit listener, an
+      # HTTP/1 parser strips leading OWS, so `" 42"` cannot arrive as a distinct spelling and the
+      # row pinned Plug.Test rather than the grammar. `"42 "` does survive the parser, but both
+      # belong to a socket-level probe rather than to this one.
+      #
+      # `"042"` and `"0042"` are here because they were the hole: the comment beside the regex
+      # called it JSON's grammar and JSON forbids leading zeros, while the regex admitted them.
+      for header <- ["0x2A", "4_2", "", "42abc", "+42", "042", "0042", "00000000000000042"] do
         conn = post(body, call_headers([{"mcp-param-maxrows", header}]))
 
         assert conn.status == 400,

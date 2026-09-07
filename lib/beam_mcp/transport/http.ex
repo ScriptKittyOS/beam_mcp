@@ -300,7 +300,11 @@ if Code.ensure_loaded?(Plug) do
     # bearer token and database URL from it -- pre-authentication, on the one branch that is
     # by definition unauthenticated. The reason goes to the log, where the host can see it.
     defp authorize(conn, authorize_fun) do
-      case authorize_fun.(conn) do
+      case host_call(fn -> authorize_fun.(conn) end) do
+        {:host_fault, kind, reason, stacktrace} ->
+          Logger.error(Exception.format(kind, reason, stacktrace))
+          {:refused, conn, 500, error(nil, -32_603, "Internal error")}
+
         :ok ->
           {:ok, conn}
 
@@ -439,17 +443,36 @@ if Code.ensure_loaded?(Plug) do
     # what keeps an attacker-chosen JSON value out of the refusal message.
     defp value_matches?(_header_value, _body_value), do: false
 
-    # The grammar is JSON's own number grammar, narrowed to the values that are integral: an
-    # optional `-`, digits, and an optional fractional part that is all zeros. `42.0` and `42`
-    # both name 42, which is the equality the spec's example requires.
+    # The grammar is JSON's INTEGER grammar plus the spec's `42.0` allowance: an optional `-`,
+    # then either `0` or a non-zero digit followed by digits, then an optional fractional part
+    # that is all zeros.
     #
-    # It is deliberately no wider than that. `+42`, ` 42`, `42 `, `4_2` and `0x2A` are all
-    # numerically 42 to one parser or another, and every one of them is a spelling JSON itself
-    # cannot produce for the body value being mirrored. Admitting them is how a hop filtering on
-    # the header and this server come to disagree about what was sent -- the same argument that
-    # makes `decode_header_value/2` require the Base64 round trip rather than accept the four
-    # spellings `Base.decode64/1` will take.
-    @integer_header ~r/\A-?\d+(?:\.0+)?\z/
+    # An earlier version of this comment said "JSON's own number grammar" over
+    # `~r/\A-?\d+(?:\.0+)?\z/`, and was wrong in BOTH directions -- found by two round-5 lanes,
+    # which is worth recording because the comment was written to justify the narrowing and did
+    # not describe it:
+    #
+    #     "042"    regex ACCEPTED   Jason.decode -> invalid JSON     <- the hole
+    #     "0042"   regex ACCEPTED   Jason.decode -> invalid JSON
+    #     "1e2"    regex refused    Jason.decode -> 100.0            <- valid JSON
+    #     "42E0"   regex refused    Jason.decode -> 42.0
+    #
+    # Leading zeros are the class the paragraph below claims to exclude, and they reached the
+    # wire: `Mcp-Param-MaxRows: 042` against a body of `42` was 200 and dispatched, so a hop
+    # routing on the literal header and this server executing on the value disagreed.
+    #
+    # EXPONENTS STAY REFUSED, and that is not the same oversight. A body value only reaches this
+    # clause when Jason decoded it as an Elixir integer, and Jason decodes every exponent form
+    # as a FLOAT -- `1e2` is `100.0`, not `100`. So no conforming client mirroring an integer has
+    # an exponent spelling to write, and refusing them denies nobody. The comment now says
+    # "integer grammar" because that is what this is.
+    #
+    # Still deliberately no wider. `+42`, `4_2` and `0x2A` are numerically 42 to one parser or
+    # another and none is a spelling JSON can produce for the value being mirrored -- the same
+    # argument that makes `decode_header_value/2` require the Base64 round trip rather than
+    # accept the four spellings `Base.decode64/1` will take. `-0` is admitted, because JSON
+    # does produce it and it names the same integer as `0`.
+    @integer_header ~r/\A-?(?:0|[1-9]\d*)(?:\.0+)?\z/
 
     defp integer_header(value) do
       if Regex.match?(@integer_header, value) do
@@ -509,8 +532,18 @@ if Code.ensure_loaded?(Plug) do
     # Headers not named by the schema are ignored: "intermediate servers that do not recognize
     # an Mcp-Param-{Name} header MUST forward it and otherwise ignore it".
     defp check_param_headers(conn, message, id, opts) do
-      message
-      |> mirrored_params(opts)
+      case mirrored_params(message, opts) do
+        {:host_fault, kind, reason, stacktrace} ->
+          Logger.error(Exception.format(kind, reason, stacktrace))
+          {:mismatch, 500, error(id, -32_603, "Internal error")}
+
+        params ->
+          check_each_param(conn, message, id, params)
+      end
+    end
+
+    defp check_each_param(conn, message, id, params) do
+      params
       |> Enum.reduce_while(:ok, fn {_key, {name, path}}, :ok ->
         header = "mcp-param-" <> String.downcase(name)
         values = header_values(conn, header)
@@ -546,9 +579,14 @@ if Code.ensure_loaded?(Plug) do
     defp mirrored_params(%{"method" => "tools/call"} = message, opts) do
       with name when is_binary(name) <- param(message, "name"),
            catalog when not is_nil(catalog) <- opts.server_opts[:tool_catalog],
-           {:ok, spec} <- ToolCatalog.fetch(catalog, name) do
+           {:ok, spec} <- host_call(fn -> ToolCatalog.fetch(catalog, name) end) do
         annotations(spec.input_schema)
       else
+        # A host catalog that RAISES is not a catalog with no such tool, and collapsing the two
+        # into %{} would let a raising catalog silently disable header mirroring — the check
+        # would pass because it inspected nothing. The fault is returned so the caller answers
+        # it, rather than thrown, so the id stays available.
+        {:host_fault, _kind, _reason, _stacktrace} = fault -> fault
         _ -> %{}
       end
     end
@@ -708,10 +746,35 @@ if Code.ensure_loaded?(Plug) do
     # call and leave the envelope altogether: `raise Plug.BadRequestError` in a tool answered a
     # bare adapter 400 carrying no error object, on a path where the protocol requires one.
     # Every exception, throw and exit out of the host is therefore -32603 inside the envelope,
-    # with the id this rescue is placed here to know.
+    # with the id this rescue is placed here to know. "Every" is load-bearing and was false when
+    # it was first written: see host_call/1 above for the population and how it is derived.
     #
     # rescue and catch share this function rather than repeating it, because a second copy of a
     # rule is how the status-swallowing regression survived being fixed in the first one.
+    # THE POPULATION OF HOST-SUPPLIED CODE, DERIVED RATHER THAN LISTED.
+    #
+    # Round 4 fixed the status rule on `dispatch/3` and the comment below claimed it covered
+    # "every exception, throw and exit out of the host". Two round-5 lanes independently
+    # derived the real population with one command --
+    #
+    #     grep -n 'authorize_fun\.(\|ToolCatalog.fetch\|Server.handle_message' http.ex
+    #
+    # -- and found three sites, of which one was inside that rescue. A host `authorize/1` or
+    # `tool_catalog` raising `Plug.BadRequestError` still handed its HTTP status to the adapter
+    # and dropped the envelope, on a path the docs above call possibly unauthenticated. One host
+    # function raising one exception had two behaviours depending on which catalog lookup fired
+    # first, which is the disagreement the single-lookup discipline exists to prevent.
+    #
+    # So every call OUT to host code goes through here, and `grep -c host_call` is the check
+    # that the population is still complete.
+    defp host_call(fun) do
+      fun.()
+    rescue
+      exception -> {:host_fault, :error, exception, __STACKTRACE__}
+    catch
+      kind, reason -> {:host_fault, kind, reason, __STACKTRACE__}
+    end
+
     defp host_fault(conn, kind, reason, stacktrace, id) do
       Logger.error(Exception.format(kind, reason, stacktrace))
       send_json(conn, 500, error(id, -32_603, "Internal error"))

@@ -1,0 +1,17 @@
+### PROBE: the new gate docs step, shown failing on the defect it exists for.
+### Population derived the way the mechanism derives it -- mix docs reads compiled beams, so
+### the probe edits the source and recompiles rather than planting a string.
+### stdio.ex reverted to @moduledoc false, gate run, then restored.
+
+--- with @moduledoc false ---
+  format                     pass
+  compile                    pass
+  docs                       FAIL (exit 0, 2 warnings)
+          warning: documentation references function "BeamMCP.Transport.Stdio.run/1" but it is hidden
+          warning: documentation references function "BeamMCP.Transport.Stdio.run/1" but it is hidden
+GATE_EXIT=1
+
+--- restored ---
+  docs                       pass
+Gate OK.
+GATE_EXIT=0

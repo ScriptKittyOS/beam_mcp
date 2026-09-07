@@ -19,7 +19,7 @@ defmodule BeamMCP.MixProject do
       package: package(),
       name: "BeamMCP",
       source_url: @source_url,
-      docs: [main: "readme", extras: ["README.md"]]
+      docs: [main: "readme", extras: ["README.md", "CHANGELOG.md"]]
     ]
   end
 
@@ -41,8 +41,9 @@ defmodule BeamMCP.MixProject do
   end
 
   defp description do
-    "Model Context Protocol server core for the BEAM: protocol handling, stdio transport, " <>
-      "and JSON Schema validation, with the tool catalog and dispatch injected by the host."
+    "Model Context Protocol server core for the BEAM: protocol handling, stdio and stateless " <>
+      "Streamable HTTP transports, and JSON Schema validation, with the tool catalog and " <>
+      "dispatch injected by the host."
   end
 
   defp package do
