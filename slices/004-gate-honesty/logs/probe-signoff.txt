@@ -1,0 +1,87 @@
+=== tools/signoff.sh probes ===
+  tool under test: /home/aylac/Projects/beam_mcp-wt/004-gate-honesty/tools/signoff.sh
+
+--- S1: two approve records at tree T, both committed. verify must exit 0 ---
+recorded: slices/test-slice/signoff/round1.r1.signoff
+  verdict: approve
+  tree:    4e42d919befc267dfc80037ac28b20a310eca20c
+  commit:  ff3cbb18b58e5202231bf99d08c5fa5276627aab
+recorded: slices/test-slice/signoff/round1.r2.signoff
+  verdict: approve
+  tree:    4e42d919befc267dfc80037ac28b20a310eca20c
+  commit:  ff3cbb18b58e5202231bf99d08c5fa5276627aab
+    the two records name the same tree:
+      tree: 4e42d919befc267dfc80037ac28b20a310eca20c
+== signoff verify: slices/test-slice ==
+   review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+   round 1 r1: approve, on the current review tree
+   round 1 r2: approve, on the current review tree
+   2 record(s), all approve, all on the tree in front of you.
+   wrote slices/test-slice/signoff/verify.txt
+  S1   AS EXPECTED  (want 0, got exit 0)  committing the records must not invalidate them
+
+--- S2: S1, then a real commit changing a tracked file. verify must refuse, both STALE ---
+    == signoff verify: slices/test-slice ==
+       review tree (HEAD's tree, slices/*/signoff/ removed): 0047ec9c5e1556ebe9096bd7a4306fb93e328925
+       round 1 r1: STALE
+            read: 4e42d919befc267dfc80037ac28b20a310eca20c
+            now:  0047ec9c5e1556ebe9096bd7a4306fb93e328925
+       round 1 r2: STALE
+            read: 4e42d919befc267dfc80037ac28b20a310eca20c
+            now:  0047ec9c5e1556ebe9096bd7a4306fb93e328925
+       A stale record is slice 001b's failure: the tree moved after the lanes approved it.
+    SIGNOFF REFUSED -- slices/test-slice is not signed off.
+  S2   AS EXPECTED  (want nonzero, got exit 1)  this is slice 001b's failure, mechanised
+
+--- S3: S1, then a commit changing ONLY slices/*/signoff/. verify must still exit 0 ---
+     The exclusion is load-bearing and this proves it rather than asserting it.
+    that commit changed only:
+      slices/test-slice/signoff/verify.txt
+== signoff verify: slices/test-slice ==
+   review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+   round 1 r1: approve, on the current review tree
+   round 1 r2: approve, on the current review tree
+   2 record(s), all approve, all on the tree in front of you.
+   wrote slices/test-slice/signoff/verify.txt
+  S3   AS EXPECTED  (want 0, got exit 0)  a commit inside the excluded directory must not move the reviewed tree
+
+--- S4: no records at all. verify must refuse ---
+     If this passes, the tool is the defect it was written against.
+    SIGNOFF REFUSED -- slices/test-slice/signoff/ holds no *.signoff records. Nothing to check is not a pass.
+  S4   AS EXPECTED  (want nonzero, got exit 1)  nothing to check is not a pass
+
+--- S5: one approve, one changes-required. verify must refuse ---
+    == signoff verify: slices/test-slice ==
+       review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+       round 1 r1: approve, on the current review tree
+       round 1 r2: CHANGES-REQUIRED
+    SIGNOFF REFUSED -- slices/test-slice is not signed off.
+  S5   AS EXPECTED  (want nonzero, got exit 1)  one lane objecting is the round objecting
+
+--- S6: a stray notes.txt under slices/*/signoff/. verify must refuse ---
+     Excluded from the reviewed tree must not become a place to put things.
+    SIGNOFF REFUSED -- slices/test-slice/signoff/notes.txt is not a *.signoff record. slices/test-slice/signoff/ is excluded from the reviewed tree and may hold nothing else.
+  S6   AS EXPECTED  (want nonzero, got exit 1)  the exclusion is policed, not just documented
+
+--- S7: a record with its 'tree:' line deleted. verify must REFUSE, not skip ---
+    == signoff verify: slices/test-slice ==
+       review tree (HEAD's tree, slices/*/signoff/ removed): 4e42d919befc267dfc80037ac28b20a310eca20c
+       round 1 r1: approve, on the current review tree
+    SIGNOFF REFUSED -- slices/test-slice/signoff/round1.r2.signoff has no 'tree:' line. An unparseable record is refused, never skipped.
+  S7   AS EXPECTED  (want nonzero, got exit 1)  a skipped record is a member the population lost quietly
+
+=== MUTATION: remove the slices/*/signoff/ exclusion from review_tree() ===
+  An exclusion whose removal changes nothing was never load-bearing. S1 and S3 must break.
+  the one line changed:
+    1c1
+    < 74:  git ls-tree -r -z --name-only HEAD | grep -z -E '^slices/[^/]+/signoff/' > "$list"
+    ---
+    > 74:  : > "$list"   # MUTANT: exclude nothing
+  S1 under the mutant: verify exit 1 -- BROKEN, as required
+  S3 under the mutant: verify exit 1 -- BROKEN, as required
+
+=== totals ===
+  probes as expected: 7
+  probes disagreeing: 0
+  mutants surviving:  0
+PROBE_SIGNOFF_EXIT=0
