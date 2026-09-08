@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule BeamMCP.Server do
+  alias BeamMCP.Catalog
   alias BeamMCP.Schema
-  alias BeamMCP.ToolCatalog
 
   @moduledoc """
   The protocol core: one message in, one response out, no process and no state of its own.
@@ -30,7 +30,7 @@ defmodule BeamMCP.Server do
   ## What the host supplies
 
       BeamMCP.Server.new(
-        tool_catalog: MyApp.Catalog,        # required, a BeamMCP.ToolCatalog
+        catalog: MyApp.Catalog,             # required, a BeamMCP.Catalog
         dispatch: &MyApp.Dispatch.call/3,   # required for tools/call
         server_name: "my-app"               # optional, defaults to "beam_mcp"
       )
@@ -69,7 +69,7 @@ defmodule BeamMCP.Server do
           initialized?: boolean(),
           server_name: String.t(),
           shutdown?: boolean(),
-          tool_catalog: module(),
+          catalog: module(),
           tools_cache_scope: String.t(),
           tools_ttl_ms: non_neg_integer()
         }
@@ -82,7 +82,7 @@ defmodule BeamMCP.Server do
       initialized?: false,
       server_name: Keyword.get(opts, :server_name, @default_server_name),
       shutdown?: false,
-      tool_catalog: Keyword.fetch!(opts, :tool_catalog),
+      catalog: fetch_catalog!(opts),
       # 2026-07-28 requires ttlMs and cacheScope on tools/list results. Neither is the
       # package's to invent: ttlMs is a freshness hint about a catalog the host owns, and
       # cacheScope is a disclosure decision -- "public" lets shared intermediaries cache a
@@ -182,7 +182,7 @@ defmodule BeamMCP.Server do
   end
 
   def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "tools/list"}) do
-    tools = Enum.map(state.tool_catalog.all(), &tool_definition/1)
+    tools = state.catalog |> Catalog.tools() |> Enum.map(&tool_definition/1)
 
     # CacheableResult: 2026-07-28 requires both fields on tools/list. They are carried at
     # both eras rather than only the modern one -- 2025-11-25 permits any result structure,
@@ -298,8 +298,35 @@ defmodule BeamMCP.Server do
   defp stringify(value), do: Jason.encode!(value)
 
   # One lookup governs both paths: a tool is callable exactly when the injected catalog names
-  # it, and the spec it returns carries the schema that will be enforced.
-  defp find_tool(state, name), do: ToolCatalog.fetch(state.tool_catalog, name)
+  # it, and the spec it returns carries the schema that will be enforced. Both this and the
+  # advertisement above go through `Catalog.tools/1`, so there is one reader rather than two
+  # call sites that could drift apart.
+  defp find_tool(state, name), do: Catalog.fetch(state.catalog, name)
+
+  # THE SHAPE IS REFUSED HERE, not at the first request. `new/1` is runtime, so calling the
+  # host's `capabilities/0` is safe -- unlike `Transport.HTTP.init/1`, which under Plug's
+  # default init_mode is the host's COMPILE time. Same pattern as `:authorize`: a host that
+  # mis-wires this learns when it starts, not from a BadMapError in a request path.
+  defp fetch_catalog!(opts) do
+    catalog = Keyword.fetch!(opts, :catalog)
+
+    case Catalog.validate(catalog) do
+      :ok ->
+        catalog
+
+      {:error, reason} ->
+        raise ArgumentError, """
+        BeamMCP.Server requires a :catalog implementing the BeamMCP.Catalog behaviour.
+
+        #{reason}
+
+        capabilities/0 must return a map with all three keys; resources and prompts may be
+        empty, but an absent key is a malformed catalog rather than an empty one:
+
+            %{tools: [%BeamMCP.ToolSpec{}], resources: [], prompts: []}
+        """
+    end
+  end
 
   # The advertised schema is the contract. Validate the wire form -- string keys, as the
   # client sent them -- before normalising, so `required` and `additionalProperties`

@@ -29,15 +29,23 @@ not. The tighter form is deliberate and is not an over-pin to be tidied away.
 
 Injection without a specification is a claim with nothing behind it, so both are declared.
 
-**`BeamMCP.ToolCatalog`** — the host names the tools.
+**`BeamMCP.Catalog`** — the host names what it offers.
+
+`capabilities/0` returns a map with three required keys. `resources` and `prompts` may be empty
+and nothing reads them yet; they are required so that serving them later adds a reader rather
+than changing this contract a second time. **An absent key is a malformed catalog, not an empty
+one**, and `BeamMCP.Server.new/1` refuses it at startup rather than at the first request.
 
 ```elixir
 defmodule MyApp.Catalog do
-  @behaviour BeamMCP.ToolCatalog
+  @behaviour BeamMCP.Catalog
 
   @impl true
-  def all do
-    [
+  def capabilities do
+    %{
+      resources: [],
+      prompts: [],
+      tools: [
       %BeamMCP.ToolSpec{
         name: :get_weather,
         command_class: :observe,
@@ -50,7 +58,8 @@ defmodule MyApp.Catalog do
           "additionalProperties" => false
         }
       }
-    ]
+        ]
+    }
   end
 end
 ```
@@ -65,13 +74,13 @@ end
 
 ```elixir
 BeamMCP.Transport.Stdio.run(
-  tool_catalog: MyApp.Catalog,
+  catalog: MyApp.Catalog,
   dispatch: &MyApp.Dispatch.call/3,
   server_name: "my-app"
 )
 ```
 
-`:tool_catalog` is required. `:dispatch` is required for `tools/call`. `:server_name` defaults
+`:catalog` is required. `:dispatch` is required for `tools/call`. `:server_name` defaults
 to `beam_mcp`, and a host that wants its own name in `initialize` says so.
 
 ## One schema, one source
@@ -110,7 +119,7 @@ no such step.
 ```elixir
 Bandit.child_spec(
   plug: {BeamMCP.Transport.HTTP,
-         tool_catalog: MyApp.Catalog,
+         catalog: MyApp.Catalog,
          dispatch: &MyApp.Dispatch.call/3,
          authorize: &MyApp.Auth.check/1,
          allowed_origins: ["https://app.example.com"]},
@@ -131,7 +140,7 @@ defmodule MyApp.Router do
   forward "/mcp",
     to: BeamMCP.Transport.HTTP,
     init_opts: [
-      tool_catalog: MyApp.Catalog,
+      catalog: MyApp.Catalog,
       dispatch: &MyApp.Dispatch.call/3,
       authorize: &MyApp.Auth.check/1,
       allowed_origins: ["https://app.example.com"]

@@ -17,10 +17,10 @@
 alias BeamMCP.Transport.HTTP
 
 defmodule Cat do
-  @behaviour BeamMCP.ToolCatalog
+  @behaviour BeamMCP.Catalog
   @impl true
-  def all do
-    [
+  def capabilities do
+    tools = [
       %BeamMCP.ToolSpec{
         name: :echo,
         command_class: :observe,
@@ -29,6 +29,8 @@ defmodule Cat do
         input_schema: %{"type" => "object", "properties" => %{}, "additionalProperties" => true}
       }
     ]
+
+    %{tools: tools, resources: [], prompts: []}
   end
 end
 
@@ -38,7 +40,7 @@ modern = "2026-07-28"
 vkey = "io.modelcontextprotocol/protocolVersion"
 
 opts = [
-  tool_catalog: Cat,
+  catalog: Cat,
   dispatch: fn _n, a, _o -> {:ok, a} end,
   authorize: fn _conn -> {:error, :nope} end,
   allowed_origins: :any

@@ -14,10 +14,12 @@ defmodule BeamMCP.InjectionTest do
   alias BeamMCP.Server
 
   defmodule CatalogWithNovelTool do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
 
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :novel_tool,
@@ -30,7 +32,7 @@ defmodule BeamMCP.InjectionTest do
   end
 
   test "an injected catalog's tool is advertised by tools/list" do
-    state = Server.new(tool_catalog: CatalogWithNovelTool)
+    state = Server.new(catalog: CatalogWithNovelTool)
 
     {_s, resp} =
       Server.handle_message(state, %{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list"})
@@ -46,7 +48,7 @@ defmodule BeamMCP.InjectionTest do
       {:ok, %{}}
     end
 
-    state = Server.new(dispatch: dispatch, tool_catalog: CatalogWithNovelTool)
+    state = Server.new(dispatch: dispatch, catalog: CatalogWithNovelTool)
 
     {_s, resp} =
       Server.handle_message(state, %{

@@ -26,10 +26,12 @@ defmodule BeamMCP.ToolSpecSchemaTest do
   }
 
   defmodule CatalogWithSchema do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
 
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :inspect_widget,
@@ -48,7 +50,7 @@ defmodule BeamMCP.ToolSpecSchemaTest do
   end
 
   defp state(dispatch \\ fn _n, _a, _o -> {:ok, %{}} end) do
-    Server.new(dispatch: dispatch, tool_catalog: CatalogWithSchema)
+    Server.new(dispatch: dispatch, catalog: CatalogWithSchema)
   end
 
   defp call(state, args) do
