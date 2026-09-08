@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# A review verdict and the tree it is about, in one file, because this repository has
+# shipped 16 verdicts bound to no tree and 2 trees carrying no verdict. Written by
+# tools/signoff.sh; the tree is HEAD's tree with slices/*/signoff/ removed.
+#
+# This records WHICH tree the verdict is about. It cannot show that anyone read it.
+
+slice: slices/006-harness-honesty
+round: 3
+lane: h
+verdict: approve
+tree: 5c19f5f654a71c2c1d22602146b03a7db0354e76
+commit: 953d1de69a68cc49e5342f6afd9499442cd88cbe
+recorded: 2026-09-08T14:26:27Z
+note: re-read of the rebase delta: 11 deletions in CHANGELOG.md and HANDOFF.md, nothing executable moved
