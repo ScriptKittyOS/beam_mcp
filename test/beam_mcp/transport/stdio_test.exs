@@ -19,10 +19,12 @@ defmodule BeamMCP.Transport.StdioTest do
   alias BeamMCP.Transport.Stdio
 
   defmodule Catalog do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
 
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :echo,
@@ -34,7 +36,7 @@ defmodule BeamMCP.Transport.StdioTest do
     end
   end
 
-  defp opts, do: [tool_catalog: Catalog, dispatch: fn _n, a, _o -> {:ok, a} end]
+  defp opts, do: [catalog: Catalog, dispatch: fn _n, a, _o -> {:ok, a} end]
 
   # Drive the real loop over a StringIO standing in for stdio. The group leader is what
   # `IO.binread(:stdio, _)` and `IO.binwrite(:stdio, _)` resolve to, so this exercises the

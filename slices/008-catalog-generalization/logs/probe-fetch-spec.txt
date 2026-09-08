@@ -1,0 +1,11 @@
+=== REPRODUCING the fetch/2 @spec claim on the current tree ===
+PR #10's ledger claims THREE host shapes raise. Verified here rather than inherited.
+
+@spec says: {:ok, BeamMCP.ToolSpec.t()} | :error
+
+host spec.name is a binary, not an atom       {:RAISED, ArgumentError}
+all/0 returns a non-list map                  {:RAISED, BadMapError}
+all/0 returns nil                             {:RAISED, Protocol.UndefinedError}
+all/0 returns a bare map, not a %ToolSpec{}   {:returned, {:ok, %{name: :echo}}}
+module is not loaded / does not exist         {:RAISED, UndefinedFunctionError}
+CONTROL: a well-formed catalog                {:returned, {:ok, %BeamMCP.ToolSpec{name: :echo, command_class: :observe, mode: :read_only, description: "d", input_schema: %{"additionalProperties" => true, "properties" => %{}, "type" => "object"}}}}

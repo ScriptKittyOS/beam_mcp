@@ -42,10 +42,12 @@ defmodule BeamMCP.ReadmeClaimsTest do
   @vkey "io.modelcontextprotocol/protocolVersion"
 
   defmodule Catalog do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
 
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :echo,
@@ -62,7 +64,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
     me = self()
 
     Server.new(
-      tool_catalog: Catalog,
+      catalog: Catalog,
       dispatch: fn name, args, _opts ->
         send(me, {:dispatched, name})
         {:ok, args}
@@ -342,6 +344,28 @@ defmodule BeamMCP.ReadmeClaimsTest do
     end
   end
 
+  describe "the BeamMCP.Catalog README claims" do
+    test "the catalog contract's behavioural sentences are pinned to the sentences that state them" do
+      # Fragments chosen to sit within one wrapped line, checked with grep against the file
+      # first -- slice 007 lost three fragments to the README's hard wrap.
+      claims("the host names what it offers")
+      claims("An absent key is a malformed catalog, not an empty")
+      claims("refuses it at startup rather than at the first request")
+    end
+
+    test "the refusal the README promises is the refusal the code performs" do
+      # Held to the code, not only to itself. The README says an absent key is refused at
+      # startup; this is that startup, and it is the sentence's only evidence.
+      defmodule ReadmeMissingKey do
+        def capabilities, do: %{tools: [], resources: []}
+      end
+
+      assert_raise ArgumentError, ~r/missing required key\(s\)/, fn ->
+        BeamMCP.Server.new(catalog: ReadmeMissingKey)
+      end
+    end
+  end
+
   describe "the :authorize_body README claims" do
     test "every behavioural sentence about the hook is pinned to the sentence that states it" do
       # FRAGMENTS ARE CHOSEN TO SIT WITHIN ONE WRAPPED LINE. The README is hard-wrapped, and
@@ -449,9 +473,11 @@ defmodule BeamMCP.ReadmeClaimsTest do
       end
 
       defmodule WeatherCatalog do
-        @behaviour BeamMCP.ToolCatalog
+        @behaviour BeamMCP.Catalog
         @impl true
-        def all do
+        def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+        defp all_tools do
           Process.get(:catalog_fun).()
         end
       end
@@ -460,7 +486,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
       state =
         BeamMCP.Server.new(
-          tool_catalog: WeatherCatalog,
+          catalog: WeatherCatalog,
           dispatch: fn _name, args, _opts ->
             send(me, {:dispatched, args})
             {:ok, args}
@@ -536,7 +562,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
       # The core is dual-era and still serves these on stdio -- that is the README's point, and
       # the reason the refusal lives in the transport. Asserted so the sentence explaining the
       # split is pinned to a core that actually still answers them.
-      state = Server.new(tool_catalog: Catalog, dispatch: fn _, a, _ -> {:ok, a} end)
+      state = Server.new(catalog: Catalog, dispatch: fn _, a, _ -> {:ok, a} end)
 
       {_state, initialize} =
         Server.handle_message(state, %{
@@ -572,10 +598,12 @@ defmodule BeamMCP.ReadmeClaimsTest do
       claims("until the schema is corrected")
 
       defmodule ForbiddenAnnotationCatalog do
-        @behaviour BeamMCP.ToolCatalog
+        @behaviour BeamMCP.Catalog
 
         @impl true
-        def all do
+        def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+        defp all_tools do
           [
             %BeamMCP.ToolSpec{
               name: :echo,
@@ -594,7 +622,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
         end
       end
 
-      conn = http_request(tool_catalog: ForbiddenAnnotationCatalog)
+      conn = http_request(catalog: ForbiddenAnnotationCatalog)
 
       assert conn.status == 500
       assert Jason.decode!(conn.resp_body)["error"]["code"] == -32_603
@@ -653,7 +681,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
     |> Plug.Conn.put_req_header("mcp-name", "echo")
     |> HTTP.call(
       HTTP.init(
-        tool_catalog: Catalog,
+        catalog: Catalog,
         dispatch: fn _n, a, _o -> {:ok, a} end,
         authorize: fn _conn -> :ok end,
         allowed_origins: :any
@@ -681,7 +709,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
     opts =
       Keyword.merge(
         [
-          tool_catalog: Catalog,
+          catalog: Catalog,
           dispatch: fn _n, a, _o -> {:ok, a} end,
           authorize: fn _conn -> :ok end,
           allowed_origins: :any
