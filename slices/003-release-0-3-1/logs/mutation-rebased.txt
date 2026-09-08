@@ -1,0 +1,59 @@
+### EVERY MUTANT RE-SCORED ON THE REBASED TREE, TWICE, PLUS THE NEW ONE FOR DEFECT (e).
+###
+### Why this file exists: PR #12 (slice 004) merged first, so this branch was rebased onto a
+### different `main` and therefore a different tree. A score from a run on a different tree is
+### not a score for this one -- slice 002 round 7's blocker was exactly that -- so the whole set
+### was re-run here rather than carried forward from `mutation-round3.txt`.
+###
+### Me1 is new: it is the anchor for defect (e), and its FIRST FORM WAS A COMPILER KILL.
+### Reverting `header_values/2` alone left five `:invalid_bytes` clauses unreachable and
+### `--warnings-as-errors` rejected the build before the suite ran -- recorded here rather than
+### quietly fixed, because CONVENTIONS.md names that as a kill that never happened:
+###
+###     warning: the following clause will never match
+###     Compilation failed due to warnings while using the --warnings-as-errors option
+###     TEST_EXIT=1   (no test count: no test ran)
+###
+### Completed by removing what it orphans, it kills. So the anchor for (e) can move.
+
+base: origin/main 955d501        HEAD: 86530a0        tree: dbc055fa
+
+mutant     pass 1                          pass 2                          verdict    round-3 record
+M13rev     160 tests, 1 failure   EXIT=2   160 tests, 1 failure   EXIT=2   KILLED     1 failure   MATCH
+M2always   160 tests, 1 failure   EXIT=2   160 tests, 1 failure   EXIT=2   KILLED     1 failure   MATCH
+M2never    160 tests, 0 failures  EXIT=0   160 tests, 0 failures  EXIT=0   SURVIVOR   0 failures  MATCH
+Mc2        160 tests, 0 failures  EXIT=0   160 tests, 0 failures  EXIT=0   SURVIVOR   0 failures  MATCH
+Mc3        160 tests, 2 failures  EXIT=2   160 tests, 2 failures  EXIT=2   KILLED     2 failures  MATCH
+Md1        160 tests, 9 failures  EXIT=2   160 tests, 9 failures  EXIT=2   KILLED     9 failures  MATCH
+Md2        160 tests, 2 failures  EXIT=2   160 tests, 2 failures  EXIT=2   KILLED     2 failures  MATCH
+Mr1        160 tests, 4 failures  EXIT=2   160 tests, 4 failures  EXIT=2   KILLED     4 failures  MATCH
+Mr2        160 tests, 3 failures  EXIT=2   160 tests, 3 failures  EXIT=2   KILLED     3 failures  MATCH
+Me1        160 tests, 1 failure   EXIT=2   160 tests, 1 failure   EXIT=2   KILLED     (new)
+
+Test total 158 -> 160: defect (e) added two tests. Every verdict and every failure count
+reproduces the round-3 record. The two survivors are still survivors, with their arguments
+unchanged.
+
+### AN INSTABILITY IN THE HARNESS, RECORDED RATHER THAN SMOOTHED OVER
+###
+### Across 40 back-to-back suite runs while producing this table, TWO runs reported one extra
+### failure than the mutant deserves: M13rev read 2 once (record: 1) and Mr2 read 4 once
+### (record: 3). Neither changed a verdict -- both were already KILLED.
+###
+### Measured rather than assumed, because a flake that ADDS a failure is the one that makes a
+### SURVIVOR read as KILLED, which is precisely what round 3 caught:
+###
+###   Mr2 alone, 6 consecutive runs:      3, 3, 3, 3, 3, 3   failures -- stable, matches record
+###   M13rev alone, 5 consecutive runs:   1, 1, 1, 1, 1      failures -- stable, matches record
+###   BASELINE unmutated, 6 consecutive:  0, 0, 0, 0, 0, 0   failures -- the shipping tree is clean
+###
+### So each mutant is stable when measured the way the round-3 record measured it, and the
+### extra failure is induced by running twenty suites back-to-back -- almost certainly the
+### Bandit-backed timing test under sustained load, which is the same component whose 700 ms
+### window produced round 3's false KILLED.
+###
+### THE NUMBERS IN THE TABLE ABOVE ARE THE ISOLATED RUNS, and the load artefact is reported
+### here rather than folded into them. It is filed in FINDINGS.md: the two survivors are the
+### rows this instability could corrupt, and neither was observed corrupted in any of the runs
+### above -- but "not observed" is weaker than "cannot happen", and the harness is not yet
+### strong enough to say the second thing.
