@@ -1,0 +1,43 @@
+=== dirty-target refusal, run before scoring ===
+$ printf '\n' >> lib/beam_mcp/catalog.ex && TARGET=lib/beam_mcp/catalog.ex tools/mutate.sh score Mcat1
+REFUSING: lib/beam_mcp/catalog.ex has uncommitted changes.  (exit 1)
+
+=== Mcat1 : TARGET=lib/beam_mcp/catalog.ex ===
+target:  lib/beam_mcp/catalog.ex
+passes:  2
+tree:    8f47e1f80c4dc356b3d84d72eb1d468cfa461c49  dirty=3
+Mcat1 | 187 tests, 2 failures TEST_EXIT=2 | 187 tests, 2 failures TEST_EXIT=2
+        failed: a malformed catalog is refused at new/1, not at the first request an absent key is a malformed catalog, not an empty one (BeamMCP.CatalogTest)
+        failed: the BeamMCP.Catalog README claims the refusal the README promises is the refusal the code performs (BeamMCP.ReadmeClaimsTest)
+SCORE_EXIT=0
+
+=== Mcat2 : TARGET=lib/beam_mcp/server.ex ===
+target:  lib/beam_mcp/server.ex
+passes:  2
+tree:    8f47e1f80c4dc356b3d84d72eb1d468cfa461c49  dirty=3
+Mcat2 |  TEST_EXIT=1 |  TEST_EXIT=1
+SCORE_EXIT=0
+  ^ NO TEST COUNT: a compiler kill, not a kill. Elixir narrowed find_tool/2's return to
+    {:ok, spec}, called the caller's ':error ->' clause unreachable, and
+    --warnings-as-errors failed the build before a test ran. Mcat2 was rewritten to keep
+    the return a union (see its header); rescored below. The mutant was not weakened to
+    make it kill -- it was corrected so that it could be scored at all.
+
+=== Mcat2 (corrected) : TARGET=lib/beam_mcp/server.ex ===
+target:  lib/beam_mcp/server.ex
+passes:  2
+tree:    8f47e1f80c4dc356b3d84d72eb1d468cfa461c49  dirty=3
+Mcat2 | 187 tests, 12 failures TEST_EXIT=2 | 187 tests, 12 failures TEST_EXIT=2
+        failed: 404 is the method-not-found case, not the -32601 code an unknown tool is 200 with a JSON-RPC error, not 404 (BeamMCP.Transport.HTTPTest)
+        failed: 404 is the method-not-found case, not the -32601 code the core's wording that 404 keys on is pinned here (BeamMCP.Transport.HTTPTest)
+        failed: a call carrying a property the catalog's schema forbids is refused (BeamMCP.ToolSpecSchemaTest)
+        failed: a call missing a required property the catalog declared is refused (BeamMCP.ToolSpecSchemaTest)
+        failed: a validation failure carries structured fields, not an inspected map (BeamMCP.ErrorPayloadTest)
+        failed: a valid call reaches dispatch with keys from the catalog's schema (BeamMCP.ToolSpecSchemaTest)
+        failed: every error result is still flagged isError (BeamMCP.ErrorPayloadTest)
+        failed: the HTTP transport's README claims arguments reach dispatch as atoms, as the README now says they do (BeamMCP.ReadmeClaimsTest)
+        failed: the human-readable content carries no Elixir syntax either (BeamMCP.ErrorPayloadTest)
+        failed: the single-lookup guarantee a name the catalog does not advertise is not callable either (BeamMCP.CatalogTest)
+        failed: tools/call normalizes JSON arguments before dispatching (BeamMCP.ServerTest)
+        failed: unknown tools return a JSON-RPC error (BeamMCP.ServerTest)
+SCORE_EXIT=0
