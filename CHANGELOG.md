@@ -11,8 +11,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.3.1] — unreleased
 
-Four defects in the HTTP transport, all found by slice 002's review lanes and all filed rather
-than fixed at the time. No wire break: `~> 0.3.0` admits this release and still excludes the
+Five defects in the HTTP transport. Four were found by slice 002's review lanes and filed rather
+than fixed at the time; the fifth was found by this slice's own review and fixed here rather than
+tagged around, because it is unauthenticated and attacker-reachable. No wire break: `~> 0.3.0` admits this release and still excludes the
 next one, measured with Elixir's own `Version` module rather than recalled. The whole row, not
 an extract of it — an abridged quotation is not a quotation:
 
@@ -48,6 +49,16 @@ records are not shipped in the package**, and the same is true of every `slices/
   `spec.input_schema` read one line later, escaped to the outer rescue and answered `id: null`.
   One host bug got two envelopes depending on which line it landed on. The spec read, the schema
   walk and the annotation check now all sit inside the same guarded call.
+
+- **A header value that is not valid UTF-8 is refused, not reflected.** `MCP-Protocol-Version`
+  carrying invalid UTF-8 was echoed back in the refusal's `data.requested`, so `Jason.encode!`
+  raised inside `send_json/3` — outside every inner rescue — and the caller's own `400` became a
+  `500` with an error-level stacktrace in the host's log. Unauthenticated and attacker-reachable:
+  no credential is needed to send a header. The refusal now happens at the read, in
+  `header_values/2`, which every header read in the transport routes through — so it covers
+  `Origin`, `Mcp-Method`, `Mcp-Name` and every `Mcp-Param-{Name}` as well, and a header read
+  added later inherits it. The offending bytes are named as a header, never reproduced in the
+  response.
 
 - **A refusal issued before the request body is read carries `connection: close`.** Only the
   `413` did. The other six pre-read refusal sites — the `Origin` `403`, the `405`,
