@@ -654,3 +654,27 @@ correction is appended to each of the four archives.
 - **PLAN §4 criterion 4 — demonstrated in CI** — is discharged by the push-event run recorded on
   PR #16, not by this file.
 - The loaded residual above is recorded, not eliminated.
+
+## A limitation of the signoff instrument, found by using it
+
+The PLAN caps this slice at three rounds. It ran **four**, and the reason is a property of
+`tools/signoff.sh` rather than a fourth review.
+
+`verify` hashes HEAD's tree with `slices/*/signoff/` removed. Everything else is in it — including
+`.gitignore` and every document. So **any commit made after the lanes record, however unrelated,
+marks their verdicts STALE and refuses the slice.** Observed twice here:
+
+1. Rebasing onto PR #18 (11 deleted lines in two `.md` files) invalidated round 2.
+2. Untracking `signoff/verify.txt` and adding one `.gitignore` comment invalidated round 3.
+
+Neither touched anything a lane had examined. The guard is not wrong — a verdict really was
+recorded against a different tree — but the cost is that **the last fix before a PR always
+forces another round**, and a reviewer who wants to close cheaply is pushed toward recording an
+approval for a tree they have not re-read. That is the pressure the instrument exists to remove,
+reappearing on its other side.
+
+Recorded, not fixed. Two shapes worth measuring if this is taken further: excluding a declared set
+of non-executable paths from the review tree the way `signoff/` is already excluded, or having
+`record` name the commit it binds so the pin does not have to live inside the tree it pins.
+
+The working discipline meanwhile, learned here: **make every tree change first, record last.**
