@@ -39,6 +39,30 @@ if Code.ensure_loaded?(Plug) do
     A required argument with no default is a contract, because a host cannot start without
     answering it.
 
+    ## One optional option: `:authorize_body`
+
+    `authorize/1` runs **before** the body is read, which is what lets it refuse an
+    unauthenticated caller without buffering megabytes on their behalf. The cost of that
+    position is that it cannot see the body, so body-signature authentication — HMAC over the
+    payload, an asymmetric signature — is not merely awkward through it but structurally
+    impossible: there is no argument through which the bytes arrive.
+
+      * `:authorize_body` — `(Plug.Conn.t(), binary() -> :ok | {:error, term()})`, optional,
+        called **after** the body is read and **before** it is decoded. The second argument is
+        the request body exactly as received. Whatever it returns as a reason goes to the log,
+        never to the caller.
+
+    The bytes are the ones the client sent, not a re-encoding of them. A signature covers
+    bytes, so handing a hook `Jason.encode!(Jason.decode!(body))` would break every correct
+    signature while looking like a fault in the host's cryptography.
+
+    Absent, the hook is skipped and nothing changes. Present, it must be a 2-arity function or
+    `init/1` raises — a wrong arity is a startup failure rather than a per-request one.
+
+    **This package performs no cryptography.** The hook is called `:authorize_body` rather than
+    `:verify_signature` because verifying a signature is the host's work; making it possible is
+    this module's.
+
     > #### Init-time, with one caveat {: .info}
     >
     > The check runs in `init/1`. Under Plug's default compile-time initialisation that is
@@ -115,7 +139,7 @@ if Code.ensure_loaded?(Plug) do
     # This Plug's own options; everything else in the keyword list belongs to Server.new/1.
     # Derived by exclusion rather than by naming what to keep: a `Keyword.take` list silently
     # dropped `tools_ttl_ms` and `tools_cache_scope` when they were added, and a test caught it.
-    @plug_opts [:authorize, :allowed_origins]
+    @plug_opts [:authorize, :allowed_origins, :authorize_body]
 
     @impl Plug
     def init(opts) do
@@ -134,6 +158,23 @@ if Code.ensure_loaded?(Plug) do
         To accept every caller, say so explicitly:
 
             authorize: fn _conn -> :ok end
+        """
+      end
+
+      # Optional, so absence is fine and a wrong shape is not. Validated here rather than at
+      # the call site for the same reason `:authorize` is: a host that mis-wires this learns at
+      # startup, not from the first signed request in production.
+      authorize_body = Keyword.get(opts, :authorize_body)
+
+      unless is_nil(authorize_body) or is_function(authorize_body, 2) do
+        raise ArgumentError, """
+        BeamMCP.Transport.HTTP's :authorize_body option must be a 2-arity function.
+
+        It takes the Plug.Conn and the raw request body, and returns :ok or {:error, reason}:
+
+            authorize_body: fn conn, body -> MyApp.Auth.verify(conn, body) end
+
+        Got: #{inspect(authorize_body)}
         """
       end
 
@@ -175,6 +216,7 @@ if Code.ensure_loaded?(Plug) do
 
       %{
         authorize: authorize,
+        authorize_body: authorize_body,
         allowed_origins: origins,
         server_opts: Keyword.drop(opts, @plug_opts)
       }
@@ -217,6 +259,7 @@ if Code.ensure_loaded?(Plug) do
     # inputs are attacker-chosen and the list of them is not knowable.
     defp handle(conn, opts) do
       with {:ok, body, conn} <- before_body(conn, opts),
+           {:ok, conn} <- authorize_body(conn, body, opts.authorize_body),
            {:ok, conn, message} <- decode(conn, body),
            {:ok, conn} <- check_headers(conn, message, opts) do
         dispatch(conn, message, opts)
@@ -325,6 +368,63 @@ if Code.ensure_loaded?(Plug) do
     # EVERY Origin header is checked, not the first. A lane sent a good one followed by a bad
     # one and got 200 with tools/call executed; reversed, 403. Order-dependent validation is
     # not validation, and intermediaries do merge and append this header.
+    # THE THREE DECISIONS THIS HOOK FORCED, ANSWERED HERE RATHER THAN LEFT TO FALL OUT.
+    #
+    # (a) WHERE IT RUNS. In `handle/2`, between `before_body/2` and `decode/2` -- not inside
+    #     `before_body/2`. Two reasons, and the second is the load-bearing one:
+    #
+    #     It must precede `Jason.decode`, because the second argument is the bytes the client
+    #     sent. A signature covers bytes; a hook handed a re-encoding of them rejects every
+    #     correct signature and presents as a fault in the host's cryptography.
+    #
+    #     And `before_body/2` is not a list of steps, it is the SPLIT at the body read: its
+    #     contract is that everything inside it is on the near side, and its `case` applies
+    #     `close_after/1` to every refusal it produces. Putting a post-read hook inside it
+    #     would inherit that closure and quietly falsify the invariant the function documents.
+    #     `check_headers/3` is on the far side but runs after `decode/2`, so it is too late.
+    #     Between the two is the only position that is both after the read and before the parse.
+    #
+    # (b) STATUS. 403 for a refusal, 500 for a hook that raises -- identical to `authorize/1`
+    #     at every point. Two hooks answering the same question differently would make the
+    #     status a hint about WHICH check failed, and the contract for both is that the caller
+    #     learns nothing. A distinct code would be exactly the leak the opacity rule forbids.
+    #
+    # (c) NO `connection: close`. This is the one place the answer differs from `authorize/1`,
+    #     and it differs because the fact underneath it does. A pre-read refusal answers over a
+    #     body still on the wire, so the adapter drains it on the server's behalf; that is what
+    #     `close_after/1` declines. Here the body is already read: the connection is clean and
+    #     an ordinary response is possible. `before_body/2`'s own comment states the invariant
+    #     -- "everything after it is on the far side: the body is read by then, the connection
+    #     is clean, and a refusal there keeps it. That is pinned in both directions." Closing
+    #     here would break that pin rather than honour it, and would cost a keep-alive
+    #     connection per refusal for no gain.
+    defp authorize_body(conn, _body, nil), do: {:ok, conn}
+
+    defp authorize_body(conn, body, authorize_body_fun) do
+      case host_call(fn -> authorize_body_fun.(conn, body) end) do
+        {__MODULE__, :host_fault, kind, reason, stacktrace} ->
+          Logger.error(Exception.format(kind, reason, stacktrace))
+          {:refused, conn, 500, error(nil, -32_603, "Internal error")}
+
+        :ok ->
+          {:ok, conn}
+
+        {:error, reason} ->
+          Logger.info(fn -> "beam_mcp: refused by host authorize_body/2: #{inspect(reason)}" end)
+          {:refused, conn, 403, error(nil, -32_600, "Forbidden")}
+
+        other ->
+          # Same fail-closed shape as `authorize/1`: a host returning neither :ok nor
+          # {:error, _} has a bug, and guessing which way it meant would be answering an
+          # authorization question on its behalf.
+          Logger.error(fn ->
+            "beam_mcp: authorize_body/2 must return :ok or {:error, reason}, got: #{inspect(other)}"
+          end)
+
+          {:refused, conn, 403, error(nil, -32_600, "Forbidden")}
+      end
+    end
+
     defp check_origin(conn, :any), do: {:ok, conn}
 
     defp check_origin(conn, allowed) do

@@ -9,6 +9,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`:authorize_body`, an optional post-read authorization hook.** `authorize/1` runs before the
+  request body is read — which is what lets it refuse an unauthenticated caller without
+  buffering megabytes on their behalf — and the cost of that position is that it cannot see the
+  body. Body-signature authentication was therefore not merely awkward through it but
+  structurally impossible: there was no argument through which the bytes arrived.
+
+  `:authorize_body` is `(Plug.Conn.t(), binary() -> :ok | {:error, term()})`, called after the
+  body is read and before it is decoded. **The second argument is the request body exactly as
+  received**, not a re-encoding: a signature covers bytes, so a hook handed
+  `Jason.encode!(Jason.decode!(body))` would reject every correct signature while presenting as
+  a fault in the host's cryptography.
+
+  **Additive and optional.** Absent, it is skipped and nothing changes; `authorize/1`'s arity,
+  position and semantics are untouched, so no existing host is affected. Present, it must be a
+  2-arity function or `init/1` raises — a wrong arity is a startup failure, not a per-request
+  one. A refusal answers `403` and a raising hook `500`, both opaque: the reason goes to the
+  log, never to the caller, so a client cannot distinguish "no signature" from "bad signature".
+  A post-read refusal does **not** carry `connection: close`, because by then the body is read
+  and the connection is clean.
+
+  **This package performs no cryptography.** The option is named `:authorize_body` rather than
+  `:verify_signature` because verifying is the host's work; making it possible is this module's.
+
 ## [0.3.1] — 2026-09-08
 
 Five defects in the HTTP transport. Four were found by slice 002's review lanes and filed rather

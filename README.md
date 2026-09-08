@@ -165,9 +165,37 @@ reads the body there does not get an error — a small request appears to work b
 already in the adapter's buffer, and a larger one hangs until the server's read timeout and then
 returns `408` with the connection dead. Measured: 119 bytes `200`, 16 KiB and 200 KiB both `408`
 after 15.0 s. Today the workarounds are a plug in front of this one that reads the body and re-supplies it,
-or deciding in `dispatch/3`. Whether `authorize/1` should instead run after the body is read, or
-be able to hand the `conn` back, is an open design question on the required-option contract and
-not something this release settles.
+or deciding in `dispatch/3`.
+
+### `authorize_body/2`, the optional post-read hook
+
+That design question is settled, and not by changing `authorize/1`. **`authorize/1` keeps its
+position before the body read**, because that is what refuses an unauthenticated caller without
+buffering megabytes on their behalf. A second, **optional** hook sits beside it:
+
+```elixir
+authorize_body: fn conn, body -> MyApp.Auth.verify_signature(conn, body) end
+```
+
+**`:authorize_body` is called after the body is read and before it is decoded, and the second
+argument is the request body exactly as received.** Not a re-encoding of it: a signature covers
+bytes, so a hook handed `Jason.encode!(Jason.decode!(body))` would reject every correct signature
+while looking like a fault in the host's cryptography.
+
+It is optional — absent, it is skipped and nothing changes. Present, it must be a 2-arity
+function or the Plug raises at `init/1`, so a wrong arity is a startup failure rather than a
+per-request one.
+
+A refusal is opaque: **the reason goes to the log, never to the caller**, exactly as with
+`authorize/1`, so a client cannot tell "no signature" from "bad signature". A refusal here
+answers `403`; a hook that raises answers `500` and tells the caller nothing.
+
+**A post-read refusal does not close the connection.** The pre-read refusals do, because the body
+is still on the wire and the adapter would drain it; by the time this hook runs the body is read,
+the connection is clean, and an ordinary response is possible.
+
+**This package performs no cryptography.** The hook is named `:authorize_body` rather than
+`:verify_signature` because verifying is the host's work; making it possible is this module's.
 
 ### Resources this Plug bounds, and the ones it does not
 

@@ -1330,6 +1330,126 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
   end
 
+  describe ":authorize_body/2 — the post-read hook, and the bytes it is handed" do
+    # `authorize/1` runs before the body is read, which is what lets it refuse an
+    # unauthenticated caller without buffering megabytes for them. The cost is that it cannot
+    # see the body, so body-signature auth is structurally impossible through it. This hook is
+    # additive and optional; `authorize/1` is untouched.
+
+    # A raw-binary POST. `post/3` above encodes a map with `Jason.encode!`, which would destroy
+    # exactly the property under test, so this helper sends bytes.
+    defp post_raw(raw, headers, o) do
+      conn =
+        :post
+        |> conn("/mcp", raw)
+        |> put_req_header("content-type", "application/json")
+
+      conn = Enum.reduce(headers, conn, fn {k, v}, c -> put_req_header(c, k, v) end)
+      HTTP.call(conn, o)
+    end
+
+    # Deliberately not what `Jason.encode!` produces: padded spaces, a newline, and `params`
+    # written before `id`. Any decode/re-encode round trip normalises all three, so a hook
+    # receiving this unchanged proves it was handed the client's bytes.
+    @odd_body ~s({"jsonrpc":"2.0" ,  "method":"tools/call",\n  "params":{"name":"echo","arguments":{}}, "id":7})
+
+    test "the hook receives the request body byte-identically, not a re-encoding" do
+      # THE POINT OF THIS TEST. A signature covers bytes. A hook handed
+      # `Jason.encode!(Jason.decode!(body))` rejects every correct signature and presents as a
+      # fault in the host's cryptography rather than in this transport. Demonstrated red before
+      # it passed, by making the call site do exactly that -- see
+      # slices/007-authorize-body/FINDINGS.md for the failure output.
+      me = self()
+
+      o =
+        opts(
+          authorize_body: fn _conn, body ->
+            send(me, {:body_seen, body})
+            :ok
+          end
+        )
+
+      conn = post_raw(@odd_body, call_headers([]), o)
+
+      assert_receive {:body_seen, seen}
+      assert seen == @odd_body
+
+      # Stated as an effect rather than trusted from the equality above: the bytes a round trip
+      # would have produced are a DIFFERENT binary, so the assertion has something to fail on.
+      refute seen == Jason.encode!(Jason.decode!(@odd_body))
+      assert conn.status == 200
+    end
+
+    test "init/1 refuses an :authorize_body of the wrong arity" do
+      # At startup, not at the first signed request. A host that mis-wires this should not
+      # learn about it from a 500 in production.
+      assert_raise ArgumentError, ~r/:authorize_body option must be a 2-arity function/, fn ->
+        opts(authorize_body: fn _conn -> :ok end)
+      end
+    end
+
+    test "absent, the hook is skipped and nothing changes" do
+      assert post(call_body(%{})).status == 200
+    end
+
+    test "a passing check allows execution; a failing check refuses" do
+      me = self()
+      dispatched = fn n, a, _o -> send(me, {:dispatched, n}) && {:ok, a} end
+
+      pass = opts(dispatch: dispatched, authorize_body: fn _c, _b -> :ok end)
+      assert post(call_body(%{}), call_headers([]), pass).status == 200
+      assert_receive {:dispatched, :echo}
+
+      fail = opts(dispatch: dispatched, authorize_body: fn _c, _b -> {:error, :bad_signature} end)
+      conn = post(call_body(%{}), call_headers([]), fail)
+
+      assert conn.status == 403
+      # The refusal is not merely a status: the tool must not have run.
+      refute_receive {:dispatched, _}, 50
+    end
+
+    test "the refusal leaks nothing about why to the caller" do
+      # Same rule as `authorize/1`: the reason goes to the log, never to the caller. A client
+      # that can tell "no signature" from "bad signature" has been handed an oracle.
+      secret = "SIGNATURE_MISMATCH_FOR_KEY_42"
+      o = opts(authorize_body: fn _c, _b -> {:error, secret} end)
+
+      conn = post(call_body(%{}), call_headers([]), o)
+
+      assert conn.status == 403
+      refute conn.resp_body =~ secret
+      refute body!(conn)["error"] |> Map.has_key?("data")
+      assert body!(conn)["error"]["message"] == "Forbidden"
+
+      for {_k, v} <- conn.resp_headers do
+        refute v =~ secret
+      end
+    end
+
+    test "a hook that raises is a host fault, answered as 500 and told to nobody" do
+      o = opts(authorize_body: fn _c, _b -> raise "hook exploded: KEY_MATERIAL" end)
+      conn = post(call_body(%{}), call_headers([]), o)
+
+      assert conn.status == 500
+      assert body!(conn)["error"]["code"] == -32_603
+      refute conn.resp_body =~ "KEY_MATERIAL"
+    end
+
+    test "a post-read refusal does NOT close the connection" do
+      # Decision (c). The seven PRE-read refusal sites close, because the body is still on the
+      # wire and the adapter would drain it. Here the body is already read: the connection is
+      # clean and an ordinary response is possible. `before_body/2`'s comment pins the
+      # invariant in both directions, and closing here would break it rather than honour it.
+      o = opts(authorize_body: fn _c, _b -> {:error, :nope} end)
+      conn = post(call_body(%{}), call_headers([]), o)
+
+      assert conn.status == 403
+      refute Enum.any?(conn.resp_headers, fn {k, v} ->
+               k == "connection" and String.downcase(v) == "close"
+             end)
+    end
+  end
+
   describe "a header value that is not valid UTF-8 is refused, not reflected" do
     # THE RED FOR THE THIRD DEFECT. Invalid UTF-8 in `MCP-Protocol-Version` was echoed into
     # the refusal's `data.requested`; `Jason.encode!` then raised inside `send_json/3`, outside
