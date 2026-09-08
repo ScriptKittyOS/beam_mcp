@@ -204,3 +204,35 @@ controls and the client cannot influence. The test to apply:
 The same question applies to any set built from headers, query parameters, body keys, filenames or
 metadata: derive from the schema, the manifest, the catalog, the code — the authority — and use
 the request only as the thing measured against it.
+
+## A brief names the instruction it supersedes, and a lane that cannot spawn says so
+
+Two halves of one failure, and the second is what made the first visible.
+
+**A brief states which instruction it replaces.** A coordinator was told to spawn subagents and
+run two review lanes. Both lane briefs it wrote still carried an earlier *"do not spawn further
+subagents"*, copied forward from a message that had already been superseded, and nothing in
+either brief said which instruction won. Both lanes then ran as two scoped passes by one reader.
+
+This is the same defect class as a superseded claim surviving into a record. The rule that
+corrections are appended rather than rewritten exists because a stale sentence sitting beside a
+true one is indistinguishable from a current one; a stale *instruction* sitting in a brief is
+worse, because it is acted on rather than merely read. **The brief is a record, and it is subject
+to the same rule: say what it supersedes, or it is not a correction, it is a contradiction the
+reader has to resolve alone.**
+
+**A lane that cannot spawn says so in its verdict.** Both lanes here did, unprompted, and that is
+the only reason the defect was caught before the record shipped: each wrote plainly that it was
+one reader making two passes rather than two readers. Had they written "two lanes" and stopped,
+the record would have claimed independence it did not have — and *independence is the entire
+content of a second lane*. A second pass by the same reader shares its assumptions, its blind
+spots, and whatever the first pass concluded.
+
+So the verdict names the condition it was produced under. "Two lanes" is a claim about how many
+parties looked, and a run that cannot make it true says which it was, in the verdict rather than
+in a footnote somewhere else.
+
+**Derivation.** The failure cost nothing here, and that is the argument for the rule rather than
+against it: the lanes reported the limitation themselves, so the record is honest. The next one
+may not, and the phrase that would have shipped — "two lanes, three rounds" — reads exactly the
+same either way.
