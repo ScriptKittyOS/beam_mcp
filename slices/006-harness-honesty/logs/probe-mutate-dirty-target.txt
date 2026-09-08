@@ -1,0 +1,31 @@
+== the guard that would have stopped the round-2 contamination ==
+date: 2026-09-08T12:15:55Z
+
+PROBE: plant a leftover mutant in the target, exactly as a SIGKILLed run would leave it,
+and check that the next invocation REFUSES rather than adopting it as the pristine.
+
+$ python3 tools/mutants/Mr2.py lib/beam_mcp/transport/http.ex   # a leftover mutant
+Mr2 applied
+$ git status --porcelain lib/
+ M lib/beam_mcp/transport/http.ex
+
+$ PASSES=1 ./tools/mutate.sh score Mc2
+REFUSING: lib/beam_mcp/transport/http.ex has uncommitted changes.
+The pristine copy is taken from the working file, so scoring against a dirty target
+risks adopting a leftover mutant as the baseline -- see the header. Commit or revert
+it, or set MUTATE_ALLOW_DIRTY_TARGET=1 if you have checked it yourself.
+SCORE_EXIT=1
+
+WITHOUT THE GUARD this run would have copied the Mr2 mutant to $pristine, scored Mc2 on
+top of it, and RESTORED Mr2 afterwards -- leaving the defect in the tree and calling it
+the baseline.
+
+$ git checkout -- lib/beam_mcp/transport/http.ex   # clear the planted mutant
+(no line above = target clean again)
+
+$ PASSES=1 ./tools/mutate.sh score Mc2   # and now it runs
+target:  lib/beam_mcp/transport/http.ex
+passes:  1
+tree:    eff906ca76c6ce59d86c46018e376195ce150efd  dirty=9
+Mc2 | 164 tests, 0 failures TEST_EXIT=0
+SCORE_EXIT=0
