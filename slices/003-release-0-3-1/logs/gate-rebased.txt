@@ -5,6 +5,6 @@
   credo                      pass
   optional deps              pass
   docs                       pass
-  reuse                      pass (231 tracked; 58 in scope, 56 headered + 2 sidecar; excluded 171 archive + 2 licence text)
+  reuse                      pass (233 tracked; 58 in scope, 56 headered + 2 sidecar; excluded 173 archive + 2 licence text)
   licence files              pass
 Gate OK.
