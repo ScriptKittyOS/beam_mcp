@@ -1,0 +1,18 @@
+background load: 32 busy loops on 32 cores
+date: 2026-09-08T01:25:07Z
+$ ./tools/mutate.sh score
+
+target:  lib/beam_mcp/transport/http.ex
+passes:  4
+tree:    a02e5603e6a26ff91af775a0b4cd1d88943c707b  dirty=3
+M13rev | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 2 failures TEST_EXIT=2 | 160 tests, 2 failures TEST_EXIT=2 | 160 tests, 2 failures TEST_EXIT=2
+M2always | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 2 failures TEST_EXIT=2 | 160 tests, 2 failures TEST_EXIT=2 | 160 tests, 1 failure TEST_EXIT=2
+M2never | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 0 failures TEST_EXIT=0
+Mc2 | 160 tests, 0 failures TEST_EXIT=0 | 160 tests, 0 failures TEST_EXIT=0 | 160 tests, 0 failures TEST_EXIT=0 | 160 tests, 0 failures TEST_EXIT=0
+Mc3 | 160 tests, 2 failures TEST_EXIT=2 | 160 tests, 2 failures TEST_EXIT=2 | 160 tests, 3 failures TEST_EXIT=2 | 160 tests, 3 failures TEST_EXIT=2
+Md1 | 160 tests, 9 failures TEST_EXIT=2 | 160 tests, 9 failures TEST_EXIT=2 | 160 tests, 9 failures TEST_EXIT=2 | 160 tests, 9 failures TEST_EXIT=2
+Md2 | 160 tests, 2 failures TEST_EXIT=2 | 160 tests, 3 failures TEST_EXIT=2 | 160 tests, 3 failures TEST_EXIT=2 | 160 tests, 3 failures TEST_EXIT=2
+Me1 | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 1 failure TEST_EXIT=2 | 160 tests, 1 failure TEST_EXIT=2
+Mr1 | 160 tests, 4 failures TEST_EXIT=2 | 160 tests, 4 failures TEST_EXIT=2 | 160 tests, 5 failures TEST_EXIT=2 | 160 tests, 5 failures TEST_EXIT=2
+Mr2 | 160 tests, 3 failures TEST_EXIT=2 | 160 tests, 4 failures TEST_EXIT=2 | 160 tests, 3 failures TEST_EXIT=2 | 160 tests, 3 failures TEST_EXIT=2
+EXIT=0
