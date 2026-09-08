@@ -1,0 +1,11 @@
+e2f8a0898362319a3aeb44a5a89e090d546858ff
+# tree of commit 90e4e99, written by: git rev-parse 'HEAD^{tree}'
+# THIS IS THE TREE ROUND 1 LANE h READ. HEAD at read time:
+# 90e4e99f8bda256fc7c5a526e4fc2b3bd8ef6d25 -- "Correct the test count this slice made
+# false, and two paths that resolve nowhere", the fourth and last commit of slice 006.
+# The four commits read: 6050eff, 4a10c0d, 24370ce, 90e4e99.
+# The working tree was NOT clean while this review ran: lane m's uncommitted
+# TEMP-PROBE test and its mutate.sh runs were live in the same worktree. Nothing in
+# this lane's findings depends on those; the deliberate probes this lane applied
+# (tools/mutants/Mr2.py header removal, mutate.sh interrupt runs) were restored and
+# the restores are proven in round1.h.md.

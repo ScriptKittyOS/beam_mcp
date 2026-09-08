@@ -1,0 +1,6 @@
+e2f8a0898362319a3aeb44a5a89e090d546858ff
+# tree of commit 90e4e99, written by: git rev-parse 'HEAD^{tree}'
+# THIS IS THE TREE ROUND 1 LANE m READ. Branch slice/006-harness-honesty.
+# Commits read in full: 90e4e99, 24370ce, 4a10c0d, 6050eff; base a02e560.
+# Also read: 6050eff~1:test/beam_mcp/transport/http_bandit_test.exs (the pre-fix drain/2).
+# HEAD at read time: 90e4e99f8bda256fc7c5a526e4fc2b3bd8ef6d25
