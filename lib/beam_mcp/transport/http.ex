@@ -141,6 +141,31 @@ if Code.ensure_loaded?(Plug) do
     # dropped `tools_ttl_ms` and `tools_cache_scope` when they were added, and a test caught it.
     @plug_opts [:authorize, :allowed_origins, :authorize_body]
 
+    # Extracted from `init/1` rather than inlined, and not for tidiness: adding this check
+    # inline took `init/1` to a cyclomatic complexity of 11 against a limit of 9, and the gate
+    # takes no baseline -- a non-zero count is a failure, not a number to hold. Extracting is
+    # the fix that keeps the check; raising the limit would have been the fix that keeps the
+    # number.
+    #
+    # Optional, so absence is fine and a wrong shape is not. Validated at init for the same
+    # reason `:authorize` is: a host that mis-wires this learns at startup, not from the first
+    # signed request in production.
+    defp validate_authorize_body!(nil), do: nil
+
+    defp validate_authorize_body!(fun) when is_function(fun, 2), do: fun
+
+    defp validate_authorize_body!(other) do
+      raise ArgumentError, """
+      BeamMCP.Transport.HTTP's :authorize_body option must be a 2-arity function.
+
+      It takes the Plug.Conn and the raw request body, and returns :ok or {:error, reason}:
+
+          authorize_body: fn conn, body -> MyApp.Auth.verify(conn, body) end
+
+      Got: #{inspect(other)}
+      """
+    end
+
     @impl Plug
     def init(opts) do
       authorize = Keyword.get(opts, :authorize)
@@ -161,22 +186,7 @@ if Code.ensure_loaded?(Plug) do
         """
       end
 
-      # Optional, so absence is fine and a wrong shape is not. Validated here rather than at
-      # the call site for the same reason `:authorize` is: a host that mis-wires this learns at
-      # startup, not from the first signed request in production.
-      authorize_body = Keyword.get(opts, :authorize_body)
-
-      unless is_nil(authorize_body) or is_function(authorize_body, 2) do
-        raise ArgumentError, """
-        BeamMCP.Transport.HTTP's :authorize_body option must be a 2-arity function.
-
-        It takes the Plug.Conn and the raw request body, and returns :ok or {:error, reason}:
-
-            authorize_body: fn conn, body -> MyApp.Auth.verify(conn, body) end
-
-        Got: #{inspect(authorize_body)}
-        """
-      end
+      authorize_body = validate_authorize_body!(Keyword.get(opts, :authorize_body))
 
       origins = Keyword.get(opts, :allowed_origins)
 
