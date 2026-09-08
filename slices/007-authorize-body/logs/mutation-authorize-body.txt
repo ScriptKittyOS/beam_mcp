@@ -1,6 +1,6 @@
 target:  lib/beam_mcp/transport/http.ex
 passes:  2
-tree:    0be739cea0a353e2296025d5a96b0f84b4b0788c  dirty=1
+tree:    cb39add5b56542d0d743ce909bd49571396af7f2  dirty=1
 Mab1 | 172 tests, 5 failures TEST_EXIT=2 | 172 tests, 5 failures TEST_EXIT=2
         failed: :authorize_body/2 — the post-read hook, and the bytes it is handed a hook that raises is a host fault, answered as 500 and told to nobody (BeamMCP.Transport.HTTPTest)
         failed: :authorize_body/2 — the post-read hook, and the bytes it is handed a passing check allows execution; a failing check refuses (BeamMCP.Transport.HTTPTest)
