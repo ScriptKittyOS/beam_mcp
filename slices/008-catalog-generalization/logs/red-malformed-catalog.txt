@@ -1,0 +1,55 @@
+=== RED: the init-time shape refusal removed from Server.new/1 ===
+$ mix test test/beam_mcp/catalog_test.exs
+Compiling 1 file (.ex)
+Generated beam_mcp app
+Running ExUnit with seed: 393777, max_cases: 64
+
+
+
+  1) test a malformed catalog is refused at new/1, not at the first request an absent key is a malformed catalog, not an empty one (BeamMCP.CatalogTest)
+     test/beam_mcp/catalog_test.exs:118
+     Expected exception ArgumentError but nothing was raised
+     code: assert_raise ArgumentError, ~r/missing required key\(s\): \[:prompts\]/, fn ->
+     stacktrace:
+       test/beam_mcp/catalog_test.exs:119: (test)
+
+...
+
+  2) test a malformed catalog is refused at new/1, not at the first request :tools must be a list (BeamMCP.CatalogTest)
+     test/beam_mcp/catalog_test.exs:124
+     Expected exception ArgumentError but nothing was raised
+     code: assert_raise ArgumentError, ~r/:tools must be a list/, fn ->
+     stacktrace:
+       test/beam_mcp/catalog_test.exs:125: (test)
+
+....
+
+  3) test a malformed catalog is refused at new/1, not at the first request :tools entries must be %ToolSpec{} (BeamMCP.CatalogTest)
+     test/beam_mcp/catalog_test.exs:130
+     Expected exception ArgumentError but nothing was raised
+     code: assert_raise ArgumentError, ~r/must all be %BeamMCP.ToolSpec\{\}/, fn ->
+     stacktrace:
+       test/beam_mcp/catalog_test.exs:134: (test)
+
+
+
+  4) test a malformed catalog is refused at new/1, not at the first request a module that does not export capabilities/0 is refused (BeamMCP.CatalogTest)
+     test/beam_mcp/catalog_test.exs:145
+     Expected exception ArgumentError but nothing was raised
+     code: assert_raise ArgumentError, ~r/does not export capabilities\/0/, fn ->
+     stacktrace:
+       test/beam_mcp/catalog_test.exs:146: (test)
+
+.
+
+  5) test a malformed catalog is refused at new/1, not at the first request capabilities/0 must return a map (BeamMCP.CatalogTest)
+     test/beam_mcp/catalog_test.exs:139
+     Expected exception ArgumentError but nothing was raised
+     code: assert_raise ArgumentError, ~r/must return a map/, fn ->
+     stacktrace:
+       test/beam_mcp/catalog_test.exs:140: (test)
+
+
+Finished in 0.09 seconds (0.09s async, 0.00s sync)
+13 tests, 5 failures
+TEST_EXIT=2

@@ -14,10 +14,12 @@ defmodule BeamMCP.ErrorPayloadTest do
   alias BeamMCP.Server
 
   defmodule Catalog do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
 
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :widget,
@@ -35,7 +37,7 @@ defmodule BeamMCP.ErrorPayloadTest do
   end
 
   defp call(dispatch, args) do
-    Server.new(tool_catalog: Catalog, dispatch: dispatch)
+    Server.new(catalog: Catalog, dispatch: dispatch)
     |> Server.handle_message(%{
       "jsonrpc" => "2.0",
       "id" => 1,

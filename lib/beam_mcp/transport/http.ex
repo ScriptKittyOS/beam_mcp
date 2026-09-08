@@ -92,7 +92,7 @@ if Code.ensure_loaded?(Plug) do
 
         Bandit.child_spec(
           plug: {BeamMCP.Transport.HTTP,
-                 tool_catalog: MyApp.Catalog,
+                 catalog: MyApp.Catalog,
                  dispatch: &MyApp.Dispatch.call/3,
                  authorize: &MyApp.Auth.check/1,
                  allowed_origins: ["https://app.example.com"]},
@@ -110,8 +110,8 @@ if Code.ensure_loaded?(Plug) do
 
     require Logger
 
+    alias BeamMCP.Catalog
     alias BeamMCP.Server
-    alias BeamMCP.ToolCatalog
 
     @modern_version "2026-07-28"
     @version_meta_key "io.modelcontextprotocol/protocolVersion"
@@ -202,7 +202,7 @@ if Code.ensure_loaded?(Plug) do
         """
       end
 
-      catalog = Keyword.get(opts, :tool_catalog)
+      catalog = Keyword.get(opts, :catalog)
 
       # Checked for the behaviour, not for truthiness: `tool_catalog: true` passed the old check
       # and failed later, at the first tools/list, as an UndefinedFunctionError from inside the
@@ -213,12 +213,19 @@ if Code.ensure_loaded?(Plug) do
       # `ensure_loaded?` raised ArgumentError at build time naming a perfectly valid catalog.
       # An option contract that rejects correct configurations is worse than the truthiness
       # check it replaced.
+      # STRUCTURAL ONLY, DELIBERATELY. This checks that the module exports `capabilities/0`
+      # and does NOT call it. Under Plug's default initialisation this runs at the host's
+      # COMPILE time, and a correct catalog that reads config or ETS would fail there -- the
+      # same class as the `ensure_loaded?` defect this check already carries a comment about.
+      # The map's SHAPE is refused by `BeamMCP.Server.new/1`, which is runtime. Recorded in
+      # slices/008-catalog-generalization/FINDINGS.md as the one place "refuse at init" is
+      # answered with "as much as is safe here".
       unless is_atom(catalog) and catalog != nil and
                match?({:module, _}, Code.ensure_compiled(catalog)) and
-               function_exported?(catalog, :all, 0) do
+               function_exported?(catalog, :capabilities, 0) do
         raise ArgumentError, """
-        BeamMCP.Transport.HTTP requires a :tool_catalog option: a module implementing the
-        BeamMCP.ToolCatalog behaviour, that is, exporting all/0.
+        BeamMCP.Transport.HTTP requires a :catalog option: a module implementing the
+        BeamMCP.Catalog behaviour, that is, exporting capabilities/0.
 
         Got: #{inspect(catalog)}
         """
@@ -769,13 +776,13 @@ if Code.ensure_loaded?(Plug) do
       end)
     end
 
-    # One lookup, `BeamMCP.ToolCatalog.fetch/2`, is what the core uses to decide whether a tool
+    # One lookup, `BeamMCP.Catalog.fetch/2`, is what the core uses to decide whether a tool
     # is callable. The transport asks the same question of the same function: two lookups would
     # be two answers to "which tool does this name mean", which is the disagreement this whole
     # header mechanism exists to prevent.
     defp mirrored_params(%{"method" => "tools/call"} = message, opts) do
       with name when is_binary(name) <- param(message, "name"),
-           catalog when not is_nil(catalog) <- opts.server_opts[:tool_catalog],
+           catalog when not is_nil(catalog) <- opts.server_opts[:catalog],
            {:ok, entries} <- host_call(fn -> tool_annotations(catalog, name) end) do
         entries
       else
@@ -798,14 +805,14 @@ if Code.ensure_loaded?(Plug) do
     # EVERYTHING THE HOST SUPPLIES IS READ INSIDE `host_call/1`, and the boundary is the whole
     # point of this function existing rather than the three steps sitting in the `with` above.
     #
-    # `ToolCatalog.fetch/2` was already wrapped; `spec.input_schema` and the schema walk were
+    # `Catalog.fetch/2` was already wrapped; `spec.input_schema` and the schema walk were
     # not. So a host catalog that RAISED kept the request's id, and the same host catalog
     # returning MALFORMED DATA -- a map where a `%ToolSpec{}` was promised -- raised `KeyError`
     # one line later, escaped to `call/2`'s rescue and answered `id: null`. Measured in
     # `slices/002-streamable-http/logs/probe-fault-ids.txt`:
     #
-    #   host tool_catalog RAISES (header validation)   500  -32603  id=4242
-    #   host tool_catalog returns a malformed spec     500  -32603  id=nil
+    #   host catalog RAISES (header validation)        500  -32603  id=4242
+    #   host catalog returns a malformed spec          500  -32603  id=nil
     #
     # One host bug, two envelopes, decided by which line it landed on. The line is not the
     # boundary; the host is.
@@ -822,11 +829,11 @@ if Code.ensure_loaded?(Plug) do
     # `annotation_detail/1` interpolate it. No JSON-derived schema can produce that. It is
     # recorded as a survivor with this argument rather than pinned by a contrived test.
     #
-    # `ToolCatalog.fetch/2` returning anything but `{:ok, spec}` still falls through this
+    # `Catalog.fetch/2` returning anything but `{:ok, spec}` still falls through this
     # `with` unchanged, to the caller's `_ -> []`: a tool this catalog does not have mirrors
     # no parameters, which is not a fault.
     defp tool_annotations(catalog, name) do
-      with {:ok, spec} <- ToolCatalog.fetch(catalog, name),
+      with {:ok, spec} <- Catalog.fetch(catalog, name),
            entries = annotations(spec.input_schema),
            :ok <- check_annotations(name, entries) do
         {:ok, entries}
@@ -1103,10 +1110,10 @@ if Code.ensure_loaded?(Plug) do
     # "every exception, throw and exit out of the host". Two round-5 lanes independently
     # derived the real population with one command --
     #
-    #     grep -n 'authorize_fun\.(\|ToolCatalog.fetch\|Server.handle_message' http.ex
+    #     grep -n 'authorize_fun\.(\|Catalog.fetch\|Server.handle_message' http.ex
     #
     # -- and found three sites, of which one was inside that rescue. A host `authorize/1` or
-    # `tool_catalog` raising `Plug.BadRequestError` still handed its HTTP status to the adapter
+    # `catalog` raising `Plug.BadRequestError` still handed its HTTP status to the adapter
     # and dropped the envelope, on a path the docs above call possibly unauthenticated. One host
     # function raising one exception had two behaviours depending on which catalog lookup fired
     # first, which is the disagreement the single-lookup discipline exists to prevent.

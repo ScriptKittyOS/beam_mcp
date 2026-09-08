@@ -11,6 +11,45 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING, and it breaks a host contract rather than the wire
+
+- **`BeamMCP.ToolCatalog` is replaced by `BeamMCP.Catalog`, and `all/0` by `capabilities/0`.**
+  Every host implementing a catalog must change. While this package is `0.x` a break lands at
+  the **minor** position, so this is `0.4.0` and `~> 0.3.0` — the requirement the README
+  recommends — already excludes it. No consumer is carried across by a routine
+  `mix deps.update`; that is what the tight pin is for.
+
+  `capabilities/0` returns `%{tools: [ToolSpec.t()], resources: [], prompts: []}`. `resources`
+  and `prompts` are **required and may be empty**. Nothing reads them yet. They exist so that
+  serving resources and prompts later adds a reader rather than changing this contract a second
+  time — the break is taken once, now, before those slices exist.
+
+  **The callback is renamed, not just re-typed.** Keeping `all/0` while changing its return from
+  a list to a map would compile against every existing host and fail at the first request with a
+  `BadMapError`. Renaming makes the break arrive at compile time as an unimplemented callback.
+
+  The option is `:catalog`, not `:tool_catalog` — a catalog carrying resources and prompts is
+  not a tool catalog, and renaming it in the same break costs less than a second one later.
+
+  **Migration:**
+
+  ```elixir
+  # before
+  @behaviour BeamMCP.ToolCatalog
+  def all, do: [%BeamMCP.ToolSpec{...}]
+
+  # after
+  @behaviour BeamMCP.Catalog
+  def capabilities, do: %{tools: [%BeamMCP.ToolSpec{...}], resources: [], prompts: []}
+  ```
+
+- **A malformed catalog is refused by `BeamMCP.Server.new/1`**, at startup, with a message naming
+  what is wrong — an absent key, a non-list `:tools`, an entry that is not a `%ToolSpec{}`, a
+  `capabilities/0` that does not return a map, or a module that does not export it.
+  `Transport.HTTP.init/1` checks only that the callback is exported, deliberately: under Plug's
+  default initialisation it runs at the host's **compile** time, where calling a catalog that
+  reads config would fail for a correct host.
+
 ### Added
 
 - **`:authorize_body`, an optional post-read authorization hook.** `authorize/1` runs before the

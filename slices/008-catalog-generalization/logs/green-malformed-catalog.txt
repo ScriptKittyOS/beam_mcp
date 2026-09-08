@@ -1,0 +1,10 @@
+=== GREEN: the init-time shape refusal restored ===
+$ mix test test/beam_mcp/catalog_test.exs
+Compiling 1 file (.ex)
+Generated beam_mcp app
+Running ExUnit with seed: 985007, max_cases: 64
+
+.............
+Finished in 0.09 seconds (0.09s async, 0.00s sync)
+13 tests, 0 failures
+TEST_EXIT=0

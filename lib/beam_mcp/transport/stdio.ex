@@ -19,12 +19,12 @@ defmodule BeamMCP.Transport.Stdio do
   option with no default.
 
       BeamMCP.Transport.Stdio.run(
-        tool_catalog: MyApp.Catalog,
+        catalog: MyApp.Catalog,
         dispatch: &MyApp.Dispatch.call/3,
         server_name: "my-app"
       )
 
-  Options are `BeamMCP.Server.new/1`'s; `:tool_catalog` is required.
+  Options are `BeamMCP.Server.new/1`'s; `:catalog` is required.
   """
 
   alias BeamMCP.Server
