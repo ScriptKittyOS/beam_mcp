@@ -1,0 +1,7 @@
+2f03bec5521bc0b45853b69667b54b2953c27eb9
+# tree of commit 716526e, written by: git rev-parse 'HEAD^{tree}'
+# THIS IS THE TREE ROUND 2 LANE h READ. Branch slice/006-harness-honesty.
+# Read: FINDINGS.md Round 2, the four *-round2 archives and their notes, ci-evidence.txt,
+# probe-mutate-dirty-target.txt, tools/mutate.sh.
+# HEAD at read time: 716526e8aa8184a6c98abf13de931281ee1bea11
+# Lane m and lane h are two written passes by ONE reader. Not two parties.
