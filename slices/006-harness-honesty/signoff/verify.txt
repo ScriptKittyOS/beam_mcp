@@ -1,8 +1,0 @@
-# Written by tools/signoff.sh verify. It says which tree the records bind, not that
-# anyone read it.
-slice: slices/006-harness-honesty
-review-tree: 1d9e14303d1c3cfe816c48c41f561de13ae54f1f
-deciding-round: 2
-deciding-records: 2
-records-total: 4
-verified: 2026-09-08T13:52:18Z

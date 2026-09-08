@@ -10,3 +10,7 @@ erl_crash.dump
 *.ez
 beam_mcp-*.tar
 /tmp/
+
+# signoff.sh rewrites this on every `verify`, so tracking it would make the next run
+# refuse on its own output, and its bytes are a restatement of the .signoff records beside it.
+slices/*/signoff/verify.txt
