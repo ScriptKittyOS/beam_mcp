@@ -15,16 +15,20 @@ it is the answer.
 
 ## State
 
-- Branch `slice/003-release-0-3-1`, based on `main` at `31bcbff`.
+- Branch `slice/003-release-0-3-1`, rebased onto `main` at `955d501` after slice 004 merged.
+  The rebase moved this branch onto a **stricter gate**: 004 widened the REUSE population from a
+  four-extension glob to every tracked file, so this slice's own `.md` records are now policed by
+  it and pass.
 - **No head hash is written here.** The last handoff named `bdb032f` and it was stale within the
   hour, because a hash written into the file it describes cannot include the commit that writes
   it. The commits are listed below by subject; `git log main..slice/003-release-0-3-1` is the
   authority for their hashes.
-- Gate green: format, compile, test, credo, optional deps, docs, reuse (25 commentable files),
-  licence files. Every step line reads `pass`, read as lines and not as an exit code.
-  `slices/003-release-0-3-1/logs/gate-release.txt`.
-- **158 tests, 0 failures.** Was 146 when this slice's second half began, 138 at the 0.2.x-era
-  handoff.
+- Gate green **on the rebased tree**: format, compile, test, credo, optional deps, docs,
+  reuse (231 tracked; 58 in scope, 56 headered + 2 sidecar), licence files. Every step line reads
+  `pass`, read as lines and not as an exit code. `logs/gate-rebased.txt`; the pre-rebase run is
+  `logs/gate-release.txt` and is kept rather than overwritten.
+- **160 tests, 0 failures.** Was 158 before the fifth defect, 146 when this slice's second half
+  began, 138 at the 0.2.x-era handoff.
 - Version **`0.3.1`**, unreleased. **`0.3.0` is published on Hex and tagged `v0.3.0`**, and its
   changelog section is dated and not amended.
 
@@ -36,8 +40,15 @@ it is the answer.
     (d)  a refusal issued before the body read ends the connection and says so
          round 1: three claims about correct code corrected
          0.3.1 — the release commit: mix.exs, CHANGELOG, README, this file
+    (e)  a header value that is not valid UTF-8 is refused, not reflected
 
-All four were review findings from slice 002, filed rather than fixed at the time. Each carries
+(a) to (d) were review findings from slice 002, filed rather than fixed at the time. **(e) was
+found by this slice's own round 3 and reported without a fix**; the owner called it in — it is
+unauthenticated and attacker-reachable, and tagging without it would ship a known 500 path. Its
+anchor on `fault_response/4`'s answer branch was **replaced, not deleted**, exactly as round 3's
+test comment required.
+
+Each of the five carries
 its own red, demonstrated and archived before its fix, and each anchor is scored by mutation on
 the tree that ships.
 
