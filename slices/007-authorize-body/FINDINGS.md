@@ -69,7 +69,7 @@ Reverted, and the revert verified byte-identical against a pre-red copy rather t
 
 `tools/mutate.sh score Mab1 Mab2`, 2 passes, `logs/mutation-authorize-body.txt`:
 
-    tree:    0be739cea0a353e2296025d5a96b0f84b4b0788c
+    tree:    cb39add5b56542d0d743ce909bd49571396af7f2
     Mab1 | 172 tests, 5 failures TEST_EXIT=2 | 172 tests, 5 failures TEST_EXIT=2
     Mab2 | 172 tests, 5 failures TEST_EXIT=2 | 172 tests, 5 failures TEST_EXIT=2
 
@@ -110,3 +110,21 @@ person adding a claim will hit the same wall.
   pinned by the raw-bytes test; ordering against header validation is not, and a refactor could
   move it after `check_headers/3` without a red suite. It would still be before `Jason.decode`,
   so the raw-bytes guarantee holds — which is why this is recorded rather than blocking.
+
+## The gate's own rule cost a change, and that is recorded rather than absorbed
+
+Adding the arity check inline took `init/1` to a cyclomatic complexity of **11** against credo's
+limit of **9**:
+
+    [F] Function is too complex (cyclomatic complexity is 11, max is 9).
+        lib/beam_mcp/transport/http.ex:145:9 #(BeamMCP.Transport.HTTP.init)
+
+`CONVENTIONS.md`'s first rule — *"A non-zero count is a failure, not a number to hold"* — makes
+that a real red rather than a threshold to adjust. The check is kept and extracted into
+`validate_authorize_body!/1`, three clauses on the argument shape. Behaviour is identical: `nil`
+through, a 2-arity function through, anything else the same `ArgumentError`.
+
+**And the score above is the re-run, not the first one.** The first table was produced against
+tree `0be739ce`; extracting the validator moved the tree, so it was scored again on `cb39add5`
+and this record quotes the second. A score from a run on a different tree is not a score for this
+one — the defect slice 002 round 7 found in a table headed "on the tree that ships".
