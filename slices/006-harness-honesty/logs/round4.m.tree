@@ -1,1 +1,6 @@
-PLACEHOLDER
+ba9ca35884ae1c94a9c79a295c7e6375b74c7760
+# tree of commit b3a80eb, written by: git rev-parse 'HEAD^{tree}'
+# THIS IS THE TREE ROUND 4 LANE m READ. Branch slice/006-harness-honesty.
+# Re-read: .gitignore +4, signoff/verify.txt untracked. Nothing executable.
+# HEAD at read time: b3a80eba2bc55685efc122010ecbfd34864cf70f
+# Lane m and lane h are two written passes by ONE reader. Not two parties.
