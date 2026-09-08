@@ -27,7 +27,7 @@ it is the answer.
   reuse (231 tracked; 58 in scope, 56 headered + 2 sidecar), licence files. Every step line reads
   `pass`, read as lines and not as an exit code. `logs/gate-rebased.txt`; the pre-rebase run is
   `logs/gate-release.txt` and is kept rather than overwritten.
-- **160 tests, 0 failures.** Was 158 before the fifth defect, 146 when this slice's second half
+- **162 tests, 0 failures.** Was 160 before slice 006's two anchors, 158 before the fifth defect, 146 when this slice's second half
   began, 138 at the 0.2.x-era handoff.
 - Version **`0.3.1`**, unreleased. **`0.3.0` is published on Hex and tagged `v0.3.0`**, and its
   changelog section is dated and not amended.
