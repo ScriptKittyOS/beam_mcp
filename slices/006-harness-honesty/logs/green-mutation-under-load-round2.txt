@@ -1,0 +1,110 @@
+== CORRECTION TO THE PROVENANCE NOTE BELOW -- ADDED 2026-09-08, AFTER IT ==
+
+Appended, not edited. The note below stands as written; this block supersedes ONE of its claims.
+
+THE BIRTH-TIMESTAMP EVIDENCE IT CITES NO LONGER EXISTS, AND ADDING THAT NOTE IS WHAT DESTROYED
+IT. The note argues this file is the clean re-run because the four *-round2 archives carry
+births forming "an unbroken serial chain". Measured now:
+
+    $ TZ=UTC stat -c '%wZ %yZ' <each of the four>
+    green-mutation-under-load-round2.txt   birth 13:36:56  mtime 13:36:56
+    green-rate-mc8-idle-round2.txt         birth 13:36:56  mtime 13:36:56
+    green-rate-mc64-idle-round2.txt        birth 13:36:56  mtime 13:36:56
+    green-rate-mc8-load32-round2.txt       birth 13:36:56  mtime 13:36:56
+
+All four share one birth, to the millisecond, and birth equals mtime -- the signature of a
+wholesale rewrite. Prepending the note rewrote each file and reset the timestamp the note
+offers as its proof. The archive that was cited as evidence was consumed by the act of citing
+it. That is this slice's own subject, one level up.
+
+WHAT SURVIVES, AND ITS LIMIT. The `date:` lines below the note's end marker are the driver's own
+output and are sequential -- 12:23:53Z, 12:30:22Z, 12:39:18Z, 12:48:16Z -- so the four archives
+come from one serial driver run. What that CANNOT establish on its own is that no interference
+overlapped its opening minutes, because the independent filesystem corroboration is gone. The
+contaminated driver's files are deleted, so its 12:14:39Z births cannot be re-checked either.
+
+STATED RATHER THAN RESOLVED: this file is PROBABLY the clean re-run and the internal dates
+support it, but the evidence originally offered for saying so does not hold, and no later
+quiet-machine scoring table exists to cite instead -- `mutation-harness-anchors-round2.txt` is
+EARLIER (12:06:42Z), not later. Recorded in FINDINGS.md under Round 2 rather than argued away.
+
+== END OF CORRECTION ==
+
+== PROVENANCE NOTE -- ADDED BY HAND, AFTER THIS FILE WAS WRITTEN ==
+
+This note is not command output and does not come from the run below. It was typed into the
+top of this file after the run had finished and the file had been written. Everything below
+the marker line that ends this note is the driver's own output, unaltered, byte for byte; not
+one existing byte of it was edited to add this.
+
+WHY IT EXISTS. This filename was used twice. The FIRST run was interrupted: while its scoring
+loop was live, a reviewer ran
+
+    git checkout -- lib/beam_mcp/transport/http.ex
+
+against this worktree, plus two `mix test` alongside it. A mutant scored against unmutated code
+reads as a SURVIVOR and is really a kill -- the direction of error this slice exists to remove
+-- and which row was corrupted is not recoverable by inspection. That run was therefore
+DISCARDED IN FULL and its files DELETED rather than repaired. A 100-run rate archive from the
+same driver, whose header line read `background load: 0` while busy loops were still running,
+was discarded and deleted with it.
+
+THIS FILE IS THE CLEAN RE-RUN. IT IS NOT THE DISCARDED RUN. The evidence is the birth
+timestamps of the four *-round2 archives, which form an unbroken serial chain written by one
+driver, each beginning exactly when the previous one ends:
+
+    green-mutation-under-load-round2.txt   birth 2026-09-08T12:23:53Z
+    green-rate-mc8-idle-round2.txt         birth 2026-09-08T12:30:22Z
+    green-rate-mc64-idle-round2.txt        birth 2026-09-08T12:39:18Z
+    green-rate-mc8-load32-round2.txt       birth 2026-09-08T12:48:16Z
+
+The contaminated driver's files were born 2026-09-08T12:14:39Z, and its mutation archive was
+deleted at about 12:15Z -- before this re-run began. No file carrying one of the four births
+above can be part of the discarded run.
+
+== END OF HAND-ADDED NOTE -- EVERYTHING BELOW THIS LINE IS UNTOUCHED COMMAND OUTPUT ==
+
+background load: 32 busy loops on 32 cores
+date: 2026-09-08T12:23:53Z
+$ ./tools/mutate.sh score
+
+target:  lib/beam_mcp/transport/http.ex
+passes:  4
+tree:    eff906ca76c6ce59d86c46018e376195ce150efd  dirty=10
+M13rev | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2
+        exchanges repeated: 1
+        failed: an exception that carries its own HTTP status belongs to the server, not to us a host catalog returning a malformed spec answers with the request's id (BeamMCP.Transport.HTTPTest)
+M2always | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2
+        failed: an exception that carries its own HTTP status belongs to the server, not to us an exception with no status of its own, raised in transport code, keeps the envelope (BeamMCP.Transport.HTTPTest)
+M2never | 164 tests, 0 failures TEST_EXIT=0 | 164 tests, 0 failures TEST_EXIT=0 | 164 tests, 0 failures TEST_EXIT=0 | 164 tests, 0 failures TEST_EXIT=0
+Mc2 | 164 tests, 0 failures TEST_EXIT=0 | 164 tests, 0 failures TEST_EXIT=0 | 164 tests, 0 failures TEST_EXIT=0 | 164 tests, 0 failures TEST_EXIT=0
+Mc3 | 164 tests, 2 failures TEST_EXIT=2 | 164 tests, 2 failures TEST_EXIT=2 | 164 tests, 2 failures TEST_EXIT=2 | 164 tests, 2 failures TEST_EXIT=2
+        exchanges repeated: 1
+        failed: an exception that carries its own HTTP status belongs to the server, not to us a host tool_catalog's exception does not choose the HTTP status either (BeamMCP.Transport.HTTPTest)
+        failed: an exception that carries its own HTTP status belongs to the server, not to us a host tool_catalog that THROWS is answered with the id, not just rescued (BeamMCP.Transport.HTTPTest)
+Md1 | 164 tests, 9 failures TEST_EXIT=2 | 164 tests, 9 failures TEST_EXIT=2 | 164 tests, 9 failures TEST_EXIT=2 | 164 tests, 9 failures TEST_EXIT=2
+        failed: a live listener: what a refusal does to the connection a 405 ends the connection instead of draining the body it refused (BeamMCP.Transport.HTTPBanditTest)
+        failed: a live listener: what a refusal does to the connection an authorize breaking its contract ends the connection instead of draining (BeamMCP.Transport.HTTPBanditTest)
+        failed: a live listener: what a refusal does to the connection an authorize refusal ends the connection instead of draining the body it refused (BeamMCP.Transport.HTTPBanditTest)
+        failed: a live listener: what a refusal does to the connection an authorize that raises ends the connection instead of draining the body (BeamMCP.Transport.HTTPBanditTest)
+        failed: a live listener: what a refusal does to the connection an Origin refusal ends the connection instead of draining the body it refused (BeamMCP.Transport.HTTPBanditTest)
+        failed: a live listener: what a refusal does to the connection an oversized body still ends the connection and says so (BeamMCP.Transport.HTTPBanditTest)
+        failed: a live listener: what a refusal does to the connection a refusal over the adapter's drain cap now announces the close it always did (BeamMCP.Transport.HTTPBanditTest)
+        failed: the body cap a body over the cap is refused and the connection closed (BeamMCP.Transport.HTTPTest)
+        failed: the HTTP transport's README claims a refusal before the body read ends the connection, as the README now says (BeamMCP.ReadmeClaimsTest)
+Md2 | 164 tests, 2 failures TEST_EXIT=2 | 164 tests, 2 failures TEST_EXIT=2 | 164 tests, 2 failures TEST_EXIT=2 | 164 tests, 2 failures TEST_EXIT=2
+        failed: a live listener: what a refusal does to the connection a refusal AFTER the body has been read keeps the connection (BeamMCP.Transport.HTTPBanditTest)
+        failed: the HTTP transport's README claims a refusal before the body read ends the connection, as the README now says (BeamMCP.ReadmeClaimsTest)
+Me1 | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2 | 164 tests, 1 failure TEST_EXIT=2
+        failed: a header value that is not valid UTF-8 is refused, not reflected invalid UTF-8 in MCP-Protocol-Version is a 400 that reflects nothing (BeamMCP.Transport.HTTPTest)
+Mr1 | 164 tests, 4 failures TEST_EXIT=2 | 164 tests, 4 failures TEST_EXIT=2 | 164 tests, 4 failures TEST_EXIT=2 | 164 tests, 4 failures TEST_EXIT=2
+        exchanges repeated: 2
+        failed: an x-mcp-header annotation the specification forbids is the host's fault an annotated `number` property is answered as a host fault, not as the caller's error (BeamMCP.Transport.HTTPTest)
+        failed: an x-mcp-header annotation the specification forbids is the host's fault an annotated `object` property is the same fault (BeamMCP.Transport.HTTPTest)
+        failed: an x-mcp-header annotation the specification forbids is the host's fault the refusal does not depend on the caller sending the header (BeamMCP.Transport.HTTPTest)
+        failed: the HTTP transport's README claims a forbidden x-mcp-header annotation is the host's fault, as the README now says (BeamMCP.ReadmeClaimsTest)
+Mr2 | 164 tests, 3 failures TEST_EXIT=2 | 164 tests, 3 failures TEST_EXIT=2 | 164 tests, 3 failures TEST_EXIT=2 | 164 tests, 3 failures TEST_EXIT=2
+        failed: x-mcp-header values MUST be case-insensitively unique (SCR-275) a nested annotation colliding with an outer one is the same fault (BeamMCP.Transport.HTTPTest)
+        failed: x-mcp-header values MUST be case-insensitively unique (SCR-275) the collision is refused however the caller writes the header, or omits it (BeamMCP.Transport.HTTPTest)
+        failed: x-mcp-header values MUST be case-insensitively unique (SCR-275) two properties whose annotations collide are a host fault, not a caller error (BeamMCP.Transport.HTTPTest)
+EXIT=0

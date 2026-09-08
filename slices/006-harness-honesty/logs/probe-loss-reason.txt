@@ -1,0 +1,512 @@
+background load: 32 busy loops on 32 cores
+date: 2026-09-08T12:04:57Z
+$ env N=250 MIX_ENV=test mix run /tmp/claude-1000/-home-aylac-Projects-beam-mcp/7e6cdf96-6bae-44c9-9851-e53830c64eb4/scratchpad/006/loss_site.exs
+
+
+08:04:59.680 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.701 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.702 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.703 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.706 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.707 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.707 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.708 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.711 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.711 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.712 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.712 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.712 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.713 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.713 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.714 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.714 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.718 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.718 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.719 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.719 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.719 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.723 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.727 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.727 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.728 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.728 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.728 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.729 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.729 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.730 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.730 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.731 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.734 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.734 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.735 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.735 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.735 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.736 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.736 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.736 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.738 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.740 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.740 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.741 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.741 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.741 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.742 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.742 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.743 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.743 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.744 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.745 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.745 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.746 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.747 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.748 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.748 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.749 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.750 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.751 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.752 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.753 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.753 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.754 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.755 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.756 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.757 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.757 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.758 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.759 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.760 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.761 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.761 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.762 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.763 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.764 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.764 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.765 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.766 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.767 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.768 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.769 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.769 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.770 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.771 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.772 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.773 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.774 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.774 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.775 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.776 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.777 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.778 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.778 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.779 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.780 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.784 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.784 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.785 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.786 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.787 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.787 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.791 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.792 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.795 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.799 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.800 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.800 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.801 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.802 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.802 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.803 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.803 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.808 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.812 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.812 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.813 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.813 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.817 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.817 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.818 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.824 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.825 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.825 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.826 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.826 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.827 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.827 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.828 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.831 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.832 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.832 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.836 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.837 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.837 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.838 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.839 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.840 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.840 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.841 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.842 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.843 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.844 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.845 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.846 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.847 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.848 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.849 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.850 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.851 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.852 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.853 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.854 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.855 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.856 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.857 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.858 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.859 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.860 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.861 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.862 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.863 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.864 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.865 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.866 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.867 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.868 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.869 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.870 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.871 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.872 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.873 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.874 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.875 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.876 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.878 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.879 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.880 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.881 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.882 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.883 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.883 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.884 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.885 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.887 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.888 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.889 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.889 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.890 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.891 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.892 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.893 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.894 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.895 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.896 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.897 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.898 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.899 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.900 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.901 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.902 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.903 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.904 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.905 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.906 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.907 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.908 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.909 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.910 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.911 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.912 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.913 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.914 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.915 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.916 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.917 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.918 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.919 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.920 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.921 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.922 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.923 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.924 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.925 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.926 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.927 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.928 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.930 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.931 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.932 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.933 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.934 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.935 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.936 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.937 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.938 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.939 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.940 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.941 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.942 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.943 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.944 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.945 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.946 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.947 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.948 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.949 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.950 [info] beam_mcp: refused by host authorize/1: :nope
+
+08:04:59.951 [info] beam_mcp: refused by host authorize/1: :nope
+
+== 250 runs of the 9 MB refusal, active-mode client ==
+   {bytes delivered to the process, end reason, socket stats, authorize/1 ran?}
+   231x  {297, :econnreset, {:error, :einval}, true}
+   19x  {0, :econnreset, {:error, :einval}, true}
+
+PROBE_DONE
+EXIT=0

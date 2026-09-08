@@ -1,0 +1,82 @@
+== the harness anchors, mutated -- ROUND 2, at full suite scale ==
+date: 2026-09-08T12:06:42Z
+command per mutant: mix test   (the WHOLE suite, not one file -- round 1 finding B1)
+
+H1 applied
+--- H1: diff against the file that ships ---
+--- /tmp/claude-1000/-home-aylac-Projects-beam-mcp/7e6cdf96-6bae-44c9-9851-e53830c64eb4/scratchpad/006/r2_bandit_test.exs	2026-09-08 08:06:42.375878850 -0400
++++ test/beam_mcp/transport/http_bandit_test.exs	2026-09-08 08:06:42.392046822 -0400
+@@ -252,7 +252,7 @@
+   @read_ms 10_000
+ 
+   defp collect(sock, acc, expect) do
+-    if complete_responses(acc) >= expect do
++    if true do
+       settle(sock, acc)
+     else
+       receive do
+--- H1: mix test ---
+  1) test the harness itself: what it will and will not report as a measurement a server that closes without answering is reported at once, and is NOT repeated (BeamMCP.Transport.HTTPBanditTest)
+  2) test the harness itself: what it will and will not report as a measurement a response split across the hold window is read whole, not cut at it (BeamMCP.Transport.HTTPBanditTest)
+  3) test the harness itself: what it will and will not report as a measurement a connection aborted every time raises after the bound instead of looping (BeamMCP.Transport.HTTPBanditTest)
+  4) test the harness itself: what it will and will not report as a measurement an aborted connection is repeated, and the repeat is announced (BeamMCP.Transport.HTTPBanditTest)
+164 tests, 4 failures
+TEST_EXIT=2
+
+H2 applied
+--- H2: diff against the file that ships ---
+--- /tmp/claude-1000/-home-aylac-Projects-beam-mcp/7e6cdf96-6bae-44c9-9851-e53830c64eb4/scratchpad/006/r2_bandit_test.exs	2026-09-08 08:06:42.375878850 -0400
++++ test/beam_mcp/transport/http_bandit_test.exs	2026-09-08 08:06:47.136454482 -0400
+@@ -263,7 +263,7 @@
+           {:aborted, reason, acc}
+ 
+         {:tcp_closed, ^sock} ->
+-          {:unanswered, acc}
++          {acc, :closed}
+       after
+         @read_ms ->
+           raise """
+--- H2: mix test ---
+  1) test the harness itself: what it will and will not report as a measurement a server that closes without answering is reported at once, and is NOT repeated (BeamMCP.Transport.HTTPBanditTest)
+164 tests, 1 failure
+TEST_EXIT=2
+
+H4 applied
+--- H4: diff against the file that ships ---
+--- /tmp/claude-1000/-home-aylac-Projects-beam-mcp/7e6cdf96-6bae-44c9-9851-e53830c64eb4/scratchpad/006/r2_bandit_test.exs	2026-09-08 08:06:42.375878850 -0400
++++ test/beam_mcp/transport/http_bandit_test.exs	2026-09-08 08:06:52.538598333 -0400
+@@ -182,7 +182,7 @@
+   # is the check that says so, with every killed mutant still scoring what the record scores.
+   #
+   # @attempts is derived from the measured loss: 5% at its worst leaves 5 attempts at 3e-7.
+-  @attempts 5
++  @attempts 1
+   @connect_ms 5_000
+   @write_ms 15_000
+ 
+--- H4: mix test ---
+  1) test the harness itself: what it will and will not report as a measurement a connection aborted every time raises after the bound instead of looping (BeamMCP.Transport.HTTPBanditTest)
+  2) test the harness itself: what it will and will not report as a measurement an aborted connection is repeated, and the repeat is announced (BeamMCP.Transport.HTTPBanditTest)
+164 tests, 2 failures
+TEST_EXIT=2
+
+H5 applied
+--- H5: diff against the file that ships ---
+--- /tmp/claude-1000/-home-aylac-Projects-beam-mcp/7e6cdf96-6bae-44c9-9851-e53830c64eb4/scratchpad/006/r2_bandit_test.exs	2026-09-08 08:06:42.375878850 -0400
++++ test/beam_mcp/transport/http_bandit_test.exs	2026-09-08 08:06:57.790999583 -0400
+@@ -263,7 +263,7 @@
+           {:aborted, reason, acc}
+ 
+         {:tcp_closed, ^sock} ->
+-          {:unanswered, acc}
++          {:aborted, :closed, acc}
+       after
+         @read_ms ->
+           raise """
+--- H5: mix test ---
+  1) test the harness itself: what it will and will not report as a measurement a server that closes without answering is reported at once, and is NOT repeated (BeamMCP.Transport.HTTPBanditTest)
+164 tests, 1 failure
+TEST_EXIT=2
+
+restored; unmutated:
+164 tests, 0 failures
