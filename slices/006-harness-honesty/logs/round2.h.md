@@ -57,3 +57,24 @@ which closes the path where a SIGKILL-orphaned mutant becomes the next run's pri
 what it cannot show, which is the property this slice exists to produce.
 
 Bounded by the independence limit at the head of this file.
+
+## Re-read after the rebase onto PR #18
+
+`signoff.sh verify` refused after this branch was rebased onto `main` carrying PR #18: the tree
+the lanes approved (`1d9e1430`) is not the tree that now ships (`1d84c05c`). That refusal is the
+mechanism working, and it is recorded here rather than worked around.
+
+**The delta was re-read in full before re-recording**, not assumed:
+
+    $ git diff f0350d3..HEAD --stat
+     CHANGELOG.md | 4 ----
+     HANDOFF.md   | 7 -------
+     2 files changed, 11 deletions(-)
+
+Eleven deleted lines in two documentation files — the stale "Known gaps" bullets that claimed the
+invalid-UTF-8 defect was unfixed while the same section listed it as fixed. No code, no test, no
+archive, and nothing `mix test` or `tools/mutate.sh` reads: the suite references `CHANGELOG.md`
+only as a filename in `mix.exs` `files:`, never its contents.
+
+**This verdict is unchanged by that delta**, and the re-record says so with the delta named rather
+than re-approving a tree nobody looked at.
