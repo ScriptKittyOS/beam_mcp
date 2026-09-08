@@ -323,3 +323,16 @@ advertised by `tools/list` and every call is answered `500`. This is the host's 
 is correct, and it is now the input the answer-branch anchor uses. Refusing such a schema at
 `check_annotations/2` — beside the non-primitive and collision checks, which is where it belongs —
 was not done here: it needs its own red and its own round, and this slice has no round left.
+
+**The mutation harness reports an extra failure under sustained load.** Across 40 back-to-back
+suite runs producing `logs/mutation-rebased.txt`, two runs read one failure more than the mutant
+deserves — `M13rev` read 2 (record: 1) and `Mr2` read 4 (record: 3). Neither changed a verdict.
+Measured in isolation, each is stable and matches the record exactly: `Mr2` 3/3/3/3/3/3 over six
+runs, `M13rev` 1/1/1/1/1 over five, and the unmutated baseline 0/0/0/0/0/0 over six — **the
+shipping tree is clean.** The artefact is induced by the driver, almost certainly the
+Bandit-backed timing test under load, which is the same component whose 700 ms window produced
+round 3's false KILLED. It matters because a flake that ADDS a failure is the one that makes a
+SURVIVOR read as KILLED: `M2never` and `Mc2` are the rows it could corrupt. Neither was observed
+corrupted in any run here, and *not observed* is weaker than *cannot happen*. Closing it means a
+harness that runs each mutant in isolation with a quiet machine, or a Bandit test that does not
+depend on wall-clock windows; both need their own round.
