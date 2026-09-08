@@ -9,7 +9,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] — unreleased
+## [0.3.1] — 2026-09-08
 
 Five defects in the HTTP transport. Four were found by slice 002's review lanes and filed rather
 than fixed at the time; the fifth was found by this slice's own review and fixed here rather than
