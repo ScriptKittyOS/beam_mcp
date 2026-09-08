@@ -6,8 +6,10 @@ defmodule BeamMCP.ServerTest do
 
   alias BeamMCP.Server
 
-  defmodule FakeToolCatalog do
-    def all do
+  defmodule FakeCatalog do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :get_latest_alerts,
@@ -36,7 +38,7 @@ defmodule BeamMCP.ServerTest do
   end
 
   test "initialize advertises MCP tool capability" do
-    state = Server.new(tool_catalog: FakeToolCatalog)
+    state = Server.new(catalog: FakeCatalog)
 
     {next_state, response} =
       Server.handle_message(state, %{"jsonrpc" => "2.0", "id" => 1, "method" => "initialize"})
@@ -50,7 +52,7 @@ defmodule BeamMCP.ServerTest do
   end
 
   test "tools/list exposes MCP-compatible tool metadata" do
-    state = Server.new(tool_catalog: FakeToolCatalog)
+    state = Server.new(catalog: FakeCatalog)
 
     {_next_state, response} =
       Server.handle_message(state, %{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
@@ -71,7 +73,7 @@ defmodule BeamMCP.ServerTest do
       {:ok, %{received: args[:action_class], case_id: args[:case_id], target: args[:target]}}
     end
 
-    state = Server.new(dispatch: dispatch, tool_catalog: FakeToolCatalog)
+    state = Server.new(dispatch: dispatch, catalog: FakeCatalog)
 
     {_next_state, response} =
       Server.handle_message(state, %{
@@ -105,7 +107,7 @@ defmodule BeamMCP.ServerTest do
   end
 
   test "unknown tools return a JSON-RPC error" do
-    state = Server.new(tool_catalog: FakeToolCatalog)
+    state = Server.new(catalog: FakeCatalog)
 
     {_next_state, response} =
       Server.handle_message(state, %{

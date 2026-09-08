@@ -18,9 +18,11 @@ defmodule BeamMCP.Transport.HTTPTest do
   @hdr "mcp-protocol-version"
 
   defmodule Catalog do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :echo,
@@ -57,7 +59,7 @@ defmodule BeamMCP.Transport.HTTPTest do
   defp opts(extra \\ []) do
     Keyword.merge(
       [
-        tool_catalog: Catalog,
+        catalog: Catalog,
         dispatch: fn _n, a, _o -> {:ok, a} end,
         authorize: fn _conn -> :ok end,
         allowed_origins: :any
@@ -106,20 +108,20 @@ defmodule BeamMCP.Transport.HTTPTest do
   describe "the two options the package refuses to default" do
     test "init/1 raises without :authorize, naming what the host must decide" do
       assert_raise ArgumentError, ~r/requires an :authorize option, and it has no default/, fn ->
-        HTTP.init(tool_catalog: Catalog, allowed_origins: :any)
+        HTTP.init(catalog: Catalog, allowed_origins: :any)
       end
     end
 
     test "init/1 raises without :allowed_origins" do
       assert_raise ArgumentError, ~r/requires an :allowed_origins option/, fn ->
-        HTTP.init(tool_catalog: Catalog, authorize: fn _ -> :ok end)
+        HTTP.init(catalog: Catalog, authorize: fn _ -> :ok end)
       end
     end
 
     test "the failure is at init, not at request time" do
       # The distinction is the whole contract: a host that forgets cannot start, rather than
       # serving unauthorised requests until someone notices.
-      assert_raise ArgumentError, fn -> HTTP.init(tool_catalog: Catalog) end
+      assert_raise ArgumentError, fn -> HTTP.init(catalog: Catalog) end
     end
 
     test "an authorize that refuses stops the request before any message is handled" do
@@ -697,7 +699,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       # The transport matches the core's `Method not found:` prefix. That coupling is real, so
       # it is asserted: a reword fails this test instead of silently turning every 404 into a
       # 200 with no test noticing.
-      state = BeamMCP.Server.new(tool_catalog: Catalog, dispatch: fn _, a, _ -> {:ok, a} end)
+      state = BeamMCP.Server.new(catalog: Catalog, dispatch: fn _, a, _ -> {:ok, a} end)
 
       {_, unimplemented} =
         BeamMCP.Server.handle_message(state, %{
@@ -747,12 +749,12 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
   end
 
-  describe ":tool_catalog is checked for the behaviour, not for truthiness" do
-    test "a value that is not a module exporting all/0 raises at init, not at the first request" do
+  describe ":catalog is checked for the behaviour, not for truthiness" do
+    test "a value that is not a module exporting capabilities/0 raises at init, not at the first request" do
       for bad <- [true, "MyApp.Catalog", Enum, :not_a_module] do
-        assert_raise ArgumentError, ~r/BeamMCP.ToolCatalog behaviour/, fn ->
+        assert_raise ArgumentError, ~r/BeamMCP.Catalog behaviour/, fn ->
           HTTP.init(
-            tool_catalog: bad,
+            catalog: bad,
             dispatch: fn _, a, _ -> {:ok, a} end,
             authorize: fn _ -> :ok end,
             allowed_origins: :any
@@ -1010,7 +1012,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       # ROUND 5, FOUND BY TWO LANES INDEPENDENTLY. The rule was applied to dispatch/3 and the
       # comment beside it claimed "every exception, throw and exit out of the host". The
       # population was LISTED, not derived. Derived by command, host-supplied code runs at three
-      # sites in the request path -- authorize/1, ToolCatalog.fetch/2 and Server.handle_message/2
+      # sites in the request path -- authorize/1, Catalog.fetch/2 and Server.handle_message/2
       # -- and only the third was inside the rescue that was fixed.
       #
       # authorize/1 is the branch this module's own docs call possibly unauthenticated.
@@ -1023,7 +1025,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert body!(conn)["error"]["code"] == -32_603
     end
 
-    test "a host tool_catalog's exception does not choose the HTTP status either" do
+    test "a host catalog's exception does not choose the HTTP status either" do
       # The catalog raises ONCE, and that is the whole design of this test.
       #
       # The first version raised on every call, so `Server.handle_message/2`'s own lookup raised
@@ -1037,9 +1039,11 @@ defmodule BeamMCP.Transport.HTTPTest do
       # succeeds. So if the fault were swallowed, this request would be served rather than
       # refused -- which is exactly the mutant.
       defmodule FlakyCatalog do
-        @behaviour BeamMCP.ToolCatalog
+        @behaviour BeamMCP.Catalog
         @impl true
-        def all do
+        def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+        defp all_tools do
           case Process.put(:flaky_called, true) do
             nil ->
               raise Plug.BadRequestError
@@ -1065,7 +1069,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       end
 
       Process.delete(:flaky_called)
-      o = opts(tool_catalog: FlakyCatalog)
+      o = opts(catalog: FlakyCatalog)
 
       # A header that LIES about the body value: 99 against a body of 42. If mirroring is
       # silently disabled by the swallowed fault, this is dispatched.
@@ -1081,14 +1085,16 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert body!(conn)["id"] == 92
     end
 
-    test "a host tool_catalog that THROWS is answered with the id, not just rescued" do
+    test "a host catalog that THROWS is answered with the id, not just rescued" do
       # host_call/1 has a `catch` as well as a `rescue`, and a mutant dropping the `catch`
       # survived the suite: the throw propagated to call/2's own catch, which answers with
       # `id: null`. Status and code were identical, so only the id moves under that mutation.
       defmodule ThrowingCatalog do
-        @behaviour BeamMCP.ToolCatalog
+        @behaviour BeamMCP.Catalog
         @impl true
-        def all do
+        def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+        defp all_tools do
           case Process.put(:throwing_called, true) do
             nil ->
               throw(:catalog_unavailable)
@@ -1120,7 +1126,7 @@ defmodule BeamMCP.Transport.HTTPTest do
         post(
           body,
           call_headers([{"mcp-param-maxrows", "99"}]),
-          opts(tool_catalog: ThrowingCatalog)
+          opts(catalog: ThrowingCatalog)
         )
 
       assert conn.status == 500
@@ -1159,28 +1165,29 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
 
     test "a host catalog returning a malformed spec answers with the request's id" do
-      # ONE HOST BUG, ONE ENVELOPE. A host `tool_catalog` that RAISES is answered by
+      # ONE HOST BUG, ONE ENVELOPE. A host `catalog` that RAISES is answered by
       # `check_param_headers/4`'s fault branch and keeps the request's id; the same host
       # catalog returning MALFORMED DATA -- a spec-shaped map that is not a `%ToolSpec{}` --
       # used to raise `KeyError` on the `spec.input_schema` read one line later, escape to
       # `call/2`'s rescue and answer `id: null`. Measured before the fix, in
       # `slices/002-streamable-http/logs/probe-fault-ids.txt`:
       #
-      #   host tool_catalog RAISES (header validation)   500  -32603  id=4242
-      #   host tool_catalog returns a malformed spec     500  -32603  id=nil
+      #   host catalog RAISES (header validation)   500  -32603  id=4242
+      #   host catalog returns a malformed spec     500  -32603  id=nil
       #
       # Which envelope a host bug got was decided by which line it landed on. The id is the
       # ONLY thing that distinguishes the two routes, which is why it is what this asserts:
       # status and code are identical on both, so asserting those alone is an anchor that
       # cannot move.
       defmodule BadSpecCatalog do
-        @behaviour BeamMCP.ToolCatalog
+        @behaviour BeamMCP.Catalog
         @impl true
-        def all, do: [%{name: :echo}]
+        def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+        defp all_tools, do: [%{name: :echo}]
       end
 
       body = call_body(%{}) |> Map.put("id", 4242)
-      conn = post(body, call_headers([]), opts(tool_catalog: BadSpecCatalog))
+      conn = post(body, call_headers([]), opts(catalog: BadSpecCatalog))
 
       assert conn.status == 500
       assert conn.resp_body != ""
@@ -1195,9 +1202,11 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
 
     defmodule InvalidUtf8HeaderNameCatalog do
-      @behaviour BeamMCP.ToolCatalog
+      @behaviour BeamMCP.Catalog
       @impl true
-      def all do
+      def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+      defp all_tools do
         [
           %BeamMCP.ToolSpec{
             name: :echo,
@@ -1243,7 +1252,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       # A property with an unencodable annotation name is still a recorded gap -- the tool is
       # advertised and uncallable -- and it is filed in this slice's FINDINGS.md rather than
       # described here as filed.
-      o = opts(tool_catalog: InvalidUtf8HeaderNameCatalog)
+      o = opts(catalog: InvalidUtf8HeaderNameCatalog)
       body = call_body(%{"value" => "x"}) |> Map.put("id", 4243)
 
       conn = post(body, call_headers([]), o)
@@ -1623,9 +1632,11 @@ defmodule BeamMCP.Transport.HTTPTest do
     # and the 400 blames the caller for the host's schema.
 
     defmodule FloatAnnotationCatalog do
-      @behaviour BeamMCP.ToolCatalog
+      @behaviour BeamMCP.Catalog
       @impl true
-      def all do
+      def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+      defp all_tools do
         [
           %BeamMCP.ToolSpec{
             name: :echo,
@@ -1642,9 +1653,11 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
 
     defmodule ObjectAnnotationCatalog do
-      @behaviour BeamMCP.ToolCatalog
+      @behaviour BeamMCP.Catalog
       @impl true
-      def all do
+      def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+      defp all_tools do
         [
           %BeamMCP.ToolSpec{
             name: :echo,
@@ -1671,7 +1684,7 @@ defmodule BeamMCP.Transport.HTTPTest do
 
       o =
         opts(
-          tool_catalog: FloatAnnotationCatalog,
+          catalog: FloatAnnotationCatalog,
           dispatch: fn n, a, _ -> send(me, {:dispatched, n, a}) && {:ok, a} end
         )
 
@@ -1706,7 +1719,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     test "the refusal does not depend on the caller sending the header" do
       # Both directions were closed before, and both must now land on the same answer: the
       # verdict is a property of the SCHEMA, so it cannot depend on what the caller sent.
-      o = opts(tool_catalog: FloatAnnotationCatalog)
+      o = opts(catalog: FloatAnnotationCatalog)
 
       ExUnit.CaptureLog.capture_log(fn ->
         assert post(call_body(%{"ratio" => 1.5}), call_headers([]), o).status == 500
@@ -1714,7 +1727,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
 
     test "an annotated `object` property is the same fault" do
-      o = opts(tool_catalog: ObjectAnnotationCatalog)
+      o = opts(catalog: ObjectAnnotationCatalog)
 
       ExUnit.CaptureLog.capture_log(fn ->
         conn = post(call_body(%{"obj" => %{"k" => "v"}}), call_headers([]), o)
@@ -1730,9 +1743,11 @@ defmodule BeamMCP.Transport.HTTPTest do
       # would turn a caller sending the wrong shape into a host fault -- the wrong side of the
       # boundary, and the mistake this fix exists to stop making in the other direction.
       defmodule UntypedAnnotationCatalog do
-        @behaviour BeamMCP.ToolCatalog
+        @behaviour BeamMCP.Catalog
         @impl true
-        def all do
+        def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+        defp all_tools do
           [
             %BeamMCP.ToolSpec{
               name: :echo,
@@ -1748,7 +1763,7 @@ defmodule BeamMCP.Transport.HTTPTest do
         end
       end
 
-      o = opts(tool_catalog: UntypedAnnotationCatalog)
+      o = opts(catalog: UntypedAnnotationCatalog)
       body = call_body(%{"loose" => "v"})
 
       assert post(body, call_headers([{"mcp-param-loose", "v"}]), o).status == 200
@@ -1773,9 +1788,11 @@ defmodule BeamMCP.Transport.HTTPTest do
     # schema.
 
     defmodule CollidingCatalog do
-      @behaviour BeamMCP.ToolCatalog
+      @behaviour BeamMCP.Catalog
       @impl true
-      def all do
+      def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+      defp all_tools do
         [
           %BeamMCP.ToolSpec{
             name: :collide,
@@ -1795,9 +1812,11 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
 
     defmodule NestedCollisionCatalog do
-      @behaviour BeamMCP.ToolCatalog
+      @behaviour BeamMCP.Catalog
       @impl true
-      def all do
+      def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+      defp all_tools do
         [
           %BeamMCP.ToolSpec{
             name: :collide,
@@ -1834,7 +1853,7 @@ defmodule BeamMCP.Transport.HTTPTest do
 
       o =
         opts(
-          tool_catalog: CollidingCatalog,
+          catalog: CollidingCatalog,
           dispatch: fn n, a, _ -> send(me, {:dispatched, n, a}) && {:ok, a} end
         )
 
@@ -1869,7 +1888,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     test "the collision is refused however the caller writes the header, or omits it" do
       # The verdict is a property of the schema. A caller who supplies both spellings, or
       # neither, gets the same answer -- otherwise the check is being decided by the request.
-      o = opts(tool_catalog: CollidingCatalog)
+      o = opts(catalog: CollidingCatalog)
       body = collide_body(%{"alpha" => "A", "beta" => "B"})
 
       ExUnit.CaptureLog.capture_log(fn ->
@@ -1884,7 +1903,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     test "a nested annotation colliding with an outer one is the same fault" do
       # This is the `Map.merge` half rather than the `Map.put` half: the nested walk's result
       # was merged over the accumulator, so a nested annotation silently won.
-      o = opts(tool_catalog: NestedCollisionCatalog)
+      o = opts(catalog: NestedCollisionCatalog)
 
       ExUnit.CaptureLog.capture_log(fn ->
         conn =

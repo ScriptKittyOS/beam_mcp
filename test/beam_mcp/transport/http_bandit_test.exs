@@ -59,9 +59,11 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   @declared_but_unsent 5_000_000
 
   defmodule Catalog do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :echo,
@@ -80,7 +82,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     plug_opts =
       Keyword.merge(
         [
-          tool_catalog: Catalog,
+          catalog: Catalog,
           dispatch: fn _n, a, _o -> {:ok, a} end,
           authorize: fn _conn -> :ok end,
           allowed_origins: :any

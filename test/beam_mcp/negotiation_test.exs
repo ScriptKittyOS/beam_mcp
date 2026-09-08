@@ -23,10 +23,12 @@ defmodule BeamMCP.NegotiationTest do
   @legacy "2025-11-25"
 
   defmodule Catalog do
-    @behaviour BeamMCP.ToolCatalog
+    @behaviour BeamMCP.Catalog
 
     @impl true
-    def all do
+    def capabilities, do: %{tools: all_tools(), resources: [], prompts: []}
+
+    defp all_tools do
       [
         %BeamMCP.ToolSpec{
           name: :echo,
@@ -38,7 +40,7 @@ defmodule BeamMCP.NegotiationTest do
     end
   end
 
-  defp state, do: Server.new(tool_catalog: Catalog, dispatch: fn _n, a, _o -> {:ok, a} end)
+  defp state, do: Server.new(catalog: Catalog, dispatch: fn _n, a, _o -> {:ok, a} end)
 
   defp send_msg(msg), do: state() |> Server.handle_message(msg) |> elem(1)
 
