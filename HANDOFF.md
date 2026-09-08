@@ -116,6 +116,19 @@ Every one of these is in `slices/003-release-0-3-1/FINDINGS.md` with its measure
 
 ## To release 0.3.1
 
+> **HELD. Do not tag and do not publish.** Owner instruction, 2026-09-08: the release waits until
+> the CI test flake (SCR-289, slice 006) is fixed and merged.
+>
+> The reason is not the defect in `0.3.1` — there isn't one. It is that a test in this repository
+> answers differently on two runs of the same commit, **measured**: PR #15's `pull_request` run
+> passed and its `push` run failed on a commit containing no code. While that is true, *"gate
+> green, every step line reading pass"* is a sample rather than a measurement, and that sentence
+> is the whole evidence that `0.3.1` is fit to ship. Tagging now would publish on a green that
+> nobody can currently distinguish from a lucky one.
+>
+> Lift this line when slice 006 is on `main`, then re-run the gate on the release commit and read
+> the step lines before step 2 below.
+
 1. Merge the PR to `main` (the ruleset requires two green checks).
 2. Date the `[0.3.1]` heading.
 3. `mix hex.publish`, then tag `v0.3.1` signed — or tag first and publish immediately after.
