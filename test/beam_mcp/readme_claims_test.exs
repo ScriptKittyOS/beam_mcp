@@ -342,6 +342,30 @@ defmodule BeamMCP.ReadmeClaimsTest do
     end
   end
 
+  describe "the :authorize_body README claims" do
+    test "every behavioural sentence about the hook is pinned to the sentence that states it" do
+      # FRAGMENTS ARE CHOSEN TO SIT WITHIN ONE WRAPPED LINE. The README is hard-wrapped, and
+      # the first version of this test failed on three fragments that spanned a line break --
+      # the hazard this file already carries one embedded newline for. Each of these was
+      # checked against the file with grep before being written here.
+      claims("position before the body read")
+      claims("is called after the body is read and before it is decoded")
+      claims("argument is the request body exactly as received")
+      claims("the reason goes to the log, never to the caller")
+      claims("A post-read refusal does not close the connection")
+      claims("This package performs no cryptography.")
+      claims("verifying is the host's work")
+    end
+
+    # The BEHAVIOUR behind these sentences is exercised in
+    # `test/beam_mcp/transport/http_test.exs`, under ":authorize_body/2 — the post-read hook,
+    # and the bytes it is handed": the byte-identity of the body, the init-time arity refusal,
+    # allow-versus-refuse, the opacity of the refusal, and the absence of `connection: close`.
+    # It is not duplicated here. Reaching across for that module's catalog fixture would give
+    # this file a second reason to break, and the claims above are pinned to sentences whose
+    # code is pinned there.
+  end
+
   describe "the HTTP transport's README claims" do
     test "the numbers in the resource section are pinned to the sentences that state them" do
       # A round-3 lane measured every number in this section and found three wrong. None of them
@@ -527,7 +551,16 @@ defmodule BeamMCP.ReadmeClaimsTest do
     test "the authorize/1 body limitation is stated with its measured failure mode" do
       claims("body-signature\nauthentication is not possible in `authorize/1`")
       claims("119 bytes `200`, 16 KiB and 200 KiB both `408`")
-      claims("open design question")
+
+      # `claims("open design question")` stood here and is REPLACED, not deleted. Slice 007
+      # settled that question -- `authorize/1` keeps its position and `:authorize_body` sits
+      # beside it -- so the README no longer poses it. This file's own rule is that a claim
+      # which moves takes its test with it; a test pinning a sentence nobody makes any more
+      # reads as coverage while guarding nothing.
+      claims("That design question is settled, and not by changing `authorize/1`.")
+
+      # And the limitation above is still TRUE of `authorize/1` itself, which is why the first
+      # two fragments are untouched: the hook did not widen `authorize/1`, it sits beside it.
     end
 
     test "a forbidden x-mcp-header annotation is the host's fault, as the README now says" do
