@@ -100,46 +100,267 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # second request only after reading the first response would test nothing: the point is that
   # its bytes are already on the wire when the server decides what to do with the connection.
   #
+  # `expect` is how many complete HTTP responses this exchange is waiting for. It is what the
+  # read terminates on, and it is not a guess: every response this adapter sends carries a
+  # `content-length`, so "complete" is decidable from the bytes rather than from a clock.
+  #
   # Returns the bytes AND whether the server closed the connection or left it open, because
   # the socket state is the effect this file exists to measure.
-  defp exchange(port, bytes_to_send) do
+  #
+  # ------------------------------------------------------------------------------------------
+  # WHY THE SOCKET IS `active: true` AND THE WRITE RUNS IN ITS OWN PROCESS. This is the fix, and
+  # it is not a timeout change. Measured, not reasoned about.
+  #
+  # The 9 MB case: the server refuses on the headers, writes a 297-byte 403, and closes with
+  # ~9 MB still unread, so the peer sends an RST. What that RST destroys is the question.
+  #
+  # `logs/probe-drain-mechanism.txt`, 40 runs per variant, reporting
+  # `{bytes received, recv reason, send result, saw the 403?}`:
+  #
+  #     A  send everything, then read (what this file did)   29x {297, :closed, :ok, true}
+  #                                                          11x {0, :closed, :ok, false}
+  #     B  A, plus show_econnreset: true                     21x {297, :closed, ...}
+  #                                                          11x {297, :econnreset, ...}
+  #                                                           8x {0, :econnreset, :ok, false}
+  #     C  passive recv concurrent with the write            40x {297, :closed, :ok, true}
+  #     D  C, plus show_econnreset: true                     25x {297, :econnreset, ...}
+  #                                                          15x {297, :closed, ...}
+  #
+  # So the bytes are LOST, not late: 11 of 40 reads saw ZERO bytes and reported the connection
+  # ended. No timeout branch is taken and no buffer is partial, which is why slice 003's repair
+  # -- one 700 ms window split into 10_000 + 700 -- reduced the rate and left the mechanism.
+  # `show_econnreset: true` only renames the error (B); it does not save the data.
+  #
+  # Reading concurrently with the write (C, D) lost nothing in 80 idle runs. It was NOT enough:
+  # `logs/probe-rate-mc8-load32-passive.txt` is 40 suites at `--max-cases 8` with 32 busy loops
+  # alongside, and 6 of them still ended with `0 complete response(s)` and `0 byte(s) read`. A
+  # PASSIVE socket keeps received bytes inside the port, and a failing `gen_tcp:send` destroys
+  # the port -- so a reader that has not yet been SCHEDULED to call `recv` loses them, which is
+  # exactly what CPU starvation produces.
+  #
+  # `active: true` moves them out of reach: the driver posts `{:tcp, sock, data}` into this
+  # process's MAILBOX as the kernel delivers it, without this process running, and a message in
+  # a mailbox cannot be taken back by a port dying. The driver also posts `{:tcp_error, sock,
+  # :econnreset}` and `{:tcp_closed, sock}` AFTER the data it already read, and the mailbox is
+  # FIFO, so "the connection ended" can never be observed before bytes that preceded it.
+  #
+  # `show_econnreset: true` is kept so that "the peer reset us" and "the peer closed cleanly"
+  # are distinguishable in the message when a read does end early. Both mean the server ended
+  # the connection, so both answer `:closed`.
+  # ------------------------------------------------------------------------------------------
+  # AND WHY A DESTROYED EXCHANGE IS REPEATED RATHER THAN REPORTED. `active: true` took the loss
+  # from 11/40 to 3/60 and did not remove it, because the last of it is not on this side of the
+  # wire at all.
+  #
+  # `logs/probe-loss-site.txt` separates the three places the 297 bytes could go. The plug's
+  # `authorize` callback messages the test process, so "the server never answered" is
+  # distinguishable from "the answer did not arrive". 60 runs under 32 busy loops:
+  #
+  #     57x  {297, :econnreset, ..., authorize ran: true}
+  #      3x  {0,   :econnreset, ..., authorize ran: true}
+  #
+  # The server decided and wrote its refusal in 60 of 60. Three of those refusals never reached
+  # the client. The server closes with ~9 MB unread, which makes Linux abort the connection with
+  # an RST instead of a FIN, and an RST discards whatever of the response had not yet been
+  # transmitted. `logs/probe-write-shape.txt` shows the write shape does not govern it either --
+  # 120 runs in one 9 MB send lost 0, 120 runs in 64 KB chunks lost 5, on the same loaded machine.
+  #
+  # So the residue is a lost segment, and NO read logic can recover it. What the harness can do
+  # is refuse to call it a measurement. `{0, :econnreset}` is not an observation of the server;
+  # it is the absence of one. Reporting it as `{"", :closed}` was the old defect. Reporting it as
+  # a failed `assert bytes =~ "HTTP/1.1 403"` is the SAME LIE WITH THE SIGN FLIPPED: a sentence
+  # about the server, for bytes the server did send.
+  #
+  # An exchange that produced no measurement is therefore repeated on a fresh connection, and the
+  # repeat is announced on stderr rather than hidden. This is not a retry of a failed assertion:
+  # the predicate is protocol-determined -- the connection ended with fewer than `expect`
+  # complete responses -- and it is decided before any assertion runs. A server that genuinely
+  # never answers fails every attempt and raises, so nothing is masked; `logs/green-mutation-under-load.txt`
+  # is the check that says so, with every killed mutant still scoring what the record scores.
+  #
+  # @attempts is derived from the measured loss: 5% at its worst leaves 5 attempts at 3e-7.
+  @attempts 5
+  @connect_ms 5_000
+  @write_ms 15_000
+
+  defp exchange(port, bytes_to_send, expect), do: exchange(port, bytes_to_send, expect, 1)
+
+  defp exchange(port, bytes_to_send, expect, attempt) do
     {:ok, sock} =
-      :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false, packet: :raw], 5_000)
+      :gen_tcp.connect(
+        ~c"127.0.0.1",
+        port,
+        [:binary, active: true, packet: :raw, show_econnreset: true],
+        @connect_ms
+      )
 
     # The send result is not asserted: a server that answers and closes while a large body is
     # still being written makes `{:error, :closed}` here a correct outcome, not a failure.
     # What the test reads is what came back.
-    _ = :gen_tcp.send(sock, bytes_to_send)
-    result = drain(sock, "")
+    me = self()
+    writer = spawn(fn -> send(me, {:written, self(), :gen_tcp.send(sock, bytes_to_send)}) end)
+
+    result = collect(sock, "", expect)
+
+    receive do
+      {:written, ^writer, _} -> :ok
+    after
+      @write_ms -> :ok
+    end
+
     :gen_tcp.close(sock)
-    result
-  end
 
-  # `:closed` means the server ended the connection. `:open` means it is still holding it --
-  # which, for a refused request with an unfinished body, means it is still draining.
-  #
-  # TWO TIMEOUTS, AND THE FIRST ONE IS WHY. A single 700 ms window made the 9 MB case FLAKY:
-  # under load the upload had not finished before the window expired, `drain/2` returned an
-  # empty buffer, and the test failed on a race rather than on the behaviour. It surfaced as a
-  # SURVIVING mutant scoring as KILLED in a re-scoring run, which is the worst way for a flake
-  # to present itself -- a table reading all-killed because a test failed for the wrong reason.
-  # So: wait generously for the FIRST byte, which is bounded by however long the client takes
-  # to finish writing, and only then use the short quiet window that distinguishes "the server
-  # is holding this connection" from "the server is done".
-  @first_byte_ms 10_000
-  @quiet_ms 700
+    case result do
+      {:destroyed, reason, acc} when attempt < @attempts ->
+        IO.puts(
+          :stderr,
+          "http_bandit_test: exchange #{attempt}/#{@attempts} produced no measurement " <>
+            "(#{inspect(reason)} after #{complete_responses(acc)}/#{expect} complete " <>
+            "responses, #{byte_size(acc)} bytes). Repeating on a fresh connection."
+        )
 
-  defp drain(sock, acc) do
-    timeout = if acc == "", do: @first_byte_ms, else: @quiet_ms
+        exchange(port, bytes_to_send, expect, attempt + 1)
 
-    case :gen_tcp.recv(sock, 0, timeout) do
-      {:ok, data} -> drain(sock, acc <> data)
-      {:error, :timeout} -> {acc, :open}
-      {:error, :closed} -> {acc, :closed}
+      {:destroyed, reason, acc} ->
+        raise ended(reason, acc, expect, attempt)
+
+      {bytes, state} ->
+        {bytes, state}
     end
   end
 
+  # THE READ TERMINATES ON THE PROTOCOL, NOT ON A SILENCE.
+  #
+  # `collect/3` reads until `expect` COMPLETE responses have been parsed out of the buffer --
+  # status line, headers, and the `content-length` bytes that follow -- or until the server ends
+  # the connection. A timeout here is never a verdict: it raises, because a harness that could
+  # not finish reading has not measured anything, and neither has one whose bytes were destroyed
+  # under it.
+  #
+  # WHAT THE PREVIOUS SHAPE GOT WRONG, and it is not the number. `drain/2` terminated on elapsed
+  # silence in both directions: `{:error, :timeout} -> {acc, :open}` and
+  # `{:error, :closed} -> {acc, :closed}`, over whatever was in `acc`, INCLUDING NOTHING. An
+  # empty buffer was reported as a measurement and every assertion downstream was made against
+  # bytes that had never arrived -- so the failure surfaced as `assert bytes =~ "HTTP/1.1 403"`,
+  # a sentence about the server, for a fault entirely on this side of the wire.
+  @read_ms 10_000
+
+  defp collect(sock, acc, expect) do
+    if complete_responses(acc) >= expect do
+      settle(sock, acc)
+    else
+      receive do
+        {:tcp, ^sock, data} ->
+          collect(sock, acc <> data, expect)
+
+        {:tcp_error, ^sock, reason} ->
+          {:destroyed, reason, acc}
+
+        {:tcp_closed, ^sock} ->
+          {:destroyed, :closed, acc}
+      after
+        @read_ms ->
+          raise """
+          No further bytes for #{@read_ms} ms with #{complete_responses(acc)} complete \
+          response(s) out of #{expect}. #{byte_size(acc)} byte(s) were read.
+
+          This is a stuck read, not a verdict about the connection.
+          """
+      end
+    end
+  end
+
+  defp ended(reason, acc, expect, attempts) do
+    """
+    #{attempts} exchange(s) in a row produced no measurement. The last ended \
+    (#{inspect(reason)}) after #{complete_responses(acc)} complete response(s) out of \
+    #{expect}, having read #{byte_size(acc)} byte(s): \
+    #{inspect(acc, limit: 400, printable_limit: 400)}
+
+    One such exchange is a lost segment and is repeated. #{attempts} of them is a server that \
+    does not answer, and that is reported here rather than turned into an assertion about \
+    bytes nobody received.
+    """
+  end
+
+  # WHETHER THE SERVER CLOSED IS ONLY ASKED ONCE THE RESPONSES ARE ALREADY COMPLETE, and that
+  # ordering is what makes the remaining window safe. TCP delivers a FIN in order, behind the
+  # bytes that preceded it, and the driver posts `{:tcp_closed, ...}` after the `{:tcp, ...}`
+  # messages it already posted -- so a server that closes after answering has already queued its
+  # FIN by the time the last byte of the last response is in hand. This window is not racing the
+  # response bytes; it is racing only the server's own close syscall.
+  #
+  # It is still a window, and it is named as one. `:open` is the ABSENCE of an event and cannot
+  # be decided any other way over a socket. What it can no longer do is report a verdict over a
+  # buffer that is empty or short, which is the defect this replaces.
+  #
+  # Anything that arrives during it is kept, so `responses/1` still counts everything the server
+  # sent and an assertion on that count is not made vacuous by `expect`.
+  @hold_ms 700
+
+  defp settle(sock, acc) do
+    receive do
+      {:tcp, ^sock, data} -> settle(sock, acc <> data)
+      {:tcp_closed, ^sock} -> {acc, :closed}
+      {:tcp_error, ^sock, _reason} -> {acc, :closed}
+    after
+      @hold_ms -> {acc, :open}
+    end
+  end
+
+  # A response is complete when its `content-length` bytes have arrived. Every response this
+  # adapter sends declares one, so this needs no chunked-encoding limb; a response without one
+  # simply never counts as complete and the read raises rather than guessing.
+  defp complete_responses(bytes), do: complete_responses(bytes, 0)
+
+  defp complete_responses(bytes, n) do
+    with ["HTTP/1.1 " <> _ = head, rest] <- String.split(bytes, "\r\n\r\n", parts: 2),
+         {:ok, len} <- content_length(head),
+         true <- byte_size(rest) >= len do
+      complete_responses(binary_part(rest, len, byte_size(rest) - len), n + 1)
+    else
+      _ -> n
+    end
+  end
+
+  defp content_length(head) do
+    head
+    |> String.downcase()
+    |> String.split("\r\n")
+    |> Enum.find_value(:error, fn
+      "content-length:" <> v -> {:ok, String.to_integer(String.trim(v))}
+      _ -> nil
+    end)
+  end
+
   defp responses(bytes), do: length(String.split(bytes, "HTTP/1.1 ")) - 1
+
+  # A raw listener with a scripted reply, so the harness's own reading can be given inputs the
+  # adapter under test cannot be made to produce on demand. CONVENTIONS.md: an anchor that
+  # cannot move under the mutation carries no information, and the two tests at the bottom of
+  # this file are the anchors for everything above -- without them the read logic is argued in
+  # a comment and pinned by nothing.
+  defp fake_listener(handler) do
+    {:ok, lsock} =
+      :gen_tcp.listen(0, [:binary, active: false, packet: :raw, reuseaddr: true, ip: :loopback])
+
+    {:ok, lport} = :inet.port(lsock)
+
+    spawn(fn -> accept_forever(lsock, handler) end)
+    on_exit(fn -> :gen_tcp.close(lsock) end)
+    lport
+  end
+
+  defp accept_forever(lsock, handler) do
+    case :gen_tcp.accept(lsock) do
+      {:ok, sock} ->
+        spawn(fn -> handler.(sock) end)
+        accept_forever(lsock, handler)
+
+      {:error, _closed} ->
+        :ok
+    end
+  end
 
   defp closes?(bytes), do: bytes |> String.downcase() |> String.contains?("connection: close")
 
@@ -188,7 +409,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # closes on everything, which is a different bug wearing the fix's clothes.
       port = listen([])
 
-      {bytes, state} = exchange(port, good_post(1) <> good_post(2))
+      {bytes, state} = exchange(port, good_post(1) <> good_post(2), 2)
 
       assert responses(bytes) == 2
       assert state == :open
@@ -207,7 +428,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
       bad_json = "{not json"
 
-      {bytes, state} = exchange(port, req("POST", bad_json) <> good_post(2))
+      {bytes, state} = exchange(port, req("POST", bad_json) <> good_post(2), 2)
 
       assert String.contains?(bytes, "HTTP/1.1 400")
       assert responses(bytes) == 2
@@ -238,7 +459,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       port = listen(allowed_origins: ["https://good.example"])
 
       {bytes, state} =
-        exchange(port, unfinished("POST", [{"origin", "https://evil.example"}]))
+        exchange(port, unfinished("POST", [{"origin", "https://evil.example"}]), 1)
 
       assert String.contains?(bytes, "HTTP/1.1 403")
       assert closes?(bytes)
@@ -251,7 +472,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     test "an authorize refusal ends the connection instead of draining the body it refused" do
       port = listen(authorize: fn _conn -> {:error, :nope} end)
 
-      {bytes, state} = exchange(port, unfinished("POST"))
+      {bytes, state} = exchange(port, unfinished("POST"), 1)
 
       assert String.contains?(bytes, "HTTP/1.1 403")
       assert closes?(bytes)
@@ -263,7 +484,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # 002's lane s3 probed.
       port = listen(authorize: fn _conn -> raise "authorize exploded" end)
 
-      {bytes, state} = exchange(port, unfinished("POST"))
+      {bytes, state} = exchange(port, unfinished("POST"), 1)
 
       assert String.contains?(bytes, "HTTP/1.1 500")
       assert closes?(bytes)
@@ -276,7 +497,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # 403" reads like one site and is two.
       port = listen(authorize: fn _conn -> :yes_please end)
 
-      {bytes, state} = exchange(port, unfinished("POST"))
+      {bytes, state} = exchange(port, unfinished("POST"), 1)
 
       assert String.contains?(bytes, "HTTP/1.1 403")
       assert closes?(bytes)
@@ -289,7 +510,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # and a non-POST is free to carry a body.
       port = listen([])
 
-      {bytes, state} = exchange(port, unfinished("PUT"))
+      {bytes, state} = exchange(port, unfinished("PUT"), 1)
 
       assert String.contains?(bytes, "HTTP/1.1 405")
       assert String.downcase(bytes) =~ "allow: post"
@@ -310,7 +531,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
       big = call_json(1, @over_drain_cap)
 
-      {bytes, state} = exchange(port, req("POST", big) <> good_post(2))
+      {bytes, state} = exchange(port, req("POST", big) <> good_post(2), 1)
 
       assert String.contains?(bytes, "HTTP/1.1 403")
       assert closes?(bytes)
@@ -331,11 +552,47 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
       big = call_json(1, 1_100_000)
 
-      {bytes, state} = exchange(port, req("POST", big) <> good_post(2))
+      {bytes, state} = exchange(port, req("POST", big) <> good_post(2), 1)
 
       assert String.contains?(bytes, "HTTP/1.1 413")
       assert closes?(bytes)
       assert state == :closed
+    end
+  end
+
+  describe "the harness itself: what it will and will not report as a measurement" do
+    test "a response split across the hold window is read whole, not cut at it" do
+      # THE ANCHOR FOR THE COMPLETENESS CHANGE. `drain/2` ended the read on @quiet_ms of
+      # silence, so a response whose body lagged its headers by longer than that came back
+      # TRUNCATED and the connection came back `:open` -- a verdict, from a partial buffer.
+      # Completeness now comes from `content-length`, so the gap is irrelevant.
+      body = String.duplicate("z", 4_000)
+      head = "HTTP/1.1 200 OK\r\ncontent-length: #{byte_size(body)}\r\n\r\n"
+
+      port =
+        fake_listener(fn sock ->
+          :gen_tcp.send(sock, head)
+          Process.sleep(@hold_ms * 2)
+          :gen_tcp.send(sock, body)
+          :gen_tcp.close(sock)
+        end)
+
+      {bytes, state} = exchange(port, "GET / HTTP/1.1\r\nhost: x\r\n\r\n", 1)
+
+      assert byte_size(bytes) == byte_size(head) + byte_size(body)
+      assert state == :closed
+    end
+
+    test "a server that never answers is reported as one, not repeated into a pass" do
+      # THE ANCHOR FOR THE REPEAT. A destroyed exchange is repeated because it is the absence of
+      # an observation; if the repeat could turn "this server never answers" into a pass it
+      # would be laundering a defect instead. It cannot: every attempt is destroyed and the
+      # harness says so, naming itself rather than asserting something about response bytes.
+      port = fake_listener(fn sock -> :gen_tcp.close(sock) end)
+
+      assert_raise RuntimeError,
+                   ~r/#{@attempts} exchange\(s\) in a row produced no measurement/,
+                   fn -> exchange(port, "GET / HTTP/1.1\r\nhost: x\r\n\r\n", 1) end
     end
   end
 end
