@@ -24,8 +24,20 @@
 # version diffed against a `http.ex.pristine` file that had been copied by hand some time
 # earlier, and carried a second copy named `.prerebase` because the first had gone stale. A
 # stale pristine makes the printed diff describe a tree nobody is running. Here the pristine is
-# made at the start of every invocation from the working file, and restored from it by an EXIT
-# trap, so an interrupted run cannot leave a mutated file behind.
+# made at the start of every invocation from the working file, and restored from it by a trap on
+# EXIT, INT and TERM.
+#
+# THAT TRAP DOES NOT COVER SIGKILL, AND SAYING SO IS THE POINT. This header used to claim "an
+# interrupted run cannot leave a mutated file behind". No trap catches SIGKILL, which is what a
+# task stop sends, so the claim was false for the one interruption a runaway scoring loop is
+# most likely to receive.
+#
+# The consequence is worse than a leftover file, and it is why the guard below exists. `pristine`
+# is copied from the WORKING file. If a SIGKILL ever does leave a mutant on disk, the NEXT
+# invocation adopts that mutant as its pristine, every "restore" afterwards restores the defect,
+# and every diff prints clean because the mutant is now the baseline. A scoring instrument that
+# silently adopts a defect as its reference is the exact failure this slice exists to remove, so
+# the run REFUSES to start when its target is dirty rather than trusting what it finds.
 #
 # WHAT IT REFUSES. A mutant whose anchor no longer matches, or one that leaves the file byte
 # identical, is reported as NOT-APPLIED and scored as nothing. CONVENTIONS.md: "a mutation
@@ -49,11 +61,52 @@ all_mutants() {
   done
 }
 
+# ONE RUN PER WORKTREE, ENFORCED. This script rewrites TARGET in place, so two runs in one
+# worktree score each other's mutations and neither result means anything. Slice 006 round 1 saw
+# exactly that happen live, with two reviewers in one worktree.
+#
+# The lock is a DIRECTORY, because mkdir is atomic on every filesystem this runs on and needs no
+# flock -- which bash 3.2 on stock macOS does not ship. It lives under the git directory so it is
+# never tracked and can never enter the REUSE step's population.
+lockdir="$(git rev-parse --git-dir)/beam_mcp-mutate.lock"
+
 pristine=""
-restore() { [ -n "$pristine" ] && [ -f "$pristine" ] && cp "$pristine" "$TARGET"; rm -f "$pristine"; }
+restore() {
+  [ -n "$pristine" ] && [ -f "$pristine" ] && cp "$pristine" "$TARGET"
+  rm -f "$pristine"
+  rmdir "$lockdir" 2>/dev/null
+}
 trap restore EXIT INT TERM
 
 start() {
+  # THE TARGET MUST BE THE COMMITTED FILE. See the SIGKILL note in the header: an uncommitted
+  # target is indistinguishable from a mutant a killed run left behind, and adopting one as the
+  # pristine corrupts every score that follows, silently and permanently.
+  #
+  # This is scoped to TARGET, not to the tree: a slice scoring mutants while its own test file
+  # and records are uncommitted is normal and stays allowed. Only the file being mutated has to
+  # be clean.
+  #
+  # It would also have stopped the incident this guard came from -- a reviewer who saw the target
+  # modified mid-run, guessed at three lock paths that do not exist instead of reading `lockdir=`
+  # in this file, concluded no run was active, and checked the target out from under a live
+  # scoring loop. One mutant then scored against unmutated code, which reads as a SURVIVOR and is
+  # really a kill: the direction of error this whole slice is about. The archive was discarded
+  # rather than repaired, because a table with one unknown false survivor is not repairable by
+  # inspection.
+  if [ -n "$(git status --porcelain -- "$TARGET")" ] && [ "${MUTATE_ALLOW_DIRTY_TARGET:-0}" != "1" ]; then
+    echo "REFUSING: $TARGET has uncommitted changes." >&2
+    echo "The pristine copy is taken from the working file, so scoring against a dirty target" >&2
+    echo "risks adopting a leftover mutant as the baseline -- see the header. Commit or revert" >&2
+    echo "it, or set MUTATE_ALLOW_DIRTY_TARGET=1 if you have checked it yourself." >&2
+    exit 1
+  fi
+  if ! mkdir "$lockdir" 2>/dev/null; then
+    echo "REFUSING: another tools/mutate.sh holds $lockdir." >&2
+    echo "It rewrites $TARGET in place, so two at once score each other's mutations." >&2
+    echo "If no run is active, remove that directory." >&2
+    exit 1
+  fi
   pristine=$(mktemp "${TMPDIR:-/tmp}/beam_mcp-mutate.XXXXXXXX") || exit 1
   cp "$TARGET" "$pristine" || exit 1
 }
@@ -76,6 +129,13 @@ suite() {
   out=$(mix test 2>&1); rc=$?
   printf '%s\n' "$out" | grep -E '^[0-9]+ tests?, ' | tail -1
   printf '%s\n' "$out" | grep -E '^ +[0-9]+\) test ' | sed 's/^ *[0-9]*) test /        failed: /'
+  # AND HOW MANY EXCHANGES PRODUCED NO MEASUREMENT. The Bandit harness repeats an exchange whose
+  # response was destroyed in transit, and announces each one on stderr. Slice 006 round 1 found
+  # that a scored run kept no trace of them -- `grep -c` over the scored archive returned 0 while
+  # the rate archive held 166 -- so a defect the repeat absorbed was invisible in exactly the
+  # artefact a verdict is read from. A row that needed repeats now says so.
+  printf '%s\n' "$out" | grep -c 'produced no measurement' \
+    | sed 's/^0$//; s/^\([1-9][0-9]*\)$/        exchanges repeated: \1/'
   return $rc
 }
 
