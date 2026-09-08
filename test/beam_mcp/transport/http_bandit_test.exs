@@ -37,7 +37,8 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   Slice 002 lane s3 measured `second-request-answered=False` for a pre-read refusal. On
   bandit 1.12.5 / thousand_island 1.5.0 that does NOT reproduce at ordinary body sizes: the
   drain succeeds and the second pipelined request IS answered
-  (`logs/probe-d-bandit-drain.txt`, three body sizes up to 1 MB, all `responses=2`). The defect
+  (`slices/003-release-0-3-1/logs/probe-d-bandit-drain.txt`, three body sizes up to 1 MB,
+  all `responses=2`). The defect
   is real; the symptom named for it was not the one this adapter shows.
 
   `async: false` on purpose -- these bind a listening socket and read raw bytes off it.
@@ -522,7 +523,8 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # THE CASE WHERE THE CLIENT WAS TOLD NOTHING. Above bandit's 8_000_000-byte drain cap the
       # drain fails, the adapter logs `Unable to read remaining data in request body` and drops
       # the connection -- pipelined request lost, no `connection: close` in the response that
-      # preceded it. Measured before the fix in `logs/probe-d-bandit-drain-limits.txt`:
+      # preceded it. Measured before the fix in
+      # `slices/003-release-0-3-1/logs/probe-d-bandit-drain-limits.txt`:
       #
       #     authorize 403, 9000160-byte body   responses=1  socket=closed
       #
