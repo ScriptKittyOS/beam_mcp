@@ -74,10 +74,6 @@ records are not shipped in the package**, and the same is true of every `slices/
 
 Recorded rather than fixed, with the measurement, in `slices/003-release-0-3-1/FINDINGS.md`:
 
-- **Invalid UTF-8 in `MCP-Protocol-Version` turns a caller's own `400` into a `500`.** The bytes
-  are echoed into the refusal's `data.requested`, so encoding the refusal raises. It is answered
-  inside the envelope and nothing leaks, but the status names the wrong party and the host's log
-  takes a stacktrace per request.
 - **`fault_response/4`'s re-raise branch is still unpinned.** Unchanged by this release.
 - **`read_body_bounded/1`'s `{:error, reason}` `400` has no test**, and now carries the new
   close behaviour untested with it.

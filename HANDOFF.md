@@ -83,13 +83,6 @@ code each round — defect, then test anchor, then record. It started at the rec
 
 Every one of these is in `slices/003-release-0-3-1/FINDINGS.md` with its measurement.
 
-- **Invalid UTF-8 in `MCP-Protocol-Version` turns a caller's own `400` into a `500`.** The bytes
-  are echoed into the refusal's `data.requested`, so `Jason.encode!` raises inside `send_json/3`
-  in `handle/2`'s `else` — outside every inner rescue. Answered inside the envelope, nothing
-  leaks, but the status names the wrong party and the host's log takes an error-level stacktrace
-  per request on a path `authorize/1` may leave unauthenticated. **Found while looking for a
-  replacement anchor and reported rather than folded in**; it is a third defect in a slice scoped
-  to two.
 - **`fault_response/4`'s re-raise branch is still unpinned**, and the never-re-raise mutant still
   survives. The owner scoped it out of this slice. The instrument it needs now exists.
 - **`check_annotations/2` inside `host_call/1` is unpinned and is a recorded survivor.** The
