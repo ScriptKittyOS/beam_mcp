@@ -1,1 +1,6 @@
-PLACEHOLDER
+233cad19726ed1fcb3957f7f7d158a177a0bee82
+# tree of commit 3d48ccd, written by: git rev-parse 'HEAD^{tree}'
+# THIS IS THE TREE ROUND 3 LANE h READ. Branch slice/006-harness-honesty, rebased onto #18.
+# Re-read in full: git diff f0350d3..HEAD -- 11 deletions, CHANGELOG.md and HANDOFF.md only.
+# HEAD at read time: 3d48ccd4a15755e67091f502a851656628c8afda
+# Lane m and lane h are two written passes by ONE reader. Not two parties.
