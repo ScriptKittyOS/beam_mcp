@@ -27,10 +27,14 @@ it is the answer.
   reuse (231 tracked; 58 in scope, 56 headered + 2 sidecar), licence files. Every step line reads
   `pass`, read as lines and not as an exit code. `logs/gate-rebased.txt`; the pre-rebase run is
   `logs/gate-release.txt` and is kept rather than overwritten.
-- **162 tests, 0 failures.** Was 160 before slice 006's two anchors, 158 before the fifth defect, 146 when this slice's second half
-  began, 138 at the 0.2.x-era handoff.
-- Version **`0.3.1`**, unreleased. **`0.3.0` is published on Hex and tagged `v0.3.0`**, and its
-  changelog section is dated and not amended.
+- **164 tests, 0 failures**, measured on this tree rather than carried forward. The previous
+  line said 162 and was stale: slice 006 added four tests, not the two its early note claimed.
+  Earlier points in the chain — 146 when this slice's second half began, 138 at the 0.2.x-era
+  handoff — are from the record and are not re-measured here.
+- Version **`0.3.1`**, **published**. Tag `v0.3.1` is annotated, GPG-signed and pushed, pointing
+  at `41dbabb`. Hex checksum `39f76e1c647fc45b5df26ece18005b7262d5ec22706dbca12cd3a3f88dd312fc`;
+  docs at `https://beam-mcp.hexdocs.pm/0.3.1`. Its changelog section is dated `2026-09-08` and is
+  not amended from here on.
 
 ## What this slice produced
 
@@ -64,11 +68,12 @@ measured, an off-by-one in a derived population, and a published derivation comm
 nothing on the tree it described. Slice 002 recorded the failure moving one level away from the
 code each round — defect, then test anchor, then record. It started at the record here.
 
-## Owner decisions still open
+## Owner decisions — 1 and 2 discharged by the release
 
-1. **`SECURITY.md`'s supported-versions table.** Unchanged by this slice; check it still says
-   what you want for a `0.3.x` patch before the tag.
-2. **Date the `[0.3.1]` heading** at tag time. It reads `unreleased`, correctly, until then.
+1. ~~**`SECURITY.md`'s supported-versions table.**~~ **Discharged.** The table reads `0.3.x | yes`,
+   which `0.3.1` satisfies unchanged; a patch moves nothing in it.
+2. ~~**Date the `[0.3.1]` heading** at tag time.~~ **Discharged.** Dated `2026-09-08`, from
+   `date -u +%F` rather than typed, in `41dbabb`.
 3. **The README version pin does not move, and that was measured rather than assumed.**
    `~> 0.3.0` admits `0.3.1` and still excludes `0.4.0`, so the recommendation is already right
    for a patch. `slices/003-release-0-3-1/logs/measure-version-requirement.txt`:
@@ -107,9 +112,14 @@ Every one of these is in `slices/003-release-0-3-1/FINDINGS.md` with its measure
 - `ToolCatalog.fetch/2`'s `@spec` honesty, and the unpinned both-eras `ttlMs`/`cacheScope`
   emission, are on the board.
 
-## To release 0.3.1
+## 0.3.1 is released
 
-1. Merge the PR to `main` (the ruleset requires two green checks).
-2. Date the `[0.3.1]` heading.
-3. `mix hex.publish`, then tag `v0.3.1` signed — or tag first and publish immediately after.
-   The GitHub ruleset targets **branches, not tags**, so a tag push is unprotected.
+Done, in this order: merged to `main` (PR #19, by rebase — the ruleset rejects merge commits),
+heading dated, published, tagged `v0.3.1` annotated and GPG-signed at `41dbabb`, tag pushed.
+
+Two facts worth keeping for the next release rather than rediscovering:
+
+- The GitHub ruleset targets **branches, not tags**, so a tag push is unprotected and ungated.
+- `main` takes **rebase merges only**; a merge commit is refused with `405`.
+
+Tag and publish remain owner steps — never `mix hex.publish`, never push a tag from a session.
