@@ -7,10 +7,10 @@
 #     mix run tools/probe_ping.exs > slices/001b-ping-guard/logs/probe-after.txt 2>&1
 
 defmodule ProbeCatalog do
-  @behaviour BeamMCP.ToolCatalog
+  @behaviour BeamMCP.Catalog
   @impl true
-  def all do
-    [
+  def capabilities do
+    tools = [
       %BeamMCP.ToolSpec{
         name: :echo,
         command_class: :observe,
@@ -18,10 +18,12 @@ defmodule ProbeCatalog do
         description: "Echo."
       }
     ]
+
+    %{tools: tools, resources: [], prompts: []}
   end
 end
 
-state = BeamMCP.Server.new(tool_catalog: ProbeCatalog, dispatch: fn _n, a, _o -> {:ok, a} end)
+state = BeamMCP.Server.new(catalog: ProbeCatalog, dispatch: fn _n, a, _o -> {:ok, a} end)
 key = "io.modelcontextprotocol/protocolVersion"
 
 send_one = fn label, msg ->
