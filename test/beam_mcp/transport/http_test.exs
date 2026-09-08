@@ -1444,6 +1444,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       conn = post(call_body(%{}), call_headers([]), o)
 
       assert conn.status == 403
+
       refute Enum.any?(conn.resp_headers, fn {k, v} ->
                k == "connection" and String.downcase(v) == "close"
              end)

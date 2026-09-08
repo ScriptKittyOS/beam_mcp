@@ -1,0 +1,15 @@
+target:  lib/beam_mcp/transport/http.ex
+passes:  2
+tree:    0be739cea0a353e2296025d5a96b0f84b4b0788c  dirty=1
+Mab1 | 172 tests, 5 failures TEST_EXIT=2 | 172 tests, 5 failures TEST_EXIT=2
+        failed: :authorize_body/2 — the post-read hook, and the bytes it is handed a hook that raises is a host fault, answered as 500 and told to nobody (BeamMCP.Transport.HTTPTest)
+        failed: :authorize_body/2 — the post-read hook, and the bytes it is handed a passing check allows execution; a failing check refuses (BeamMCP.Transport.HTTPTest)
+        failed: :authorize_body/2 — the post-read hook, and the bytes it is handed a post-read refusal does NOT close the connection (BeamMCP.Transport.HTTPTest)
+        failed: :authorize_body/2 — the post-read hook, and the bytes it is handed the hook receives the request body byte-identically, not a re-encoding (BeamMCP.Transport.HTTPTest)
+        failed: :authorize_body/2 — the post-read hook, and the bytes it is handed the refusal leaks nothing about why to the caller (BeamMCP.Transport.HTTPTest)
+Mab2 | 172 tests, 5 failures TEST_EXIT=2 | 172 tests, 5 failures TEST_EXIT=2
+        failed: a live listener: what a refusal does to the connection a refusal AFTER the body has been read keeps the connection (BeamMCP.Transport.HTTPBanditTest)
+        failed: :authorize_body/2 — the post-read hook, and the bytes it is handed the hook receives the request body byte-identically, not a re-encoding (BeamMCP.Transport.HTTPTest)
+        failed: malformed input answers, rather than crashing an empty body is a parse error, not an exception (BeamMCP.Transport.HTTPTest)
+        failed: malformed input answers, rather than crashing invalid JSON is a parse error (BeamMCP.Transport.HTTPTest)
+        failed: the HTTP transport's README claims a refusal before the body read ends the connection, as the README now says (BeamMCP.ReadmeClaimsTest)
