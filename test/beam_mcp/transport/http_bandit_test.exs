@@ -45,6 +45,8 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   """
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
+
   alias BeamMCP.Transport.HTTP
 
   @modern "2026-07-28"
@@ -115,7 +117,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # The 9 MB case: the server refuses on the headers, writes a 297-byte 403, and closes with
   # ~9 MB still unread, so the peer sends an RST. What that RST destroys is the question.
   #
-  # `logs/probe-drain-mechanism.txt`, 40 runs per variant, reporting
+  # `slices/006-harness-honesty/logs/probe-drain-mechanism.txt`, 40 runs per variant, reporting
   # `{bytes received, recv reason, send result, saw the 403?}`:
   #
   #     A  send everything, then read (what this file did)   29x {297, :closed, :ok, true}
@@ -133,7 +135,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # `show_econnreset: true` only renames the error (B); it does not save the data.
   #
   # Reading concurrently with the write (C, D) lost nothing in 80 idle runs. It was NOT enough:
-  # `logs/probe-rate-mc8-load32-passive.txt` is 40 suites at `--max-cases 8` with 32 busy loops
+  # `slices/006-harness-honesty/logs/probe-rate-mc8-load32-passive.txt` is 40 suites at `--max-cases 8` with 32 busy loops
   # alongside, and 6 of them still ended with `0 complete response(s)` and `0 byte(s) read`. A
   # PASSIVE socket keeps received bytes inside the port, and a failing `gen_tcp:send` destroys
   # the port -- so a reader that has not yet been SCHEDULED to call `recv` loses them, which is
@@ -153,7 +155,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # from 11/40 to 3/60 and did not remove it, because the last of it is not on this side of the
   # wire at all.
   #
-  # `logs/probe-loss-site.txt` separates the three places the 297 bytes could go. The plug's
+  # `slices/006-harness-honesty/logs/probe-loss-site.txt` separates the three places the 297 bytes could go. The plug's
   # `authorize` callback messages the test process, so "the server never answered" is
   # distinguishable from "the answer did not arrive". 60 runs under 32 busy loops:
   #
@@ -163,7 +165,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # The server decided and wrote its refusal in 60 of 60. Three of those refusals never reached
   # the client. The server closes with ~9 MB unread, which makes Linux abort the connection with
   # an RST instead of a FIN, and an RST discards whatever of the response had not yet been
-  # transmitted. `logs/probe-write-shape.txt` shows the write shape does not govern it either --
+  # transmitted. `slices/006-harness-honesty/logs/probe-write-shape.txt` shows the write shape does not govern it either --
   # 120 runs in one 9 MB send lost 0, 120 runs in 64 KB chunks lost 5, on the same loaded machine.
   #
   # So the residue is a lost segment, and NO read logic can recover it. What the harness can do
@@ -176,7 +178,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # repeat is announced on stderr rather than hidden. This is not a retry of a failed assertion:
   # the predicate is protocol-determined -- the connection ended with fewer than `expect`
   # complete responses -- and it is decided before any assertion runs. A server that genuinely
-  # never answers fails every attempt and raises, so nothing is masked; `logs/green-mutation-under-load.txt`
+  # never answers fails every attempt and raises, so nothing is masked; `slices/006-harness-honesty/logs/green-mutation-under-load.txt`
   # is the check that says so, with every killed mutant still scoring what the record scores.
   #
   # @attempts is derived from the measured loss: 5% at its worst leaves 5 attempts at 3e-7.
@@ -212,7 +214,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     :gen_tcp.close(sock)
 
     case result do
-      {:destroyed, reason, acc} when attempt < @attempts ->
+      {:aborted, reason, acc} when attempt < @attempts ->
         IO.puts(
           :stderr,
           "http_bandit_test: exchange #{attempt}/#{@attempts} produced no measurement " <>
@@ -222,8 +224,11 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
         exchange(port, bytes_to_send, expect, attempt + 1)
 
-      {:destroyed, reason, acc} ->
-        raise ended(reason, acc, expect, attempt)
+      {:aborted, reason, acc} ->
+        raise aborted(reason, acc, expect, attempt)
+
+      {:unanswered, acc} ->
+        raise unanswered(acc, expect)
 
       {bytes, state} ->
         {bytes, state}
@@ -255,10 +260,10 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
           collect(sock, acc <> data, expect)
 
         {:tcp_error, ^sock, reason} ->
-          {:destroyed, reason, acc}
+          {:aborted, reason, acc}
 
         {:tcp_closed, ^sock} ->
-          {:destroyed, :closed, acc}
+          {:unanswered, acc}
       after
         @read_ms ->
           raise """
@@ -271,16 +276,39 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     end
   end
 
-  defp ended(reason, acc, expect, attempts) do
+  defp aborted(reason, acc, expect, attempts) do
     """
-    #{attempts} exchange(s) in a row produced no measurement. The last ended \
+    #{attempts} exchange(s) in a row were aborted before a measurement existed. The last ended \
     (#{inspect(reason)}) after #{complete_responses(acc)} complete response(s) out of \
     #{expect}, having read #{byte_size(acc)} byte(s): \
     #{inspect(acc, limit: 400, printable_limit: 400)}
 
-    One such exchange is a lost segment and is repeated. #{attempts} of them is a server that \
-    does not answer, and that is reported here rather than turned into an assertion about \
-    bytes nobody received.
+    One aborted exchange is a lost segment and is repeated. #{attempts} of them is not, and it \
+    is reported here rather than turned into an assertion about bytes nobody received.
+    """
+  end
+
+  # A CLEAN CLOSE IS NEVER REPEATED, AND THAT DISTINCTION IS THE WHOLE OF ROUND 1's FINDING B2.
+  #
+  # The repeat used to fire on `{:tcp_closed, ...}` too. Round 1 lane m built a listener that
+  # stays silent on four connections and answers on the fifth, and the suite PASSED -- an
+  # intermittently broken server laundered into a green run by the very mechanism added to stop
+  # a false verdict. Repeating a silence is indistinguishable from believing it away.
+  #
+  # A FIN and an RST are different statements and the harness now reads them as different. The
+  # server closing cleanly having answered nothing is the server saying it has nothing to say:
+  # a measurement, and a damning one. Only an ABORT can destroy a response that was written,
+  # which is what `slices/006-harness-honesty/logs/probe-loss-reason.txt` measures against the
+  # real listener -- every genuine loss arrives as `:econnreset`, never as a clean close.
+  defp unanswered(acc, expect) do
+    """
+    The server closed the connection without answering: #{complete_responses(acc)} complete \
+    response(s) out of #{expect}, #{byte_size(acc)} byte(s) read: \
+    #{inspect(acc, limit: 400, printable_limit: 400)}
+
+    This is NOT repeated. A clean close is the server's answer, not a lost one -- only an abort \
+    can destroy a response already written. Repeating this would turn an intermittently silent \
+    server into a passing suite.
     """
   end
 
@@ -585,16 +613,92 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       assert state == :closed
     end
 
-    test "a server that never answers is reported as one, not repeated into a pass" do
-      # THE ANCHOR FOR THE REPEAT. A destroyed exchange is repeated because it is the absence of
-      # an observation; if the repeat could turn "this server never answers" into a pass it
-      # would be laundering a defect instead. It cannot: every attempt is destroyed and the
-      # harness says so, naming itself rather than asserting something about response bytes.
-      port = fake_listener(fn sock -> :gen_tcp.close(sock) end)
+    test "an aborted connection is repeated, and the repeat is announced" do
+      # THE POSITIVE ANCHOR FOR THE REPEAT, and it exists because round 1 lane m showed the old
+      # one was CONTAINED: it interpolated #{@attempts} into its own expected message, so the
+      # constant sat on both sides and could not disagree with itself. Setting @attempts to 1 --
+      # deleting the repeat outright -- left the whole suite green.
+      #
+      # This one fails if the repeat is removed, because the first exchange is aborted and only
+      # a repeat can reach the answer. SO_LINGER 0 makes close/1 send an RST rather than a FIN,
+      # which is the real listener's behaviour when it closes with a body still unread.
+      body = String.duplicate("z", 64)
+      head = "HTTP/1.1 200 OK\r\ncontent-length: #{byte_size(body)}\r\n\r\n"
+      seen = :counters.new(1, [])
 
-      assert_raise RuntimeError,
-                   ~r/#{@attempts} exchange\(s\) in a row produced no measurement/,
-                   fn -> exchange(port, "GET / HTTP/1.1\r\nhost: x\r\n\r\n", 1) end
+      port =
+        fake_listener(fn sock ->
+          # Read first, so the abort is ordered AFTER the request rather than racing it.
+          _ = :gen_tcp.recv(sock, 0, 2_000)
+
+          if :counters.get(seen, 1) == 0 do
+            :counters.add(seen, 1, 1)
+            :inet.setopts(sock, [{:linger, {true, 0}}])
+          else
+            :gen_tcp.send(sock, head <> body)
+          end
+
+          :gen_tcp.close(sock)
+        end)
+
+      announced =
+        capture_io(:stderr, fn ->
+          send(self(), {:exchanged, exchange(port, "GET / HTTP/1.1\r\nhost: x\r\n\r\n", 1)})
+        end)
+
+      assert_received {:exchanged, {bytes, state}}
+      assert byte_size(bytes) == byte_size(head) + byte_size(body)
+      assert state == :closed
+      assert announced =~ "produced no measurement"
+    end
+
+    test "a server that closes without answering is reported at once, and is NOT repeated" do
+      # ROUND 1 LANE m's ATTACK, kept as a test. A listener silent on the first four connections
+      # and answering on the fifth used to PASS: the repeat walked past four refusals to reach an
+      # answer, which is laundering an intermittently broken server rather than measuring it.
+      # A clean close is now a measurement and stops the exchange dead.
+      seen = :counters.new(1, [])
+
+      port =
+        fake_listener(fn sock ->
+          _ = :gen_tcp.recv(sock, 0, 2_000)
+          :counters.add(seen, 1, 1)
+
+          if :counters.get(seen, 1) > 4 do
+            body = "{}"
+            :gen_tcp.send(sock, "HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\n" <> body)
+          end
+
+          :gen_tcp.close(sock)
+        end)
+
+      announced =
+        capture_io(:stderr, fn ->
+          assert_raise RuntimeError, ~r/closed the connection without answering/, fn ->
+            exchange(port, "GET / HTTP/1.1\r\nhost: x\r\n\r\n", 1)
+          end
+        end)
+
+      # The absence of a repeat is the whole assertion: one silence, one report.
+      refute announced =~ "produced no measurement"
+      assert :counters.get(seen, 1) == 1
+    end
+
+    test "a connection aborted every time raises after the bound instead of looping" do
+      # The bound is written as a LITERAL here. @attempts appears on the other side of this
+      # comparison only, so raising or lowering it breaks this test instead of moving with it.
+      port =
+        fake_listener(fn sock ->
+          _ = :gen_tcp.recv(sock, 0, 2_000)
+          :inet.setopts(sock, [{:linger, {true, 0}}])
+          :gen_tcp.close(sock)
+        end)
+
+      capture_io(:stderr, fn ->
+        assert_raise RuntimeError,
+                     ~r/^5 exchange\(s\) in a row were aborted/,
+                     fn -> exchange(port, "GET / HTTP/1.1\r\nhost: x\r\n\r\n", 1) end
+      end)
     end
   end
 end
