@@ -1,0 +1,65 @@
+== the gate, 5 times, on the tree that ships ==
+date: 2026-09-08T02:37:06Z
+HEAD: a02e5603e6a26ff91af775a0b4cd1d88943c707b
+staged, so tools/ and the mutants are in git ls-files and therefore in the REUSE step's population
+
+---- gate run 1 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (260 tracked; 71 in scope, 69 headered + 2 sidecar; excluded 187 archive + 2 licence text)
+  licence files              pass
+Gate OK.
+GATE_EXIT=0
+---- gate run 2 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (260 tracked; 71 in scope, 69 headered + 2 sidecar; excluded 187 archive + 2 licence text)
+  licence files              pass
+Gate OK.
+GATE_EXIT=0
+---- gate run 3 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (260 tracked; 71 in scope, 69 headered + 2 sidecar; excluded 187 archive + 2 licence text)
+  licence files              pass
+Gate OK.
+GATE_EXIT=0
+---- gate run 4 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (260 tracked; 71 in scope, 69 headered + 2 sidecar; excluded 187 archive + 2 licence text)
+  licence files              pass
+Gate OK.
+GATE_EXIT=0
+---- gate run 5 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      pass
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (260 tracked; 71 in scope, 69 headered + 2 sidecar; excluded 187 archive + 2 licence text)
+  licence files              pass
+Gate OK.
+GATE_EXIT=0

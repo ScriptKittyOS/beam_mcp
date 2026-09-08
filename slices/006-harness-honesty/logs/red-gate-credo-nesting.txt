@@ -1,0 +1,129 @@
+== the gate, run 5 times on the tree that ships ==
+date: 2026-09-08T02:35:41Z
+dirty: 5 path(s) (the slice's own uncommitted work)
+
+---- gate run 1 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      FAIL (exit 8)
+      Checking 16 source files ...
+      
+        Refactoring opportunities                                                     
+      ┃ 
+      ┃ [F] → Function body is nested too deep (max depth is 2, was 3).
+      ┃       test/beam_mcp/transport/http_bandit_test.exs:351:30 #(BeamMCP.Transport.HTTPBanditTest.fake_listener)
+      
+      Please report incorrect results: https://github.com/rrrene/credo/issues
+      
+      Analysis took 0.1 seconds (0.02s to load, 0.1s running 69 checks on 16 files)
+      252 mods/funs, found 1 refactoring opportunity.
+      
+      Use `mix credo explain` to explain issues, `mix credo --help` for options.
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (234 tracked; 59 in scope, 57 headered + 2 sidecar; excluded 173 archive + 2 licence text)
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1
+---- gate run 2 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      FAIL (exit 8)
+      Checking 16 source files ...
+      
+        Refactoring opportunities                                                     
+      ┃ 
+      ┃ [F] → Function body is nested too deep (max depth is 2, was 3).
+      ┃       test/beam_mcp/transport/http_bandit_test.exs:351:30 #(BeamMCP.Transport.HTTPBanditTest.fake_listener)
+      
+      Please report incorrect results: https://github.com/rrrene/credo/issues
+      
+      Analysis took 0.1 seconds (0.02s to load, 0.1s running 69 checks on 16 files)
+      252 mods/funs, found 1 refactoring opportunity.
+      
+      Use `mix credo explain` to explain issues, `mix credo --help` for options.
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (234 tracked; 59 in scope, 57 headered + 2 sidecar; excluded 173 archive + 2 licence text)
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1
+---- gate run 3 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      FAIL (exit 8)
+      Checking 16 source files ...
+      
+        Refactoring opportunities                                                     
+      ┃ 
+      ┃ [F] → Function body is nested too deep (max depth is 2, was 3).
+      ┃       test/beam_mcp/transport/http_bandit_test.exs:351:30 #(BeamMCP.Transport.HTTPBanditTest.fake_listener)
+      
+      Please report incorrect results: https://github.com/rrrene/credo/issues
+      
+      Analysis took 0.1 seconds (0.02s to load, 0.1s running 69 checks on 16 files)
+      252 mods/funs, found 1 refactoring opportunity.
+      
+      Use `mix credo explain` to explain issues, `mix credo --help` for options.
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (234 tracked; 59 in scope, 57 headered + 2 sidecar; excluded 173 archive + 2 licence text)
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1
+---- gate run 4 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      FAIL (exit 8)
+      Checking 16 source files ...
+      
+        Refactoring opportunities                                                     
+      ┃ 
+      ┃ [F] → Function body is nested too deep (max depth is 2, was 3).
+      ┃       test/beam_mcp/transport/http_bandit_test.exs:351:30 #(BeamMCP.Transport.HTTPBanditTest.fake_listener)
+      
+      Please report incorrect results: https://github.com/rrrene/credo/issues
+      
+      Analysis took 0.1 seconds (0.02s to load, 0.1s running 69 checks on 16 files)
+      252 mods/funs, found 1 refactoring opportunity.
+      
+      Use `mix credo explain` to explain issues, `mix credo --help` for options.
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (234 tracked; 59 in scope, 57 headered + 2 sidecar; excluded 173 archive + 2 licence text)
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1
+---- gate run 5 ----
+== beam_mcp gate ==
+  format                     pass
+  compile                    pass
+  test                       pass
+  credo                      FAIL (exit 8)
+      Checking 16 source files ...
+      
+        Refactoring opportunities                                                     
+      ┃ 
+      ┃ [F] → Function body is nested too deep (max depth is 2, was 3).
+      ┃       test/beam_mcp/transport/http_bandit_test.exs:351:30 #(BeamMCP.Transport.HTTPBanditTest.fake_listener)
+      
+      Please report incorrect results: https://github.com/rrrene/credo/issues
+      
+      Analysis took 0.1 seconds (0.02s to load, 0.1s running 69 checks on 16 files)
+      252 mods/funs, found 1 refactoring opportunity.
+      
+      Use `mix credo explain` to explain issues, `mix credo --help` for options.
+  optional deps              pass
+  docs                       pass
+  reuse                      pass (234 tracked; 59 in scope, 57 headered + 2 sidecar; excluded 173 archive + 2 licence text)
+  licence files              pass
+GATE FAILED.
+GATE_EXIT=1

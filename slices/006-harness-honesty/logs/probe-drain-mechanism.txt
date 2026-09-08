@@ -1,0 +1,487 @@
+== probe: what drain/2 actually sees on the 9 MB refusal ==
+tree: a02e5603e6a26ff91af775a0b4cd1d88943c707b
+date: 2026-09-08T01:21:04Z
+
+---- the probe script, verbatim ----
+# Why does `bytes` come back EMPTY from the 9 MB refusal case?
+#
+# The PLAN's hypothesis is the 700 ms quiet window returning a PARTIAL buffer. The measured
+# failure argument is "" -- an EMPTY buffer -- and the whole suite finished in 3.5 s, so the
+# 10_000 ms first-byte window was never reached either. This probe asks which socket result
+# `drain/2` actually saw, and whether the bytes were LOST rather than late.
+#
+# Four variants of the same exchange, each run N times:
+#   A  send-everything-then-read, show_econnreset default(false)   <- what the test does today
+#   B  send-everything-then-read, show_econnreset: true
+#   C  read concurrently with the write, show_econnreset default
+#   D  read concurrently with the write, show_econnreset: true
+alias BeamMCP.Transport.HTTP
+
+defmodule Cat do
+  @behaviour BeamMCP.ToolCatalog
+  @impl true
+  def all do
+    [
+      %BeamMCP.ToolSpec{
+        name: :echo,
+        command_class: :observe,
+        mode: :read_only,
+        description: "Echo.",
+        input_schema: %{"type" => "object", "properties" => %{}, "additionalProperties" => true}
+      }
+    ]
+  end
+end
+
+n = String.to_integer(System.get_env("N", "20"))
+over = 9_000_000
+modern = "2026-07-28"
+vkey = "io.modelcontextprotocol/protocolVersion"
+
+opts = [
+  tool_catalog: Cat,
+  dispatch: fn _n, a, _o -> {:ok, a} end,
+  authorize: fn _conn -> {:error, :nope} end,
+  allowed_origins: :any
+]
+
+{:ok, pid} =
+  Bandit.start_link(plug: {HTTP, opts}, port: 0, ip: :loopback, startup_log: false)
+
+{:ok, {_a, port}} = ThousandIsland.listener_info(pid)
+
+call_json = fn id, pad ->
+  Jason.encode!(%{
+    "jsonrpc" => "2.0",
+    "id" => id,
+    "method" => "tools/call",
+    "params" => %{"name" => "echo", "arguments" => %{}},
+    "_meta" => %{vkey => modern},
+    "pad" => String.duplicate("x", pad)
+  })
+end
+
+req = fn method, body ->
+  "#{method} /mcp HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n" <>
+    "content-length: #{byte_size(body)}\r\nmcp-protocol-version: #{modern}\r\n" <>
+    "mcp-method: tools/call\r\nmcp-name: echo\r\n\r\n" <> body
+end
+
+big = req.("POST", call_json.(1, over))
+second = req.("POST", call_json.(2, 0))
+payload = big <> second
+
+# The test's drain/2, verbatim, but reporting the RAW socket result instead of a verdict.
+drain = fn drain, sock, acc, first_ms, quiet_ms ->
+  t = if acc == "", do: first_ms, else: quiet_ms
+
+  case :gen_tcp.recv(sock, 0, t) do
+    {:ok, data} -> drain.(drain, sock, acc <> data, first_ms, quiet_ms)
+    {:error, reason} -> {acc, reason}
+  end
+end
+
+run = fn concurrent?, econnreset? ->
+  base = [:binary, active: false, packet: :raw]
+  sockopts = if econnreset?, do: base ++ [show_econnreset: true], else: base
+  {:ok, sock} = :gen_tcp.connect(~c"127.0.0.1", port, sockopts, 5_000)
+
+  send_res =
+    if concurrent? do
+      me = self()
+      spawn(fn -> send(me, {:sent, :gen_tcp.send(sock, payload)}) end)
+      :spawned
+    else
+      :gen_tcp.send(sock, payload)
+    end
+
+  {acc, reason} = drain.(drain, sock, "", 10_000, 700)
+
+  send_res =
+    if concurrent? do
+      receive do
+        {:sent, r} -> r
+      after
+        5_000 -> :writer_still_running
+      end
+    else
+      send_res
+    end
+
+  :gen_tcp.close(sock)
+  {byte_size(acc), reason, send_res, String.contains?(acc, "HTTP/1.1 403")}
+end
+
+for {label, conc, ecr} <- [
+      {"A  send-all-then-read, show_econnreset default", false, false},
+      {"B  send-all-then-read, show_econnreset: true", false, true},
+      {"C  concurrent read+write, show_econnreset default", true, false},
+      {"D  concurrent read+write, show_econnreset: true", true, true}
+    ] do
+  results = for _ <- 1..n, do: run.(conc, ecr)
+
+  tally =
+    results
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {_k, v} -> -v end)
+
+  IO.puts("\n== #{label}  (#{n} runs) ==")
+  IO.puts("   {bytes_received, recv_reason, send_result, saw_403?}")
+
+  for {k, v} <- tally, do: IO.puts("   #{v}x  #{inspect(k)}")
+
+  bad = Enum.count(results, fn {_, _, _, saw} -> not saw end)
+  IO.puts("   403 MISSING in #{bad}/#{n}")
+end
+
+IO.puts("\nPROBE_DONE")
+---- end of script ----
+
+$ N=40 MIX_ENV=test mix run tools-scratch/drain_mechanism.exs
+
+21:21:04.900 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.908 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.909 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.909 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.910 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.910 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.910 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.910 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.911 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.912 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.912 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.912 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.913 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.913 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.913 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.914 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.915 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.915 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.916 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.916 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.917 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.917 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.918 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.918 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.918 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.918 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.919 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.919 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.919 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.920 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.920 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.920 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.921 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.921 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.922 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.922 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.922 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.923 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.923 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.923 [info] beam_mcp: refused by host authorize/1: :nope
+
+== A  send-all-then-read, show_econnreset default  (40 runs) ==
+   {bytes_received, recv_reason, send_result, saw_403?}
+   29x  {297, :closed, :ok, true}
+   11x  {0, :closed, :ok, false}
+   403 MISSING in 11/40
+
+21:21:04.926 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.927 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.927 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.928 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.928 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.929 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.929 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.929 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.930 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.930 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.931 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.931 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.932 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.932 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.932 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.933 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.933 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.933 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.933 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.934 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.934 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.934 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.935 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.935 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.936 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.936 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.936 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.937 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.937 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.937 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.938 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.938 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.938 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.938 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.939 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.939 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.939 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.939 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.940 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.940 [info] beam_mcp: refused by host authorize/1: :nope
+
+== B  send-all-then-read, show_econnreset: true  (40 runs) ==
+   {bytes_received, recv_reason, send_result, saw_403?}
+   21x  {297, :closed, :ok, true}
+   11x  {297, :econnreset, :ok, true}
+   8x  {0, :econnreset, :ok, false}
+   403 MISSING in 8/40
+
+21:21:04.940 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.940 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.941 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.941 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.941 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.942 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.942 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.942 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.943 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.943 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.943 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.943 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.944 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.944 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.944 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.944 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.945 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.945 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.945 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.945 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.946 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.946 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.946 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.947 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.947 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.947 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.948 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.948 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.948 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.948 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.948 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.949 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.949 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.949 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.949 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.950 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.950 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.950 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.951 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.951 [info] beam_mcp: refused by host authorize/1: :nope
+
+== C  concurrent read+write, show_econnreset default  (40 runs) ==
+   {bytes_received, recv_reason, send_result, saw_403?}
+   40x  {297, :closed, :ok, true}
+   403 MISSING in 0/40
+
+21:21:04.951 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.952 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.952 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.952 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.952 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.953 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.953 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.953 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.953 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.954 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.954 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.954 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.955 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.955 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.956 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.956 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.956 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.956 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.957 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.957 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.957 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.958 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.958 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.958 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.958 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.959 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.959 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.960 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.960 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.960 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.960 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.961 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.961 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.961 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.962 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.962 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.962 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.963 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.963 [info] beam_mcp: refused by host authorize/1: :nope
+
+21:21:04.963 [info] beam_mcp: refused by host authorize/1: :nope
+
+== D  concurrent read+write, show_econnreset: true  (40 runs) ==
+   {bytes_received, recv_reason, send_result, saw_403?}
+   25x  {297, :econnreset, :ok, true}
+   15x  {297, :closed, :ok, true}
+   403 MISSING in 0/40
+
+PROBE_DONE
+PROBE_EXIT=0
