@@ -151,6 +151,18 @@ defect `CONVENTIONS.md` names. It is not: the two places are at different *times
 that cannot run at compile time is the one omitted there. Recorded because it looks wrong until
 you know why.
 
+**Four tracked probes were still on the old contract, and `lib/` is the wrong population to
+check.** Acceptance criterion 1 says "nothing in `lib/` reads `tool_catalog.ex`", and that was
+true while `tools/probe_ping.exs` and the three probes in `tools/probes/` each carried three
+separate breaks: `@behaviour BeamMCP.ToolCatalog`, `def all`, and `catalog: ` spelled
+`tool_catalog: `. The gate cannot see them — it never compiles `tools/*.exs` — so they would have
+sat broken until the next slice tried to re-run one. They are instruments, not archives, and an
+instrument that no longer runs is the same defect as an archive nobody can refetch. Fixed and
+**proven by running them**: `mix run tools/probe_ping.exs` serves `echo` from `tools/list`, and
+each network probe prints `PROBE_DONE` at `N=1` with the same `{297, :econnreset, ..., true}`
+slice 006 measured. The lesson is the population, not the four files: the grep that found this
+was the one run over the whole tree, and the one that missed it was scoped to `lib/`.
+
 ## Departures from slice 007's shape, stated rather than smoothed over
 
 - **The issue was filed at record time, not before the code.** Slice 007's PLAN opens "Written
