@@ -1194,41 +1194,67 @@ defmodule BeamMCP.Transport.HTTPTest do
       refute Map.has_key?(body!(conn)["error"], "data")
     end
 
+    defmodule InvalidUtf8HeaderNameCatalog do
+      @behaviour BeamMCP.ToolCatalog
+      @impl true
+      def all do
+        [
+          %BeamMCP.ToolSpec{
+            name: :echo,
+            command_class: :observe,
+            mode: :read_only,
+            description: "Echo.",
+            input_schema: %{
+              "type" => "object",
+              "properties" => %{
+                "value" => %{"type" => "string", "x-mcp-header" => <<"X-", 0xFF, 0xFE>>}
+              }
+            }
+          }
+        ]
+      end
+    end
+
     test "an exception with no status of its own, raised in transport code, keeps the envelope" do
-      # This drives `call/2`'s rescue and `fault_response/4`'s ANSWER branch. That branch was
-      # previously reached only by the malformed-spec catalog above, and the fix for the lost
-      # id moves that request off it -- so this test exists to keep the branch pinned across
-      # that move. With no cover here, the mutant making `fault_response/4` ALWAYS re-raise
-      # serves a bodyless 500, which is the precise failure this module exists to avoid.
+      # REPLACED, NOT DELETED -- the previous version of this comment said in terms that it must
+      # be, and this is that replacement.
       #
-      # THE INPUT IS A RECORDED OPEN DEFECT AND THIS TEST DOES NOT ENDORSE IT. Invalid UTF-8
-      # bytes in `MCP-Protocol-Version` are echoed back in the refusal's `data.requested`, so
-      # `Jason.encode!` raises `Jason.EncodeError` inside `send_json/3` in `handle/2`'s `else`
-      # -- outside every inner rescue -- and a caller turns its own 400 into a 500 with an
-      # error-level stacktrace in the host's log. Measured, and filed in this slice's
-      # FINDINGS.md under "Open, recorded rather than fixed". What is pinned here is that an
-      # exception with no `:plug_status`, raised by the transport's OWN machinery, is answered
-      # INSIDE the envelope rather than as a bare 500 -- NOT that 500 is the right status for
-      # this input. When the reflection is fixed, this anchor must be REPLACED, not deleted.
+      # This drives `call/2`'s rescue and `fault_response/4`'s ANSWER branch. With no cover
+      # here, the mutant making `fault_response/4` ALWAYS re-raise serves a bodyless 500, which
+      # is the precise failure this module exists to avoid.
+      #
+      # THE OLD INPUT IS GONE BECAUSE IT WAS FIXED. This test used to reach the branch through
+      # invalid UTF-8 in `MCP-Protocol-Version`, echoed into `data.requested` -- an
+      # unauthenticated caller turning its own 400 into a 500. `header_values/2` now refuses
+      # such a value at the read, so that route is a clean 400 and can no longer anchor
+      # anything. See "a header value that is not valid UTF-8 is refused, not reflected".
+      #
+      # THE NEW INPUT IS THE HOST'S BYTES, AND THAT IS THE POINT rather than a convenience: the
+      # host declares `x-mcp-header` with invalid UTF-8, so `param_error/3` interpolates it into
+      # a refusal message and `Jason.encode!` raises `Jason.EncodeError` inside `send_json/3` --
+      # transport machinery, outside every inner rescue, no `:plug_status` of its own.
       #
       #   Plug.Exception.status(%Jason.EncodeError{}) == 500   <- hence the answer branch
-      invalid_utf8 = <<"1.0-", 0xFF, 0xFE>>
-      refute String.valid?(invalid_utf8)
+      #
+      # Unlike the old input, **500 is the correct answer here**: a schema this package cannot
+      # encode is the host's bug, not the caller's, and the caller is told nothing about it.
+      # So this anchor pins the branch on an input that does not also record a defect.
+      #
+      # A property with an unencodable annotation name is still a recorded gap -- the tool is
+      # advertised and uncallable -- and it is filed in this slice's FINDINGS.md rather than
+      # described here as filed.
+      o = opts(tool_catalog: InvalidUtf8HeaderNameCatalog)
+      body = call_body(%{"value" => "x"}) |> Map.put("id", 4243)
 
-      # `_meta` is DROPPED deliberately. With a body version present, `compare_versions/3`'s
-      # first branch fires -- "header does not match the body value" -- and answers a 400 that
-      # reflects nothing. The reflecting branch is the one that runs on a body declaring no
-      # era, which is every request that does not carry `_meta`.
-      body = call_body(%{}) |> Map.put("id", 4243) |> Map.delete("_meta")
-
-      conn =
-        post(body, [{@hdr, invalid_utf8}, {"mcp-method", "tools/call"}, {"mcp-name", "echo"}])
+      conn = post(body, call_headers([]), o)
 
       assert conn.status == 500
       # A body at all is half the point: the mutant that re-raises everything sends none.
       assert conn.resp_body != ""
       assert body!(conn)["error"]["code"] == -32_603
       assert body!(conn)["jsonrpc"] == "2.0"
+      # The host's bytes do not reach the caller.
+      refute conn.resp_body =~ "\xff"
       # `id: null` here is honest rather than desirable: `call/2`'s rescue spans the whole
       # request path and holds no decoded body to read an id from.
       assert body!(conn)["id"] == nil
@@ -1301,6 +1327,59 @@ defmodule BeamMCP.Transport.HTTPTest do
       conn = post(body, call_headers([]), o)
 
       assert body!(conn)["id"] == 4242
+    end
+  end
+
+  describe "a header value that is not valid UTF-8 is refused, not reflected" do
+    # THE RED FOR THE THIRD DEFECT. Invalid UTF-8 in `MCP-Protocol-Version` was echoed into
+    # the refusal's `data.requested`; `Jason.encode!` then raised inside `send_json/3`, outside
+    # every inner rescue, and `call/2`'s rescue turned the caller's own 400 into a 500 with an
+    # error-level stacktrace in the host's log. Unauthenticated and attacker-reachable.
+    #
+    # DERIVATION of the population, so a new echo site inherits the fix rather than needing a
+    # new finding:
+    #
+    #   $ grep -nE '"(requested|received|name|value|detail)" =>|header_error\(|param_error\(' \
+    #       lib/beam_mcp/transport/http.ex
+    #
+    # returned one site embedding CALLER-controlled bytes -- `"requested" => unsupported`, the
+    # raw header values. Every other site interpolates a compile-time header NAME or a
+    # host-authored schema property. All six header reads route through `header_values/2`, so
+    # that function is where the class is closed, not the echo site.
+    test "invalid UTF-8 in MCP-Protocol-Version is a 400 that reflects nothing" do
+      invalid_utf8 = <<"1.0-", 0xFF, 0xFE>>
+      refute String.valid?(invalid_utf8)
+
+      body = call_body(%{}) |> Map.put("id", 4243) |> Map.delete("_meta")
+
+      conn =
+        post(body, [{@hdr, invalid_utf8}, {"mcp-method", "tools/call"}, {"mcp-name", "echo"}])
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+      # The bytes are NOT reflected: that is the whole defect, not an incidental detail.
+      refute conn.resp_body =~ "\xff"
+      refute Map.has_key?(body!(conn)["error"], "data")
+      assert body!(conn)["id"] == 4243
+    end
+
+    test "the refusal covers every header the transport reads, not just the version header" do
+      # `header_values/2` is the one path; a second header proves the fix is not site-local.
+      invalid_utf8 = <<"ec", 0xFF, "ho">>
+      refute String.valid?(invalid_utf8)
+
+      body = call_body(%{}) |> Map.put("id", 99) |> Map.delete("_meta")
+
+      conn =
+        post(body, [
+          {@hdr, "2026-07-28"},
+          {"mcp-method", "tools/call"},
+          {"mcp-name", invalid_utf8}
+        ])
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+      refute conn.resp_body =~ "\xff"
     end
   end
 

@@ -329,6 +329,9 @@ if Code.ensure_loaded?(Plug) do
 
     defp check_origin(conn, allowed) do
       case header_values(conn, "origin") do
+        :invalid_bytes ->
+          {:refused, conn, 400, header_error(nil, "Origin header value is not valid UTF-8")}
+
         [] ->
           {:ok, conn}
 
@@ -434,7 +437,24 @@ if Code.ensure_loaded?(Plug) do
     # server-behaviour row is "client omits header but value is in body -> server MUST reject",
     # which is unenforceable if the caller's own headers define the set. Omitting
     # `Mcp-Param-Region` while the body carried `region` returned 200 and dispatched.
-    defp header_values(conn, name), do: get_req_header(conn, name)
+    # EVERY header read in this module routes through here, which is what makes this the one
+    # place the class is closed rather than the one echo site that happened to be reachable.
+    #
+    # A value that is not valid UTF-8 cannot be carried by this protocol: it cannot be compared
+    # against a JSON body value, and -- the defect this closes -- it cannot be ENCODED into the
+    # refusal that reports it. `compare_versions/3` reflected the refused values in
+    # `data.requested`, so `Jason.encode!` raised `Jason.EncodeError` inside `send_json/3`,
+    # outside every inner rescue, and `call/2`'s rescue turned the caller's own 400 into a 500
+    # with an error-level stacktrace in the host's log. Unauthenticated and attacker-reachable.
+    #
+    # Refusing at the READ rather than at the echo is what makes a new echo site inherit this.
+    # The population is not a list here: it is exactly the set of headers this module reads,
+    # because this is the function it reads them with.
+    defp header_values(conn, name) do
+      case get_req_header(conn, name) do
+        values -> if Enum.all?(values, &String.valid?/1), do: values, else: :invalid_bytes
+      end
+    end
 
     # "For headers that permit the Base64 sentinel encoding (Mcp-Name and Mcp-Param-{Name}),
     # servers MUST decode encoded values before comparing them to the body value."
@@ -614,6 +634,9 @@ if Code.ensure_loaded?(Plug) do
         body_value = value_at(arguments(message), path)
 
         cond do
+          values == :invalid_bytes ->
+            {:halt, param_error(id, name, "value is not valid UTF-8")}
+
           # "Parameter value is null" / "parameter not in arguments" -> "server MUST NOT expect
           # the header".
           is_nil(body_value) and values == [] ->
@@ -839,6 +862,9 @@ if Code.ensure_loaded?(Plug) do
       values = header_values(conn, header_name)
 
       cond do
+        values == :invalid_bytes ->
+          {:mismatch, 400, header_error(id, "#{header_name} header value is not valid UTF-8")}
+
         values == [] ->
           {:mismatch, 400, header_error(id, "Missing #{header_name} header; it is required")}
 
@@ -864,6 +890,10 @@ if Code.ensure_loaded?(Plug) do
       values = header_values(conn, @protocol_header)
 
       case body_protocol_version(message) do
+        _ when values == :invalid_bytes ->
+          {:mismatch, 400,
+           header_error(id, "#{@protocol_header} header value is not valid UTF-8")}
+
         :invalid ->
           {:mismatch, 400, header_error(id, "_meta must be a JSON object when present")}
 

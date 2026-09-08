@@ -256,3 +256,70 @@ machine and were flaky at 700 ms flat under load; a slower machine or a busier C
 find a new edge. The failure mode is a false red on the 9 MB case rather than a false green,
 which is the safe direction, but it is a timing dependency in a suite that otherwise has none
 and it is written down rather than left to be rediscovered.
+
+## Defect (e) — the third HTTP defect, found by this slice's review and fixed in it
+
+Reported by round 3 as open and not fixed. The owner's call, 2026-09-07: *"It is unauthenticated
+and attacker-reachable, it is the same class as the four already in 0.3.1, and tagging without it
+ships a known 500 path."* Fixed here rather than filed.
+
+**The defect.** Invalid UTF-8 in `MCP-Protocol-Version` was echoed into the refusal's
+`data.requested`. `Jason.encode!` then raised `Jason.EncodeError` inside `send_json/3`, outside
+every inner rescue; `call/2`'s rescue answered it through `fault_response/4`'s answer branch, so
+the caller's own `400` came back as a `500` and the host's log took an error-level stacktrace. No
+credential is required to send a header.
+
+**Red, before the fix** (`logs/red-e-invalid-utf8.txt`):
+
+    1) test a header value that is not valid UTF-8 is refused, not reflected
+       invalid UTF-8 in MCP-Protocol-Version is a 400 that reflects nothing
+       code:  assert conn.status == 400
+       left:  500
+       right: 400
+    92 tests, 1 failure
+    TEST_EXIT=2
+
+**The population, derived rather than listed.** The fix is not at the echo site. Command:
+
+    $ grep -nE '"(requested|received|name|value|detail)" =>|header_error\(|param_error\(' \
+        lib/beam_mcp/transport/http.ex
+
+One site embeds **caller**-controlled bytes: `"requested" => unsupported`, the raw header values.
+Every other site interpolates a compile-time header NAME or a host-authored schema property. All
+six header reads route through `header_values/2`, so that is where the class is closed. `Origin`,
+`Mcp-Method`, `Mcp-Name` and every `Mcp-Param-{Name}` inherit the refusal, and a read added later
+inherits it too.
+
+**Measured, not assumed, while choosing the fix:**
+
+- `String.downcase/1` does **not** raise on invalid UTF-8 — it passes the bytes through. Only
+  `Jason.encode!` raises, and `Plug.Exception.status(%Jason.EncodeError{}) == 500`.
+- The Base64 sentinel is **not** a bypass. `decode_header_value/2` uses `Base.decode64/1`, the
+  non-raising variant, and a decoded value is used only for comparison in `all_match?/3` — it is
+  never echoed into a payload. A decoded value that is invalid UTF-8 fails the comparison and is
+  refused as an ordinary mismatch. Recorded because the validity check runs on the raw value and
+  a reader will ask.
+
+**Green:** `160 tests, 0 failures`, `TEST_EXIT=0` (`logs/green-e-invalid-utf8.txt`). Gate green,
+every step line reading pass.
+
+### The anchor was replaced, not deleted
+
+Round 3's test comment said in terms that when this reflection was fixed, the anchor on
+`fault_response/4`'s **answer branch** must be *replaced rather than deleted*, because that test
+was the branch's only cover. Fixing the defect removed its input, and the test failed exactly as
+predicted — `left: 400, right: 500`.
+
+The replacement reaches the same branch through the **host's** bytes instead of the caller's: a
+host declaring `x-mcp-header` with invalid UTF-8 makes `param_error/3` interpolate it into a
+refusal message, and `Jason.encode!` raises inside `send_json/3` — transport machinery, no
+`:plug_status`. **On that input `500` is the correct answer**, so the new anchor pins the branch
+without also recording a defect, which the old one did.
+
+## Open, recorded rather than fixed — appended
+
+**A host `x-mcp-header` annotation name that is not valid UTF-8 makes its tool uncallable.** It is
+advertised by `tools/list` and every call is answered `500`. This is the host's bug and the `500`
+is correct, and it is now the input the answer-branch anchor uses. Refusing such a schema at
+`check_annotations/2` — beside the non-primitive and collision checks, which is where it belongs —
+was not done here: it needs its own red and its own round, and this slice has no round left.
