@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "      {:error, _} -> {:error, {:uncanonical, {:label_value, id, k, v}}}\n    end\n  end\n"
-new = "      {:error, _} = e -> e\n    end\n  end\n"
+old = "      {:ok, items} -> {:ok, {:array, items}}\n      {:error, _} -> {:error, {:uncanonical, {:label_value, id, k, v}}}\n"
+new = "      {:ok, items} -> {:ok, {:array, items}}\n      {:error, _} = e -> e\n"
 
 if s.count(old) != 1:
     sys.exit("Mca16: anchor found %d times" % s.count(old))
