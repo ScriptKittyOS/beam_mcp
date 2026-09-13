@@ -18,8 +18,9 @@ together.
 beam_mcp renders authority; it never decides it. The connectome carries a sign slot so that a
 graph can show what a policy allowed, denied or held — and the package itself writes only
 `:unknown` into that slot. It populates no sign, signs no finding, holds no key, and makes no
-authority decision. Those belong to the host, reached through the same hooks that already carry
-risk tiers, approvals and receipts. The connectome is not an MCP capability: neither protocol
+authority decision. Those belong to the host, behind the same `:authorize` and `:authorize_body`
+hooks the transport already offers — where a host keeps its own risk tiers, approvals and
+receipts, none of which this package holds. The connectome is not an MCP capability: neither protocol
 revision this package targets defines a topology or a declared-reachability primitive, and none
 is claimed.
 
@@ -29,14 +30,14 @@ is claimed.
   provenance.
 - The **declared connectome** is built from what is declared: the catalog's tools, resources and
   prompts, the static call graph between the host's modules, and the host's boundary declarations.
-  It says what *may* happen.
+  It says what *can* happen.
 - The **observed connectome** is built from what ran: telemetry on the dispatch path and, when the
   host opts in, a guarded tracer. It records edge identity only — never arguments, results or
   headers. It says what *did* happen, over a stated window.
 - A **drift finding** is an edge the observed connectome has and the declared connectome does not,
   or an edge both have with signs that differ. Drift is a record; what to do about it is the host's.
 - **Dead authority** is an edge the declared connectome has and the observed one never showed in the
-  window. It is evidence for narrowing, not a fault.
+  window. It is evidence the host can use to narrow what it declares; it is not a fault.
 - A **coverage bound** is the measured fraction of one graph the other accounts for, stated with
   the window it was measured over. It is reported as a number, never assumed complete.
 
