@@ -241,6 +241,68 @@ defmodule BeamMCP.Connectome.CanonicalTest do
                Canonical.encode(Graph.new!(nodes: [n2], edges: [], schema_version: @version))
     end
 
+    test "the whole label value domain: strings, atoms, integers, booleans, null, arrays and objects of them" do
+      n =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{
+            "list" => [1, "a", nil, false, %{"k" => :atom}],
+            flag: true,
+            none: nil,
+            n: -3,
+            zero: 0
+          }
+        )
+
+      g = Graph.new!(nodes: [n], edges: [], schema_version: @version)
+      {:ok, bytes} = Canonical.encode(g)
+
+      assert bytes =~
+               ~s("labels":{"flag":true,"list":[1,"a",null,false,{"k":"atom"}],"n":-3,"none":null,"zero":0})
+
+      # The exporters flatten the same values, in the same order, and never a weight.
+      dot = Canonical.to_dot!(g)
+
+      assert dot =~
+               ~S(label_flag="true", label_list="[1,\"a\",null,false,{\"k\":\"atom\"}]", label_n="-3")
+
+      assert dot =~ ~S(label_none="null", label_zero="0")
+      graphml = Canonical.to_graphml!(g)
+
+      assert graphml =~
+               ~s(<data key="label_list">[1,&quot;a&quot;,null,false,{&quot;k&quot;:&quot;atom&quot;}]</data>)
+
+      refute graphml =~ "weight"
+    end
+
+    test "a label key that is not an atom or a string is refused by node and key; inside a nested value, by value" do
+      n =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{7 => "seven"}
+        )
+
+      assert {:error, {:uncanonical, {:label_key, id, 7}}} =
+               Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+
+      assert id == n.id
+
+      n2 =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{outer: %{8 => "eight"}}
+        )
+
+      assert {:error, {:uncanonical, {:label_value, _, :outer, %{8 => "eight"}}}} =
+               Canonical.encode(Graph.new!(nodes: [n2], edges: [], schema_version: @version))
+    end
+
     test "escaping: quote, backslash and control characters; everything else literal UTF-8" do
       n =
         Node.new!(
@@ -297,6 +359,34 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert Canonical.sidecar!(g) != Canonical.sidecar!(g2)
       assert Canonical.sidecar!(g) == File.read!(Path.join(@fixtures, "golden.sidecar.json"))
     end
+  end
+
+  test "a float weight is written in the sidecar in its shortest round-tripping form, and is in no hash" do
+    a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "a"})
+    b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "b"})
+    e = Edge.new!(from: a.id, to: b.id, kind: :invoke, provenance: :observed, weight: 0.1)
+    g = Graph.new!(nodes: [a, b], edges: [e], schema_version: @version)
+    assert Canonical.sidecar!(g) =~ ~s("weight":0.1})
+    refute Canonical.encode!(g) =~ "0.1"
+  end
+
+  test "the bang forms raise the named reason; DOT quotes a backslash in an id" do
+    n =
+      Node.new!(
+        kind: :tool,
+        level: :server,
+        identity: {:tool, "s", "back\\slash"},
+        labels: %{r: 0.5}
+      )
+
+    g = Graph.new!(nodes: [n], edges: [], schema_version: @version)
+
+    assert_raise ArgumentError, ~r/encode: \{:uncanonical, \{:label_value/, fn ->
+      Canonical.encode!(g)
+    end
+
+    ok = Graph.new!(nodes: [%{n | labels: %{}}], edges: [], schema_version: @version)
+    assert Canonical.to_dot!(ok) =~ ~S("s/tool/back\\slash" [kind="tool")
   end
 
   describe "exporters" do
