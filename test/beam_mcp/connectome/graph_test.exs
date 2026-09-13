@@ -126,7 +126,7 @@ defmodule BeamMCP.Connectome.GraphTest do
   end
 
   describe "the sign slot, observed from outside" do
-    test "every edge a graph holds carries :unknown, whatever the input order" do
+    test "every edge the package builds carries :unknown, whatever the input order" do
       {nodes, edges} = fixture()
 
       {:ok, g} =
@@ -138,5 +138,34 @@ defmodule BeamMCP.Connectome.GraphTest do
 
       assert Enum.all?(g.edges, &(&1.sign == :unknown))
     end
+
+    test "a sign a host wrote on its own copy survives Graph.new/1 untouched -- the package launders nothing" do
+      # Written here, outside lib/, which is the only place a sign other than :unknown may be
+      # written. Erasing a host's :deny would itself be an authority act.
+      {nodes, edges} = fixture()
+      [first | rest] = edges
+      signed = %{first | sign: :deny}
+      {:ok, g} = Graph.new(nodes: nodes, edges: [signed | rest], schema_version: @version)
+      assert Enum.find(g.edges, &(Edge.key(&1) == Edge.key(first))).sign == :deny
+    end
+
+    test "two edges differing only in sign are the same edge" do
+      {nodes, edges} = fixture()
+      [first | _] = edges
+
+      assert {:error, {:duplicate_edge, key}} =
+               Graph.new(
+                 nodes: nodes,
+                 edges: [%{first | sign: :allow} | edges],
+                 schema_version: @version
+               )
+
+      assert key == Edge.key(first)
+    end
+  end
+
+  test "options that are not a keyword list are refused by name, not by a clause error" do
+    assert {:error, {:invalid, :opts, %{}}} = Graph.new(%{})
+    assert_raise ArgumentError, ~r/\{:invalid, :opts, :nope\}/, fn -> Graph.new!(:nope) end
   end
 end

@@ -80,6 +80,12 @@ defmodule BeamMCP.Connectome.EdgeTest do
     end
   end
 
+  test "options that are not a keyword list are refused by name, not by a clause error" do
+    assert {:error, {:invalid, :opts, %{}}} = Edge.new(%{})
+    assert {:error, {:invalid, :opts, [{"from", 1}]}} = Edge.new([{"from", 1}])
+    assert_raise ArgumentError, ~r/\{:invalid, :opts, nil\}/, fn -> Edge.new!(nil) end
+  end
+
   describe "Edge.key/1" do
     test "is the identity of an edge: from, to, kind, provenance -- never sign or weight" do
       {:ok, a} = Edge.new(from: @from, to: @to, kind: :invoke, provenance: :declared, weight: 1)

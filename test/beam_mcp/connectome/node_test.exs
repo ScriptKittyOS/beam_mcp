@@ -132,6 +132,26 @@ defmodule BeamMCP.Connectome.NodeTest do
       assert length(Enum.uniq(ids)) == length(ids)
     end
 
+    test "escaping makes the join injective: a name containing the delimiter, or the escape, cannot collide" do
+      # The order of the two replaces is load-bearing: escaping `/` before `%` would send
+      # "a/b" and "a%2Fb" to the same string. Pinned here and by a mutant that swaps them.
+      assert Node.id({:tool, "srv", "a/b"}) != Node.id({:tool, "srv", "a%2Fb"})
+      assert Node.id({:tool, "srv", "a%b"}) != Node.id({:tool, "srv", "a%25b"})
+      # A server whose name spells another identity's join does not become that identity.
+      assert Node.id({:server, "srv/tool/x"}) != Node.id({:tool, "srv", "x"})
+      assert Node.id({:tool, "srv/module", "Enum"}) != Node.id({:module, "srv", Enum})
+    end
+
+    test "options that are not a keyword list are refused by name, not by a clause error" do
+      assert {:error, {:invalid, :opts, %{kind: :tool}}} = Node.new(%{kind: :tool})
+      assert {:error, {:invalid, :opts, nil}} = Node.new(nil)
+      assert {:error, {:invalid, :opts, [:kind]}} = Node.new([:kind])
+
+      assert_raise ArgumentError, ~r/\{:invalid, :opts, %\{kind: :tool\}\}/, fn ->
+        Node.new!(%{kind: :tool})
+      end
+    end
+
     test "a name that is a string and the same name as an atom are the same node" do
       assert Node.id({:tool, "srv", :echo}) == Node.id({:tool, "srv", "echo"})
     end
