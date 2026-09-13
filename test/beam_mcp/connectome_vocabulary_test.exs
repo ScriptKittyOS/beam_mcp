@@ -20,7 +20,9 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
      test that already runs, and a fifth edge kind or a new sign cannot arrive without a
      sentence in the public vocabulary.
 
-  The limit, stated: anchor 3 reads `@type` unions only. An atom used as a value outside a
+  The limit, stated: anchor 3 reads `@type` unions only, and checks for a definition row
+  anywhere in the document rather than under a particular heading, because a typespec does not
+  say which family it belongs to. An atom used as a value outside a
   typespec is not in its population. Slice 010's census over edge construction sites is the
   other half.
   """
@@ -28,15 +30,28 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
 
   @doc_path "docs/connectome.md"
 
-  # The vocabulary as ratified. Each atom must appear in the document as `:atom` -- the
-  # backticked form the document uses to define a term -- and each name as a heading or a
-  # bold term. A definition is a sentence, and the document is where it lives; this file only
-  # checks that the sentence exists.
-  @node_kinds [:server, :tool, :resource, :prompt, :process, :module]
-  @edge_kinds [:invoke, :read, :message, :supervise]
-  @signs [:allow, :deny, :hold, :unknown]
-  @levels [:mfa, :module, :boundary, :server]
-  @provenances [:declared, :observed]
+  # The vocabulary as ratified. Each atom must have a DEFINITION ROW in the document -- a table
+  # row that opens `| \`:atom\` |` -- and each name must appear bold, which is how the document
+  # marks a term at the sentence that defines it. A definition is a sentence, and the document is
+  # where it lives; this file only checks that the sentence exists.
+  #
+  # "Has a row", not "appears in backticks anywhere": the first version checked the latter, and
+  # deleting the `:unknown` row survived, because `:unknown` is also mentioned in the invariant
+  # paragraph. A mention is not a definition, and an anchor that a mention satisfies cannot move
+  # when the definition goes (CONVENTIONS.md, the contained anchor). Measured, not assumed:
+  # mutation Md4 in the slice record.
+  #
+  # Each family is checked under ITS OWN HEADING, because `:module` and `:server` are both a
+  # node kind and a level: two terms sharing an atom. Checked over the whole document, deleting
+  # the node-kind row for `:module` survived -- the level row satisfied it (mutation Md5). The
+  # heading is the family, and a row outside it does not define the term in it.
+  @families [
+    {"Node kinds", [:server, :tool, :resource, :prompt, :process, :module]},
+    {"Edge kinds", [:invoke, :read, :message, :supervise]},
+    {"Sign", [:allow, :deny, :hold, :unknown]},
+    {"Level", [:mfa, :module, :boundary, :server]},
+    {"Provenance", [:declared, :observed]}
+  ]
   @names ["connectome", "declared connectome", "observed connectome", "drift finding"]
 
   # The one-paragraph invariant, pinned by its first sentence.
@@ -49,9 +64,16 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
   test "every ratified term is defined in the document" do
     doc = File.read!(@doc_path)
 
-    for atom <- @node_kinds ++ @edge_kinds ++ @signs ++ @levels ++ @provenances do
-      assert String.contains?(doc, "`#{inspect(atom)}`"),
-             "#{inspect(atom)} is not defined in #{@doc_path}"
+    sections = sections(doc)
+
+    for {family, atoms} <- @families do
+      section = Map.get(sections, family)
+      assert section, "#{@doc_path} has no \"## #{family}\" section"
+
+      for atom <- atoms do
+        assert defined?(section, atom),
+               "#{inspect(atom)} has no definition row under \"## #{family}\" in #{@doc_path}"
+      end
     end
 
     for name <- @names do
@@ -72,11 +94,25 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
       |> Enum.uniq()
       |> Enum.sort()
 
-    undefined =
-      Enum.reject(used, fn {atom, _file} -> String.contains?(doc, "`#{inspect(atom)}`") end)
+    undefined = Enum.reject(used, fn {atom, _file} -> defined?(doc, atom) end)
 
     assert undefined == [],
            "atoms in @type unions with no definition in #{@doc_path}: #{inspect(undefined)}"
+  end
+
+  # A term is defined when a table row opens with it. The row form is the one every table in
+  # the document uses, and it is what a reader would call the definition.
+  defp defined?(text, atom), do: String.contains?(text, "| `#{inspect(atom)}` |")
+
+  # The document split at its `## ` headings: heading title -> the text under it.
+  defp sections(doc) do
+    doc
+    |> String.split(~r/^## /m)
+    |> Enum.drop(1)
+    |> Map.new(fn chunk ->
+      [title | body] = String.split(chunk, "\n", parts: 2)
+      {String.trim(title), Enum.join(body)}
+    end)
   end
 
   # Every `@type name :: alt | alt | ...` in the file, and every bare atom among its
