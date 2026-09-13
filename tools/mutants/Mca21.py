@@ -11,7 +11,7 @@ p = sys.argv[1]
 s = open(p).read()
 
 old = "      sorted = Enum.sort_by(list, &elem(&1, 0))\n"
-new = "      sorted = Enum.sort_by(list, &elem(&1, 0), &utf16_le/2)\n"
+new = "      sorted = Enum.sort_by(list, &elem(&1, 0), &utf16_be/2)\n"
 
 if s.count(old) != 1:
     sys.exit("Mca21: anchor found %d times" % s.count(old))

@@ -46,6 +46,7 @@ defmodule BeamMCP.Connectome.Canonical do
           | {:duplicate_label_key, String.t(), String.t()}
           | {:invalid_utf8, String.t(), term()}
           | {:invalid_graph, term()}
+          | {:not_xml, String.t(), char()}
 
   @doc """
   The canonical bytes of the declared form of `graph`.
@@ -159,9 +160,12 @@ defmodule BeamMCP.Connectome.Canonical do
          {:ok, edges} <- canonical_edges(graph.edges) do
       node_lines =
         for {id, kind, level, labels} <- nodes do
+          # The fixed names are DOT identifiers; a label's name carries the key, so it is
+          # quoted as a value is -- a key may hold =, a space or a quote.
           attrs = [
             {"kind", kind},
-            {"level", level} | Enum.map(labels, fn {k, v} -> {"label_" <> k, flat(v)} end)
+            {"level", level}
+            | Enum.map(labels, fn {k, v} -> {dot_q("label_" <> k), flat(v)} end)
           ]
 
           [
@@ -199,19 +203,27 @@ defmodule BeamMCP.Connectome.Canonical do
   def to_dot!(graph), do: bang(to_dot(graph), "to_dot")
 
   @doc """
-  The GraphML export. Keys are declared once; nodes and edges follow the canonical order;
-  text is XML-escaped (`&`, `<`, `>`, `"`). Weights are not exported.
+  The GraphML export. Keys are declared once, as `l0`, `l1`, ... in canonical key order with
+  `attr.name` carrying the label key (a GraphML key id is an NMTOKEN, which a label key need
+  not be); nodes and edges follow the canonical order; text is XML-escaped (`&`, `<`, `>`,
+  `"`). A character XML 1.0 cannot carry -- a C0 control other than tab, LF and CR, or a
+  noncharacter such as U+FFFE -- is refused as `{:not_xml, id, codepoint}` rather than
+  written: no character reference can carry it either, and every conforming parser would
+  refuse the document. Weights are not exported.
   """
   @spec to_graphml(Graph.t()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
   def to_graphml(%Graph{} = graph) do
     with :ok <- checked(graph),
          {:ok, nodes} <- canonical_nodes(graph.nodes),
-         {:ok, edges} <- canonical_edges(graph.edges) do
+         {:ok, edges} <- canonical_edges(graph.edges),
+         :ok <- xml_chars(nodes) do
       label_keys =
         nodes
         |> Enum.flat_map(fn {_, _, _, labels} -> Enum.map(labels, &elem(&1, 0)) end)
         |> Enum.uniq()
-        |> Enum.sort(&utf16_le/2)
+        |> Enum.sort(&utf16_be/2)
+
+      key_id = label_keys |> Enum.with_index() |> Map.new(fn {k, i} -> {k, "l#{i}"} end)
 
       keys =
         [
@@ -221,8 +233,8 @@ defmodule BeamMCP.Connectome.Canonical do
           Enum.map(
             label_keys,
             &[
-              ~s(  <key id="label_),
-              xml(&1),
+              ~s(  <key id="),
+              key_id[&1],
               ~s(" for="node" attr.name="),
               xml(&1),
               ~s(" attr.type="string"/>\n)
@@ -248,7 +260,7 @@ defmodule BeamMCP.Connectome.Canonical do
             "</data>\n"
           ] ++
             Enum.map(labels, fn {k, v} ->
-              [~s(      <data key="label_), xml(k), ~s(">), xml(flat(v)), "</data>\n"]
+              [~s(      <data key="), key_id[k], ~s(">), xml(flat(v)), "</data>\n"]
             end) ++ ["    </node>\n"]
         end
 
@@ -338,7 +350,7 @@ defmodule BeamMCP.Connectome.Canonical do
   # another language collapses duplicates on parse and can never re-derive the bytes. Refused,
   # never merged, like ids.
   defp unique_keys(pairs, id) do
-    sorted = Enum.sort_by(pairs, &elem(&1, 0), &utf16_le/2)
+    sorted = Enum.sort_by(pairs, &elem(&1, 0), &utf16_be/2)
 
     sorted
     |> Enum.chunk_every(2, 1, :discard)
@@ -424,7 +436,7 @@ defmodule BeamMCP.Connectome.Canonical do
   # the JSON writer
 
   defp array(items) when is_list(items),
-    do: [?[, Enum.map_join(items, ",", &json/1) |> to_string(), ?]]
+    do: [?[, Enum.map_join(items, ",", &json/1), ?]]
 
   defp object(pairs),
     do: [
@@ -504,9 +516,31 @@ defmodule BeamMCP.Connectome.Canonical do
       |> String.replace(">", "&gt;")
       |> String.replace("\"", "&quot;")
 
+  # XML 1.0's Char production: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] |
+  # [#x10000-#x10FFFF]. Every string the export writes -- ids, keys, flattened values -- is
+  # read against it first; the endpoints are ids already read.
+  defp xml_chars(nodes) do
+    Enum.find_value(nodes, :ok, fn {id, _kind, _level, labels} ->
+      strings = [id | Enum.flat_map(labels, fn {k, v} -> [k, flat(v)] end)]
+
+      Enum.find_value(strings, fn s ->
+        case Enum.find(String.to_charlist(s), &(not xml_char?(&1))) do
+          nil -> nil
+          cp -> {:error, {:uncanonical, {:not_xml, id, cp}}}
+        end
+      end)
+    end)
+  end
+
+  defp xml_char?(c) when c in [0x9, 0xA, 0xD], do: true
+  defp xml_char?(c) when c >= 0x20 and c <= 0xD7FF, do: true
+  defp xml_char?(c) when c >= 0xE000 and c <= 0xFFFD, do: true
+  defp xml_char?(c) when c >= 0x10000 and c <= 0x10FFFF, do: true
+  defp xml_char?(_), do: false
+
   # JCS orders object keys by UTF-16 code unit. A UTF-16BE binary compares byte-wise in
   # exactly that order, so the comparison is on the re-encoded key.
-  defp utf16_le(a, b), do: utf16(a) <= utf16(b)
+  defp utf16_be(a, b), do: utf16(a) <= utf16(b)
   defp utf16(s), do: :unicode.characters_to_binary(s, :utf8, {:utf16, :big})
 
   defp nfc(s), do: String.normalize(s, :nfc)

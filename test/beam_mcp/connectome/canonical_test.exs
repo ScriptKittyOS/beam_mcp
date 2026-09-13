@@ -279,13 +279,16 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       dot = Canonical.to_dot!(g)
 
       assert dot =~
-               ~S(label_flag="true", label_list="[1,\"a\",null,false,{\"k\":\"atom\"}]", label_n="-3")
+               ~S("label_flag"="true", "label_list"="[1,\"a\",null,false,{\"k\":\"atom\"}]", "label_n"="-3")
 
-      assert dot =~ ~S(label_none="null", label_zero="0")
+      assert dot =~ ~S("label_none"="null", "label_zero"="0")
       graphml = Canonical.to_graphml!(g)
 
+      # Keys flag, list, n, none, zero in UTF-16 order: "list" is l1.
+      assert graphml =~ ~s(<key id="l1" for="node" attr.name="list" attr.type="string"/>)
+
       assert graphml =~
-               ~s(<data key="label_list">[1,&quot;a&quot;,null,false,{&quot;k&quot;:&quot;atom&quot;}]</data>)
+               ~s(<data key="l1">[1,&quot;a&quot;,null,false,{&quot;k&quot;:&quot;atom&quot;}]</data>)
 
       refute graphml =~ "weight"
     end
@@ -754,7 +757,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       dot = Canonical.to_dot!(Graph.new!(nodes: [n], edges: [], schema_version: @version))
 
       assert dot =~
-               ~S("kind"="tool", "level"="server", "label_a=b"="1", "label_has space"="v", "label_q\"uote"="true")
+               ~S(kind="tool", level="server", "label_a=b"="1", "label_has space"="v", "label_q\"uote"="true")
     end
 
     test "GraphML refuses a character XML 1.0 cannot carry, by node and code point, and names keys by position" do
@@ -780,6 +783,19 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
       assert {:error, {:uncanonical, {:not_xml, "s/tool/x\u0002", 0x02}}} =
                Canonical.to_graphml(Graph.new!(nodes: [i], edges: [], schema_version: @version))
+
+      # Every range XML 1.0 admits, written literally: tab, LF, CR, a private-use character,
+      # U+FFFD, and one above U+FFFF.
+      ok =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{t: "a\tb\nc\rd\uE000e\uFFFDf\u{1F600}"}
+        )
+
+      xml = Canonical.to_graphml!(Graph.new!(nodes: [ok], edges: [], schema_version: @version))
+      assert xml =~ "<data key=\"l0\">a\tb\nc\rd\uE000e\uFFFDf\u{1F600}</data>"
 
       n =
         Node.new!(
