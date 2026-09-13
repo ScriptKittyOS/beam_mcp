@@ -42,9 +42,17 @@ defmodule BeamMCP.Connectome.Declared do
   given to `GenServer.start_link/2`, a module in `Task.async/3`, a struct module in
   `struct/2` -- is called from inside that library, not from the scope, so the call is neither
   an edge nor an entry in the bound: the bound enumerates dynamic dispatch *from* the scope,
-  not dispatch *into* it from library code. Calls to the runtime's built-in functions (the
-  `erlang` module's BIFs) are not reported either: every module makes them, and the dependency
-  is on the runtime itself, not on a part of the system.
+  not dispatch *into* it from library code. Calls to what `:erlang.is_builtin/3` calls a
+  built-in -- C-implemented functions in `erlang`, and also in `lists`, `ets`, `maps`, `re`,
+  `math`, `os`, `binary` among others -- are not reported either (xref's default, which this
+  builder never changes): every module makes them, and the dependency is on the runtime itself,
+  not on a part of the system. So `lists` appears among the external callees when
+  `:lists.reverse/1` is called and not when `:lists.member/2` is, and a module whose only
+  outward calls are into `ets` has none. Two more, at the edges of the `MACRO-` rule: a
+  compile-time hook written as a plain function (`__before_compile__/1`, `__after_compile__/2`)
+  is attributed to that function and so reads as a runtime call; and a private macro leaves no
+  `MACRO-` function and no call, so a helper used only from its body produces neither an edge
+  nor an expansion call.
 
   ## What this module does not do
 
