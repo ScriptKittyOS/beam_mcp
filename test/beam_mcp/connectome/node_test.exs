@@ -239,5 +239,25 @@ defmodule BeamMCP.Connectome.NodeTest do
         Node.id({:boundary, :srv, :application, :x})
       end
     end
+
+    test "every row of the id table in docs/connectome.md is what id/1 writes" do
+      doc = File.read!("docs/connectome.md")
+      [_, section] = Regex.run(~r/### The id string\n(.*?)\n## /s, doc)
+
+      rows =
+        for [_, identity, id] <- Regex.scan(~r/^\| `([^`]+)` \| `([^`]+)` \|$/m, section),
+            do: {identity, id}
+
+      # A population of one would pass on a table that says nothing; the table names every
+      # identity shape the Identity section lists, at least one row each.
+      assert length(rows) >= 10
+
+      for {source, id} <- rows do
+        {identity, []} = Code.eval_string(source)
+
+        assert Node.id(identity) == id,
+               "#{source} -> #{inspect(Node.id(identity))}, doc says #{id}"
+      end
+    end
   end
 end

@@ -42,7 +42,9 @@ All notable changes to this project are documented here. The format follows
   specified in full in `docs/connectome-canonical.md`, with a worked example whose hash reproduces
   with `sha256sum` alone, so a verifier can be written without importing this package. Weights
   travel in a separate sidecar that is never hashed. `to_dot/1`, `to_graphml/1` and `to_json/1`
-  render the same canonical order.
+  render the same canonical order. What has no canonical bytes is refused by name rather than
+  guessed at: a float, two ids or two label keys that coincide after normalisation, and a string
+  that is not valid UTF-8.
 - **The gate reads the branch's own commit messages** for attribution trailers, session links,
   board identifiers and consumer names — offline, over `origin/main..HEAD`; a pull request's body
   is read by a person before merge.

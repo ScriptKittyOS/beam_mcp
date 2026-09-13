@@ -114,6 +114,33 @@ which it is:
 A boundary identity and the `:boundary` level imply each other; a bare module is a
 module-level node and a module-function-arity is an `:mfa`-level node.
 
+### The id string
+
+`BeamMCP.Connectome.Node.id/1` is the one place an identity becomes an id, and this is what
+it writes. The components of the identity are written in order, the server first, each
+escaped and then joined by `/`. Escaping is `%` to `%25` first, then `/` to `%2F`, applied to
+every component, so a `/` inside a server name or a resource URI never reads as a separator.
+An atom naming a kind or a source is written as its name; a module is written as Elixir
+prints it (`inspect/1`: `Foo.Bar`, or `:erl_mod` for an Erlang module); a function name as
+its atom's name; an arity as a decimal integer. Nothing is normalised here; NFC is applied by
+the canonical form, not by the id.
+
+| identity | id |
+| -- | -- |
+| `{:server, "srv"}` | `srv/server` |
+| `{:tool, "srv", "écho"}` | `srv/tool/écho` |
+| `{:resource, "srv", "r://a"}` | `srv/resource/r:%2F%2Fa` |
+| `{:prompt, "a/b", "p%"}` | `a%2Fb/prompt/p%25` |
+| `{:process, "srv", :worker}` | `srv/process/worker` |
+| `{:module, "srv", Foo.Bar}` | `srv/module/Foo.Bar` |
+| `{:module, "srv", :erl_mod}` | `srv/module/:erl_mod` |
+| `{:module, "srv", {Foo.Bar, :run, 2}}` | `srv/module/Foo.Bar/run/2` |
+| `{:boundary, "srv", :application, :beam_mcp}` | `srv/boundary/application/beam_mcp` |
+| `{:boundary, "srv", :boundary_module, Foo}` | `srv/boundary/boundary_module/Foo` |
+
+The escaping is not reversed by anything in this package: an id is compared, sorted and
+hashed as bytes, never parsed back into its identity.
+
 ## Provenance
 
 | provenance | which build produced the edge |

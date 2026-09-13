@@ -382,6 +382,13 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
       assert {:error, {:uncanonical, {:invalid_utf8, ^bad, :id}}} =
                Canonical.encode(Graph.new!(nodes: [hand], edges: [], schema_version: @version))
+
+      # The sidecar keys edges without reading nodes first, so an endpoint is where it meets
+      # the bad bytes; it names the field it met them in.
+      loop = Edge.new!(from: bad, to: bad, kind: :invoke, provenance: :declared, weight: 1)
+      g = Graph.new!(nodes: [hand], edges: [loop], schema_version: @version)
+      assert {:error, {:uncanonical, {:invalid_utf8, ^bad, :from}}} = Canonical.sidecar(g)
+      assert {:error, {:uncanonical, {:invalid_utf8, ^bad, :id}}} = Canonical.encode(g)
     end
 
     test "escaping: quote, backslash and control characters; everything else literal UTF-8" do
@@ -491,6 +498,47 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert Canonical.to_dot!(g) == File.read!(Path.join(@fixtures, "golden.dot"))
       assert Canonical.to_graphml!(g) == File.read!(Path.join(@fixtures, "golden.graphml"))
       assert Canonical.to_json!(g) == Canonical.encode!(g)
+    end
+  end
+
+  describe "rule 8: the value domain, at its edges" do
+    test "a negative integer, an integer beyond 2^53, an empty object and an empty array are written as the document says" do
+      big = 9_007_199_254_740_993
+
+      n =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{a: -1, b: big, c: %{}, d: []}
+        )
+
+      assert {:ok, bytes} =
+               Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+
+      assert bytes =~ ~s("labels":{"a":-1,"b":9007199254740993,"c":{},"d":[]})
+    end
+
+    test "nil, true and false are literals as values and refused as keys" do
+      ok =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{a: nil, b: true, c: false}
+        )
+
+      assert {:ok, bytes} =
+               Canonical.encode(Graph.new!(nodes: [ok], edges: [], schema_version: @version))
+
+      assert bytes =~ ~s("labels":{"a":null,"b":true,"c":false})
+
+      for k <- [nil, true, false] do
+        n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: %{k => 1})
+
+        assert {:error, {:uncanonical, {:label_key, _, ^k}}} =
+                 Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+      end
     end
   end
 
