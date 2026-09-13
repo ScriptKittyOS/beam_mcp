@@ -30,7 +30,10 @@ defmodule BeamMCP.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   def application do
-    [extra_applications: [:logger]]
+    # OTP's `tools` application carries `:xref`, which the declared-connectome builder reads
+    # call edges with. Optional: a release that leaves it out still boots, and the builder
+    # refuses by name instead of crashing.
+    [extra_applications: [:logger, :tools], optional_applications: [:tools]]
   end
 
   defp deps do

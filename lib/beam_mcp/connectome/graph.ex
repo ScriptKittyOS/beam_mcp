@@ -14,8 +14,8 @@ defmodule BeamMCP.Connectome.Graph do
   `schema_version` is required and must be the one this module defines. A graph from a
   version this module does not know is refused rather than guessed at.
 
-  Every node and edge handed in is checked against its field domains -- `Node.check/1`,
-  `Edge.check/1` -- and refused by field, because a host may build a struct by literal and
+  Every node and edge handed in is checked against its field domains --
+  `BeamMCP.Connectome.Node.check/1`, `BeamMCP.Connectome.Edge.check/1` -- and refused by field, because a host may build a struct by literal and
   bypass the constructors, and a later slice hashes whatever this function accepted. Nothing
   is normalised, defaulted or rewritten: a sign a host wrote survives exactly as written when
   it is in the vocabulary, and is refused, not corrected, when it is not.
