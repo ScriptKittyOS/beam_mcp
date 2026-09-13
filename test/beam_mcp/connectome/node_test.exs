@@ -51,6 +51,64 @@ defmodule BeamMCP.Connectome.NodeTest do
                Node.new(kind: :module, level: :mfa, identity: {:module, "srv", Enum})
     end
 
+    test "a boundary-level module node carries the source of its grouping in its identity" do
+      # Two different things group modules -- an OTP application, named by an atom, and a
+      # Boundary declaration, named by a module -- and both arrive as atoms. One shape would
+      # hash two facts to the same bytes, so the identity says which it is.
+      assert {:ok, %Node{kind: :module, level: :boundary} = app} =
+               Node.new(
+                 kind: :module,
+                 level: :boundary,
+                 identity: {:boundary, "srv", :application, :my_app}
+               )
+
+      assert {:ok, %Node{kind: :module, level: :boundary} = decl} =
+               Node.new(
+                 kind: :module,
+                 level: :boundary,
+                 identity: {:boundary, "srv", :boundary_module, MyApp.Foo}
+               )
+
+      assert app.id != decl.id
+      assert app.id == Node.id({:boundary, "srv", :application, :my_app})
+    end
+
+    test "the boundary identity and the :boundary level imply each other; a bare module is a module-level node" do
+      assert {:error, {:invalid, :identity, {:boundary, "srv", :application, :my_app}}} =
+               Node.new(
+                 kind: :module,
+                 level: :module,
+                 identity: {:boundary, "srv", :application, :my_app}
+               )
+
+      assert {:error, {:invalid, :identity, {:module, "srv", Enum}}} =
+               Node.new(kind: :module, level: :boundary, identity: {:module, "srv", Enum})
+
+      assert {:error, {:invalid, :identity, {:module, "srv", Enum}}} =
+               Node.new(kind: :module, level: :server, identity: {:module, "srv", Enum})
+
+      # Only a module-kind node groups modules; a tool has no boundary identity.
+      assert {:error, {:invalid, :identity, {:boundary, "srv", :application, :my_app}}} =
+               Node.new(
+                 kind: :tool,
+                 level: :boundary,
+                 identity: {:boundary, "srv", :application, :my_app}
+               )
+    end
+
+    test "a boundary source the vocabulary does not name is refused" do
+      assert_raise ArgumentError, ~r/identity/, fn ->
+        Node.id({:boundary, "srv", :umbrella, :x})
+      end
+
+      assert {:error, {:invalid, :identity, {:boundary, "srv", :umbrella, :x}}} =
+               Node.new(
+                 kind: :module,
+                 level: :boundary,
+                 identity: {:boundary, "srv", :umbrella, :x}
+               )
+    end
+
     test "an identity with the right tag but a shape id/1 does not name is refused, not raised" do
       assert {:error, {:invalid, :identity, {:tool, "srv"}}} =
                Node.new(kind: :tool, level: :server, identity: {:tool, "srv"})
@@ -125,7 +183,9 @@ defmodule BeamMCP.Connectome.NodeTest do
         Node.id({:prompt, "srv", :greet}),
         Node.id({:process, "srv", :my_worker}),
         Node.id({:module, "srv", Enum}),
-        Node.id({:module, "srv", {Enum, :map, 2}})
+        Node.id({:module, "srv", {Enum, :map, 2}}),
+        Node.id({:boundary, "srv", :application, :my_app}),
+        Node.id({:boundary, "srv", :boundary_module, MyApp.Foo})
       ]
 
       assert Enum.all?(ids, &is_binary/1)
