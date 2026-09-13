@@ -17,7 +17,9 @@ defmodule BeamMCP.Connectome.Edge do
   ## Identity
 
   `key/1` -- from, to, kind, provenance -- is what makes two edges the same edge. Sign and
-  weight are not part of it: they are what is said *about* the edge, not what it is.
+  weight are not part of it: they are what is said *about* the edge, not what it is. The key
+  is an in-memory identity for sorting and de-duplication, not a wire shape: a serialized edge
+  names every field, and never emits `kind` or `provenance` as a bare positional atom.
   """
 
   @kinds [:invoke, :read, :message, :supervise]
@@ -56,14 +58,17 @@ defmodule BeamMCP.Connectome.Edge do
   Builds an edge from `from:`, `to:` (node ids), `kind:`, `provenance:` and an optional
   `weight:`. Its sign is `:unknown`.
 
+  Options are a keyword list; anything else is refused as `{:invalid, :opts, value}`.
+
   Refuses, by name: an unknown key -- `:sign` among them -- (`{:unknown_key, key}`), a
   missing required key (`{:missing, key}`), an endpoint that is not a node id, a kind or
   provenance outside the vocabulary, and a weight that is not `nil` or a non-negative number
   (each `{:invalid, field, value}`).
   """
   @spec new(keyword()) :: {:ok, t()} | {:error, term()}
-  def new(opts) when is_list(opts) do
-    with :ok <- reject_unknown(opts),
+  def new(opts) do
+    with :ok <- keyword(opts),
+         :ok <- reject_unknown(opts),
          :ok <- require_keys(opts),
          {:ok, from} <- node_id(opts, :from),
          {:ok, to} <- node_id(opts, :to),
@@ -87,6 +92,12 @@ defmodule BeamMCP.Connectome.Edge do
   @spec key(t()) :: key()
   def key(%__MODULE__{from: from, to: to, kind: kind, provenance: provenance}),
     do: {from, to, kind, provenance}
+
+  # Keyword options only. A map, nil, or a list that is not a keyword list is refused by name
+  # rather than by a clause error, so new!/1 raises the ArgumentError its doc promises.
+  defp keyword(opts) do
+    if Keyword.keyword?(opts), do: :ok, else: {:error, {:invalid, :opts, opts}}
+  end
 
   defp reject_unknown(opts) do
     case Enum.find(Keyword.keys(opts), &(&1 not in @keys)) do

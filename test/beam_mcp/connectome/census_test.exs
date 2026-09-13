@@ -11,13 +11,27 @@ defmodule BeamMCP.Connectome.CensusTest do
   the struct default (`sign: :unknown`), a typespec, or the field's own definition; and the
   atoms `:allow`, `:deny`, `:hold` may appear in a code line only inside the `@type sign`
   union that names them. Comment lines and documentation heredocs are excluded from the
-  population, because a sentence about signs is not a write. The limit, stated: a write
-  through a name the census does not know -- `Map.put(e, :sign, x)` is caught by `:sign`,
-  but a key held in a variable is not. That is what reviewer lane (a) reads for.
+  population, because a sentence about signs is not a write.
+
+  The limit, stated, and it is wider than "a key held in a variable". A write evades this
+  census when neither the key nor the value is spelled on a code line: a whole-collection
+  write with a variable argument (`struct(e, host_fields)`, `Map.merge(e, fields)`,
+  `Map.put(e, key, value)`); a compound identifier the word boundary does not split
+  (`:default_sign`, `opts[:edge_sign]`); a computed atom (`String.to_atom("si" <> "gn")`);
+  and code inside a `\"""` heredoc, which this file reads as documentation. The
+  strip-then-match rule also lets a fifth atom appended to the `@type sign` union through;
+  the vocabulary census in `connectome_vocabulary_test.exs` is what refuses that. So the
+  standing rule for later slices is the one this census cannot enforce by itself: a decoder
+  builds an edge through `Edge.new/1`, never through `struct/2` over external input. That is
+  what a reader of `lib/` checks by hand.
 
   **One node-id site.** `Node.id/1` is the only function that turns an identity into an id,
   and every `%Node{}` in `lib/` is built in `node.ex`. A second site is how two id schemes
-  arrive; the census refuses it by count.
+  arrive; the census refuses it by count. Its limit: it counts `def id(` under
+  `lib/beam_mcp/connectome/` and the struct literal spelled `%Node{` or
+  `%BeamMCP.Connectome.Node{` or `struct(Node`. A function under another name, an inline
+  join of the same parts in a builder, an aliased literal (`%N{`), or a `def id(` elsewhere
+  under `lib/` is outside its count.
   """
   use ExUnit.Case, async: true
 
