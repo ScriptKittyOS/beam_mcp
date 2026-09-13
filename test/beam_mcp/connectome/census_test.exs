@@ -110,11 +110,14 @@ defmodule BeamMCP.Connectome.CensusTest do
   # A line is permitted when, with every permitted form removed from it, no sign token
   # remains. The permitted forms: the struct default `sign: :unknown`; the typespec union
   # naming the four values; the struct field's type `sign: sign()`; the typedoc's name.
-  # The last two are the domain check `Edge.check/1` runs for `Graph.new/1`: the membership
-  # list, spelled once, and the predicate that reads it. A predicate over a value is reading;
-  # it cannot be turned into a write without a line this census would see.
+  # The first form is the struct default in its defstruct spelling only -- `, sign: :unknown]`
+  # -- because the bare `sign: :unknown` let `%{e | sign: :unknown}` through: a launder that
+  # corrects a host's sign to the default is spelled with exactly the permitted text. Review
+  # found it; the narrower form makes that line visible. The last two are the domain check
+  # `Edge.check/1` runs for `Graph.new/1`: the membership list, spelled once, and the predicate
+  # that reads it -- reading, which the refusal tests hold from the other side.
   @permitted_forms [
-    "sign: :unknown",
+    ", sign: :unknown]",
     "@type sign :: :allow | :deny | :hold | :unknown",
     "sign: sign()",
     "@signs [:allow, :deny, :hold, :unknown]",
