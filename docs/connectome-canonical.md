@@ -29,7 +29,10 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
 3. **`"edges"` is an array sorted by the tuple** (`from`, `to`, `kind`, `provenance`), each
    compared as in rule 2, left to right. Each edge is an object with exactly `"from"`,
    `"kind"`, `"provenance"`, `"sign"`, `"to"` — in that order, which is their sorted order.
-   **No weight.**
+   **No weight.** That tuple is an edge's identity: `BeamMCP.Connectome.Graph.new/1` refuses
+   two edges with the same tuple and an edge whose `from` or `to` names no node, so the
+   canonical form never meets either; it neither merges nor drops. The sign is not part of
+   the identity — one edge carries one sign.
 4. **Every other object** — `"labels"` and anything nested in it — **sorts its keys by UTF-16
    code unit**, the order [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (the JSON
    Canonicalization Scheme) uses. For keys within the Basic Multilingual Plane this is code
@@ -37,18 +40,29 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    for example U+1F600 sorts before U+FF01.
 5. **Every atom is a string under the name of its field.** `kind`, `level`, `sign` and
    `provenance` are written as their name: `"kind":"module"`, `"level":"module"`. A reader
-   tells the family by the key alone; no value is ever a bare, unnamed word.
-6. **Strings are NFC-normalised** before anything else — ids, label keys and label values.
-   Two nodes whose ids coincide after normalisation are refused, never merged.
+   tells the family by the key alone; no value is ever a bare, unnamed word. A label key may
+   arrive as an atom or a string and is written as the same string either way; the three
+   atoms `nil`, `true` and `false` are the JSON literals `null`, `true` and `false` as
+   values, and are refused as keys.
+6. **Strings are NFC-normalised** before anything else — ids, edge endpoints, label keys and
+   label values, whether they arrived as strings or as atoms. Two nodes whose ids coincide
+   after normalisation are refused, never merged; so are two label keys in one object that
+   coincide after normalisation, or an atom and a string spelling one key. **A string that is
+   not valid UTF-8 is refused**, naming the node and the field, because it has no canonical
+   bytes: a writer that stops at the bad byte would emit a prefix, and two distinct strings
+   could meet.
 7. **String escaping** is RFC 8785's: `"` as `\"`, `\` as `\\`, and the control characters
    U+0008, U+0009, U+000A, U+000C, U+000D as `\b`, `\t`, `\n`, `\f`, `\r`; every other
    character below U+0020 as `\u` followed by four lowercase hexadecimal digits; **everything
    else literal UTF-8**, including `/` and every non-ASCII character.
 8. **Label values** are strings, integers, `true`, `false`, `null`, arrays of these, or
    objects of these (sorted by rule 4). An atom label value is written as a string. Integers
-   are decimal with no sign for zero or positive values, no leading zeros, no exponent. **A
-   float is refused**, because two runtimes may print it differently; so is anything with no
-   byte form (a reference, a pid, a tuple, a function).
+   are decimal with no sign for zero or positive values, a leading `-` for negative ones, no
+   leading zeros, no exponent, and no upper bound: an integer beyond 2^53 is written in full,
+   and a reader that cannot hold it exactly cannot re-derive the bytes — that is the reader's
+   limit, stated here rather than rounded. An empty object is `{}` and an empty array `[]`.
+   **A float is refused**, because two runtimes may print it differently; so is anything with
+   no byte form (a reference, a pid, a tuple, a function).
 9. **The hash is SHA-256 over exactly these bytes**, written as sixty-four lowercase
    hexadecimal characters when written as text.
 
