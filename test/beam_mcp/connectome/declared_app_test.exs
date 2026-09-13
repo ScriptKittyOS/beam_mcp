@@ -19,8 +19,11 @@ defmodule BeamMCP.Connectome.DeclaredAppTest do
   test "without :xref on the code path the builder refuses by name instead of crashing" do
     ebin = :code.lib_dir(:tools) |> Path.join("ebin") |> to_string()
     true = Code.delete_path(ebin)
-    :code.purge(:xref)
+    # Delete, then purge: the other order leaves old code lingering after the reload, and a
+    # second run in one VM would refuse the delete. This test crashes rather than skips on an
+    # OTP without tools; the rest of the suite needs xref anyway.
     :code.delete(:xref)
+    :code.purge(:xref)
 
     try do
       refute Code.ensure_loaded?(:xref)

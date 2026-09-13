@@ -114,6 +114,10 @@ defmodule BeamMCP.Connectome.Declared do
   list of caller `{module, function, arity}` the host vouches for).
 
   Returns `{:ok, %Result{}}`, or `{:error, reason}` by name.
+
+  Two side effects, stated: each application in `apps:` is loaded (never started) before its
+  `.app` is read, and the loads preceding a refusal persist; and `capabilities/0` is called
+  twice on the catalog -- once by the package's contract check, once to read it.
   """
   @spec build(keyword()) :: {:ok, Result.t()} | {:error, term()}
   def build(opts) do
