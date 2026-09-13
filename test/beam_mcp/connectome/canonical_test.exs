@@ -803,6 +803,16 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert xml =~ "<data key=\"l0\">a&#9;b&#10;c&#13;d\uE000e\uFFFDf\u{1F600}</data>"
       refute xml =~ "\t"
 
+      # The four ids that would have read back as one, each still its own node element.
+      four =
+        for ws <- [" ", "\t", "\n", "\r"],
+            do: Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "a#{ws}b"})
+
+      xml = Canonical.to_graphml!(Graph.new!(nodes: four, edges: [], schema_version: @version))
+
+      for ref <- ["a b", "a&#9;b", "a&#10;b", "a&#13;b"],
+          do: assert(xml =~ ~s(<node id="s/tool/#{ref}">))
+
       n =
         Node.new!(
           kind: :tool,
