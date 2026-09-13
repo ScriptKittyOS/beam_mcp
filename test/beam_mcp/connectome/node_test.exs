@@ -181,7 +181,7 @@ defmodule BeamMCP.Connectome.NodeTest do
                  labels: MapSet.new(["a"])
                )
 
-      n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
+      %Node{} = n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
 
       assert {:error, {:invalid, :labels, %Date{}}} =
                Node.check(%Node{n | labels: ~D[2026-01-01]})

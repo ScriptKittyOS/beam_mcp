@@ -50,7 +50,10 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    coincide after normalisation, or an atom and a string spelling one key. **A string that is
    not valid UTF-8 is refused**, naming the node and the field, because it has no canonical
    bytes: a writer that stops at the bad byte would emit a prefix, and two distinct strings
-   could meet.
+   could meet. NFC is applied with the Unicode tables of the runtime that encodes; Unicode's
+   normalisation stability policy keeps the result the same for every character assigned in
+   both runtimes' versions, so two runtimes differ only on a string carrying a code point one
+   of them does not yet know.
 7. **String escaping** is RFC 8785's: `"` as `\"`, `\` as `\\`, and the control characters
    U+0008, U+0009, U+000A, U+000C, U+000D as `\b`, `\t`, `\n`, `\f`, `\r`; every other
    character below U+0020 as `\u` followed by four lowercase hexadecimal digits; **everything
@@ -62,7 +65,10 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    and a reader that cannot hold it exactly cannot re-derive the bytes — that is the reader's
    limit, stated here rather than rounded. An empty object is `{}` and an empty array `[]`.
    **A float is refused**, because two runtimes may print it differently; so is anything with
-   no byte form (a reference, a pid, a tuple, a function).
+   no byte form (a reference, a pid, a tuple, a function), and a struct — a struct is not a
+   labels map, and its fields are the private layout of another module, which a release may
+   change. A refusal at any depth is reported by node, by the label it was met under, and by
+   that label's whole value.
 9. **The hash is SHA-256 over exactly these bytes**, written as sixty-four lowercase
    hexadecimal characters when written as text.
 
@@ -85,8 +91,10 @@ and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.
 Weights are written separately as `{"schema_version":1,"weights":[…]}`, one object per edge
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
-integer; a float weight is written in the shortest form that round-trips. The sidecar is
-not part of any hash.
+integer; a float weight is written in the shortest form that round-trips (`:erlang.float_to_binary/2`
+with `:short`, which OTP 25 introduced). The sidecar is not part of any hash. It is defined
+only for a graph whose declared form encodes: what `encode/1` refuses, `sidecar/1` refuses
+with the same reason.
 
 ## What the exports are
 
