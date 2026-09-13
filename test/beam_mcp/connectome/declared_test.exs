@@ -267,6 +267,25 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       assert Enum.all?(g.edges, &(&1.weight == nil and &1.sign == :unknown))
     end
 
+    test "a call into or out of an ungrouped module is enumerated, never an edge and never dropped" do
+      # Alpha calls Beta. Beta is grouped; Alpha is not. The call cannot be an edge (one end has
+      # no node at this level) and it must not vanish: the compiled code showed it.
+      map = %{Fx.Beta => {:application, :grp}}
+
+      {:ok, %{graph: g, bound: bound}} =
+        build(
+          level: :boundary,
+          boundaries: map,
+          modules: [Fx.Alpha, Fx.Beta],
+          catalog: nil,
+          tool_modules: %{}
+        )
+
+      assert bound.ungrouped_modules == [Fx.Alpha]
+      assert bound.ungrouped_calls == [{{Fx.Alpha, :run, 1}, {Fx.Beta, :run, 1}}]
+      assert keys(g.edges) == []
+    end
+
     test "without a host map, modules group by their OTP application; those with none are enumerated" do
       {:ok, %{graph: g, bound: bound}} =
         build(level: :boundary, modules: [Fx.Alpha, Fx.Beta], catalog: nil, tool_modules: %{})
@@ -360,6 +379,32 @@ defmodule BeamMCP.Connectome.DeclaredTest do
                Declared.build(server: @server, modules: [Fx.Beta], catalog: DoubledCatalog)
 
       assert id == Node.id({:tool, @server, :echo})
+    end
+
+    test "an application no .app file describes is refused by name, not built as empty" do
+      assert {:error, {:unknown_app, :no_such_app_zz}} =
+               Declared.build(server: @server, apps: [:no_such_app_zz])
+    end
+
+    test "a module or app list holding a non-atom is refused by name" do
+      assert {:error, {:invalid, :modules, ["NotAnAtom"]}} =
+               Declared.build(server: @server, modules: ["NotAnAtom"])
+
+      assert {:error, {:invalid, :apps, ["beam_mcp"]}} =
+               Declared.build(server: @server, apps: ["beam_mcp"])
+    end
+
+    defmodule PlainMapTool do
+      @behaviour BeamMCP.Catalog
+      @impl true
+      def capabilities, do: %{tools: [%{name: :plain}], resources: [], prompts: []}
+    end
+
+    test "a catalog the package's own contract check refuses is refused here by the same reason, and never read" do
+      assert {:error, {:invalid, :catalog, reason}} = build(catalog: PlainMapTool)
+      assert reason =~ "ToolSpec"
+      assert {:error, {:invalid, :catalog, reason2}} = build(catalog: :not_a_catalog)
+      assert reason2 =~ "capabilities/0"
     end
 
     test "each malformed option is refused by its name" do
