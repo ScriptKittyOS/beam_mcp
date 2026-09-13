@@ -320,8 +320,10 @@ defmodule BeamMCP.Connectome.Canonical do
     end
   end
 
+  # Pairs are read in term order, not the map's: past thirty-two keys a map lists its pairs
+  # in hash order, and which of two faults is named would follow the runtime.
   defp labels(labels, id) do
-    with {:ok, pairs} <- map_ok(Map.to_list(labels), fn {k, v} -> label(k, v, id) end) do
+    with {:ok, pairs} <- map_ok(Enum.sort(labels), fn {k, v} -> label(k, v, id) end) do
       unique_keys(pairs, id)
     end
   end
@@ -379,7 +381,7 @@ defmodule BeamMCP.Connectome.Canonical do
   end
 
   defp value(v, id, k) when is_map(v) and not is_struct(v) do
-    with {:ok, pairs} <- map_ok(Map.to_list(v), fn {kk, vv} -> label(kk, vv, id) end),
+    with {:ok, pairs} <- map_ok(Enum.sort(v), fn {kk, vv} -> label(kk, vv, id) end),
          {:ok, sorted} <- unique_keys(pairs, id) do
       {:ok, {:object, sorted}}
     end
