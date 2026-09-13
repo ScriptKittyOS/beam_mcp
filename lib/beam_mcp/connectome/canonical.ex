@@ -523,14 +523,14 @@ defmodule BeamMCP.Connectome.Canonical do
     Enum.find_value(nodes, :ok, fn {id, _kind, _level, labels} ->
       strings = [id | Enum.flat_map(labels, fn {k, v} -> [k, flat(v)] end)]
 
-      Enum.find_value(strings, fn s ->
-        case Enum.find(String.to_charlist(s), &(not xml_char?(&1))) do
-          nil -> nil
-          cp -> {:error, {:uncanonical, {:not_xml, id, cp}}}
-        end
-      end)
+      case Enum.find_value(strings, &not_xml/1) do
+        nil -> nil
+        cp -> {:error, {:uncanonical, {:not_xml, id, cp}}}
+      end
     end)
   end
+
+  defp not_xml(s), do: Enum.find(String.to_charlist(s), &(not xml_char?(&1)))
 
   defp xml_char?(c) when c in [0x9, 0xA, 0xD], do: true
   defp xml_char?(c) when c >= 0x20 and c <= 0xD7FF, do: true
