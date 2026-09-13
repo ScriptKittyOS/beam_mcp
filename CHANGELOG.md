@@ -11,6 +11,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the connectome, additive
+
+- **The connectome vocabulary and data model.** `docs/connectome.md` defines the words: a
+  connectome is the wiring diagram of a composed MCP system, built once from what is declared
+  and once from what ran. `BeamMCP.Connectome.Node`, `Edge` and `Graph` carry it: a node has
+  a structural id derived by one function from the identity the host supplies; an edge carries
+  from, to, kind, provenance, an optional weight, and a sign slot. **The package writes
+  `:unknown` into that slot and nothing else** — it populates no sign, signs no finding, holds
+  no key, decides no authority; that is the host's, and a census test over `lib/` holds it.
+  `Graph.new/1` validates every struct it is handed, by field, and corrects nothing.
+- **The declared connectome.** `BeamMCP.Connectome.Declared.build/1` reads three sources and
+  nothing that ran: the catalog's `capabilities/0`, the call edges of the modules in scope from
+  their beams (OTP's `:xref`, so a module used only at compile time produces no edge), and a
+  grouping of modules at the `:boundary` level. Beside the graph it returns the completeness
+  bound — every dynamic-dispatch site, callee outside the scope, unreadable catalog entry, tool
+  without a module, and module without a beam or debug information, enumerated and never
+  summarised to a count. OTP's `tools` application is declared as an optional application for
+  `:xref`; a release without it still boots and the builder refuses by name.
+- **No MCP capability is claimed.** Neither protocol revision this package targets defines a
+  topology or declared-reachability primitive, and none is invented. Nothing on the wire changes.
+
 ### Changed — BREAKING, and it breaks a host contract rather than the wire
 
 - **`BeamMCP.ToolCatalog` is replaced by `BeamMCP.Catalog`, and `all/0` by `capabilities/0`.**
