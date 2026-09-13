@@ -174,8 +174,8 @@ done
 #      not remove them from history, and rewriting history is not this script's to do. New
 #      records do not join them. The allowlist is pinned by sha256 so that widening it is an
 #      edit to this file, visible in a diff, and not a quiet append.
-#   4. Under either directory, every tracked entry is a regular file (mode 100644 or 100755)
-#      and its name has no newline. A symlink (120000) at a grandfathered path would publish
+#   4. Under either directory, every tracked entry is a regular file (mode 100644 or 100755);
+#      and no tracked name anywhere has a newline in it. A symlink (120000) at a grandfathered path would publish
 #      its target string -- an internal path name -- under a name the allowlist admits; a
 #      gitlink (160000) at the same path passed the WHOLE GATE green when measured, because
 #      the census read names and not modes. A name containing a newline can spell two adjacent
@@ -201,10 +201,14 @@ internal_dir=".internal"
 allowlist="tools/publication-allowlist.txt"
 allowlist_sha="ee5dc25859a7ccc153b25a1216ba65abfa3d576117d5b7c327e9b37296dde5c3"
 pub_fail=0
-# The exit status is kept as well as the output: check-ignore exits 1 when the path is NOT
-# ignored, and a negated pattern (`!/.internal/`) is a rule in .gitignore that does exactly that.
-if pub_rule=$(git check-ignore -v "$internal_dir/probe" 2>/dev/null); then
-  case "$pub_rule" in
+# TWO QUESTIONS, TWO COMMANDS. `-q` answers "is the path ignored?" with its exit status alone.
+# `-v` answers "which rule matched?" -- and under -v the exit status means something else:
+# a NEGATED pattern that matches the probe directly (`!/.internal/*`) is printed and exits 0,
+# although nothing is ignored. Measured on git 2.43: with that mis-edit in place, `-v` printed
+# `.gitignore:20:!/.internal/*`, exited 0, and the whole gate was green; `-q` exited 1. So the
+# fact comes from -q and only the source name comes from -v.
+if git check-ignore -q "$internal_dir/probe" 2>/dev/null; then
+  case "$(git check-ignore -v "$internal_dir/probe" 2>/dev/null)" in
     .gitignore:*) pub_ignore="rule in .gitignore" ;;
     *)            pub_ignore="IGNORE RULE for $internal_dir/ IS NOT IN THE TRACKED .gitignore"; pub_fail=1 ;;
   esac
@@ -225,9 +229,11 @@ while IFS= read -r -d '' entry; do
   n_pub=$((n_pub + 1))
   mode="${entry%% *}"
   f="${entry#*	}"
+  # A newline in a tracked name is refused anywhere in the tree: no legitimate path has one,
+  # and the allowlist lookup below is newline-delimited, so such a name could match two lines.
+  case "$f" in *$'\n'*) pub_violations="${pub_violations}${f}  (newline in name)"$'\n'; continue ;; esac
   case "$f" in
     "$internal_dir"/*|slices/*)
-      case "$f" in *$'\n'*) pub_violations="${pub_violations}${f}  (newline in name)"$'\n'; continue ;; esac
       case "$mode" in
         100644|100755) ;;
         120000) pub_violations="${pub_violations}${f}  (symbolic link)"$'\n'; continue ;;
