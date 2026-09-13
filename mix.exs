@@ -22,7 +22,15 @@ defmodule BeamMCP.MixProject do
       package: package(),
       name: "BeamMCP",
       source_url: @source_url,
-      docs: [main: "readme", extras: ["README.md", "CHANGELOG.md", "docs/connectome.md"]]
+      docs: [
+        main: "readme",
+        extras: [
+          "README.md",
+          "CHANGELOG.md",
+          "docs/connectome.md",
+          "docs/connectome-canonical.md"
+        ]
+      ]
     ]
   end
 
