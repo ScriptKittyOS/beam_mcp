@@ -97,14 +97,27 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       {:ok, %{bound: %Declared.Bound{} = bound}} = build()
 
       assert Enum.map(bound.unresolved_calls, &elem(&1, 0)) ==
-               Enum.sort([{Fx.Dyn, :call, 2}, {Fx.Dyn, :fun, 2}])
+               Enum.sort([{Fx.Dyn, :apply_to, 2}, {Fx.Dyn, :call, 2}, {Fx.Dyn, :fun, 2}])
+
+      # The three shapes, as xref reports them: a dynamic module call and a fun call are
+      # $M_EXPR calls; apply/3 with a variable argument list is a $M_EXPR call of arity -1,
+      # which is xref's spelling of "arity unknown". Measured, not assumed: a first draft
+      # looked for a resolved call to :erlang.apply/3 and there is none.
+      assert {{Fx.Dyn, :apply_to, 2}, {:"$M_EXPR", :run, -1}} in bound.unresolved_calls
+      assert {{Fx.Dyn, :call, 2}, {:"$M_EXPR", :run, 1}} in bound.unresolved_calls
+      assert {{Fx.Dyn, :fun, 2}, {:"$M_EXPR", :"$F_EXPR", 1}} in bound.unresolved_calls
 
       assert bound.allowlisted_calls == []
     end
 
     test "an allowlisted site moves from unresolved to allowlisted, by name" do
       {:ok, %{bound: bound}} = build(dynamic_allowlist: [{Fx.Dyn, :fun, 2}])
-      assert Enum.map(bound.unresolved_calls, &elem(&1, 0)) == [{Fx.Dyn, :call, 2}]
+
+      assert Enum.map(bound.unresolved_calls, &elem(&1, 0)) == [
+               {Fx.Dyn, :apply_to, 2},
+               {Fx.Dyn, :call, 2}
+             ]
+
       assert Enum.map(bound.allowlisted_calls, &elem(&1, 0)) == [{Fx.Dyn, :fun, 2}]
     end
 

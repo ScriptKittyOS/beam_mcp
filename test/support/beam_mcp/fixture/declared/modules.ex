@@ -16,9 +16,10 @@ end
 defmodule BeamMCP.Fixture.Declared.Alpha do
   @moduledoc false
   # The one known cross-module call in the fixture, plus a compile-time-only dependency.
+  alias BeamMCP.Fixture.Declared.Beta
   require BeamMCP.Fixture.Declared.MacroOnly, as: MacroOnly
 
-  def run(x), do: BeamMCP.Fixture.Declared.Beta.run(MacroOnly.twice(x))
+  def run(x), do: Beta.run(MacroOnly.twice(x))
 end
 
 defmodule BeamMCP.Fixture.Declared.Gamma do
@@ -29,8 +30,12 @@ end
 
 defmodule BeamMCP.Fixture.Declared.Dyn do
   @moduledoc false
-  # Two dynamic-dispatch sites. Neither resolves statically; both must appear in the
-  # completeness bound, by the caller's module, function and arity.
-  def call(mod, x), do: apply(mod, :run, [x])
+  # Three dynamic-dispatch sites, in the three shapes a host writes them. None resolves
+  # statically; all must appear in the completeness bound, by the caller's module, function
+  # and arity. `apply/3` with a literal argument list is inlined by the compiler into a
+  # `$M_EXPR` call; with a variable list it stays a call to `:erlang.apply/3`, which xref
+  # resolves -- so the builder must look for both.
+  def call(mod, x), do: mod.run(x)
+  def apply_to(mod, args), do: apply(mod, :run, args)
   def fun(f, x), do: f.(x)
 end
