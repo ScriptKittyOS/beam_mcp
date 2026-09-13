@@ -231,6 +231,48 @@ defmodule BeamMCP.Connectome.GraphTest do
     end
   end
 
+  describe "Graph.check/1 -- a literal-built %Graph{} is validated as new/1 would have" do
+    # The same argument one level up: a host may build the graph struct by literal and hand
+    # it to the encoder. check/1 reads it against everything new/1 refuses and corrects
+    # nothing; a graph new/1 built passes.
+    test "a graph new/1 built passes; a literal one is refused by the same names" do
+      {nodes, edges} = fixture()
+      g = Graph.new!(nodes: nodes, edges: edges, schema_version: @version)
+      assert Graph.check(g) == :ok
+
+      assert Graph.check(%Graph{g | schema_version: 2}) ==
+               {:error, {:invalid, :schema_version, 2}}
+
+      assert Graph.check(%Graph{g | nodes: :none}) == {:error, {:invalid, :nodes, :none}}
+      assert Graph.check(%Graph{g | edges: [1]}) == {:error, {:invalid, :edges, [1]}}
+
+      [n | _] = g.nodes
+      bad_node = %Node{n | labels: MapSet.new()}
+
+      assert Graph.check(%Graph{g | nodes: [bad_node | tl(g.nodes)]}) ==
+               {:error, {:invalid, :labels, MapSet.new()}}
+
+      [e | _] = g.edges
+
+      assert Graph.check(%Graph{g | edges: [%Edge{e | sign: :yes} | tl(g.edges)]}) ==
+               {:error, {:invalid, :sign, :yes}}
+
+      assert Graph.check(%Graph{g | nodes: [n | g.nodes]}) == {:error, {:duplicate_node, n.id}}
+
+      assert Graph.check(%Graph{g | edges: [e | g.edges]}) ==
+               {:error, {:duplicate_edge, Edge.key(e)}}
+
+      stray = %Edge{e | from: "nowhere"}
+
+      assert Graph.check(%Graph{g | edges: [stray | tl(g.edges)]}) ==
+               {:error, {:dangling_edge, "nowhere"}}
+
+      # Order is not a fault: a literal graph in any order is the same graph.
+      assert Graph.check(%Graph{g | nodes: Enum.reverse(g.nodes), edges: Enum.reverse(g.edges)}) ==
+               :ok
+    end
+  end
+
   test "options that are not a keyword list are refused by name, not by a clause error" do
     assert {:error, {:invalid, :opts, %{}}} = Graph.new(%{})
     assert_raise ArgumentError, ~r/\{:invalid, :opts, :nope\}/, fn -> Graph.new!(:nope) end

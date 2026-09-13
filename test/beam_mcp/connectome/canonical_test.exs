@@ -562,6 +562,37 @@ defmodule BeamMCP.Connectome.CanonicalTest do
              [{"s/tool/caf\u00e9 a", 2}, {"s/tool/caf\u00e9b", 1}]
   end
 
+  test "a literal-built graph is checked as Graph.new/1 would have, by every entry point" do
+    # Review built %Graph{} by literal and reached the encoder unchecked: an edge from an
+    # invalid-UTF-8 endpoint that named no node was written truncated and hashed; a struct
+    # as labels was written with its __struct__. What Graph.new/1 refuses, the encoder
+    # refuses too, under the graph's own name for it.
+    bad = <<"a", 0xFF, "b">>
+    n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
+    stray = Edge.new!(from: bad, to: n.id, kind: :invoke, provenance: :declared, weight: 1)
+    literal = %Graph{schema_version: @version, nodes: [n], edges: [stray]}
+
+    for f <- [
+          &Canonical.encode/1,
+          &Canonical.sidecar/1,
+          &Canonical.to_dot/1,
+          &Canonical.to_graphml/1
+        ] do
+      assert {:error, {:uncanonical, {:invalid_graph, {:dangling_edge, ^bad}}}} = f.(literal)
+    end
+
+    %Node{} = n
+
+    structy = %Graph{
+      schema_version: @version,
+      nodes: [%Node{n | labels: MapSet.new(["a"])}],
+      edges: []
+    }
+
+    assert {:error, {:uncanonical, {:invalid_graph, {:invalid, :labels, %MapSet{}}}}} =
+             Canonical.encode(structy)
+  end
+
   test "the sidecar refuses what the declared form refuses: two ids that coincide after NFC" do
     # Review found sidecar/1 keying edges without reading the nodes, so a graph encode/1
     # refuses produced a sidecar with two entries under one key and no way to tell them apart.
