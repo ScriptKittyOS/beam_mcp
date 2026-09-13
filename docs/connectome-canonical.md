@@ -104,11 +104,17 @@ that order, the array sorted as in rule 3, the same string rules. An integer wei
 integer; a float weight is written in the shortest form that round-trips
 (`:erlang.float_to_binary/2` with `:short`, which OTP 25 introduced; on an older OTP the
 sidecar raises rather than answering). The digits are the shortest that round-trip; the
-placement is Erlang's, which differs from other runtimes' shortest forms: the mantissa
-always carries a fractional digit, an exponent is written as `e` with no `+` and no
-padding, and plain decimal notation is used for magnitudes from 10⁻⁴ up to but not
-including 10¹⁵ — `0.1`, `0.0001`, `999999999999999.0`, `1.0e15`, `1.0e-5`, `1.0e20`. The
-sidecar is not part of any hash. It is defined only for a graph whose declared form
+placement is Erlang's, which differs from other runtimes' shortest forms and is decided by
+the digit count of the mantissa, not by the magnitude. Write the digits as D, a string with
+no trailing zeros, of length L, and let e be the power of ten such that the value is
+D × 10^e. Plain notation is used when −4 ≤ e ≤ 2 for a one-digit D, and when
+−(L+2) ≤ e ≤ 1 otherwise (≤ 2 when e + L − 1 ≥ 10) — except that D ≥ 2⁵³ with e = 0,
+D > 2⁵² div 5 with e = 1, and D > 2⁵¹ div 25 with e = 2 take an exponent. Plain notation
+appends `.0` when no digit falls after the point, and prefixes `0.` and −(L+e) zeros when
+L + e ≤ 0. Exponent notation is the first digit, `.`, the remaining digits or `0`, `e`, and
+e + L − 1 with no `+` and no padding. Zero is `0.0`. So `0.1`, `0.0001`,
+`999999999999999.0`, `1.0e15`, `1.0e-5`, `1.0e20`, `9.99e14`, `3.0e6`, `1.23456e-4`,
+`0.001234`, `12340.0`. The sidecar is not part of any hash. It is defined only for a graph whose declared form
 encodes: what `encode/1` refuses, `sidecar/1` refuses with the same reason.
 
 ## What the exports are
