@@ -117,9 +117,10 @@ module-level node and a module-function-arity is an `:mfa`-level node.
 ### The id string
 
 `BeamMCP.Connectome.Node.id/1` is the one place an identity becomes an id, and this is what
-it writes. The components are written the server first, then the kind, then the rest of
-the identity in order — not the tuple's order, which puts the kind first — each escaped and
-then joined by `/`. Escaping is `%` to `%25` first, then `/` to `%2F`, applied to
+it writes. The components are written the server first, then the identity's tag (its
+first element: `boundary` for a boundary identity, whose node kind is `module`), then the
+rest of the identity in order — not the tuple's order, which puts the tag first — each
+escaped and then joined by `/`. Escaping is `%` to `%25` first, then `/` to `%2F`, applied to
 every component, so a `/` inside a server name or a resource URI never reads as a separator.
 An atom naming a kind or a source is written as its name; a module is written as Elixir
 prints it (`inspect/1`: `Foo.Bar`, or `:erl_mod` for an Erlang module, and a module atom

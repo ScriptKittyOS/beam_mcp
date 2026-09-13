@@ -492,6 +492,19 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert bytes =~ ~s("labels":{"\u{1F600}":2,"\uFF01":1})
     end
 
+    test "a nested object sorts its keys by UTF-16 code unit too" do
+      n =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{o: %{"\uFF01" => 1, "\u{1F600}" => 2}}
+        )
+
+      {:ok, bytes} = Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+      assert bytes =~ ~s("labels":{"o":{"\u{1F600}":2,"\uFF01":1}})
+    end
+
     test "a raw duplicate id and a duplicate after NFC are two refusals, under two names" do
       a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "caf\u00e9"})
       b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "cafe\u0301"})
