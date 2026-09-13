@@ -23,12 +23,16 @@ defmodule BeamMCP.Connectome.CensusTest do
 
   @lib_files_cmd ["ls-files", "-z", "--", "lib/"]
 
+  # The token `sign` as a word, or one of the three non-default sign atoms as a whole atom.
+  # Whole tokens, not substrings: `:allowed_origins` is not `:allow`, and `assign` is not
+  # `sign` -- the first draft matched both and reported the HTTP transport.
+  @sign_token ~r/\bsign\b|(?<![\w?!]):(allow|deny|hold)(?![\w?!])/
+
   test "no code line under lib/ writes or names a sign other than :unknown" do
     offenders =
       for file <- tracked(),
           {line, n} <- code_lines(file),
-          String.contains?(line, "sign") or
-            Enum.any?([":allow", ":deny", ":hold"], &String.contains?(line, &1)),
+          Regex.match?(@sign_token, line),
           not permitted_sign_line?(line),
           do: "#{file}:#{n}: #{String.trim(line)}"
 
@@ -46,10 +50,8 @@ defmodule BeamMCP.Connectome.CensusTest do
           Regex.match?(~r/^\s*defp?\s+id\(/, line),
           do: "#{file}:#{n}"
 
-    assert id_sites == [
-             "lib/beam_mcp/connectome/node.ex:" <> hd(String.split(hd(id_sites), ":") |> tl())
-           ],
-           "expected one Node.id/1 clause site in node.ex, found: #{inspect(id_sites)}"
+    assert match?(["lib/beam_mcp/connectome/node.ex:" <> _], id_sites),
+           "expected exactly one `def id(` site, in node.ex; found: #{inspect(id_sites)}"
 
     node_literals =
       for file <- tracked(),
@@ -90,12 +92,18 @@ defmodule BeamMCP.Connectome.CensusTest do
     |> Enum.reverse()
   end
 
-  defp permitted_sign_line?(line) do
-    t = String.trim(line)
+  # A line is permitted when, with every permitted form removed from it, no sign token
+  # remains. The permitted forms: the struct default `sign: :unknown`; the typespec union
+  # naming the four values; the struct field's type `sign: sign()`; the typedoc's name.
+  @permitted_forms [
+    "sign: :unknown",
+    "@type sign :: :allow | :deny | :hold | :unknown",
+    "sign: sign()"
+  ]
 
-    Regex.match?(~r/^sign: :unknown,?$/, t) or
-      Regex.match?(~r/^@type sign :: :allow \| :deny \| :hold \| :unknown$/, t) or
-      Regex.match?(~r/^sign: sign\(\),?$/, t)
+  defp permitted_sign_line?(line) do
+    stripped = Enum.reduce(@permitted_forms, line, &String.replace(&2, &1, ""))
+    not Regex.match?(@sign_token, stripped)
   end
 
   defp tracked do
