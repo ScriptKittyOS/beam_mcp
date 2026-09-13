@@ -164,6 +164,73 @@ defmodule BeamMCP.Connectome.GraphTest do
     end
   end
 
+  describe "host-built structs are validated, never modified" do
+    # A host may hand-build a %Node{} or %Edge{} and bypass the constructors. A later slice
+    # hashes whatever this function accepted, so a malformed struct would become a hash over
+    # garbage. Field domains are checked and refused by name; nothing is normalised, coerced,
+    # defaulted or rewritten. Validation is reading; laundering is writing.
+    test "an edge with a sign outside the vocabulary is refused, not corrected to :unknown" do
+      {nodes, edges} = fixture()
+      [first | rest] = edges
+
+      assert {:error, {:invalid, :sign, :approve}} =
+               Graph.new(
+                 nodes: nodes,
+                 edges: [%{first | sign: :approve} | rest],
+                 schema_version: @version
+               )
+    end
+
+    test "an edge with a kind, provenance, weight or endpoint outside its domain is refused by field" do
+      {nodes, edges} = fixture()
+      [first | rest] = edges
+
+      for {field, value} <- [
+            kind: :teleport,
+            provenance: :guessed,
+            weight: -1,
+            weight: "3",
+            from: :srv,
+            to: 7
+          ] do
+        assert {:error, {:invalid, ^field, ^value}} =
+                 Graph.new(
+                   nodes: nodes,
+                   edges: [Map.put(first, field, value) | rest],
+                   schema_version: @version
+                 )
+      end
+    end
+
+    test "a node with a kind, level, id or labels outside its domain is refused by field" do
+      {nodes, edges} = fixture()
+      [first | rest] = nodes
+
+      for {field, value} <- [kind: :neuron, level: :neuropil, id: :not_a_string, labels: [:a]] do
+        assert {:error, {:invalid, ^field, ^value}} =
+                 Graph.new(
+                   nodes: [Map.put(first, field, value) | rest],
+                   edges: edges,
+                   schema_version: @version
+                 )
+      end
+    end
+
+    test "a well-formed host-built struct is held exactly as given" do
+      {nodes, edges} = fixture()
+
+      hand = %Node{
+        id: Node.id({:tool, "srv", :hand}),
+        kind: :tool,
+        level: :server,
+        labels: %{mode: :proposal}
+      }
+
+      {:ok, g} = Graph.new(nodes: [hand | nodes], edges: edges, schema_version: @version)
+      assert Enum.find(g.nodes, &(&1.id == hand.id)) == hand
+    end
+  end
+
   test "options that are not a keyword list are refused by name, not by a clause error" do
     assert {:error, {:invalid, :opts, %{}}} = Graph.new(%{})
     assert_raise ArgumentError, ~r/\{:invalid, :opts, :nope\}/, fn -> Graph.new!(:nope) end
