@@ -24,6 +24,7 @@ defmodule BeamMCP.Connectome.Edge do
 
   @kinds [:invoke, :read, :message, :supervise]
   @provenances [:declared, :observed]
+  @signs [:allow, :deny, :hold, :unknown]
   @keys [:from, :to, :kind, :provenance, :weight]
   @required [:from, :to, :kind, :provenance]
 
@@ -86,6 +87,29 @@ defmodule BeamMCP.Connectome.Edge do
       {:ok, edge} -> edge
       {:error, reason} -> raise ArgumentError, "invalid edge: #{inspect(reason)}"
     end
+  end
+
+  @doc """
+  Checks every field of a built edge against its domain, refusing by name. Reads only:
+  nothing is normalised, defaulted or rewritten, and the sign is checked for membership and
+  nothing else. `Graph.new/1` runs this over every edge it is handed, because a host may
+  build an edge by literal and bypass `new/1`.
+  """
+  @spec check(t()) :: :ok | {:error, {:invalid, atom(), term()}}
+  def check(%__MODULE__{} = edge) do
+    checks = [
+      {:from, &is_binary/1},
+      {:to, &is_binary/1},
+      {:kind, &(&1 in @kinds)},
+      {:provenance, &(&1 in @provenances)},
+      {:weight, &(is_nil(&1) or (is_number(&1) and &1 >= 0))},
+      {:sign, &(&1 in @signs)}
+    ]
+
+    Enum.find_value(checks, :ok, fn {field, ok?} ->
+      value = Map.fetch!(edge, field)
+      if ok?.(value), do: nil, else: {:error, {:invalid, field, value}}
+    end)
   end
 
   @doc "The identity of the edge: from, to, kind, provenance."

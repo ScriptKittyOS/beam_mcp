@@ -13,6 +13,12 @@ defmodule BeamMCP.Connectome.Graph do
 
   `schema_version` is required and must be the one this module defines. A graph from a
   version this module does not know is refused rather than guessed at.
+
+  Every node and edge handed in is checked against its field domains -- `Node.check/1`,
+  `Edge.check/1` -- and refused by field, because a host may build a struct by literal and
+  bypass the constructors, and a later slice hashes whatever this function accepted. Nothing
+  is normalised, defaulted or rewritten: a sign a host wrote survives exactly as written when
+  it is in the vocabulary, and is refused, not corrected, when it is not.
   """
 
   alias BeamMCP.Connectome.{Edge, Node}
@@ -53,6 +59,8 @@ defmodule BeamMCP.Connectome.Graph do
          {:ok, version} <- version(opts),
          {:ok, nodes} <- structs(opts, :nodes, Node),
          {:ok, edges} <- structs(opts, :edges, Edge),
+         :ok <- each(nodes, &Node.check/1),
+         :ok <- each(edges, &Edge.check/1),
          {:ok, nodes} <- unique(nodes, & &1.id, :duplicate_node),
          {:ok, edges} <- unique(edges, &Edge.key/1, :duplicate_edge),
          :ok <- endpoints_present(nodes, edges) do
@@ -102,6 +110,18 @@ defmodule BeamMCP.Connectome.Graph do
     if is_list(value) and Enum.all?(value, &is_struct(&1, module)),
       do: {:ok, value},
       else: {:error, {:invalid, key, value}}
+  end
+
+  # Every struct handed in is checked against its field domains and the first offender is
+  # refused by field. A host may build a struct by literal and bypass the constructors; what
+  # this function accepts is what a later slice hashes. Nothing is corrected.
+  defp each(items, check) do
+    Enum.find_value(items, :ok, fn item ->
+      case check.(item) do
+        :ok -> nil
+        {:error, _} = error -> error
+      end
+    end)
   end
 
   # Sorted by the identity function, and refused on the first identity seen twice. The sort

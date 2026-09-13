@@ -8,7 +8,8 @@ defmodule BeamMCP.Connectome.CensusTest do
 
   **The sign slot.** Nothing in `lib/` writes a sign other than `:unknown`. Read as code, not
   as prose: every occurrence of the token `sign` in a code line under `lib/` must be one of
-  the struct default (`sign: :unknown`), a typespec, or the field's own definition; and the
+  the struct default (`sign: :unknown`), a typespec, the field's own definition, or the
+  membership check `Edge.check/1` performs for `Graph.new/1`; and the
   atoms `:allow`, `:deny`, `:hold` may appear in a code line only inside the `@type sign`
   union that names them. Comment lines and documentation heredocs are excluded from the
   population, because a sentence about signs is not a write.
@@ -109,10 +110,15 @@ defmodule BeamMCP.Connectome.CensusTest do
   # A line is permitted when, with every permitted form removed from it, no sign token
   # remains. The permitted forms: the struct default `sign: :unknown`; the typespec union
   # naming the four values; the struct field's type `sign: sign()`; the typedoc's name.
+  # The last two are the domain check `Edge.check/1` runs for `Graph.new/1`: the membership
+  # list, spelled once, and the predicate that reads it. A predicate over a value is reading;
+  # it cannot be turned into a write without a line this census would see.
   @permitted_forms [
     "sign: :unknown",
     "@type sign :: :allow | :deny | :hold | :unknown",
-    "sign: sign()"
+    "sign: sign()",
+    "@signs [:allow, :deny, :hold, :unknown]",
+    "{:sign, &(&1 in @signs)}"
   ]
 
   defp permitted_sign_line?(line) do

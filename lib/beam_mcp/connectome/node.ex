@@ -89,6 +89,26 @@ defmodule BeamMCP.Connectome.Node do
   end
 
   @doc """
+  Checks every field of a built node against its domain, refusing by name. Reads only. The id
+  is checked for being a string; whether it was derived by `id/1` cannot be checked, because
+  the identity is not stored. `Graph.new/1` runs this over every node it is handed.
+  """
+  @spec check(t()) :: :ok | {:error, {:invalid, atom(), term()}}
+  def check(%__MODULE__{} = node) do
+    checks = [
+      {:id, &is_binary/1},
+      {:kind, &(&1 in @kinds)},
+      {:level, &(&1 in @levels)},
+      {:labels, &is_map/1}
+    ]
+
+    Enum.find_value(checks, :ok, fn {field, ok?} ->
+      value = Map.fetch!(node, field)
+      if ok?.(value), do: nil, else: {:error, {:invalid, field, value}}
+    end)
+  end
+
+  @doc """
   The id of the node with this identity: a string, stable, and distinct for distinct
   identities. Components are joined by `/` with any `/` or `%` inside a component escaped (the
   `%` first, so an escape cannot be forged), so two identities join to one string only when
