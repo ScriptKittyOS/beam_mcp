@@ -23,11 +23,13 @@ All notable changes to this project are documented here. The format follows
   `Graph.new/1` validates every struct it is handed, by field, and corrects nothing.
 - **The declared connectome.** `BeamMCP.Connectome.Declared.build/1` reads three sources and
   nothing that ran: the catalog's `capabilities/0`, the call edges of the modules in scope from
-  their beams (OTP's `:xref`, so a module used only at compile time produces no edge), and a
-  grouping of modules at the `:boundary` level. Beside the graph it returns the completeness
+  their beams (OTP's `:xref`, so a module whose only use is at a macro's expansion site produces
+  no edge, and the calls a macro body makes at expansion time are filed as expansion calls, not
+  edges), and a grouping of modules at the `:boundary` level. Beside the graph it returns the completeness
   bound — every dynamic-dispatch site, callee outside the scope, unreadable catalog entry, tool
   without a module, and module without a beam or debug information, enumerated and never
-  summarised to a count. OTP's `tools` application is declared as an optional application for
+  summarised to a count. What the compiled code cannot show is stated in the moduledoc: a
+  module handed as data to a dispatcher outside the scope, and calls to the runtime's built-ins. OTP's `tools` application is declared as an optional application for
   `:xref`; a release without it still boots and the builder refuses by name.
 - **No MCP capability is claimed.** Neither protocol revision this package targets defines a
   topology or declared-reachability primitive, and none is invented. Nothing on the wire changes.

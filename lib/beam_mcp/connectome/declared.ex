@@ -12,9 +12,12 @@ defmodule BeamMCP.Connectome.Declared do
     resource and prompt, a `:invoke` edge from the server to each tool, and a `:invoke` edge
     from a tool to the module the host names for it in `tool_modules:`;
   * **the compiled code** -- call edges read from the beams of the modules in scope with OTP's
-    `:xref`, so a module used only at compile time produces no edge; the scope is `modules:`,
-    or every module an `.app` file names for each of `apps:` -- never a directory listing, so a
-    stale beam beside the real ones is not a module;
+    `:xref`. A module whose only use is at a macro's expansion site produces no edge, because
+    no call to it survives into the caller's beam; the calls a macro's own body makes at
+    expansion time are attributed by xref to its `MACRO-` function and are filed in the bound
+    as expansion calls, never as edges. The scope is `modules:`, or every module an `.app` file
+    names for each of `apps:` -- never a directory listing, so a stale beam beside the real
+    ones is not a module;
   * **a grouping of modules**, at the `:boundary` level: the host's `boundaries:` map, or, by
     default, each module's OTP application.
 
@@ -25,7 +28,18 @@ defmodule BeamMCP.Connectome.Declared do
   `:xref` cannot resolve, by caller), sites the host vouched for in `dynamic_allowlist:`, callees
   outside the scope, modules with no beam on the code path, modules whose beam carries no debug
   information, catalog entries no reader can name, tools with no implementing module, and
-  modules that could not be grouped at the `:boundary` level. Nothing is dropped silently.
+  modules that could not be grouped at the `:boundary` level. Nothing the compiled code shows is
+  dropped silently; what it cannot show is stated below.
+
+  ## What the compiled code cannot show, stated
+
+  A module handed as *data* to a dispatcher outside the scope -- a behaviour callback module
+  given to `GenServer.start_link/2`, a module in `Task.async/3`, a struct module in
+  `struct/2` -- is called from inside that library, not from the scope, so the call is neither
+  an edge nor an entry in the bound: the bound enumerates dynamic dispatch *from* the scope,
+  not dispatch *into* it from library code. Calls to the runtime's built-in functions (the
+  `erlang` module's BIFs) are not reported either: every module makes them, and the dependency
+  is on the runtime itself, not on a part of the system.
 
   ## What this module does not do
 
@@ -41,6 +55,7 @@ defmodule BeamMCP.Connectome.Declared do
     @moduledoc "What a declared build could not see, enumerated. Every field is a sorted list."
     defstruct unresolved_calls: [],
               allowlisted_calls: [],
+              macro_expansion_calls: [],
               external_callees: [],
               modules_without_beam: [],
               modules_without_debug_info: [],
@@ -53,6 +68,7 @@ defmodule BeamMCP.Connectome.Declared do
     @type t :: %__MODULE__{
             unresolved_calls: [{mfa_t(), {atom(), atom(), arity()}}],
             allowlisted_calls: [{mfa_t(), {atom(), atom(), arity()}}],
+            macro_expansion_calls: [{mfa_t(), mfa_t()}],
             external_callees: [module()],
             modules_without_beam: [module()],
             modules_without_debug_info: [module()],
@@ -116,6 +132,7 @@ defmodule BeamMCP.Connectome.Declared do
       bound = %Bound{
         unresolved_calls: code.unresolved,
         allowlisted_calls: code.allowlisted,
+        macro_expansion_calls: code.macro,
         external_callees: code.external,
         modules_without_beam: code.no_beam,
         modules_without_debug_info: code.no_debug_info,
@@ -306,7 +323,7 @@ defmodule BeamMCP.Connectome.Declared do
       {:ok, unresolved} = :xref.q(ref, ~c"UC")
 
       in_scope = MapSet.new(added)
-      {resolved, external} = split_calls(calls, in_scope)
+      {resolved, external, macro} = split_calls(calls, in_scope)
 
       {allowlisted, unresolved} =
         Enum.split_with(unresolved, fn {caller, _} ->
@@ -324,6 +341,7 @@ defmodule BeamMCP.Connectome.Declared do
          unresolved: Enum.sort(unresolved),
          allowlisted: Enum.sort(allowlisted),
          external: external,
+         macro: macro,
          no_beam: Enum.sort(no_beam),
          no_debug_info: Enum.sort(no_debug_info),
          ungrouped: Enum.sort(ungrouped),
@@ -365,23 +383,32 @@ defmodule BeamMCP.Connectome.Declared do
   # shapes, none arrives as a resolved call to `:erlang.apply/3`, so none is looked for here.
   defp split_calls(calls, in_scope) do
     calls
-    |> Enum.reduce({[], MapSet.new()}, fn {{fm, _, _} = from, {tm, _, _} = to}, {kept, ext} ->
+    |> Enum.reduce({[], MapSet.new(), []}, fn {{fm, ff, _} = from, {tm, _, _} = to},
+                                              {kept, ext, macro} ->
       cond do
         tm == :"$M_EXPR" ->
-          {kept, ext}
+          {kept, ext, macro}
+
+        macro_function?(ff) ->
+          # A call a macro body makes runs at expansion time, in the compiler, not in the
+          # system. xref attributes it to the `MACRO-name` function. It is neither an edge nor
+          # a callee outside the scope; it is enumerated by its macro.
+          {kept, ext, [{from, to} | macro]}
 
         MapSet.member?(in_scope, fm) and MapSet.member?(in_scope, tm) ->
-          {[{from, to} | kept], ext}
+          {[{from, to} | kept], ext, macro}
 
         true ->
           # Every call xref reports comes from a module that was added, so the caller is in
           # scope by construction; only the callee can be outside it.
           _ = fm
-          {kept, MapSet.put(ext, tm)}
+          {kept, MapSet.put(ext, tm), macro}
       end
     end)
-    |> then(fn {kept, ext} -> {kept, Enum.sort(MapSet.to_list(ext))} end)
+    |> then(fn {kept, ext, macro} -> {kept, Enum.sort(MapSet.to_list(ext)), Enum.sort(macro)} end)
   end
+
+  defp macro_function?(f), do: String.starts_with?(Atom.to_string(f), "MACRO-")
 
   defp at_level(:module, modules, calls, server, _boundaries) do
     ids = Map.new(modules, &{&1, Node.id({:module, server, &1})})

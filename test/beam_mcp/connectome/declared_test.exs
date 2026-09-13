@@ -145,8 +145,10 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       {:ok, %{graph: g, bound: bound}} = build()
       refute :elixir_quote in bound.external_callees
 
-      assert [{{Fx.MacroOnly, :"MACRO-twice", 2}, {:elixir_quote, :shallow_validate_ast, 1}}] =
-               bound.macro_expansion_calls
+      assert bound.macro_expansion_calls == [
+               {{Fx.MacroOnly, :"MACRO-twice", 2}, {Fx.MacroHelper, :note, 1}},
+               {{Fx.MacroOnly, :"MACRO-twice", 2}, {:elixir_quote, :shallow_validate_ast, 1}}
+             ]
 
       # An in-scope module called only from a macro body: an expansion call, and no edge.
       helper = Node.id({:module, @server, Fx.MacroHelper})
