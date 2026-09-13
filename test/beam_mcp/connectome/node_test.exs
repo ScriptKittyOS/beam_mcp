@@ -71,6 +71,12 @@ defmodule BeamMCP.Connectome.NodeTest do
 
       assert app.id != decl.id
       assert app.id == Node.id({:boundary, "srv", :application, :my_app})
+
+      # The id says which grouping it is, in so many words. Distinctness alone was not enough:
+      # a mutant that dropped the source segment left the two ids distinct -- an atom rendered
+      # by Atom.to_string/1 and a module rendered by inspect/1 already differ -- and survived.
+      assert app.id == "srv/boundary/application/my_app"
+      assert decl.id == "srv/boundary/boundary_module/MyApp.Foo"
     end
 
     test "the boundary identity and the :boundary level imply each other; a bare module is a module-level node" do
