@@ -140,6 +140,10 @@ defmodule BeamMCP.Connectome.NodeTest do
       # A server whose name spells another identity's join does not become that identity.
       assert Node.id({:server, "srv/tool/x"}) != Node.id({:tool, "srv", "x"})
       assert Node.id({:tool, "srv/module", "Enum"}) != Node.id({:module, "srv", Enum})
+      # And the delimiter itself must be escaped, not only the escape: without the `/` step
+      # these two join to "srv/tool/tool/x" -- same kind, the boundary between server and
+      # name moved. Pinned by a mutant that drops that step.
+      assert Node.id({:tool, "srv/tool", "x"}) != Node.id({:tool, "srv", "tool/x"})
     end
 
     test "options that are not a keyword list are refused by name, not by a clause error" do
