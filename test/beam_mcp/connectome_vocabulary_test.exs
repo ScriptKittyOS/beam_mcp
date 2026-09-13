@@ -39,7 +39,7 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
   # deleting the `:unknown` row survived, because `:unknown` is also mentioned in the invariant
   # paragraph. A mention is not a definition, and an anchor that a mention satisfies cannot move
   # when the definition goes (CONVENTIONS.md, the contained anchor). Measured, not assumed:
-  # mutation Md4 in the slice record.
+  # deleting that row was a mutation this file survived until the anchor changed.
   #
   # Each family is checked under ITS OWN HEADING, because `:module` and `:server` are both a
   # node kind and a level: two terms sharing an atom. Checked over the whole document, deleting
