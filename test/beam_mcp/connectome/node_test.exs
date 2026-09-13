@@ -234,6 +234,10 @@ defmodule BeamMCP.Connectome.NodeTest do
     test "the server component must be a string, in the two-element shape as well" do
       assert_raise ArgumentError, ~r/server/, fn -> Node.id({:tool, :srv, :echo}) end
       assert_raise ArgumentError, ~r/server/, fn -> Node.id({:server, :srv}) end
+
+      assert_raise ArgumentError, ~r/server/, fn ->
+        Node.id({:boundary, :srv, :application, :x})
+      end
     end
   end
 end
