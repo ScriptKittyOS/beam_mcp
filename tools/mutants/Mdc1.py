@@ -10,10 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '        MapSet.member?(in_scope, fm) and MapSet.member?(in_scope, tm) ->
-          {[{from, to} | kept], ext, macro}'
-new = '        MapSet.member?(in_scope, fm) ->
-          {[{from, to} | kept], ext, macro}'
+old = "        MapSet.member?(in_scope, fm) and MapSet.member?(in_scope, tm) ->\n          {[{from, to} | kept], ext, macro}"
+new = "        MapSet.member?(in_scope, fm) ->\n          {[{from, to} | kept], ext, macro}"
 
 if s.count(old) != 1:
     sys.exit("Mdc1: anchor found %d times" % s.count(old))
