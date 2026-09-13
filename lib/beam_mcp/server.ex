@@ -59,7 +59,8 @@ defmodule BeamMCP.Server do
 
   @typedoc """
   The dispatch contract. A host supplies a function of this shape; the server calls it and
-  never inspects what it does. Ultraviolet's `Dispatch.safe_call/3` satisfies it.
+  never inspects what it does. Any three-arity function returning an ok-or-error tuple
+  satisfies it, whatever sits behind it.
   """
   @type dispatch :: (atom(), map(), keyword() -> {:ok, term()} | {:error, term()})
 
