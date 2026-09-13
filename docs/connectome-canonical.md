@@ -124,3 +124,13 @@ with the same reason.
 `to_json/1` is the canonical bytes. `to_dot/1` and `to_graphml/1` are renderings of the same
 canonical order for Graphviz and GraphML readers: they carry kind, level, labels, edge kind,
 provenance and sign, and no weight. They are not canonical forms and are not hashed.
+
+DOT quotes every id and every value, and quotes a label's attribute name too (`"label_<key>"`),
+because a key may carry `=`, a space or a quote; `kind`, `level` and the edge attributes are
+DOT identifiers and stay bare. GraphML declares one `<key>` per label key as `l0`, `l1`, … in
+the order of rule 4 with `attr.name` carrying the key — a GraphML key id is an NMTOKEN, which
+a label key need not be — and escapes `&`, `<`, `>`, `"` in text. A character XML 1.0 cannot
+carry at all (a C0 control other than tab, LF and CR; a noncharacter such as U+FFFE), which
+the canonical bytes do carry, is refused by `to_graphml/1` as `{:not_xml, id, codepoint}`
+rather than written into a document every conforming parser rejects; no character reference
+can carry it either.

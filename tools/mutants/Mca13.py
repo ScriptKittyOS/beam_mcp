@@ -11,7 +11,7 @@ p = sys.argv[1]
 s = open(p).read()
 
 old = "         {:ok, sorted} <- unique_keys(pairs, id) do\n      {:ok, {:object, sorted}}"
-new = "         sorted = Enum.sort_by(pairs, &elem(&1, 0), &utf16_le/2) do\n      {:ok, {:object, sorted}}"
+new = "         sorted = Enum.sort_by(pairs, &elem(&1, 0), &utf16_be/2) do\n      {:ok, {:object, sorted}}"
 
 if s.count(old) != 1:
     sys.exit("Mca13: anchor found %d times" % s.count(old))
