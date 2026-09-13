@@ -135,7 +135,14 @@ quote never lands in an id. Text is escaped: `&`, `<`, `>`, `"`, and
 tab, LF and CR as the character references `&#9;`, `&#10;`, `&#13;` — a parser folds the
 literal characters to a space inside an attribute value and CR to LF in content, and a
 reference survives both, so two ids that differ only by whitespace kind stay two nodes. A
-character XML 1.0 cannot carry at all (a C0 control other than tab, LF and CR; a noncharacter
-such as U+FFFE), which the canonical bytes do carry, is refused by `to_graphml/1` as
+character outside XML 1.0's Char production — `#x9 | #xA | #xD | [#x20-#xD7FF] |
+[#xE000-#xFFFD] | [#x10000-#x10FFFF]`, so a C0 control other than tab, LF and CR, or U+FFFE
+or U+FFFF — which the canonical bytes do carry, is refused by `to_graphml/1` as
 `{:not_xml, id, codepoint}` rather than written into a document every conforming parser
 rejects; no character reference can carry it either.
+
+The exports' exact bytes are not specified by this page. A label value that is not a string
+is written as its rule-8 JSON text in both, so the string `"true"` and the boolean `true`
+read the same there; everything else — headers, indentation, attribute order, DOT's own
+escape of `\` and `"` — is the exporter's layout, which `test/fixtures/connectome/golden.dot`
+and `golden.graphml` pin and a release may change without the hash changing.
