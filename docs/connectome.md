@@ -89,6 +89,31 @@ Nodes can be built at, and a graph collapsed to, one of four levels, coarsest la
 The finest level a graph was built at is kept; collapsing is a view, and a path reported by a
 query is a path in the graph as built.
 
+## Identity
+
+A node's id is derived from a structural identity, never from a counter. The first element
+names the kind of part; the second is the server identity the host supplies; the rest names
+the part within it.
+
+| identity | node |
+| -- | -- |
+| `{:server, server}` | the server itself |
+| `{:tool, server, name}` · `{:resource, server, name}` · `{:prompt, server, name}` · `{:process, server, name}` | a catalog part or a process, named within the server |
+| `{:module, server, module}` | a module, at the `:module` level |
+| `{:module, server, {module, function, arity}}` | one function, at the `:mfa` level |
+| `{:boundary, server, source, name}` | a group of modules, at the `:boundary` level, with the source of the grouping named |
+
+Two different things group modules, and both arrive as atoms, so a boundary identity says
+which it is:
+
+| source | the grouping |
+| -- | -- |
+| `:application` | an OTP application, named by its atom |
+| `:boundary_module` | a declared boundary, named by its root module |
+
+A boundary identity and the `:boundary` level imply each other; a bare module is a
+module-level node and a module-function-arity is an `:mfa`-level node.
+
 ## Provenance
 
 | provenance | which build produced the edge |

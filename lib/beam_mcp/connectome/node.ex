@@ -45,6 +45,8 @@ defmodule BeamMCP.Connectome.Node do
              name :: atom() | String.t()}
           | {:module, server :: String.t(), module()}
           | {:module, server :: String.t(), {module(), atom(), arity()}}
+          | {:boundary, server :: String.t(), :application, atom()}
+          | {:boundary, server :: String.t(), :boundary_module, module()}
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -115,6 +117,21 @@ defmodule BeamMCP.Connectome.Node do
   defp id_parts({:module, server, m}) when is_binary(server) and is_atom(m),
     do: [server, "module", inspect(m)]
 
+  # A boundary identity carries the source of its grouping: an OTP application and a
+  # Boundary declaration both arrive as atoms, and one shape would join two facts to one id.
+  defp id_parts({:boundary, server, :application, app}) when is_binary(server) and is_atom(app),
+    do: [server, "boundary", "application", Atom.to_string(app)]
+
+  defp id_parts({:boundary, server, :boundary_module, m}) when is_binary(server) and is_atom(m),
+    do: [server, "boundary", "boundary_module", inspect(m)]
+
+  defp id_parts({_kind, server, _, _} = identity) when not is_binary(server),
+    do:
+      raise(
+        ArgumentError,
+        "the server component of an identity must be a string: #{inspect(identity)}"
+      )
+
   defp id_parts({_kind, server} = identity) when not is_binary(server),
     do:
       raise(
@@ -168,15 +185,17 @@ defmodule BeamMCP.Connectome.Node do
     end
   end
 
-  # The identity's tag must be the node's kind, its shape must be one `id/1` names, and a
-  # module identity carries its own level: module-function-arity is the :mfa level and a bare
-  # module is not. That is a check of consistency between two given fields, not an inference
-  # of one from the other.
+  # The identity's tag must be the node's kind -- with one exception: a `:boundary` identity
+  # names a group of modules, so its node is of kind `:module` at level `:boundary`. Its shape
+  # must be one `id/1` names, and a module identity carries its own level: module-function-arity
+  # is the :mfa level, a bare module the :module level, a boundary identity the :boundary
+  # level, each in both directions. That is a check of consistency between two given fields,
+  # not an inference of one from the other.
   defp identity(opts, kind, level) do
     identity = Keyword.fetch!(opts, :identity)
 
-    with true <- is_tuple(identity) and tuple_size(identity) >= 2 and elem(identity, 0) == kind,
-         true <- mfa_level_consistent?(identity, level) do
+    with true <- is_tuple(identity) and tuple_size(identity) >= 2 and tag_matches?(identity, kind),
+         true <- level_consistent?(identity, level) do
       {:ok, id(identity)}
     else
       false -> {:error, {:invalid, :identity, identity}}
@@ -185,7 +204,12 @@ defmodule BeamMCP.Connectome.Node do
     ArgumentError -> {:error, {:invalid, :identity, Keyword.fetch!(opts, :identity)}}
   end
 
-  defp mfa_level_consistent?({:module, _, {_, _, _}}, level), do: level == :mfa
-  defp mfa_level_consistent?({:module, _, _}, level), do: level != :mfa
-  defp mfa_level_consistent?(_, _), do: true
+  defp tag_matches?(identity, kind) do
+    elem(identity, 0) == kind or (elem(identity, 0) == :boundary and kind == :module)
+  end
+
+  defp level_consistent?({:module, _, {_, _, _}}, level), do: level == :mfa
+  defp level_consistent?({:module, _, _}, level), do: level == :module
+  defp level_consistent?({:boundary, _, _, _}, level), do: level == :boundary
+  defp level_consistent?(_, _), do: true
 end
