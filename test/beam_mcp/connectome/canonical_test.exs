@@ -740,6 +740,62 @@ defmodule BeamMCP.Connectome.CanonicalTest do
   end
 
   describe "exporters" do
+    test "DOT quotes attribute names as it quotes values: a label key may carry =, space or a quote" do
+      # An external review found the attribute value quoted and the name written raw, so
+      # a key like "a=b" produced DOT that Graphviz refuses while the same graph hashed.
+      n =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{"a=b" => 1, "has space" => "v", "q\"uote" => true}
+        )
+
+      dot = Canonical.to_dot!(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+
+      assert dot =~
+               ~S("kind"="tool", "level"="server", "label_a=b"="1", "label_has space"="v", "label_q\"uote"="true")
+    end
+
+    test "GraphML refuses a character XML 1.0 cannot carry, by node and code point, and names keys by position" do
+      # JSON escapes a control as \u000c and writes U+FFFE literally; XML 1.0's Char production
+      # admits neither, and no character reference can carry them. The export refuses rather
+      # than write a document every conforming parser rejects. Key ids are l0, l1, ... in
+      # canonical key order (a GraphML key id is an NMTOKEN, which a label key need not be);
+      # attr.name carries the key.
+      for {bad, cp} <- [{"a\fb", 0x0C}, {"a\uFFFEb", 0xFFFE}, {"\u0001", 0x01}] do
+        n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: %{t: bad})
+        g = Graph.new!(nodes: [n], edges: [], schema_version: @version)
+        assert {:ok, _} = Canonical.encode(g)
+        assert {:error, {:uncanonical, {:not_xml, "s/tool/x", ^cp}}} = Canonical.to_graphml(g)
+
+        k =
+          Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: %{bad => 1})
+
+        assert {:error, {:uncanonical, {:not_xml, "s/tool/x", ^cp}}} =
+                 Canonical.to_graphml(Graph.new!(nodes: [k], edges: [], schema_version: @version))
+      end
+
+      i = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x\u0002"})
+
+      assert {:error, {:uncanonical, {:not_xml, "s/tool/x\u0002", 0x02}}} =
+               Canonical.to_graphml(Graph.new!(nodes: [i], edges: [], schema_version: @version))
+
+      n =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{"has space" => 1, "a<b" => 2}
+        )
+
+      xml = Canonical.to_graphml!(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+      assert xml =~ ~s(<key id="l0" for="node" attr.name="a&lt;b" attr.type="string"/>)
+      assert xml =~ ~s(<key id="l1" for="node" attr.name="has space" attr.type="string"/>)
+      assert xml =~ ~s(<data key="l0">2</data>)
+      assert xml =~ ~s(<data key="l1">1</data>)
+    end
+
     test "DOT and GraphML are byte-exact against their goldens, and follow the canonical order" do
       g = golden_graph()
       assert Canonical.to_dot!(g) == File.read!(Path.join(@fixtures, "golden.dot"))
