@@ -174,8 +174,12 @@ done
 #      not remove them from history, and rewriting history is not this script's to do. New
 #      records do not join them. The allowlist is pinned by sha256 so that widening it is an
 #      edit to this file, visible in a diff, and not a quiet append.
-#   4. No tracked SYMLINK is under either directory. A symlink at a grandfathered path would
-#      publish its target string -- an internal path name -- under a name the allowlist admits.
+#   4. Under either directory, every tracked entry is a regular file (mode 100644 or 100755)
+#      and its name has no newline. A symlink (120000) at a grandfathered path would publish
+#      its target string -- an internal path name -- under a name the allowlist admits; a
+#      gitlink (160000) at the same path passed the WHOLE GATE green when measured, because
+#      the census read names and not modes. A name containing a newline can spell two adjacent
+#      allowlist lines and match them both; measured, it was counted as grandfathered.
 #
 # THE POPULATION IS READ WITH `-s -z` AND `IFS= read -r -d ''`, AND THAT IS A CORRECTNESS
 # REQUIREMENT. The first version read `git ls-files` line by line with `read -r` and default
@@ -197,11 +201,16 @@ internal_dir=".internal"
 allowlist="tools/publication-allowlist.txt"
 allowlist_sha="ee5dc25859a7ccc153b25a1216ba65abfa3d576117d5b7c327e9b37296dde5c3"
 pub_fail=0
-case "$(git check-ignore -v "$internal_dir/probe" 2>/dev/null)" in
-  .gitignore:*) pub_ignore="rule in .gitignore" ;;
-  "")           pub_ignore="NO IGNORE RULE for $internal_dir/"; pub_fail=1 ;;
-  *)            pub_ignore="IGNORE RULE for $internal_dir/ IS NOT IN THE TRACKED .gitignore"; pub_fail=1 ;;
-esac
+# The exit status is kept as well as the output: check-ignore exits 1 when the path is NOT
+# ignored, and a negated pattern (`!/.internal/`) is a rule in .gitignore that does exactly that.
+if pub_rule=$(git check-ignore -v "$internal_dir/probe" 2>/dev/null); then
+  case "$pub_rule" in
+    .gitignore:*) pub_ignore="rule in .gitignore" ;;
+    *)            pub_ignore="IGNORE RULE for $internal_dir/ IS NOT IN THE TRACKED .gitignore"; pub_fail=1 ;;
+  esac
+else
+  pub_ignore="NO IGNORE RULE for $internal_dir/"; pub_fail=1
+fi
 if [ -f "$allowlist" ] && [ "$(sha256sum "$allowlist" | cut -d' ' -f1)" = "$allowlist_sha" ]; then
   allowed=$'\n'$(grep -v '^#' "$allowlist")$'\n'
   pub_allow="allowlist pinned"
@@ -218,9 +227,12 @@ while IFS= read -r -d '' entry; do
   f="${entry#*	}"
   case "$f" in
     "$internal_dir"/*|slices/*)
-      if [ "$mode" = "120000" ]; then
-        pub_violations="${pub_violations}${f}  (symbolic link)"$'\n'; continue
-      fi ;;
+      case "$f" in *$'\n'*) pub_violations="${pub_violations}${f}  (newline in name)"$'\n'; continue ;; esac
+      case "$mode" in
+        100644|100755) ;;
+        120000) pub_violations="${pub_violations}${f}  (symbolic link)"$'\n'; continue ;;
+        *)      pub_violations="${pub_violations}${f}  (mode $mode, not a regular file)"$'\n'; continue ;;
+      esac ;;
   esac
   case "$f" in
     "$internal_dir"/*) pub_violations="${pub_violations}${f}  (internal directory)"$'\n' ;;
