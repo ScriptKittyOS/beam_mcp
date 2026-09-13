@@ -29,8 +29,12 @@ All notable changes to this project are documented here. The format follows
   bound — every dynamic-dispatch site, callee outside the scope, unreadable catalog entry, tool
   without a module, and module without a beam or debug information, enumerated and never
   summarised to a count. What the compiled code cannot show is stated in the moduledoc: a
-  module handed as data to a dispatcher outside the scope, and calls to the runtime's built-ins. OTP's `tools` application is declared as an optional application for
-  `:xref`; a release without it still boots and the builder refuses by name.
+  module handed as data to a dispatcher outside the scope, and calls to the runtime's
+  built-ins. A catalog the package's own contract check refuses is refused by the builder for
+  the same reason, and never read. OTP's `tools` application, which carries `:xref`, is
+  declared optional in the `.app` file — in the one spelling Mix honours, `tools: :optional`
+  inside `extra_applications`, with a test that reads the `.app` the build writes — so a release
+  without it still boots and the builder refuses by name.
 - **No MCP capability is claimed.** Neither protocol revision this package targets defines a
   topology or declared-reachability primitive, and none is invented. Nothing on the wire changes.
 

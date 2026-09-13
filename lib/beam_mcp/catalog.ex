@@ -14,7 +14,9 @@ defmodule BeamMCP.Catalog do
 
       %{tools: [BeamMCP.ToolSpec.t()], resources: [], prompts: []}
 
-  `resources` and `prompts` are **required and may be empty**. Nothing reads them today. They
+  `resources` and `prompts` are **required and may be empty**. The server reads neither; the
+  declared-connectome builder reads a `:uri`/`"uri"` or `:name`/`"name"` from each entry to
+  name a node and enumerates the rest as unreadable, which is a reader, not a contract. They
   are here so that serving them later adds a reader rather than changing this contract a second
   time, and every host that has already written `capabilities/0` keeps working when they do.
 
