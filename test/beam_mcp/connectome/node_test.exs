@@ -169,6 +169,23 @@ defmodule BeamMCP.Connectome.NodeTest do
 
       assert %Node{} = Node.new!(kind: :server, level: :server, identity: {:server, "srv"})
     end
+
+    test "a struct is not a labels map: refused by new/1 and by check/1, so the canonical form never sees its __struct__" do
+      # Review found MapSet.new(["a"]) as labels encoded as {"__struct__":"Elixir.MapSet",...}:
+      # bytes that depend on a struct's private layout, which is what rule 8 exists to exclude.
+      assert {:error, {:invalid, :labels, %MapSet{}}} =
+               Node.new(
+                 kind: :tool,
+                 level: :server,
+                 identity: {:tool, "s", "x"},
+                 labels: MapSet.new(["a"])
+               )
+
+      n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
+
+      assert {:error, {:invalid, :labels, %Date{}}} =
+               Node.check(%Node{n | labels: ~D[2026-01-01]})
+    end
   end
 
   describe "Node.id/1 -- one function, one implementation site" do

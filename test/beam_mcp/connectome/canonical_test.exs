@@ -18,7 +18,9 @@ defmodule BeamMCP.Connectome.CanonicalTest do
     gen all(
           names <- uniq_list_of(name_gen(), min_length: 1, max_length: 6),
           pairs <-
-            list_of({member_of(names), member_of(names), member_of([:invoke, :read])},
+            list_of(
+              {member_of(names), member_of(names), member_of([:invoke, :read]),
+               member_of([nil, 1, 7, 0.5])},
               max_length: 8
             ),
           labelled <- member_of(names)
@@ -37,12 +39,13 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
       edges =
         pairs
-        |> Enum.map(fn {a, b, k} ->
+        |> Enum.map(fn {a, b, k, w} ->
           Edge.new!(
             from: Node.id({:tool, "srv", a}),
             to: Node.id({:tool, "srv", b}),
             kind: k,
-            provenance: :declared
+            provenance: :declared,
+            weight: w
           )
         end)
         |> Enum.uniq_by(&Edge.key/1)
@@ -102,6 +105,16 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
       assert Canonical.encode!(a) == Canonical.encode!(b)
       assert Canonical.hash!(a) == Canonical.hash!(b)
+
+      # And with every weight gone: the declared bytes never carried one.
+      {:ok, c} =
+        Graph.new(
+          nodes: nodes,
+          edges: Enum.map(edges, &%{&1 | weight: nil}),
+          schema_version: @version
+        )
+
+      assert Canonical.encode!(a) == Canonical.encode!(c)
     end
   end
 
@@ -303,6 +316,32 @@ defmodule BeamMCP.Connectome.CanonicalTest do
                Canonical.encode(Graph.new!(nodes: [n2], edges: [], schema_version: @version))
     end
 
+    test "a value with no byte form inside a list or a nested object is refused, naming the label and its whole value" do
+      # Review found the refusal present at every depth but tested only at the top, and the
+      # error for a nested object naming the inner key. The rule now: a refusal inside a
+      # container names the label the container hangs from, and the container.
+      bad = <<0xFF>>
+
+      for v <- [
+            [1, 0.5],
+            %{"x" => 0.5},
+            [[%{"y" => [2.0]}]],
+            [self()],
+            %{"t" => {1, 2}},
+            [fn -> :never end],
+            %{"m" => MapSet.new()},
+            [bad],
+            %{"cafe\u0301" => 1, "caf\u00e9" => 2}
+          ] do
+        n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: %{a: v})
+        result = Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+        id = n.id
+
+        assert match?({:error, {:uncanonical, {:label_value, ^id, :a, ^v}}}, result),
+               "not refused by label and whole value: #{inspect(v)} -> #{inspect(result)}"
+      end
+    end
+
     test "an atom label key or value is NFC-normalised like any other string" do
       # Atoms can carry non-ASCII names. A combining sequence in an atom and the precomposed
       # form in a string are the same key and the same value in the bytes.
@@ -399,11 +438,11 @@ defmodule BeamMCP.Connectome.CanonicalTest do
           kind: :tool,
           level: :server,
           identity: {:tool, "s", "x"},
-          labels: %{t: "a\"b\\c\n\t\u0001\u001f\u00e9/"}
+          labels: %{t: "a\"b\\c\n\t\b\f\r\u0001\u001f\u00e9/"}
         )
 
       {:ok, bytes} = Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
-      assert bytes =~ ~S("t":"a\"b\\c\n\t\u0001\u001fé/")
+      assert bytes =~ ~S("t":"a\"b\\c\n\t\b\f\r\u0001\u001fé/")
     end
 
     test "label keys sort by UTF-16 code unit, the order the JSON canonicalization scheme uses" do
@@ -464,6 +503,22 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
     assert Enum.map(decoded["weights"], &{&1["from"], &1["weight"]}) ==
              [{"s/tool/caf\u00e9 a", 2}, {"s/tool/caf\u00e9b", 1}]
+  end
+
+  test "the sidecar refuses what the declared form refuses: two ids that coincide after NFC" do
+    # Review found sidecar/1 keying edges without reading the nodes, so a graph encode/1
+    # refuses produced a sidecar with two entries under one key and no way to tell them apart.
+    a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "caf\u00e9"})
+    b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "cafe\u0301"})
+    ea = Edge.new!(from: a.id, to: a.id, kind: :invoke, provenance: :observed, weight: 1)
+    eb = Edge.new!(from: b.id, to: b.id, kind: :invoke, provenance: :observed, weight: 2)
+    g = Graph.new!(nodes: [a, b], edges: [ea, eb], schema_version: @version)
+
+    assert {:error, {:uncanonical, {:duplicate_id_after_nfc, "s/tool/caf\u00e9"}}} =
+             Canonical.encode(g)
+
+    assert {:error, {:uncanonical, {:duplicate_id_after_nfc, "s/tool/caf\u00e9"}}} =
+             Canonical.sidecar(g)
   end
 
   test "a float weight is written in the sidecar in its shortest round-tripping form, and is in no hash" do
