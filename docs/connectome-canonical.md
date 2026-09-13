@@ -127,10 +127,14 @@ provenance and sign, and no weight. They are not canonical forms and are not has
 
 DOT quotes every id and every value, and quotes a label's attribute name too (`"label_<key>"`),
 because a key may carry `=`, a space or a quote; `kind`, `level` and the edge attributes are
-DOT identifiers and stay bare. GraphML declares one `<key>` per label key as `l0`, `l1`, … in
-the order of rule 4 with `attr.name` carrying the key — a GraphML key id is an NMTOKEN, which
-a label key need not be — and escapes `&`, `<`, `>`, `"` in text. A character XML 1.0 cannot
-carry at all (a C0 control other than tab, LF and CR; a noncharacter such as U+FFFE), which
-the canonical bytes do carry, is refused by `to_graphml/1` as `{:not_xml, id, codepoint}`
-rather than written into a document every conforming parser rejects; no character reference
-can carry it either.
+DOT identifiers and stay bare. GraphML's schema types every id as an NMTOKEN; a node id is
+not one (it carries `/`) and is read as a string by the readers this targets, and label keys
+are declared as `l0`, `l1`, … in the order of rule 4 with `attr.name` carrying the key, so a
+key carrying a space or a quote never lands in an id. Text is escaped: `&`, `<`, `>`, `"`, and
+tab, LF and CR as the character references `&#9;`, `&#10;`, `&#13;` — a parser folds the
+literal characters to a space inside an attribute value and CR to LF in content, and a
+reference survives both, so two ids that differ only by whitespace kind stay two nodes. A
+character XML 1.0 cannot carry at all (a C0 control other than tab, LF and CR; a noncharacter
+such as U+FFFE), which the canonical bytes do carry, is refused by `to_graphml/1` as
+`{:not_xml, id, codepoint}` rather than written into a document every conforming parser
+rejects; no character reference can carry it either.

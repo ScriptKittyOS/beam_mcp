@@ -206,7 +206,8 @@ defmodule BeamMCP.Connectome.Canonical do
   The GraphML export. Keys are declared once, as `l0`, `l1`, ... in canonical key order with
   `attr.name` carrying the label key (a GraphML key id is an NMTOKEN, which a label key need
   not be); nodes and edges follow the canonical order; text is XML-escaped (`&`, `<`, `>`,
-  `"`). A character XML 1.0 cannot carry -- a C0 control other than tab, LF and CR, or a
+  `"`, and tab, LF and CR as character references, which a parser preserves where it folds
+  the literal characters). A character XML 1.0 cannot carry -- a C0 control other than tab, LF and CR, or a
   noncharacter such as U+FFFE -- is refused as `{:not_xml, id, codepoint}` rather than
   written: no character reference can carry it either, and every conforming parser would
   refuse the document. Weights are not exported.
@@ -508,13 +509,20 @@ defmodule BeamMCP.Connectome.Canonical do
       ?"
     ]
 
-  defp xml(s),
-    do:
-      s
-      |> String.replace("&", "&amp;")
-      |> String.replace("<", "&lt;")
-      |> String.replace(">", "&gt;")
-      |> String.replace("\"", "&quot;")
+  # Tab, LF and CR go as character references: a parser folds a literal one inside an
+  # attribute value to a space, and a CR in content to LF (XML 1.0 3.3.3, 2.11), so ids that
+  # differ only by whitespace kind would read back as one node. A reference survives both.
+  @xml_escapes %{
+    "&" => "&amp;",
+    "<" => "&lt;",
+    ">" => "&gt;",
+    "\"" => "&quot;",
+    "\t" => "&#9;",
+    "\n" => "&#10;",
+    "\r" => "&#13;"
+  }
+
+  defp xml(s), do: String.replace(s, Map.keys(@xml_escapes), &@xml_escapes[&1])
 
   # XML 1.0's Char production: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] |
   # [#x10000-#x10FFFF]. Every string the export writes -- ids, keys, flattened values -- is
