@@ -14,3 +14,7 @@ beam_mcp-*.tar
 # signoff.sh rewrites this on every `verify`, so tracking it would make the next run
 # refuse on its own output, and its bytes are a restatement of the .signoff records beside it.
 slices/*/signoff/verify.txt
+
+# Internal material: never tracked, never in a PR, never in a commit message. Policed by the
+# `publication` step of tools/gate.sh, which also refuses new files under slices/.
+/.internal/
