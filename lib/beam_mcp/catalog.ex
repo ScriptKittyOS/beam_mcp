@@ -34,8 +34,9 @@ defmodule BeamMCP.Catalog do
 
   @typedoc """
   What a host offers. Every key is required; `resources` and `prompts` are typed as generic
-  lists because nothing in this package reads them yet, and typing them precisely now would be
-  a claim about a shape no code enforces.
+  lists because the server does not read them and no code enforces a shape -- the connectome
+  builder reads a name from each entry and enumerates the rest, which is a reader, not a
+  contract.
   """
   @type t :: %{
           required(:tools) => [BeamMCP.ToolSpec.t()],
