@@ -45,19 +45,26 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    atoms `nil`, `true` and `false` are the JSON literals `null`, `true` and `false` as
    values, and are refused as keys.
 6. **Strings are NFC-normalised** before anything else — ids, edge endpoints, label keys and
-   label values, whether they arrived as strings or as atoms. Two nodes whose ids coincide
-   after normalisation are refused, never merged; so are two label keys in one object that
-   coincide after normalisation, or an atom and a string spelling one key. **A string that is
-   not valid UTF-8 is refused**, naming the node and the field, because it has no canonical
-   bytes: a writer that stops at the bad byte would emit a prefix, and two distinct strings
-   could meet. NFC is applied with the Unicode tables of the runtime that encodes; Unicode's
+   label values, whether they arrived as strings or as atoms. NFC, not NFKC: canonical
+   equivalents fold (a combining sequence and its precomposed form, U+212B and U+00C5), and
+   compatibility equivalents stay distinct (`ﬁ` U+FB01 and `fi` are two strings). Two nodes
+   whose ids coincide after normalisation are refused, never merged; so are two label keys in
+   one object that coincide after normalisation, or an atom and a string spelling one key.
+   **A string that is not well-formed UTF-8 is refused** — well-formed as Unicode defines it:
+   no overlong form, no encoded surrogate, nothing past U+10FFFF, no truncated sequence;
+   noncharacters such as U+FFFE and a byte-order mark are well-formed and written literally.
+   The refusal names the node and the field for an id or a top-level label; inside a nested
+   value it is reported as rule 8 says, by the label and its whole value. It is refused
+   because it has no canonical bytes: a writer that stops at the bad byte would emit a
+   prefix, and two distinct strings could meet. NFC is applied with the Unicode tables of the runtime that encodes; Unicode's
    normalisation stability policy keeps the result the same for every character assigned in
    both runtimes' versions, so two runtimes differ only on a string carrying a code point one
    of them does not yet know.
 7. **String escaping** is RFC 8785's: `"` as `\"`, `\` as `\\`, and the control characters
    U+0008, U+0009, U+000A, U+000C, U+000D as `\b`, `\t`, `\n`, `\f`, `\r`; every other
    character below U+0020 as `\u` followed by four lowercase hexadecimal digits; **everything
-   else literal UTF-8**, including `/` and every non-ASCII character.
+   else literal UTF-8**, including `/`, U+007F, U+2028 and U+2029, and every character above
+   U+FFFF as its own UTF-8 bytes, never as a surrogate pair.
 8. **Label values** are strings, integers, `true`, `false`, `null`, arrays of these, or
    objects of these (sorted by rule 4). An atom label value is written as a string. Integers
    are decimal with no sign for zero or positive values, a leading `-` for negative ones, no

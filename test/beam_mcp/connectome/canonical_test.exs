@@ -403,6 +403,58 @@ defmodule BeamMCP.Connectome.CanonicalTest do
                Canonical.encode(Graph.new!(nodes: [n3], edges: [], schema_version: @version))
     end
 
+    test "well-formed UTF-8 is Unicode's: overlong forms, encoded surrogates and code points past U+10FFFF are refused; noncharacters and a BOM are written" do
+      for bad <- [
+            <<0xC0, 0x80>>,
+            <<0xE0, 0x80, 0x80>>,
+            <<0xED, 0xA0, 0x80>>,
+            <<0xF4, 0x90, 0x80, 0x80>>,
+            <<0x80>>,
+            <<0xE2, 0x82>>
+          ] do
+        n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: %{t: bad})
+
+        assert {:error, {:uncanonical, {:invalid_utf8, _, :t}}} =
+                 Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version)),
+               "not refused: #{inspect(bad)}"
+      end
+
+      n =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{t: "\uFEFF\uFFFE\uFFFF"}
+        )
+
+      {:ok, bytes} = Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+      assert bytes =~ "\"t\":\"\uFEFF\uFFFE\uFFFF\""
+    end
+
+    test "NFC, not NFKC: compatibility-equivalent strings stay two strings" do
+      a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "\uFB01"})
+      b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "fi"})
+
+      {:ok, bytes} =
+        Canonical.encode(Graph.new!(nodes: [a, b], edges: [], schema_version: @version))
+
+      assert bytes =~ ~s("id":"s/tool/fi") and bytes =~ ~s("id":"s/tool/\uFB01")
+    end
+
+    test "edges sort by to before kind" do
+      x = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
+      a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "a"})
+      b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "b"})
+      ea = Edge.new!(from: x.id, to: a.id, kind: :read, provenance: :declared)
+      eb = Edge.new!(from: x.id, to: b.id, kind: :invoke, provenance: :declared)
+
+      {:ok, bytes} =
+        Canonical.encode(Graph.new!(nodes: [x, a, b], edges: [eb, ea], schema_version: @version))
+
+      [_, edges] = String.split(bytes, ~s("edges":))
+      assert edges =~ ~r/"to":"s\/tool\/a"\}.*"to":"s\/tool\/b"\}/
+    end
+
     test "a string that is not valid UTF-8 is refused by name, never truncated" do
       # A bitstring comprehension over an invalid byte stops silently: <<"a", 0xFF, "b">>
       # would have been written as "a", and two distinct ids could meet in the bytes.
@@ -438,11 +490,16 @@ defmodule BeamMCP.Connectome.CanonicalTest do
           kind: :tool,
           level: :server,
           identity: {:tool, "s", "x"},
-          labels: %{t: "a\"b\\c\n\t\b\f\r\u0001\u001f\u00e9/"}
+          labels: %{t: "a\"b\\c\n\t\b\f\r\u0001\u001f\u00e9/\u0000\u007f\u2028\u2029\u{1F600}"}
         )
 
+      # DEL, U+2028, U+2029 and a character above U+FFFF are where other JSON writers
+      # differ (a JavaScript-safe escaper writes \u2028; some write surrogate pairs); the
+      # layout writes them literally, and NUL as \u0000.
       {:ok, bytes} = Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
-      assert bytes =~ ~S("t":"a\"b\\c\n\t\b\f\r\u0001\u001fé/")
+
+      assert bytes =~
+               ~S("t":"a\"b\\c\n\t\b\f\r\u0001\u001fé/\u0000) <> "\u007f\u2028\u2029\u{1F600}\""
     end
 
     test "label keys sort by UTF-16 code unit, the order the JSON canonicalization scheme uses" do
