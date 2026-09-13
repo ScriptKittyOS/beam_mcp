@@ -13,7 +13,8 @@ defmodule BeamMCP.Fixture.Declared.MacroOnly do
   # survives into Alpha's beam, so the declared graph must show no edge from Alpha to it. The
   # macro's own body calls MacroHelper at expansion time: xref reports that from the
   # `MACRO-twice` function, and the builder must file it as an expansion call, not an edge.
-  defmacro twice(x), do: BeamMCP.Fixture.Declared.MacroHelper.note(quote(do: unquote(x) * 2))
+  alias BeamMCP.Fixture.Declared.MacroHelper
+  defmacro twice(x), do: MacroHelper.note(quote(do: unquote(x) * 2))
 end
 
 defmodule BeamMCP.Fixture.Declared.Outward do
