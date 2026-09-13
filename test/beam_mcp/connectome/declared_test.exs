@@ -128,12 +128,37 @@ defmodule BeamMCP.Connectome.DeclaredTest do
     end
 
     test "callees outside the scope are neither nodes nor edges, and are enumerated by module" do
-      {:ok, %{graph: g, bound: bound}} = build()
-      assert :elixir_quote in bound.external_callees
-      refute Enum.any?(g.nodes, &(&1.id == Node.id({:module, @server, :elixir_quote})))
+      {:ok, %{graph: g, bound: bound}} =
+        build(modules: [Fx.Alpha, Fx.Beta, Fx.Gamma, Fx.Dyn, Fx.Catalog, Fx.Outward])
+
+      assert :calendar in bound.external_callees
+      refute Enum.any?(g.nodes, &(&1.id == Node.id({:module, @server, :calendar})))
       assert bound.external_callees == Enum.sort(bound.external_callees)
       # A dynamic target is not a callee outside the scope; it is an unresolved site.
       refute :"$M_EXPR" in bound.external_callees
+    end
+
+    test "a call a macro body makes at expansion time is an expansion call, not a runtime edge or callee" do
+      # xref attributes such calls to the `MACRO-name` function. They run in the compiler, not
+      # in the system, so they are neither :invoke edges nor callees outside the scope; they
+      # are enumerated by their macro, because a reader of the bound must be able to see them.
+      {:ok, %{graph: g, bound: bound}} = build()
+      refute :elixir_quote in bound.external_callees
+
+      assert [{{Fx.MacroOnly, :"MACRO-twice", 2}, {:elixir_quote, :shallow_validate_ast, 1}}] =
+               bound.macro_expansion_calls
+
+      # An in-scope module called only from a macro body: an expansion call, and no edge.
+      helper = Node.id({:module, @server, Fx.MacroHelper})
+      {:ok, %{graph: g2, bound: bound2}} = build(modules: @modules ++ [Fx.MacroHelper])
+      refute Enum.any?(g2.edges, &(&1.to == helper))
+
+      assert Enum.any?(
+               bound2.macro_expansion_calls,
+               &match?({{Fx.MacroOnly, :"MACRO-twice", 2}, {Fx.MacroHelper, :note, 1}}, &1)
+             )
+
+      _ = g
     end
 
     test "a tool with no implementing module is enumerated" do
