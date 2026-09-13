@@ -460,6 +460,49 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert bytes =~ ~s("id":"s/tool/fi") and bytes =~ ~s("id":"s/tool/\uFB01")
     end
 
+    test "nodes and edges sort by code point, label keys by UTF-16 code unit: the two orders differ above U+FFFF" do
+      # U+1F600 is above U+FF01 by code point and below it by UTF-16 code unit (its lead
+      # surrogate is 0xD83D). A verifier that sorts ids with a UTF-16 string comparison, as
+      # JavaScript does by default, puts the nodes the other way round.
+      fw = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "\uFF01"})
+      sm = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "\u{1F600}"})
+      e_fw = Edge.new!(from: fw.id, to: fw.id, kind: :invoke, provenance: :declared)
+      e_sm = Edge.new!(from: sm.id, to: sm.id, kind: :invoke, provenance: :declared)
+
+      {:ok, bytes} =
+        Canonical.encode(
+          Graph.new!(nodes: [sm, fw], edges: [e_sm, e_fw], schema_version: @version)
+        )
+
+      [_, nodes, edges] = String.split(bytes, ~r/"nodes":|"edges":/)
+      assert nodes =~ ~r/s\/tool\/\x{FF01}.*s\/tool\/\x{1F600}/u
+      assert edges =~ ~r/s\/tool\/\x{FF01}.*s\/tool\/\x{1F600}/u
+
+      keyed =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{"\uFF01" => 1, "\u{1F600}" => 2}
+        )
+
+      {:ok, bytes} =
+        Canonical.encode(Graph.new!(nodes: [keyed], edges: [], schema_version: @version))
+
+      assert bytes =~ ~s("labels":{"\u{1F600}":2,"\uFF01":1})
+    end
+
+    test "a raw duplicate id and a duplicate after NFC are two refusals, under two names" do
+      a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "caf\u00e9"})
+      b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "cafe\u0301"})
+
+      assert {:error, {:uncanonical, {:invalid_graph, {:duplicate_node, "s/tool/caf\u00e9"}}}} =
+               Canonical.encode(%Graph{schema_version: @version, nodes: [a, a], edges: []})
+
+      assert {:error, {:uncanonical, {:duplicate_id_after_nfc, "s/tool/caf\u00e9"}}} =
+               Canonical.encode(Graph.new!(nodes: [a, b], edges: [], schema_version: @version))
+    end
+
     test "edges sort by to before kind" do
       x = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
       a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "a"})

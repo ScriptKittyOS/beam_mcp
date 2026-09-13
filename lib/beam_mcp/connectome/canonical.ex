@@ -33,7 +33,11 @@ defmodule BeamMCP.Connectome.Canonical do
 
   alias BeamMCP.Connectome.{Edge, Graph}
 
-  @typedoc "Why a graph could not be encoded canonically."
+  @typedoc """
+  Why a graph could not be encoded canonically. The first fault met is named; labels are
+  read in term order (atoms before strings, strings bytewise), so which of two faults is
+  named does not depend on the map's own order.
+  """
   @type uncanonical ::
           {:duplicate_id_after_nfc, String.t()}
           | {:label_value, String.t(), term(), term()}
