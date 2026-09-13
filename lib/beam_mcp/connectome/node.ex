@@ -56,6 +56,8 @@ defmodule BeamMCP.Connectome.Node do
   @doc """
   Builds a node from `kind:`, `level:`, `identity:` and an optional `labels:` map.
 
+  Options are a keyword list; anything else is refused as `{:invalid, :opts, value}`.
+
   Refuses, by name: an unknown key (`{:unknown_key, key}`), a missing required key
   (`{:missing, key}`), a kind or level outside the vocabulary (`{:invalid, :kind, value}`,
   `{:invalid, :level, value}`), an identity whose tag is not the kind or whose shape `id/1`
@@ -63,8 +65,9 @@ defmodule BeamMCP.Connectome.Node do
   one its shape means, and labels that are not a map.
   """
   @spec new(keyword()) :: {:ok, t()} | {:error, term()}
-  def new(opts) when is_list(opts) do
-    with :ok <- reject_unknown(opts),
+  def new(opts) do
+    with :ok <- keyword(opts),
+         :ok <- reject_unknown(opts),
          :ok <- require_keys(opts),
          {:ok, kind} <- member(opts, :kind, @kinds),
          {:ok, level} <- member(opts, :level, @levels),
@@ -85,9 +88,10 @@ defmodule BeamMCP.Connectome.Node do
 
   @doc """
   The id of the node with this identity: a string, stable, and distinct for distinct
-  identities. Components are joined by `/` with any `/` or `%` inside a component escaped, so
-  no two identities can join to the same string. A name given as an atom and the same name
-  given as a string are the same node.
+  identities. Components are joined by `/` with any `/` or `%` inside a component escaped (the
+  `%` first, so an escape cannot be forged), so two identities join to one string only when
+  their components are the same strings. That is the one deliberate many-to-one: a name given
+  as an atom and the same name given as a string are the same node.
 
   Raises `ArgumentError` for an identity shape the vocabulary does not name, or a server
   component that is not a string.
@@ -130,6 +134,12 @@ defmodule BeamMCP.Connectome.Node do
 
   defp escape(component) do
     component |> String.replace("%", "%25") |> String.replace("/", "%2F")
+  end
+
+  # Keyword options only. A map, nil, or a list that is not a keyword list is refused by name
+  # rather than by a clause error, so new!/1 raises the ArgumentError its doc promises.
+  defp keyword(opts) do
+    if Keyword.keyword?(opts), do: :ok, else: {:error, {:invalid, :opts, opts}}
   end
 
   defp reject_unknown(opts) do

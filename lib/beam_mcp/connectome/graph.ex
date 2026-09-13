@@ -37,6 +37,8 @@ defmodule BeamMCP.Connectome.Graph do
   @doc """
   Builds a graph from `nodes:`, `edges:` and `schema_version:`.
 
+  Options are a keyword list; anything else is refused as `{:invalid, :opts, value}`.
+
   Refuses, by name: an unknown key (`{:unknown_key, key}`), a missing key (`{:missing, key}`),
   a schema version other than `schema_version/0` (`{:invalid, :schema_version, value}`), a
   `nodes:` or `edges:` value that is not a list of the structs (`{:invalid, :nodes, value}`,
@@ -44,8 +46,9 @@ defmodule BeamMCP.Connectome.Graph do
   key (`{:duplicate_edge, key}`), and an edge endpoint that is not a node (`{:dangling_edge, id}`).
   """
   @spec new(keyword()) :: {:ok, t()} | {:error, term()}
-  def new(opts) when is_list(opts) do
-    with :ok <- reject_unknown(opts),
+  def new(opts) do
+    with :ok <- keyword(opts),
+         :ok <- reject_unknown(opts),
          :ok <- require_keys(opts),
          {:ok, version} <- version(opts),
          {:ok, nodes} <- structs(opts, :nodes, Node),
@@ -64,6 +67,12 @@ defmodule BeamMCP.Connectome.Graph do
       {:ok, graph} -> graph
       {:error, reason} -> raise ArgumentError, "invalid graph: #{inspect(reason)}"
     end
+  end
+
+  # Keyword options only. A map, nil, or a list that is not a keyword list is refused by name
+  # rather than by a clause error, so new!/1 raises the ArgumentError its doc promises.
+  defp keyword(opts) do
+    if Keyword.keyword?(opts), do: :ok, else: {:error, {:invalid, :opts, opts}}
   end
 
   defp reject_unknown(opts) do
