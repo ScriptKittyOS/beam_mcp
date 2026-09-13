@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "    with {:ok, _nodes} <- canonical_nodes(graph.nodes),\n         {:ok, keyed} <-"
-new = "    with {:ok, keyed} <-"
+old = "         {:ok, _nodes} <- canonical_nodes(graph.nodes),\n         {:ok, keyed} <-"
+new = "         {:ok, keyed} <-"
 
 if s.count(old) != 1:
     sys.exit("Mca15: anchor found %d times" % s.count(old))
