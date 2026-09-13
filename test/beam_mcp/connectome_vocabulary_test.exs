@@ -20,9 +20,12 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
      test that already runs, and a fifth edge kind or a new sign cannot arrive without a
      sentence in the public vocabulary.
 
-  The limit, stated: anchor 3 reads `@type` unions only, and checks for a definition row
-  anywhere in the document rather than under a particular heading, because a typespec does not
-  say which family it belongs to. An atom used as a value outside a
+  The limit, stated: anchor 3 reads `@type` unions only, and only their BARE-ATOM alternatives
+  (`:: :a | :b`), checking for a definition row anywhere in the document rather than under a
+  particular heading, because a typespec does not say which family it belongs to. An atom
+  inside a tuple alternative -- an error reason such as `{:label_value, id, key, value}` -- is
+  not vocabulary and is not read; the first version read every atom in the union and reported
+  the canonical encoder's error tags as undefined terms. An atom used as a value outside a
   typespec is not in its population. Slice 010's census over edge construction sites is the
   other half.
   """
@@ -122,7 +125,9 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
     file
     |> File.read!()
     |> then(&Regex.scan(~r/@type\s+\w+(?:\([^)]*\))?\s*::\s*([^\n]+(?:\n\s+\|[^\n]+)*)/, &1))
-    |> Enum.flat_map(fn [_, rhs] -> Regex.scan(~r/(?<![\w?])(:[a-z_][a-z0-9_?!]*)/, rhs) end)
-    |> Enum.map(fn [_, atom] -> {String.to_atom(String.trim_leading(atom, ":")), file} end)
+    |> Enum.flat_map(fn [_, rhs] -> String.split(rhs, "|") end)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&Regex.match?(~r/^:[a-z_][a-z0-9_?!]*$/, &1))
+    |> Enum.map(fn atom -> {String.to_atom(String.trim_leading(atom, ":")), file} end)
   end
 end

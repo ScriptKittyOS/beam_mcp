@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <key id="kind" for="node" attr.name="kind" attr.type="string"/>
+  <key id="level" for="node" attr.name="level" attr.type="string"/>
+  <key id="label_command_class" for="node" attr.name="command_class" attr.type="string"/>
+  <key id="label_mode" for="node" attr.name="mode" attr.type="string"/>
+  <key id="label_nested" for="node" attr.name="nested" attr.type="string"/>
+  <key id="label_title" for="node" attr.name="title" attr.type="string"/>
+  <key id="ekind" for="edge" attr.name="kind" attr.type="string"/>
+  <key id="provenance" for="edge" attr.name="provenance" attr.type="string"/>
+  <key id="sign" for="edge" attr.name="sign" attr.type="string"/>
+  <graph id="connectome" edgedefault="directed">
+    <node id="srv/boundary/application/beam_mcp">
+      <data key="kind">module</data>
+      <data key="level">boundary</data>
+    </node>
+    <node id="srv/module/Enum">
+      <data key="kind">module</data>
+      <data key="level">module</data>
+    </node>
+    <node id="srv/resource/r:%2F%2Fa">
+      <data key="kind">resource</data>
+      <data key="level">server</data>
+    </node>
+    <node id="srv/server">
+      <data key="kind">server</data>
+      <data key="level">server</data>
+    </node>
+    <node id="srv/tool/écho">
+      <data key="kind">tool</data>
+      <data key="level">server</data>
+      <data key="label_command_class">observe</data>
+      <data key="label_mode">read_only</data>
+      <data key="label_nested">{&quot;n&quot;:2,&quot;ok&quot;:true}</data>
+      <data key="label_title">café</data>
+    </node>
+    <edge source="srv/module/Enum" target="srv/boundary/application/beam_mcp">
+      <data key="ekind">message</data>
+      <data key="provenance">observed</data>
+      <data key="sign">unknown</data>
+    </edge>
+    <edge source="srv/server" target="srv/tool/écho">
+      <data key="ekind">invoke</data>
+      <data key="provenance">declared</data>
+      <data key="sign">unknown</data>
+    </edge>
+    <edge source="srv/tool/écho" target="srv/module/Enum">
+      <data key="ekind">invoke</data>
+      <data key="provenance">declared</data>
+      <data key="sign">unknown</data>
+    </edge>
+    <edge source="srv/tool/écho" target="srv/resource/r:%2F%2Fa">
+      <data key="ekind">read</data>
+      <data key="provenance">observed</data>
+      <data key="sign">unknown</data>
+    </edge>
+  </graph>
+</graphml>

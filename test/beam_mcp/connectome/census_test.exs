@@ -121,7 +121,20 @@ defmodule BeamMCP.Connectome.CensusTest do
     "@type sign :: :allow | :deny | :hold | :unknown",
     "sign: sign()",
     "@signs [:allow, :deny, :hold, :unknown]",
-    "{:sign, &(&1 in @signs)}"
+    "{:sign, &(&1 in @signs)}",
+    # The serializer carries the sign OUT to bytes and to the exports, under its field name
+    # (docs/connectome-canonical.md, rule 5). Each of these is a read of a built edge's
+    # sign, spelled once in canonical.ex; none takes a sign in. A new spelling is a new
+    # line here, seen in a diff.
+    "for {{from, to, kind, prov}, sign} <- edges do",
+    "defp json({{from, to, kind, prov}, sign}) do",
+    "Atom.to_string(e.sign)}",
+    "{\"sign\", sign}",
+    "\", sign=\",",
+    "dot_q(sign),",
+    "xml(sign),",
+    "<key id=\"sign\" for=\"edge\" attr.name=\"sign\" attr.type=\"string\"/>",
+    "<data key=\"sign\">"
   ]
 
   defp permitted_sign_line?(line) do
