@@ -112,10 +112,12 @@ D × 10^e. Plain notation is used when −4 ≤ e ≤ 2 for a one-digit D, and w
 D > 2⁵² div 5 with e = 1, and D > 2⁵¹ div 25 with e = 2 take an exponent. Plain notation
 appends `.0` when no digit falls after the point, and prefixes `0.` and −(L+e) zeros when
 L + e ≤ 0. Exponent notation is the first digit, `.`, the remaining digits or `0`, `e`, and
-e + L − 1 with no `+` and no padding. Zero is `0.0`. So `0.1`, `0.0001`,
+e + L − 1 with no `+` and no padding. Zero is `0.0`, and a negative zero — which the edge
+constructor admits, as it is not below zero — is `-0.0`. So `0.1`, `0.0001`,
 `999999999999999.0`, `1.0e15`, `1.0e-5`, `1.0e20`, `9.99e14`, `3.0e6`, `1.23456e-4`,
-`0.001234`, `12340.0`. The sidecar is not part of any hash. It is defined only for a graph whose declared form
-encodes: what `encode/1` refuses, `sidecar/1` refuses with the same reason.
+`0.001234`, `12340.0`, `0.0`, `-0.0`. The sidecar is not part of any hash. It is defined
+only for a graph whose declared form encodes: what `encode/1` refuses, `sidecar/1` refuses
+with the same reason.
 
 ## What the exports are
 
