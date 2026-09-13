@@ -155,5 +155,62 @@ for f in LICENSE NOTICE LICENSES/Apache-2.0.txt; do
 done
 [ "$lic_fail" -eq 0 ] && note "licence files" "pass"
 
+# Publication boundary: the repository is public and its history is publishable at every commit.
+#
+# Working records -- plans, findings, review notes, decision records -- live outside the tree
+# from here on, under an ignored directory, and this step is what makes "ignored" a verdict
+# rather than a hope. THE POPULATION IS `git ls-files`, THE SAME SOURCE THE REUSE STEP READS, so
+# a file that is on disk but not added is not in it -- which is correct, because that file is
+# not in any commit. What IS checked, in three parts, each with its own line of output:
+#
+#   1. The ignore rule exists. `git check-ignore` is asked about a path under the internal
+#      directory; a removed or mis-edited rule fails here before anything is tracked.
+#   2. No tracked path is under the internal directory. `git add -f` bypasses the ignore rule,
+#      and that is exactly the act this line exists to catch.
+#   3. No tracked path is under slices/ beyond the set frozen in tools/publication-allowlist.txt.
+#      The existing slice records stay tracked, deliberately and by name -- untracking them would
+#      not remove them from history, and rewriting history is not this script's to do. New
+#      records do not join them. The allowlist is pinned by sha256 so that widening it is an
+#      edit to this file, visible in a diff, and not a quiet append.
+#
+# The limit, stated: this is a census over PATHS. A board identifier or a consumer's name inside
+# a tracked file is not seen here, because the pattern that would find it would itself be the
+# thing this step exists to keep out of a public script.
+internal_dir=".internal"
+allowlist="tools/publication-allowlist.txt"
+allowlist_sha="ee5dc25859a7ccc153b25a1216ba65abfa3d576117d5b7c327e9b37296dde5c3"
+pub_fail=0
+if git check-ignore -q "$internal_dir/probe"; then
+  pub_ignore="rule present"
+else
+  pub_ignore="NO IGNORE RULE for $internal_dir/"; pub_fail=1
+fi
+if [ -f "$allowlist" ] && [ "$(sha256sum "$allowlist" | cut -d' ' -f1)" = "$allowlist_sha" ]; then
+  allowed=$'\n'$(grep -v '^#' "$allowlist")$'\n'
+  pub_allow="allowlist pinned"
+else
+  allowed=$'\n'
+  pub_allow="ALLOWLIST MISSING OR CHANGED (sha256 mismatch)"; pub_fail=1
+fi
+n_pub=0; n_grand=0; pub_violations=""
+while read -r f; do
+  n_pub=$((n_pub + 1))
+  case "$f" in
+    "$internal_dir"/*) pub_violations="${pub_violations}${f}  (internal directory)"$'\n' ;;
+    slices/*)
+      case "$allowed" in
+        *$'\n'"$f"$'\n'*) n_grand=$((n_grand + 1)) ;;
+        *) pub_violations="${pub_violations}${f}  (new under slices/)"$'\n' ;;
+      esac ;;
+  esac
+done < <(git ls-files)
+if [ "$pub_fail" -eq 0 ] && [ -z "$pub_violations" ]; then
+  note "publication" "pass ($n_pub tracked; $n_grand grandfathered under slices/; 0 internal; $pub_ignore; $pub_allow)"
+else
+  note "publication" "FAIL ($n_pub tracked; $n_grand grandfathered under slices/; $pub_ignore; $pub_allow)"
+  [ -n "$pub_violations" ] && { printf '      tracked paths that must not be:\n'; printf '%s' "$pub_violations" | sed 's/^/        /'; }
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then echo "Gate OK."; else echo "GATE FAILED."; fi
 exit "$fail"
