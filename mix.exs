@@ -36,7 +36,9 @@ defmodule BeamMCP.MixProject do
       {:plug, "~> 1.16", optional: true},
       {:bandit, "~> 1.5", optional: true},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      # Property tests. Test-time only; it does not enter the published package.
+      {:stream_data, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
