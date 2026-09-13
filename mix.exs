@@ -11,6 +11,9 @@ defmodule BeamMCP.MixProject do
     [
       app: :beam_mcp,
       version: @version,
+      # Fixtures under test/support compile only for the test environment: they are real
+      # modules the connectome builder reads, never a mock, and they never ship.
+      elixirc_paths: elixirc_paths(Mix.env()),
       elixir: "~> 1.15",
       elixirc_options: [warnings_as_errors: true],
       start_permanent: Mix.env() == :prod,
@@ -22,6 +25,9 @@ defmodule BeamMCP.MixProject do
       docs: [main: "readme", extras: ["README.md", "CHANGELOG.md", "docs/connectome.md"]]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def application do
     [extra_applications: [:logger]]
