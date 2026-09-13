@@ -161,10 +161,12 @@ done
 # from here on, under an ignored directory, and this step is what makes "ignored" a verdict
 # rather than a hope. THE POPULATION IS `git ls-files`, THE SAME SOURCE THE REUSE STEP READS, so
 # a file that is on disk but not added is not in it -- which is correct, because that file is
-# not in any commit. What IS checked, in three parts, each with its own line of output:
+# not in any commit. What IS checked, in four parts, each with its own line of output:
 #
-#   1. The ignore rule exists. `git check-ignore` is asked about a path under the internal
-#      directory; a removed or mis-edited rule fails here before anything is tracked.
+#   1. The ignore rule exists IN THE TRACKED .gitignore. `git check-ignore -v` names the source
+#      of the rule that matched, and only `.gitignore` counts: a rule in .git/info/exclude or in
+#      a global excludes file would satisfy `-q` on the author's machine and not exist in CI or
+#      in a clone, which is the same shape as the untracked sidecar the REUSE step once accepted.
 #   2. No tracked path is under the internal directory. `git add -f` bypasses the ignore rule,
 #      and that is exactly the act this line exists to catch.
 #   3. No tracked path is under slices/ beyond the set frozen in tools/publication-allowlist.txt.
@@ -172,19 +174,34 @@ done
 #      not remove them from history, and rewriting history is not this script's to do. New
 #      records do not join them. The allowlist is pinned by sha256 so that widening it is an
 #      edit to this file, visible in a diff, and not a quiet append.
+#   4. No tracked SYMLINK is under either directory. A symlink at a grandfathered path would
+#      publish its target string -- an internal path name -- under a name the allowlist admits.
+#
+# THE POPULATION IS READ WITH `-s -z` AND `IFS= read -r -d ''`, AND THAT IS A CORRECTNESS
+# REQUIREMENT. The first version read `git ls-files` line by line with `read -r` and default
+# IFS, and it passed three probes it should have refused, measured on the tree that shipped it:
+#
+#   - a file named `slices/001-revision-negotiation/PLAN.md ` -- a trailing space -- was read
+#     with the space stripped, matched the allowlisted path, and was counted as GRANDFATHERED.
+#     The whole gate was green over it.
+#   - a force-added `.internal/é` arrived C-quoted as `".internal/\303\251"`, matched neither
+#     `case` pattern, and was counted as an ordinary tracked file. `-z` disables the quoting.
+#   - a symlink replacing a grandfathered path was listed by its name alone, and its name was
+#     allowed. `-s` carries the mode, and 120000 is refused under either directory.
 #
 # The limit, stated: this is a census over PATHS. A board identifier or a consumer's name inside
 # a tracked file is not seen here, because the pattern that would find it would itself be the
-# thing this step exists to keep out of a public script.
+# thing this step exists to keep out of a public script. Both the ignore rule and the patterns
+# below are root-anchored: a nested `lib/.internal/` is neither ignored nor detected.
 internal_dir=".internal"
 allowlist="tools/publication-allowlist.txt"
 allowlist_sha="ee5dc25859a7ccc153b25a1216ba65abfa3d576117d5b7c327e9b37296dde5c3"
 pub_fail=0
-if git check-ignore -q "$internal_dir/probe"; then
-  pub_ignore="rule present"
-else
-  pub_ignore="NO IGNORE RULE for $internal_dir/"; pub_fail=1
-fi
+case "$(git check-ignore -v "$internal_dir/probe" 2>/dev/null)" in
+  .gitignore:*) pub_ignore="rule in .gitignore" ;;
+  "")           pub_ignore="NO IGNORE RULE for $internal_dir/"; pub_fail=1 ;;
+  *)            pub_ignore="IGNORE RULE for $internal_dir/ IS NOT IN THE TRACKED .gitignore"; pub_fail=1 ;;
+esac
 if [ -f "$allowlist" ] && [ "$(sha256sum "$allowlist" | cut -d' ' -f1)" = "$allowlist_sha" ]; then
   allowed=$'\n'$(grep -v '^#' "$allowlist")$'\n'
   pub_allow="allowlist pinned"
@@ -193,8 +210,18 @@ else
   pub_allow="ALLOWLIST MISSING OR CHANGED (sha256 mismatch)"; pub_fail=1
 fi
 n_pub=0; n_grand=0; pub_violations=""
-while read -r f; do
+# Each -s -z entry is `<mode> <object> <stage>\t<path>`, NUL-terminated. The path is everything
+# after the tab, byte for byte: no quoting, no trimming, a trailing space is part of the name.
+while IFS= read -r -d '' entry; do
   n_pub=$((n_pub + 1))
+  mode="${entry%% *}"
+  f="${entry#*	}"
+  case "$f" in
+    "$internal_dir"/*|slices/*)
+      if [ "$mode" = "120000" ]; then
+        pub_violations="${pub_violations}${f}  (symbolic link)"$'\n'; continue
+      fi ;;
+  esac
   case "$f" in
     "$internal_dir"/*) pub_violations="${pub_violations}${f}  (internal directory)"$'\n' ;;
     slices/*)
@@ -203,7 +230,7 @@ while read -r f; do
         *) pub_violations="${pub_violations}${f}  (new under slices/)"$'\n' ;;
       esac ;;
   esac
-done < <(git ls-files)
+done < <(git ls-files -s -z)
 if [ "$pub_fail" -eq 0 ] && [ -z "$pub_violations" ]; then
   note "publication" "pass ($n_pub tracked; $n_grand grandfathered under slices/; 0 internal; $pub_ignore; $pub_allow)"
 else
