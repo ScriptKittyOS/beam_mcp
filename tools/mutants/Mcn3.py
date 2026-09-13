@@ -5,10 +5,11 @@
 #
 # Mcn3 -- DROP THE KIND VALIDATION. Any atom becomes a kind. The named-refusal test must catch it.
 #
-# TWO REPLACEMENTS, BECAUSE ONE WOULD BE A COMPILER KILL. The first version removed the
-# check and left its helper or attribute unused; --warnings-as-errors rejected the build
-# before a test ran (CONVENTIONS.md, "the compiler kill"). The mutation is completed by also
-# removing what it orphans.
+# ONE REPLACEMENT. The first version removed the check and left the @kinds attribute
+# unused; --warnings-as-errors rejected the build before a test ran (CONVENTIONS.md, "the
+# compiler kill"), so a second replacement removed the attribute. Since check/1 arrived the
+# attribute has a second reader, and removing it became a compiler kill of its own; the
+# mutation is the first replacement alone again.
 import sys
 
 p = sys.argv[1]
@@ -18,10 +19,6 @@ for old, new in [
     [
         "{:ok, kind} <- member(opts, :kind, @kinds),",
         "{:ok, kind} <- {:ok, Keyword.fetch!(opts, :kind)},"
-    ],
-    [
-        "  @kinds [:server, :tool, :resource, :prompt, :process, :module]\n",
-        ""
     ]
 ]:
     if s.count(old) != 1:
