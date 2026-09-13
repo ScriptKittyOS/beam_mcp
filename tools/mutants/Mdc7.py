@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "        tm == :\"$M_EXPR\" -> {kept, ext}"
-new = "        tm == :\"$M_EXPR\" -> {kept, MapSet.put(ext, tm)}"
+old = "        tm == :\"$M_EXPR\" ->\n          {kept, ext}"
+new = "        tm == :\"$M_EXPR\" ->\n          {kept, MapSet.put(ext, tm)}"
 
 if s.count(old) != 1:
     sys.exit("Mdc7: anchor found %d times" % s.count(old))
