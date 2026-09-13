@@ -46,9 +46,10 @@ defmodule BeamMCP.Connectome.Declared do
   built-in -- C-implemented functions in `erlang`, and also in `lists`, `ets`, `maps`, `re`,
   `math`, `os`, `binary` among others -- are not reported either (xref's default, which this
   builder never changes): every module makes them, and the dependency is on the runtime itself,
-  not on a part of the system. So `lists` appears among the external callees when
-  `:lists.reverse/1` is called and not when `:lists.member/2` is, and a module whose only
-  outward calls are into `ets` has none. Two more, at the edges of the `MACRO-` rule: a
+  not on a part of the system. The filter is per function, not per module: `lists` appears
+  among the external callees when `:lists.reverse/1` is called and not when `:lists.member/2`
+  is; `ets` when `:ets.tab2list/1` is called and not when `:ets.lookup/2` is (measured: twenty-
+  five of `ets`'s exports are Erlang-implemented). Two more, at the edges of the `MACRO-` rule: a
   compile-time hook written as a plain function (`__before_compile__/1`, `__after_compile__/2`)
   is attributed to that function and so reads as a runtime call; and a private macro leaves no
   `MACRO-` function and no call, so a helper used only from its body produces neither an edge
