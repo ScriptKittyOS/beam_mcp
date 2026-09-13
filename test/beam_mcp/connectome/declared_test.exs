@@ -132,11 +132,19 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       assert :elixir_quote in bound.external_callees
       refute Enum.any?(g.nodes, &(&1.id == Node.id({:module, @server, :elixir_quote})))
       assert bound.external_callees == Enum.sort(bound.external_callees)
+      # A dynamic target is not a callee outside the scope; it is an unresolved site.
+      refute :"$M_EXPR" in bound.external_callees
     end
 
     test "a tool with no implementing module is enumerated" do
       {:ok, %{bound: bound}} = build()
       assert bound.tools_without_module == [:write]
+    end
+
+    test "a tool whose named module is outside the scope is enumerated too, never a dangling edge" do
+      {:ok, %{graph: g, bound: bound}} = build(tool_modules: %{echo: Not.In.Scope})
+      assert bound.tools_without_module == [:echo, :write]
+      refute Enum.any?(g.edges, &(&1.from == Node.id({:tool, @server, :echo})))
     end
 
     test "a module with no beam on the code path is enumerated, not invented" do
@@ -240,6 +248,8 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       :xref.stop(ref)
 
       assert bound.unresolved_calls == Enum.sort(uc)
+      assert bound.external_callees == Enum.sort(Enum.uniq(bound.external_callees))
+      assert length(bound.external_callees) > 1
 
       assert {{BeamMCP.Server, :validate_and_dispatch, 3}, {:"$M_EXPR", :"$F_EXPR", 3}} in bound.unresolved_calls
     end
