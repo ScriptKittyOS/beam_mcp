@@ -237,7 +237,7 @@ defmodule BeamMCP.Connectome.GraphTest do
     # nothing; a graph new/1 built passes.
     test "a graph new/1 built passes; a literal one is refused by the same names" do
       {nodes, edges} = fixture()
-      g = Graph.new!(nodes: nodes, edges: edges, schema_version: @version)
+      %Graph{} = g = Graph.new!(nodes: nodes, edges: edges, schema_version: @version)
       assert Graph.check(g) == :ok
 
       assert Graph.check(%Graph{g | schema_version: 2}) ==
@@ -246,13 +246,13 @@ defmodule BeamMCP.Connectome.GraphTest do
       assert Graph.check(%Graph{g | nodes: :none}) == {:error, {:invalid, :nodes, :none}}
       assert Graph.check(%Graph{g | edges: [1]}) == {:error, {:invalid, :edges, [1]}}
 
-      [n | _] = g.nodes
+      [%Node{} = n | _] = g.nodes
       bad_node = %Node{n | labels: MapSet.new()}
 
       assert Graph.check(%Graph{g | nodes: [bad_node | tl(g.nodes)]}) ==
                {:error, {:invalid, :labels, MapSet.new()}}
 
-      [e | _] = g.edges
+      [%Edge{} = e | _] = g.edges
 
       assert Graph.check(%Graph{g | edges: [%Edge{e | sign: :yes} | tl(g.edges)]}) ==
                {:error, {:invalid, :sign, :yes}}

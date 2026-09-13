@@ -32,7 +32,10 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    **No weight.** That tuple is an edge's identity: `BeamMCP.Connectome.Graph.new/1` refuses
    two edges with the same tuple and an edge whose `from` or `to` names no node, so the
    canonical form never meets either; it neither merges nor drops. The sign is not part of
-   the identity — one edge carries one sign.
+   the identity — one edge carries one sign. A graph struct built by literal, bypassing
+   `Graph.new/1`, is read against the same refusals before a byte is written
+   (`BeamMCP.Connectome.Graph.check/1`) and refused as `{:invalid_graph, reason}` under the
+   graph's own name for the fault.
 4. **Every other object** — `"labels"` and anything nested in it — **sorts its keys by UTF-16
    code unit**, the order [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (the JSON
    Canonicalization Scheme) uses. For keys within the Basic Multilingual Plane this is code
@@ -99,9 +102,13 @@ Weights are written separately as `{"schema_version":1,"weights":[…]}`, one ob
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
 integer; a float weight is written in the shortest form that round-trips (`:erlang.float_to_binary/2`
-with `:short`, which OTP 25 introduced). The sidecar is not part of any hash. It is defined
-only for a graph whose declared form encodes: what `encode/1` refuses, `sidecar/1` refuses
-with the same reason.
+with `:short`, which OTP 25 introduced). The digits are the shortest that round-trip; the
+placement is Erlang's, which differs from other runtimes' shortest forms: the mantissa
+always carries a fractional digit, an exponent is written as `e` with no `+` and no
+padding, and plain decimal notation is used for magnitudes from 10⁻⁴ up to but not
+including 10¹⁵ — `0.1`, `0.0001`, `999999999999999.0`, `1.0e15`, `1.0e-5`, `1.0e20`. The
+sidecar is not part of any hash. It is defined only for a graph whose declared form
+encodes: what `encode/1` refuses, `sidecar/1` refuses with the same reason.
 
 ## What the exports are
 

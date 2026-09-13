@@ -568,7 +568,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
     # as labels was written with its __struct__. What Graph.new/1 refuses, the encoder
     # refuses too, under the graph's own name for it.
     bad = <<"a", 0xFF, "b">>
-    n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
+    %Node{} = n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"})
     stray = Edge.new!(from: bad, to: n.id, kind: :invoke, provenance: :declared, weight: 1)
     literal = %Graph{schema_version: @version, nodes: [n], edges: [stray]}
 
@@ -580,8 +580,6 @@ defmodule BeamMCP.Connectome.CanonicalTest do
         ] do
       assert {:error, {:uncanonical, {:invalid_graph, {:dangling_edge, ^bad}}}} = f.(literal)
     end
-
-    %Node{} = n
 
     structy = %Graph{
       schema_version: @version,

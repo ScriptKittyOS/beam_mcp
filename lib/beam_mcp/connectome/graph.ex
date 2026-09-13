@@ -56,15 +56,41 @@ defmodule BeamMCP.Connectome.Graph do
     with :ok <- keyword(opts),
          :ok <- reject_unknown(opts),
          :ok <- require_keys(opts),
-         {:ok, version} <- version(opts),
-         {:ok, nodes} <- structs(opts, :nodes, Node),
-         {:ok, edges} <- structs(opts, :edges, Edge),
+         {:ok, version, nodes, edges} <-
+           validate(
+             Keyword.fetch!(opts, :schema_version),
+             Keyword.fetch!(opts, :nodes),
+             Keyword.fetch!(opts, :edges)
+           ) do
+      {:ok, %__MODULE__{schema_version: version, nodes: nodes, edges: edges}}
+    end
+  end
+
+  @doc """
+  Reads a graph struct against everything `new/1` refuses, and corrects nothing.
+
+  A host may build `%BeamMCP.Connectome.Graph{}` by literal and hand it to the encoder; the
+  encoder hashes whatever it is given, so it asks this first. A graph `new/1` built passes.
+  Order is not a fault: a literal graph in any order is the same graph, and the encoder
+  sorts for itself. Refuses by the names `new/1` uses.
+  """
+  @spec check(t()) :: :ok | {:error, term()}
+  def check(%__MODULE__{} = graph) do
+    with {:ok, _version, _nodes, _edges} <-
+           validate(graph.schema_version, graph.nodes, graph.edges),
+         do: :ok
+  end
+
+  defp validate(version, nodes, edges) do
+    with {:ok, version} <- version(version),
+         {:ok, nodes} <- structs(:nodes, nodes, Node),
+         {:ok, edges} <- structs(:edges, edges, Edge),
          :ok <- each(nodes, &Node.check/1),
          :ok <- each(edges, &Edge.check/1),
          {:ok, nodes} <- unique(nodes, & &1.id, :duplicate_node),
          {:ok, edges} <- unique(edges, &Edge.key/1, :duplicate_edge),
          :ok <- endpoints_present(nodes, edges) do
-      {:ok, %__MODULE__{schema_version: version, nodes: nodes, edges: edges}}
+      {:ok, version, nodes, edges}
     end
   end
 
@@ -97,16 +123,10 @@ defmodule BeamMCP.Connectome.Graph do
     end
   end
 
-  defp version(opts) do
-    case Keyword.fetch!(opts, :schema_version) do
-      @schema_version -> {:ok, @schema_version}
-      other -> {:error, {:invalid, :schema_version, other}}
-    end
-  end
+  defp version(@schema_version), do: {:ok, @schema_version}
+  defp version(other), do: {:error, {:invalid, :schema_version, other}}
 
-  defp structs(opts, key, module) do
-    value = Keyword.fetch!(opts, key)
-
+  defp structs(key, value, module) do
     if is_list(value) and Enum.all?(value, &is_struct(&1, module)),
       do: {:ok, value},
       else: {:error, {:invalid, key, value}}
