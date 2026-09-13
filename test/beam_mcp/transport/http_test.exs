@@ -169,7 +169,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
 
     test "tools/call cannot reach dispatch without the header" do
-      # This is SCR-255's hazard asked of HTTP: on stdio the bare call executes.
+      # The stdio transport's hazard asked of HTTP: on stdio the bare call executes.
       me = self()
 
       o =
@@ -1756,8 +1756,8 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
   end
 
-  describe "x-mcp-header values MUST be case-insensitively unique (SCR-275)" do
-    # Found by the round-4 security lane on slice 002, filed as SCR-275 and not fixed then.
+  describe "x-mcp-header values MUST be case-insensitively unique" do
+    # Found by the round-4 security lane on slice 002, filed and not fixed then.
     # `annotations/2` accumulated into a map keyed by `String.downcase(name)`, so two properties
     # annotated `Dup` and `DUP` produced ONE entry: `Map.put` dropped a sibling and `Map.merge`
     # let a nested annotation overwrite an outer one. The lane's exploit, against a live Bandit:
