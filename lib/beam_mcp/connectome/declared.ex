@@ -48,8 +48,7 @@ defmodule BeamMCP.Connectome.Declared do
   builder never changes): every module makes them, and the dependency is on the runtime itself,
   not on a part of the system. The filter is per function, not per module: `lists` appears
   among the external callees when `:lists.reverse/1` is called and not when `:lists.member/2`
-  is; `ets` when `:ets.tab2list/1` is called and not when `:ets.lookup/2` is (measured: twenty-
-  five of `ets`'s exports are Erlang-implemented). Two more, at the edges of the `MACRO-` rule: a
+  is; `ets` when `:ets.tab2list/1` is called and not when `:ets.lookup/2` is (measured: 25 of `ets`'s exports are Erlang-implemented). Two more, at the edges of the `MACRO-` rule: a
   compile-time hook written as a plain function (`__before_compile__/1`, `__after_compile__/2`)
   is attributed to that function and so reads as a runtime call; and a private macro leaves no
   `MACRO-` function and no call, so a helper used only from its body produces neither an edge
