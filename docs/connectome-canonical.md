@@ -59,10 +59,10 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    The refusal names the node and the field for an id or a top-level label; inside a nested
    value it is reported as rule 8 says, by the label and its whole value. It is refused
    because it has no canonical bytes: a writer that stops at the bad byte would emit a
-   prefix, and two distinct strings could meet. NFC is applied with the Unicode tables of the runtime that encodes; Unicode's
-   normalisation stability policy keeps the result the same for every character assigned in
-   both runtimes' versions, so two runtimes differ only on a string carrying a code point one
-   of them does not yet know.
+   prefix, and two distinct strings could meet. NFC is applied with the Unicode tables of
+   the runtime that encodes; Unicode's normalisation stability policy keeps the result the
+   same for every character assigned in both runtimes' versions, so two runtimes differ only
+   on a string carrying a code point one of them does not yet know.
 7. **String escaping** is RFC 8785's: `"` as `\"`, `\` as `\\`, and the control characters
    U+0008, U+0009, U+000A, U+000C, U+000D as `\b`, `\t`, `\n`, `\f`, `\r`; every other
    character below U+0020 as `\u` followed by four lowercase hexadecimal digits; **everything
@@ -101,8 +101,9 @@ and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.
 Weights are written separately as `{"schema_version":1,"weights":[…]}`, one object per edge
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
-integer; a float weight is written in the shortest form that round-trips (`:erlang.float_to_binary/2`
-with `:short`, which OTP 25 introduced). The digits are the shortest that round-trip; the
+integer; a float weight is written in the shortest form that round-trips
+(`:erlang.float_to_binary/2` with `:short`, which OTP 25 introduced; on an older OTP the
+sidecar raises rather than answering). The digits are the shortest that round-trip; the
 placement is Erlang's, which differs from other runtimes' shortest forms: the mantissa
 always carries a fractional digit, an exponent is written as `e` with no `+` and no
 padding, and plain decimal notation is used for magnitudes from 10⁻⁴ up to but not
