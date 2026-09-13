@@ -35,6 +35,17 @@ All notable changes to this project are documented here. The format follows
   declared optional in the `.app` file — in the one spelling Mix honours, `tools: :optional`
   inside `extra_applications`, with a test that reads the `.app` the build writes — so a release
   without it still boots and the builder refuses by name.
+- **Canonical bytes, a hash, and exports.** `BeamMCP.Connectome.Canonical.encode/1` writes the
+  declared form of a graph as canonical JSON — schema version first, nodes by id, edges by key,
+  every other object's keys in RFC 8785 order, strings NFC-normalised, every atom a string under
+  the name of its field, no weight — and `hash/1` is SHA-256 over those bytes. The byte layout is
+  specified in full in `docs/connectome-canonical.md`, with a worked example whose hash reproduces
+  with `sha256sum` alone, so a verifier can be written without importing this package. Weights
+  travel in a separate sidecar that is never hashed. `to_dot/1`, `to_graphml/1` and `to_json/1`
+  render the same canonical order.
+- **The gate reads the branch's own commit messages** for attribution trailers, session links,
+  board identifiers and consumer names — offline, over `origin/main..HEAD`; a pull request's body
+  is read by a person before merge.
 - **No MCP capability is claimed.** Neither protocol revision this package targets defines a
   topology or declared-reachability primitive, and none is invented. Nothing on the wire changes.
 
