@@ -190,6 +190,29 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert Canonical.encode!(ga) =~ "caf\u00e9"
     end
 
+    test "the canonical order is the order of the NORMALISED bytes, which the graph's own order is not" do
+      # Raw, "cafe" + combining acute + "b" sorts before "caf" + precomposed é + " a" (0x65 < 0xC3
+      # at the fourth byte), so Graph.new/1 holds them in that order. After NFC both begin
+      # "café" and the sixth bytes decide: " " (0x20) before "b" (0x62). The encoder must sort
+      # by what it writes, not by what it was handed -- a mutant that skipped the sort kept the
+      # graph's order and survived every test that built its graph through Graph.new/1.
+      a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "cafe\u0301b"})
+      b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "caf\u00e9 a"})
+      assert a.id < b.id
+      ea = Edge.new!(from: a.id, to: b.id, kind: :invoke, provenance: :declared)
+      eb = Edge.new!(from: b.id, to: a.id, kind: :invoke, provenance: :declared)
+      {:ok, g} = Graph.new(nodes: [a, b], edges: [ea, eb], schema_version: @version)
+      assert Enum.map(g.nodes, & &1.id) == [a.id, b.id]
+
+      decoded = Jason.decode!(Canonical.encode!(g))
+      assert Enum.map(decoded["nodes"], & &1["id"]) == ["s/tool/caf\u00e9 a", "s/tool/caf\u00e9b"]
+
+      assert Enum.map(decoded["edges"], & &1["from"]) == [
+               "s/tool/caf\u00e9 a",
+               "s/tool/caf\u00e9b"
+             ]
+    end
+
     test "two ids that coincide after NFC are refused, never merged" do
       a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "cafe\u0301"})
       b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "caf\u00e9"})
@@ -224,11 +247,11 @@ defmodule BeamMCP.Connectome.CanonicalTest do
           kind: :tool,
           level: :server,
           identity: {:tool, "s", "x"},
-          labels: %{t: "a\"b\\c\n\t\u0001\u00e9/"}
+          labels: %{t: "a\"b\\c\n\t\u0001\u001f\u00e9/"}
         )
 
       {:ok, bytes} = Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
-      assert bytes =~ ~S("t":"a\"b\\c\n\t\u0001é/")
+      assert bytes =~ ~S("t":"a\"b\\c\n\t\u0001\u001fé/")
     end
 
     test "label keys sort by UTF-16 code unit, the order the JSON canonicalization scheme uses" do
