@@ -11,9 +11,9 @@ defmodule BeamMCP.PublicationContentTest do
 
   1. No file contains a board identifier. The pattern names the board's key. That key is
      already in the repository's history and in the tracked slice records, so this file states
-     no new fact; but a pattern that names the board is exactly what the gate's `publication`
-     step keeps out of a public script, which is why this check is a test in the suite and not
-     a step in the gate.
+     no new fact. The gate's `messages` step reads the same pattern over the branch's commit
+     messages; this test reads it over the tree. Two populations, one pattern, each spelled
+     where its population is read.
   2. No file names a consumer. The names are the ones on the README's consumer line -- the one
      place the project description allows them -- and this file asserts that line still carries
      each name, so the list here cannot outlive the sentence it is derived from.

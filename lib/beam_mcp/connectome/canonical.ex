@@ -40,13 +40,15 @@ defmodule BeamMCP.Connectome.Canonical do
           | {:label_key, String.t(), term()}
           | {:duplicate_label_key, String.t(), String.t()}
           | {:invalid_utf8, String.t(), term()}
+          | {:invalid_graph, term()}
 
   @doc """
   The canonical bytes of the declared form of `graph`.
   """
   @spec encode(Graph.t()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
   def encode(%Graph{} = graph) do
-    with {:ok, nodes} <- canonical_nodes(graph.nodes),
+    with :ok <- checked(graph),
+         {:ok, nodes} <- canonical_nodes(graph.nodes),
          {:ok, edges} <- canonical_edges(graph.edges) do
       {:ok,
        IO.iodata_to_binary([
@@ -94,7 +96,8 @@ defmodule BeamMCP.Connectome.Canonical do
   def sidecar(%Graph{} = graph) do
     # Each edge is keyed on its own, never zipped against the sorted list: the canonical
     # order is the order of the normalised bytes, which the graph's order need not share.
-    with {:ok, _nodes} <- canonical_nodes(graph.nodes),
+    with :ok <- checked(graph),
+         {:ok, _nodes} <- canonical_nodes(graph.nodes),
          {:ok, keyed} <-
            map_ok(graph.edges, &with({:ok, {key, _}} <- canonical_edge(&1), do: {:ok, {&1, key}})) do
       weights =
@@ -146,7 +149,8 @@ defmodule BeamMCP.Connectome.Canonical do
   """
   @spec to_dot(Graph.t()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
   def to_dot(%Graph{} = graph) do
-    with {:ok, nodes} <- canonical_nodes(graph.nodes),
+    with :ok <- checked(graph),
+         {:ok, nodes} <- canonical_nodes(graph.nodes),
          {:ok, edges} <- canonical_edges(graph.edges) do
       node_lines =
         for {id, kind, level, labels} <- nodes do
@@ -195,7 +199,8 @@ defmodule BeamMCP.Connectome.Canonical do
   """
   @spec to_graphml(Graph.t()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
   def to_graphml(%Graph{} = graph) do
-    with {:ok, nodes} <- canonical_nodes(graph.nodes),
+    with :ok <- checked(graph),
+         {:ok, nodes} <- canonical_nodes(graph.nodes),
          {:ok, edges} <- canonical_edges(graph.edges) do
       label_keys =
         nodes
@@ -278,6 +283,16 @@ defmodule BeamMCP.Connectome.Canonical do
   @doc "`to_graphml/1`, raising."
   @spec to_graphml!(Graph.t()) :: binary()
   def to_graphml!(graph), do: bang(to_graphml(graph), "to_graphml")
+
+  # A host may build the graph struct by literal and bypass Graph.new/1; the encoder hashes
+  # whatever it is given, so it reads the struct against everything new/1 refuses first,
+  # under the graph's own name for the fault.
+  defp checked(graph) do
+    case Graph.check(graph) do
+      :ok -> :ok
+      {:error, reason} -> {:error, {:uncanonical, {:invalid_graph, reason}}}
+    end
+  end
 
   # ---------------------------------------------------------------------------------------
   # the canonical intermediate form: nodes as {id, kind, level, [{key, value}]} sorted by id;

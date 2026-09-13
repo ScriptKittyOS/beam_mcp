@@ -121,8 +121,9 @@ it writes. The components of the identity are written in order, the server first
 escaped and then joined by `/`. Escaping is `%` to `%25` first, then `/` to `%2F`, applied to
 every component, so a `/` inside a server name or a resource URI never reads as a separator.
 An atom naming a kind or a source is written as its name; a module is written as Elixir
-prints it (`inspect/1`: `Foo.Bar`, or `:erl_mod` for an Erlang module); a function name as
-its atom's name; an arity as a decimal integer. Nothing is normalised here; NFC is applied by
+prints it (`inspect/1`: `Foo.Bar`, or `:erl_mod` for an Erlang module, and a module atom
+that is not a plain identifier is quoted the way Elixir quotes it, `:"has space"`); a
+function name as its atom's name; an arity as a decimal integer. Nothing is normalised here; NFC is applied by
 the canonical form, not by the id.
 
 | identity | id |
@@ -134,6 +135,7 @@ the canonical form, not by the id.
 | `{:process, "srv", :worker}` | `srv/process/worker` |
 | `{:module, "srv", Foo.Bar}` | `srv/module/Foo.Bar` |
 | `{:module, "srv", :erl_mod}` | `srv/module/:erl_mod` |
+| `{:module, "srv", :"has space"}` | `srv/module/:"has space"` |
 | `{:module, "srv", {Foo.Bar, :run, 2}}` | `srv/module/Foo.Bar/run/2` |
 | `{:boundary, "srv", :application, :beam_mcp}` | `srv/boundary/application/beam_mcp` |
 | `{:boundary, "srv", :boundary_module, Foo}` | `srv/boundary/boundary_module/Foo` |
