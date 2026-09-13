@@ -259,5 +259,35 @@ else
   fail=1
 fi
 
+# Commit messages: the branch's own commits carry no attribution trailer, no session link, no
+# board identifier and no consumer name.
+#
+# THE POPULATION IS THE BRANCH'S OWN COMMITS -- those reachable from HEAD and not from
+# origin/main -- and the step says so on its line. On main itself, or where origin/main does
+# not resolve, the population is empty and the line says that too rather than printing `pass`
+# over nothing it looked at. The patterns are the ones a public test in this tree already
+# carries (test/beam_mcp/publication_content_test.exs), plus the two trailer names and the
+# session-URL host; nothing here names anything the tree does not name already.
+#
+# The limit, stated: a pull request's body is not a commit message and is not read here. A
+# body is policed by a person reading it before merge.
+msg_fail=0
+if base=$(git merge-base origin/main HEAD 2>/dev/null); then
+  n_msgs=$(git rev-list --count "$base"..HEAD)
+  msg_hits=$(for h in $(git rev-list "$base"..HEAD); do
+    git log -1 --format=%B "$h" | sed "s/^/$(git rev-parse --short "$h")	/"
+  done | grep -i -E 'Co-Authored-By:|Claude-Session:|claude\.ai|SCR-[0-9]+|Ultraviolet|Trinity' || true)
+  if [ -z "$msg_hits" ]; then
+    note "messages" "pass ($n_msgs commit(s) since origin/main; none names a trailer, a session, a board id or a consumer)"
+  else
+    note "messages" "FAIL ($n_msgs commit(s) since origin/main)"
+    printf '      lines naming a trailer, a session, a board id or a consumer (hash<TAB>text):\n'
+    printf '%s\n' "$msg_hits" | sed 's/^/        /'
+    msg_fail=1; fail=1
+  fi
+else
+  note "messages" "pass (origin/main does not resolve here; 0 commits examined -- this line is not evidence)"
+fi
+
 if [ "$fail" -eq 0 ]; then echo "Gate OK."; else echo "GATE FAILED."; fi
 exit "$fail"
