@@ -33,6 +33,35 @@ defmodule BeamMCP.Connectome.NodeTest do
       end
     end
 
+    test "a module identity carries its own level: module-function-arity is :mfa, a module is not" do
+      assert {:ok, %Node{level: :mfa}} =
+               Node.new(kind: :module, level: :mfa, identity: {:module, "srv", {Enum, :map, 2}})
+
+      assert {:ok, %Node{level: :module}} =
+               Node.new(kind: :module, level: :module, identity: {:module, "srv", Enum})
+
+      assert {:error, {:invalid, :identity, {:module, "srv", {Enum, :map, 2}}}} =
+               Node.new(
+                 kind: :module,
+                 level: :module,
+                 identity: {:module, "srv", {Enum, :map, 2}}
+               )
+
+      assert {:error, {:invalid, :identity, {:module, "srv", Enum}}} =
+               Node.new(kind: :module, level: :mfa, identity: {:module, "srv", Enum})
+    end
+
+    test "an identity with the right tag but a shape id/1 does not name is refused, not raised" do
+      assert {:error, {:invalid, :identity, {:tool, "srv"}}} =
+               Node.new(kind: :tool, level: :server, identity: {:tool, "srv"})
+
+      assert {:error, {:invalid, :identity, {:tool, :srv, :echo}}} =
+               Node.new(kind: :tool, level: :server, identity: {:tool, :srv, :echo})
+
+      assert {:error, {:invalid, :identity, :not_a_tuple}} =
+               Node.new(kind: :tool, level: :server, identity: :not_a_tuple)
+    end
+
     test "labels default to an empty map" do
       assert {:ok, %Node{labels: %{}}} =
                Node.new(kind: :server, level: :server, identity: {:server, "srv"})
@@ -112,8 +141,9 @@ defmodule BeamMCP.Connectome.NodeTest do
       assert_raise ArgumentError, ~r/identity/, fn -> Node.id({:tool, "srv"}) end
     end
 
-    test "the server component must be a string" do
+    test "the server component must be a string, in the two-element shape as well" do
       assert_raise ArgumentError, ~r/server/, fn -> Node.id({:tool, :srv, :echo}) end
+      assert_raise ArgumentError, ~r/server/, fn -> Node.id({:server, :srv}) end
     end
   end
 end

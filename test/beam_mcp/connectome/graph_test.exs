@@ -115,10 +115,13 @@ defmodule BeamMCP.Connectome.GraphTest do
                Graph.new(nodes: [], edges: [], schema_version: @version)
     end
 
-    test "new!/1 raises the same named reason" do
+    test "new!/1 raises the same named reason, and returns the graph otherwise" do
       assert_raise ArgumentError, ~r/\{:missing, :schema_version\}/, fn ->
         Graph.new!(nodes: [], edges: [])
       end
+
+      assert %Graph{nodes: [], edges: []} =
+               Graph.new!(nodes: [], edges: [], schema_version: @version)
     end
   end
 
