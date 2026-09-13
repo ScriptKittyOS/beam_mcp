@@ -4,14 +4,14 @@
 # Run by tools/mutate.sh with TARGET=lib/beam_mcp/connectome/declared.ex, which passes the
 # file to mutate as argv[1].
 #
-# Mdc8 -- LET A TOOL POINT AT A MODULE OUTSIDE THE SCOPE. The edge would dangle, and Graph.new/1 would refuse the whole build for a host mistake the bound should have enumerated.
+# Mdc8 -- LET A TOOL POINT AT A MODULE OUTSIDE THE SCOPE. The edge would dangle, and Graph.new/1 would refuse the whole build for a host mistake the bound should have enumerated. `code` stays referenced so the kill is not the compiler`s.
 import sys
 
 p = sys.argv[1]
 s = open(p).read()
 
 old = "             to when not is_nil(to) <- code.module_ids[module] do"
-new = "             to <- Node.id({:module, server, module}) do"
+new = "             to <- (fn _ -> Node.id({:module, server, module}) end).(code.module_ids) do"
 
 if s.count(old) != 1:
     sys.exit("Mdc8: anchor found %d times" % s.count(old))
