@@ -31,9 +31,11 @@ defmodule BeamMCP.MixProject do
 
   def application do
     # OTP's `tools` application carries `:xref`, which the declared-connectome builder reads
-    # call edges with. Optional: a release that leaves it out still boots, and the builder
-    # refuses by name instead of crashing.
-    [extra_applications: [:logger, :tools], optional_applications: [:tools]]
+    # call edges with. Optional, in the one spelling Mix honours -- `tools: :optional` inside
+    # extra_applications. A separate `optional_applications:` key is accepted by Mix and
+    # ignored, and the first version of this line shipped tools as REQUIRED in the .app;
+    # a test reads the .app the build writes.
+    [extra_applications: [:logger, tools: :optional]]
   end
 
   defp deps do

@@ -16,10 +16,15 @@ defmodule BeamMCP.Connectome.Declared do
     no call to it survives into the caller's beam; the calls a macro's own body makes at
     expansion time are attributed by xref to its `MACRO-` function and are filed in the bound
     as expansion calls, never as edges. The scope is `modules:`, or every module an `.app` file
-    names for each of `apps:` -- never a directory listing, so a stale beam beside the real
-    ones is not a module;
+    names for each of `apps:` -- never a directory listing. Under `apps:` the `.app` is the
+    authority and a stale beam beside the real ones is not a module; under `modules:` the host
+    has named the module, and its beam is found on the code path by that name, whatever put it
+    there. Naming an application no `.app` describes is refused by name; the application is
+    loaded first, a side effect on this node's application controller;
   * **a grouping of modules**, at the `:boundary` level: the host's `boundaries:` map, or, by
-    default, each module's OTP application.
+    default, each module's OTP application as the application controller knows it at build
+    time -- a module whose application is not loaded is enumerated as ungrouped, with its
+    calls, and never guessed into a group.
 
   ## The completeness bound
 
@@ -27,9 +32,9 @@ defmodule BeamMCP.Connectome.Declared do
   every field an enumerated, sorted list and never a count: dynamic-dispatch sites (the calls
   `:xref` cannot resolve, by caller), sites the host vouched for in `dynamic_allowlist:`, callees
   outside the scope, modules with no beam on the code path, modules whose beam carries no debug
-  information, catalog entries no reader can name, tools with no implementing module, and
-  modules that could not be grouped at the `:boundary` level. Nothing the compiled code shows is
-  dropped silently; what it cannot show is stated below.
+  information, catalog entries no reader can name, tools with no implementing module, modules
+  that could not be grouped at the `:boundary` level and the calls into or out of them. Nothing
+  the compiled code shows is dropped silently; what it cannot show is stated below.
 
   ## What the compiled code cannot show, stated
 
@@ -62,6 +67,7 @@ defmodule BeamMCP.Connectome.Declared do
               unreadable_catalog_entries: [],
               tools_without_module: [],
               ungrouped_modules: [],
+              ungrouped_calls: [],
               sources_used: []
 
     @type mfa_t :: {module(), atom(), arity()}
@@ -75,6 +81,7 @@ defmodule BeamMCP.Connectome.Declared do
             unreadable_catalog_entries: [{:resources | :prompts, term()}],
             tools_without_module: [atom()],
             ungrouped_modules: [module()],
+            ungrouped_calls: [{mfa_t(), mfa_t()}],
             sources_used: [:catalog | :xref | :boundary_map | :application]
           }
   end
@@ -139,6 +146,7 @@ defmodule BeamMCP.Connectome.Declared do
         unreadable_catalog_entries: catalog.unreadable,
         tools_without_module: tools_without_module,
         ungrouped_modules: code.ungrouped,
+        ungrouped_calls: code.ungrouped_calls,
         sources_used: Enum.sort(catalog.sources ++ code.sources)
       }
 
@@ -191,10 +199,10 @@ defmodule BeamMCP.Connectome.Declared do
   defp scope(opts) do
     case {Keyword.get(opts, :modules), Keyword.get(opts, :apps)} do
       {mods, nil} when is_list(mods) ->
-        {:ok, Enum.sort(Enum.uniq(mods))}
+        atoms(mods, :modules, fn m -> {:ok, Enum.sort(Enum.uniq(m))} end)
 
       {nil, apps} when is_list(apps) ->
-        {:ok, apps |> Enum.flat_map(&app_modules/1) |> Enum.uniq() |> Enum.sort()}
+        atoms(apps, :apps, &app_modules/1)
 
       {nil, nil} ->
         {:error, {:missing, :modules}}
@@ -210,9 +218,27 @@ defmodule BeamMCP.Connectome.Declared do
     end
   end
 
-  defp app_modules(app) do
-    _ = Application.load(app)
-    Application.spec(app, :modules) || []
+  defp atoms(list, key, then) do
+    if Enum.all?(list, &is_atom/1), do: then.(list), else: {:error, {:invalid, key, list}}
+  end
+
+  # An application is loaded so its .app can be read -- a side effect on this node's
+  # application controller, stated. One no .app file describes is refused by name: the .app is
+  # the population rule's authority, and an app without one has no population to derive.
+  defp app_modules(apps) do
+    Enum.reduce_while(apps, {:ok, []}, fn app, {:ok, acc} ->
+      case Application.load(app) do
+        r when r == :ok or r == {:error, {:already_loaded, app}} ->
+          {:cont, {:ok, acc ++ (Application.spec(app, :modules) || [])}}
+
+        {:error, _} ->
+          {:halt, {:error, {:unknown_app, app}}}
+      end
+    end)
+    |> case do
+      {:ok, mods} -> {:ok, mods |> Enum.uniq() |> Enum.sort()}
+      error -> error
+    end
   end
 
   # ---------------------------------------------------------------------------------------
@@ -224,42 +250,52 @@ defmodule BeamMCP.Connectome.Declared do
         {:ok, %{nodes: [], edges: [], unreadable: [], tools: [], sources: []}}
 
       module when is_atom(module) ->
-        caps = module.capabilities()
-        tools = Map.get(caps, :tools, [])
-        server_id = Node.id({:server, server})
-
-        tool_nodes =
-          for %BeamMCP.ToolSpec{} = t <- tools do
-            Node.new!(
-              kind: :tool,
-              level: :server,
-              identity: {:tool, server, t.name},
-              labels: %{command_class: t.command_class, mode: t.mode}
-            )
-          end
-
-        tool_edges =
-          for n <- tool_nodes,
-              do: Edge.new!(from: server_id, to: n.id, kind: :invoke, provenance: :declared)
-
-        {resource_nodes, bad_resources} =
-          named(Map.get(caps, :resources, []), :resources, [:uri, "uri"], server, :resource)
-
-        {prompt_nodes, bad_prompts} =
-          named(Map.get(caps, :prompts, []), :prompts, [:name, "name"], server, :prompt)
-
-        {:ok,
-         %{
-           nodes: tool_nodes ++ resource_nodes ++ prompt_nodes,
-           edges: tool_edges,
-           unreadable: Enum.sort(bad_resources ++ bad_prompts),
-           tools: Enum.map(tools, & &1.name),
-           sources: [:catalog]
-         }}
+        # The package's one contract check runs first, so a catalog it refuses is refused
+        # here by the same reason and is never read: a `tools` entry that is not a ToolSpec
+        # was once skipped silently by the comprehension in read_catalog/2.
+        case BeamMCP.Catalog.validate(module) do
+          :ok -> read_catalog(module, server)
+          {:error, reason} -> {:error, {:invalid, :catalog, reason}}
+        end
 
       other ->
         {:error, {:invalid, :catalog, other}}
     end
+  end
+
+  defp read_catalog(module, server) do
+    caps = module.capabilities()
+    tools = Map.get(caps, :tools, [])
+    server_id = Node.id({:server, server})
+
+    tool_nodes =
+      for %BeamMCP.ToolSpec{} = t <- tools do
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, server, t.name},
+          labels: %{command_class: t.command_class, mode: t.mode}
+        )
+      end
+
+    tool_edges =
+      for n <- tool_nodes,
+          do: Edge.new!(from: server_id, to: n.id, kind: :invoke, provenance: :declared)
+
+    {resource_nodes, bad_resources} =
+      named(Map.get(caps, :resources, []), :resources, [:uri, "uri"], server, :resource)
+
+    {prompt_nodes, bad_prompts} =
+      named(Map.get(caps, :prompts, []), :prompts, [:name, "name"], server, :prompt)
+
+    {:ok,
+     %{
+       nodes: tool_nodes ++ resource_nodes ++ prompt_nodes,
+       edges: tool_edges,
+       unreadable: Enum.sort(bad_resources ++ bad_prompts),
+       tools: Enum.map(tools, & &1.name),
+       sources: [:catalog]
+     }}
   end
 
   # A resource or prompt entry is readable when it carries a name under one of the keys a
@@ -330,7 +366,7 @@ defmodule BeamMCP.Connectome.Declared do
           caller in allowlist
         end)
 
-      {nodes, edges, module_ids, ungrouped, sources} =
+      {nodes, edges, module_ids, ungrouped, ungrouped_calls, sources} =
         at_level(level, added, resolved, server, boundaries)
 
       {:ok,
@@ -345,6 +381,7 @@ defmodule BeamMCP.Connectome.Declared do
          no_beam: Enum.sort(no_beam),
          no_debug_info: Enum.sort(no_debug_info),
          ungrouped: Enum.sort(ungrouped),
+         ungrouped_calls: ungrouped_calls,
          sources: [:xref | sources]
        }}
     after
@@ -426,7 +463,7 @@ defmodule BeamMCP.Connectome.Declared do
         Edge.new!(from: a, to: b, kind: :invoke, provenance: :declared)
       end)
 
-    {nodes, edges, ids, [], []}
+    {nodes, edges, ids, [], [], []}
   end
 
   defp at_level(:mfa, modules, calls, server, _boundaries) do
@@ -454,23 +491,20 @@ defmodule BeamMCP.Connectome.Declared do
     # At this level a tool's implementing module is not a node; module ids are empty so a
     # tool_modules entry is enumerated as a tool without a module rather than dangling.
     _ = modules
-    {nodes, edges, %{}, [], []}
+    {nodes, edges, %{}, [], [], []}
   end
 
   defp at_level(:boundary, modules, calls, server, boundaries) do
-    {groups, ungrouped, source} =
-      Enum.reduce(modules, {%{}, [], nil}, fn m, {groups, ungrouped, _} ->
+    {groups, ungrouped} =
+      Enum.reduce(modules, {%{}, []}, fn m, {groups, ungrouped} ->
         case group_of(m, boundaries) do
-          nil -> {groups, [m | ungrouped], nil}
-          group -> {Map.put(groups, m, group), ungrouped, nil}
+          nil -> {groups, [m | ungrouped]}
+          group -> {Map.put(groups, m, group), ungrouped}
         end
       end)
-      |> then(fn {g, u, _} ->
-        {g, u, if(is_map(boundaries), do: :boundary_map, else: :application)}
-      end)
 
-    group_id = fn {src, name} -> Node.id({:boundary, server, src, name}) end
-    ids = Map.new(groups, fn {m, group} -> {m, group_id.(group)} end)
+    source = if is_map(boundaries), do: :boundary_map, else: :application
+    ids = Map.new(groups, fn {m, {src, name}} -> {m, Node.id({:boundary, server, src, name})} end)
 
     nodes =
       groups
@@ -480,16 +514,23 @@ defmodule BeamMCP.Connectome.Declared do
         Node.new!(kind: :module, level: :boundary, identity: {:boundary, server, src, name})
       end)
 
+    # A call with an ungrouped end cannot be an edge at this level -- one end has no node --
+    # and the compiled code showed it, so it is enumerated, not dropped.
+    {grouped_calls, ungrouped_calls} =
+      Enum.split_with(calls, fn {{fm, _, _}, {tm, _, _}} ->
+        Map.has_key?(ids, fm) and Map.has_key?(ids, tm)
+      end)
+
     edges =
-      calls
+      grouped_calls
       |> Enum.map(fn {{fm, _, _}, {tm, _, _}} -> {ids[fm], ids[tm]} end)
-      |> Enum.reject(fn {a, b} -> is_nil(a) or is_nil(b) or a == b end)
+      |> Enum.reject(fn {a, b} -> a == b end)
       |> Enum.uniq()
       |> Enum.map(fn {a, b} ->
         Edge.new!(from: a, to: b, kind: :invoke, provenance: :declared)
       end)
 
-    {nodes, edges, ids, ungrouped, [source]}
+    {nodes, edges, ids, ungrouped, Enum.sort(ungrouped_calls), [source]}
   end
 
   defp group_of(m, boundaries) when is_map(boundaries) do
@@ -500,8 +541,11 @@ defmodule BeamMCP.Connectome.Declared do
     end
   end
 
-  # The grouping the BEAM itself asserts: the OTP application a module belongs to. A module
-  # with none is enumerated, never guessed into a group.
+  # The grouping the BEAM itself asserts: the OTP application a module belongs to, as the
+  # application controller knows it at build time -- which is to say among LOADED applications.
+  # Under `apps:` every named application is loaded first; under `modules:` a module whose
+  # application is not loaded is indistinguishable from one that belongs to none, and both are
+  # enumerated as ungrouped rather than guessed from a beam's path.
   defp group_of(m, :application) do
     case :application.get_application(m) do
       {:ok, app} -> {:application, app}
