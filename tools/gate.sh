@@ -159,7 +159,9 @@ done
 #
 # Working records -- plans, findings, review notes, decision records -- live outside the tree
 # from here on, under an ignored directory, and this step is what makes "ignored" a verdict
-# rather than a hope. THE POPULATION IS `git ls-files`, THE SAME SOURCE THE REUSE STEP READS, so
+# rather than a hope. Since 2026-09-13 the records live in a separate repository outside this
+# worktree altogether, so the ignore rule and this census are a backstop for a file written to
+# the old path out of habit, not the primary control. THE POPULATION IS `git ls-files`, THE SAME SOURCE THE REUSE STEP READS, so
 # a file that is on disk but not added is not in it -- which is correct, because that file is
 # not in any commit. What IS checked, in four parts, each with its own line of output:
 #
