@@ -819,6 +819,21 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert xml =~ ~s(<key id="l1" for="node" attr.name="has space" attr.type="string"/>)
       assert xml =~ ~s(<data key="l0">2</data>)
       assert xml =~ ~s(<data key="l1">1</data>)
+
+      # Numbered in the order of rule 4, UTF-16 code unit: U+1F600 before U+FF01 -- a plain
+      # sort would number them the other way and every reader would file the data under the
+      # wrong name.
+      u =
+        Node.new!(
+          kind: :tool,
+          level: :server,
+          identity: {:tool, "s", "x"},
+          labels: %{"\uFF01" => 1, "\u{1F600}" => 2}
+        )
+
+      xml = Canonical.to_graphml!(Graph.new!(nodes: [u], edges: [], schema_version: @version))
+      assert xml =~ ~s(<key id="l0" for="node" attr.name="\u{1F600}" attr.type="string"/>)
+      assert xml =~ ~s(<key id="l1" for="node" attr.name="\uFF01" attr.type="string"/>)
     end
 
     test "DOT and GraphML are byte-exact against their goldens, and follow the canonical order" do
