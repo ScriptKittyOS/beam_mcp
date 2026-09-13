@@ -369,7 +369,9 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       # would have been written as "a", and two distinct ids could meet in the bytes.
       bad = <<"a", 0xFF, "b">>
       refute String.valid?(bad)
-      n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: %{t: bad})
+
+      %Node{} =
+        n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: %{t: bad})
 
       assert {:error, {:uncanonical, {:invalid_utf8, id, :t}}} =
                Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
