@@ -784,29 +784,38 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert {:error, {:uncanonical, {:not_xml, "s/tool/x\u0002", 0x02}}} =
                Canonical.to_graphml(Graph.new!(nodes: [i], edges: [], schema_version: @version))
 
-      # Every range XML 1.0 admits, written literally: tab, LF, CR, a private-use character,
-      # U+FFFD, and one above U+FFFF.
+      # Every range XML 1.0 admits. Tab, LF and CR are admitted but not written literally: a
+      # parser folds them to a space inside an attribute value and CR to LF in content (XML
+      # 1.0 §3.3.3, §2.11), so four ids differing only by whitespace kind read back as one
+      # node. A character reference survives both. A private-use character, U+FFFD and one
+      # above U+FFFF are written literally.
       ok =
         Node.new!(
           kind: :tool,
           level: :server,
-          identity: {:tool, "s", "x"},
-          labels: %{t: "a\tb\nc\rd\uE000e\uFFFDf\u{1F600}"}
+          identity: {:tool, "s", "x\ty"},
+          labels: %{"k\nk" => "a\tb\nc\rd\uE000e\uFFFDf\u{1F600}"}
         )
 
       xml = Canonical.to_graphml!(Graph.new!(nodes: [ok], edges: [], schema_version: @version))
-      assert xml =~ "<data key=\"l0\">a\tb\nc\rd\uE000e\uFFFDf\u{1F600}</data>"
+      assert xml =~ ~s(<node id="s/tool/x&#9;y">)
+      assert xml =~ ~s(<key id="l0" for="node" attr.name="k&#10;k" attr.type="string"/>)
+      assert xml =~ "<data key=\"l0\">a&#9;b&#10;c&#13;d\uE000e\uFFFDf\u{1F600}</data>"
+      refute xml =~ "\t"
 
       n =
         Node.new!(
           kind: :tool,
           level: :server,
           identity: {:tool, "s", "x"},
-          labels: %{"has space" => 1, "a<b" => 2}
+          labels: %{"has space" => 1, "a<b&c>d\"e" => 2}
         )
 
       xml = Canonical.to_graphml!(Graph.new!(nodes: [n], edges: [], schema_version: @version))
-      assert xml =~ ~s(<key id="l0" for="node" attr.name="a&lt;b" attr.type="string"/>)
+
+      assert xml =~
+               ~s(<key id="l0" for="node" attr.name="a&lt;b&amp;c&gt;d&quot;e" attr.type="string"/>)
+
       assert xml =~ ~s(<key id="l1" for="node" attr.name="has space" attr.type="string"/>)
       assert xml =~ ~s(<data key="l0">2</data>)
       assert xml =~ ~s(<data key="l1">1</data>)
