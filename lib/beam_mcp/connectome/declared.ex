@@ -373,11 +373,11 @@ defmodule BeamMCP.Connectome.Declared do
         MapSet.member?(in_scope, fm) and MapSet.member?(in_scope, tm) ->
           {[{from, to} | kept], ext}
 
-        MapSet.member?(in_scope, fm) ->
-          {kept, MapSet.put(ext, tm)}
-
         true ->
-          {kept, ext}
+          # Every call xref reports comes from a module that was added, so the caller is in
+          # scope by construction; only the callee can be outside it.
+          _ = fm
+          {kept, MapSet.put(ext, tm)}
       end
     end)
     |> then(fn {kept, ext} -> {kept, Enum.sort(MapSet.to_list(ext))} end)
