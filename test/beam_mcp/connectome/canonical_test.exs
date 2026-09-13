@@ -424,11 +424,11 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert {:error, {:uncanonical, {:invalid_utf8, ^bad, :id}}} =
                Canonical.encode(Graph.new!(nodes: [hand], edges: [], schema_version: @version))
 
-      # The sidecar keys edges without reading nodes first, so an endpoint is where it meets
-      # the bad bytes; it names the field it met them in.
+      # The sidecar reads the nodes before it keys an edge, so an endpoint carrying the bad
+      # bytes is refused as the node's id there too, never met as an endpoint.
       loop = Edge.new!(from: bad, to: bad, kind: :invoke, provenance: :declared, weight: 1)
       g = Graph.new!(nodes: [hand], edges: [loop], schema_version: @version)
-      assert {:error, {:uncanonical, {:invalid_utf8, ^bad, :from}}} = Canonical.sidecar(g)
+      assert {:error, {:uncanonical, {:invalid_utf8, ^bad, :id}}} = Canonical.sidecar(g)
       assert {:error, {:uncanonical, {:invalid_utf8, ^bad, :id}}} = Canonical.encode(g)
     end
 

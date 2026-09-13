@@ -94,7 +94,8 @@ defmodule BeamMCP.Connectome.Canonical do
   def sidecar(%Graph{} = graph) do
     # Each edge is keyed on its own, never zipped against the sorted list: the canonical
     # order is the order of the normalised bytes, which the graph's order need not share.
-    with {:ok, keyed} <-
+    with {:ok, _nodes} <- canonical_nodes(graph.nodes),
+         {:ok, keyed} <-
            map_ok(graph.edges, &with({:ok, {key, _}} <- canonical_edge(&1), do: {:ok, {&1, key}})) do
       weights =
         keyed
@@ -352,8 +353,14 @@ defmodule BeamMCP.Connectome.Canonical do
   defp value(v, _id, _k) when is_atom(v), do: {:ok, nfc(Atom.to_string(v))}
   defp value(v, _id, _k) when is_integer(v), do: {:ok, v}
 
+  # A refusal inside a container names the label the container hangs from, and the whole
+  # container, whatever depth it was met at; the inner key or element alone told a reader
+  # nothing about where to look.
   defp value(v, id, k) when is_list(v) do
-    with {:ok, items} <- map_ok(v, &value(&1, id, k)), do: {:ok, {:array, items}}
+    case map_ok(v, &value(&1, id, k)) do
+      {:ok, items} -> {:ok, {:array, items}}
+      {:error, _} -> {:error, {:uncanonical, {:label_value, id, k, v}}}
+    end
   end
 
   defp value(v, id, k) when is_map(v) and not is_struct(v) do
@@ -362,11 +369,8 @@ defmodule BeamMCP.Connectome.Canonical do
       {:ok, {:object, sorted}}
     end
     |> case do
-      {:error, {:uncanonical, {tag, _, _}}} when tag in [:label_key, :duplicate_label_key] ->
-        {:error, {:uncanonical, {:label_value, id, k, v}}}
-
-      other ->
-        other
+      {:ok, object} -> {:ok, object}
+      {:error, _} -> {:error, {:uncanonical, {:label_value, id, k, v}}}
     end
   end
 
@@ -378,13 +382,13 @@ defmodule BeamMCP.Connectome.Canonical do
     end
   end
 
+  # An endpoint is a node id: Graph.new/1 refuses an edge whose endpoint names no node, and
+  # both encode/1 and sidecar/1 read the nodes first, so a bad byte in an endpoint has
+  # already been refused under the node's :id by the time an edge is keyed.
   defp canonical_edge(%Edge{} = e) do
-    with {:ok, from} <- utf8(e.from, e.from, :from),
-         {:ok, to} <- utf8(e.to, e.to, :to) do
-      {:ok,
-       {{nfc(from), nfc(to), Atom.to_string(e.kind), Atom.to_string(e.provenance)},
-        Atom.to_string(e.sign)}}
-    end
+    {:ok,
+     {{nfc(e.from), nfc(e.to), Atom.to_string(e.kind), Atom.to_string(e.provenance)},
+      Atom.to_string(e.sign)}}
   end
 
   # A binary that is not valid UTF-8 has no canonical bytes. A bitstring comprehension over

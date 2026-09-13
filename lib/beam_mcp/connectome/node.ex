@@ -99,7 +99,7 @@ defmodule BeamMCP.Connectome.Node do
       {:id, &is_binary/1},
       {:kind, &(&1 in @kinds)},
       {:level, &(&1 in @levels)},
-      {:labels, &is_map/1}
+      {:labels, &(is_map(&1) and not is_struct(&1))}
     ]
 
     Enum.find_value(checks, :ok, fn {field, ok?} ->
@@ -200,7 +200,7 @@ defmodule BeamMCP.Connectome.Node do
 
   defp labels(opts) do
     case Keyword.get(opts, :labels, %{}) do
-      labels when is_map(labels) -> {:ok, labels}
+      labels when is_map(labels) and not is_struct(labels) -> {:ok, labels}
       other -> {:error, {:invalid, :labels, other}}
     end
   end
