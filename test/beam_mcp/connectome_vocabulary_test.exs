@@ -50,7 +50,8 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
     {"Edge kinds", [:invoke, :read, :message, :supervise]},
     {"Sign", [:allow, :deny, :hold, :unknown]},
     {"Level", [:mfa, :module, :boundary, :server]},
-    {"Provenance", [:declared, :observed]}
+    {"Provenance", [:declared, :observed]},
+    {"Identity", [:application, :boundary_module]}
   ]
   @names ["connectome", "declared connectome", "observed connectome", "drift finding"]
 
