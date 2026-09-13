@@ -214,7 +214,9 @@ defmodule BeamMCP.Connectome.Node do
   defp identity(opts, kind, level) do
     identity = Keyword.fetch!(opts, :identity)
 
-    with true <- is_tuple(identity) and tuple_size(identity) >= 2 and tag_matches?(identity, kind),
+    shaped? = is_tuple(identity) and tuple_size(identity) >= 2
+
+    with true <- shaped? and tag_matches?(identity, kind),
          true <- level_consistent?(identity, level) do
       {:ok, id(identity)}
     else
