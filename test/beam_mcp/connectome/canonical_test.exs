@@ -431,6 +431,25 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert bytes =~ "\"t\":\"\uFEFF\uFFFE\uFFFF\""
     end
 
+    test "a singleton decomposition folds: U+212B and U+00C5 are one id" do
+      a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "\u212B"})
+      b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "\u00C5"})
+
+      assert {:error, {:uncanonical, {:duplicate_id_after_nfc, "s/tool/\u00C5"}}} =
+               Canonical.encode(Graph.new!(nodes: [a, b], edges: [], schema_version: @version))
+    end
+
+    test "when more than one label is refused, the one named does not depend on the map's internal order" do
+      # A map past thirty-two keys lists its pairs in hash order, which is the runtime's;
+      # this pair named "zz_bad" before the labels were read in term order.
+      base = for i <- 1..100, into: %{}, do: {"k#{i}", i}
+      labels = base |> Map.put("aa_bad", 0.5) |> Map.put("zz_bad", 0.5)
+      n = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "x"}, labels: labels)
+
+      assert {:error, {:uncanonical, {:label_value, _, "aa_bad", 0.5}}} =
+               Canonical.encode(Graph.new!(nodes: [n], edges: [], schema_version: @version))
+    end
+
     test "NFC, not NFKC: compatibility-equivalent strings stay two strings" do
       a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "\uFB01"})
       b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "fi"})
@@ -605,6 +624,26 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
     assert {:error, {:uncanonical, {:duplicate_id_after_nfc, "s/tool/caf\u00e9"}}} =
              Canonical.sidecar(g)
+  end
+
+  test "the sidecar's float placement is the document's six examples" do
+    a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "a"})
+    b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "b"})
+
+    for {w, text} <- [
+          {0.1, "0.1"},
+          {0.0001, "0.0001"},
+          {999_999_999_999_999.0, "999999999999999.0"},
+          {1.0e15, "1.0e15"},
+          {1.0e-5, "1.0e-5"},
+          {1.0e20, "1.0e20"}
+        ] do
+      e = Edge.new!(from: a.id, to: b.id, kind: :invoke, provenance: :observed, weight: w)
+      g = Graph.new!(nodes: [a, b], edges: [e], schema_version: @version)
+
+      assert Canonical.sidecar!(g) =~ ~s("weight":#{text}}),
+             "#{inspect(w)} was not written as #{text}"
+    end
   end
 
   test "a float weight is written in the sidecar in its shortest round-tripping form, and is in no hash" do
