@@ -38,6 +38,8 @@ defmodule BeamMCP.Connectome.Canonical do
           {:duplicate_id_after_nfc, String.t()}
           | {:label_value, String.t(), term(), term()}
           | {:label_key, String.t(), term()}
+          | {:duplicate_label_key, String.t(), String.t()}
+          | {:invalid_utf8, String.t(), term()}
 
   @doc """
   The canonical bytes of the declared form of `graph`.
@@ -90,12 +92,14 @@ defmodule BeamMCP.Connectome.Canonical do
   """
   @spec sidecar(Graph.t()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
   def sidecar(%Graph{} = graph) do
-    with {:ok, edges} <- canonical_edges(graph.edges) do
+    # Each edge is keyed on its own, never zipped against the sorted list: the canonical
+    # order is the order of the normalised bytes, which the graph's order need not share.
+    with {:ok, keyed} <-
+           map_ok(graph.edges, &with({:ok, {key, _}} <- canonical_edge(&1), do: {:ok, {&1, key}})) do
       weights =
-        graph.edges
-        |> Enum.zip(edges)
+        keyed
         |> Enum.reject(fn {edge, _} -> is_nil(edge.weight) end)
-        |> Enum.map(fn {edge, {key, _iodata}} ->
+        |> Enum.map(fn {edge, key} ->
           {key,
            object([
              {"from", elem(key, 0)},
@@ -293,16 +297,32 @@ defmodule BeamMCP.Connectome.Canonical do
   end
 
   defp canonical_node(node) do
-    id = nfc(node.id)
-
-    with {:ok, labels} <- labels(node.labels, id) do
+    with {:ok, id} <- utf8(node.id, node.id, :id),
+         id = nfc(id),
+         {:ok, labels} <- labels(node.labels, id) do
       {:ok, {id, Atom.to_string(node.kind), Atom.to_string(node.level), labels}}
     end
   end
 
   defp labels(labels, id) do
     with {:ok, pairs} <- map_ok(Map.to_list(labels), fn {k, v} -> label(k, v, id) end) do
-      {:ok, Enum.sort_by(pairs, &elem(&1, 0), &utf16_le/2)}
+      unique_keys(pairs, id)
+    end
+  end
+
+  # Two keys that coincide once normalised -- a combining sequence and its precomposed form,
+  # or an atom and a string spelling one name -- would be written twice, and a reader in
+  # another language collapses duplicates on parse and can never re-derive the bytes. Refused,
+  # never merged, like ids.
+  defp unique_keys(pairs, id) do
+    sorted = Enum.sort_by(pairs, &elem(&1, 0), &utf16_le/2)
+
+    sorted
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.find(fn [a, b] -> elem(a, 0) == elem(b, 0) end)
+    |> case do
+      nil -> {:ok, sorted}
+      [a, _] -> {:error, {:uncanonical, {:duplicate_label_key, id, elem(a, 0)}}}
     end
   end
 
@@ -314,16 +334,22 @@ defmodule BeamMCP.Connectome.Canonical do
   end
 
   defp key(k, _id) when is_atom(k) and not is_boolean(k) and not is_nil(k),
-    do: {:ok, Atom.to_string(k)}
+    do: {:ok, nfc(Atom.to_string(k))}
 
-  defp key(k, _id) when is_binary(k), do: {:ok, nfc(k)}
+  defp key(k, id) when is_binary(k) do
+    with {:ok, k} <- utf8(k, id, k), do: {:ok, nfc(k)}
+  end
+
   defp key(k, id), do: {:error, {:uncanonical, {:label_key, id, k}}}
 
   # The value domain of the layout, and nothing else. A float prints differently across
   # runtimes; a reference, a pid, a tuple or a function has no byte form at all.
-  defp value(v, _id, _k) when is_binary(v), do: {:ok, nfc(v)}
+  defp value(v, id, k) when is_binary(v) do
+    with {:ok, v} <- utf8(v, id, k), do: {:ok, nfc(v)}
+  end
+
   defp value(v, _id, _k) when is_boolean(v) or is_nil(v), do: {:ok, v}
-  defp value(v, _id, _k) when is_atom(v), do: {:ok, Atom.to_string(v)}
+  defp value(v, _id, _k) when is_atom(v), do: {:ok, nfc(Atom.to_string(v))}
   defp value(v, _id, _k) when is_integer(v), do: {:ok, v}
 
   defp value(v, id, k) when is_list(v) do
@@ -331,11 +357,12 @@ defmodule BeamMCP.Connectome.Canonical do
   end
 
   defp value(v, id, k) when is_map(v) and not is_struct(v) do
-    with {:ok, pairs} <- map_ok(Map.to_list(v), fn {kk, vv} -> label(kk, vv, id) end) do
-      {:ok, {:object, Enum.sort_by(pairs, &elem(&1, 0), &utf16_le/2)}}
+    with {:ok, pairs} <- map_ok(Map.to_list(v), fn {kk, vv} -> label(kk, vv, id) end),
+         {:ok, sorted} <- unique_keys(pairs, id) do
+      {:ok, {:object, sorted}}
     end
     |> case do
-      {:error, {:uncanonical, {:label_key, _, _}}} ->
+      {:error, {:uncanonical, {tag, _, _}}} when tag in [:label_key, :duplicate_label_key] ->
         {:error, {:uncanonical, {:label_value, id, k, v}}}
 
       other ->
@@ -346,13 +373,25 @@ defmodule BeamMCP.Connectome.Canonical do
   defp value(v, id, k), do: {:error, {:uncanonical, {:label_value, id, k, v}}}
 
   defp canonical_edges(edges) do
-    list =
-      for %Edge{} = e <- edges do
-        {{nfc(e.from), nfc(e.to), Atom.to_string(e.kind), Atom.to_string(e.provenance)},
-         Atom.to_string(e.sign)}
-      end
+    with {:ok, list} <- map_ok(edges, &canonical_edge/1) do
+      {:ok, Enum.sort_by(list, &elem(&1, 0))}
+    end
+  end
 
-    {:ok, Enum.sort_by(list, &elem(&1, 0))}
+  defp canonical_edge(%Edge{} = e) do
+    with {:ok, from} <- utf8(e.from, e.from, :from),
+         {:ok, to} <- utf8(e.to, e.to, :to) do
+      {:ok,
+       {{nfc(from), nfc(to), Atom.to_string(e.kind), Atom.to_string(e.provenance)},
+        Atom.to_string(e.sign)}}
+    end
+  end
+
+  # A binary that is not valid UTF-8 has no canonical bytes. A bitstring comprehension over
+  # <<"a", 0xFF, "b">> stops at the bad byte and yields "a" (measured), so writing would emit
+  # a prefix and two distinct strings could meet. Refused, naming the id and the field.
+  defp utf8(s, id, field) do
+    if String.valid?(s), do: {:ok, s}, else: {:error, {:uncanonical, {:invalid_utf8, id, field}}}
   end
 
   # ---------------------------------------------------------------------------------------
