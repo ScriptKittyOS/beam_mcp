@@ -669,7 +669,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
              Canonical.sidecar(g)
   end
 
-  test "the sidecar's float placement is the document's eleven examples, by digit count and not by magnitude" do
+  test "the sidecar's float placement is the document's thirteen examples, by digit count and not by magnitude" do
     a = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "a"})
     b = Node.new!(kind: :tool, level: :server, identity: {:tool, "s", "b"})
 
@@ -686,7 +686,9 @@ defmodule BeamMCP.Connectome.CanonicalTest do
           # Above 10^-4 by magnitude and still written with an exponent: six digits.
           {1.23456e-4, "1.23456e-4"},
           {0.001234, "0.001234"},
-          {12_340.0, "12340.0"}
+          {12_340.0, "12340.0"},
+          {0.0, "0.0"},
+          {-0.0, "-0.0"}
         ] do
       e = Edge.new!(from: a.id, to: b.id, kind: :invoke, provenance: :observed, weight: w)
       g = Graph.new!(nodes: [a, b], edges: [e], schema_version: @version)

@@ -36,7 +36,8 @@ defmodule BeamMCP.Connectome.Canonical do
   @typedoc """
   Why a graph could not be encoded canonically. The first fault met is named; labels are
   read in term order (atoms before strings, strings bytewise), so which of two faults is
-  named does not depend on the map's own order.
+  named does not depend on the map's own order. Term order does not tell an integer key
+  from the float equal to it; both are refused, and which is named first may vary.
   """
   @type uncanonical ::
           {:duplicate_id_after_nfc, String.t()}
