@@ -22,6 +22,17 @@ defmodule BeamMCP.Connectome.NodeTest do
       assert node.labels == %{command_class: :observe, mode: :read_only}
     end
 
+    test "the level is the level given, never inferred from the kind" do
+      # Every other test builds a catalog node at :server, and a mutant that silently set the
+      # level of every :tool node to :server survived them all. The field is what the caller
+      # said, whatever the kind; :module and :server are members of both families and the
+      # struct must never derive one field from the other.
+      for kind <- [:tool, :resource, :prompt, :process], level <- [:mfa, :module, :boundary] do
+        assert {:ok, %Node{kind: ^kind, level: ^level}} =
+                 Node.new(kind: kind, level: level, identity: {kind, "srv", :x})
+      end
+    end
+
     test "labels default to an empty map" do
       assert {:ok, %Node{labels: %{}}} =
                Node.new(kind: :server, level: :server, identity: {:server, "srv"})
