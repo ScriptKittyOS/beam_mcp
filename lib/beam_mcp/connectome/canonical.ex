@@ -73,6 +73,38 @@ defmodule BeamMCP.Connectome.Canonical do
   @spec encode!(Graph.t()) :: binary()
   def encode!(graph), do: bang(encode(graph), "encode")
 
+  @doc """
+  The canonical bytes of a value in the label grammar: the rules of a node's `"labels"`
+  object (rule 4 of `docs/connectome-canonical.md`), applied to a map on its own.
+
+  A record the package writes beside a graph -- the diff engine's, for one -- is encoded
+  here rather than by a second layout: keys in UTF-16 order and unique after NFC, strings
+  NFC, atoms as strings under their field names, integers, booleans, `null`, lists, nested
+  maps; nothing else, refused by name. A consumer's verifier for a labels object reads it
+  unchanged. A refusal names the value as a labels object would, with `"record"` in the
+  id position.
+  """
+  @spec encode_value(map()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
+  def encode_value(value) when is_map(value) and not is_struct(value) do
+    with {:ok, object} <- value(value, "record", :record), do: {:ok, json(object)}
+  end
+
+  def encode_value(value), do: {:error, {:uncanonical, {:label_value, "record", :record, value}}}
+
+  @doc "`encode_value/1`, raising."
+  @spec encode_value!(map()) :: binary()
+  def encode_value!(value), do: bang(encode_value(value), "encode_value")
+
+  @doc "SHA-256 over `encode_value/1`'s bytes."
+  @spec hash_value(map()) :: {:ok, <<_::256>>} | {:error, {:uncanonical, uncanonical()}}
+  def hash_value(value) do
+    with {:ok, bytes} <- encode_value(value), do: {:ok, :crypto.hash(:sha256, bytes)}
+  end
+
+  @doc "`hash_value/1`, raising."
+  @spec hash_value!(map()) :: <<_::256>>
+  def hash_value!(value), do: bang(hash_value(value), "hash_value")
+
   @doc "SHA-256 over the canonical bytes."
   @spec hash(Graph.t()) :: {:ok, <<_::256>>} | {:error, {:uncanonical, uncanonical()}}
   def hash(graph) do
