@@ -165,10 +165,12 @@ defmodule BeamMCP.Connectome.Tracer do
 
   defp counted(state), do: {:noreply, %{state | seen: state.seen + 1}}
 
-  # Everything set in init/1, unset: the flags on every process, the pattern on every module.
+  # Everything set in init/1, unset: the pattern on every module. The flags need no
+  # unsetting -- the BEAM removes every trace flag a tracer set the moment the tracer
+  # process exits (measured: a mutant that dropped the explicit unset survived, because the
+  # flags were gone anyway). The test that reads the flags after a stop pins that.
   defp clear(state) do
     Process.cancel_timer(state.timer)
-    :erlang.trace(:all, false, [:all])
     for m <- state.modules, do: :erlang.trace_pattern({m, :_, :_}, false, [:local])
     :ok
   end

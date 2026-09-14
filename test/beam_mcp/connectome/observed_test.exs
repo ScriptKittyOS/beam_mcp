@@ -15,7 +15,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
   use ExUnitProperties
 
   alias BeamMCP.Connectome.{Canonical, Edge, Graph, Node, Observed}
-  alias BeamMCP.Fixture.Declared.Catalog
+  alias BeamMCP.Fixture.ObservedCatalog, as: Catalog
   alias BeamMCP.Server
 
   @marker "PAYLOAD-MARKER-7f3a9c"
@@ -43,6 +43,21 @@ defmodule BeamMCP.Connectome.ObservedTest do
   end
 
   defp ok_dispatch, do: fn _name, _args, _opts -> {:ok, %{"done" => true}} end
+
+  # A dispatch that hands its arguments back to the test, so a marker test can first prove
+  # the marker reached the dispatch function -- a schema-less tool drops undeclared keys
+  # before dispatch, and the first marker tests were vacuous for exactly that reason.
+  defp reporting_dispatch(test, reply) do
+    fn _name, args, _opts ->
+      send(test, {:dispatched, args})
+      reply.()
+    end
+  end
+
+  defp assert_dispatch_saw_marker do
+    assert_receive {:dispatched, args}
+    assert inspect(args, limit: :infinity, printable_limit: :infinity) =~ @marker
+  end
 
   # A handler as a named function: telemetry warns about a local function (it is slower to
   # call), and a host attaching in anger would not use one either.
@@ -144,29 +159,32 @@ defmodule BeamMCP.Connectome.ObservedTest do
     # latency summary.
     test "a marker in a nested argument map and in a uri argument is absent from rows, bytes, sidecar and latency" do
       {name, _} = start_collector()
-      state = server(ok_dispatch())
+      state = server(reporting_dispatch(self(), fn -> {:ok, %{"done" => true}} end))
 
       call(state, :echo, %{
         "note" => %{"deep" => %{"deeper" => @marker}},
         "uri" => "r://#{@marker}/x"
       })
 
+      assert_dispatch_saw_marker()
       assert_marker_absent(name)
     end
 
     test "a marker in the error a dispatch returns is absent" do
       {name, _} = start_collector()
-      state = server(fn _, _, _ -> {:error, "failed: #{@marker}"} end)
+      state = server(reporting_dispatch(self(), fn -> {:error, "failed: #{@marker}"} end))
       call(state, :echo, %{"k" => @marker})
+      assert_dispatch_saw_marker()
       assert_marker_absent(name)
     end
 
     test "a marker in an exception a dispatch raises is absent, and the edge was still recorded" do
       {name, _} = start_collector()
-      state = server(fn _, _, _ -> raise "exploded: #{@marker}" end)
+      state = server(reporting_dispatch(self(), fn -> raise "exploded: #{@marker}" end))
 
       assert_raise RuntimeError, ~r/exploded/, fn -> call(state, :echo, %{"k" => @marker}) end
 
+      assert_dispatch_saw_marker()
       assert_marker_absent(name)
       assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
     end
@@ -177,8 +195,9 @@ defmodule BeamMCP.Connectome.ObservedTest do
       :ok = :telemetry.attach(id, [:beam_mcp, :dispatch, :stop], &__MODULE__.forward/4, self())
 
       on_exit(fn -> :telemetry.detach(id) end)
-      state = server(fn _, _, _ -> {:ok, %{"echo" => @marker}} end)
+      state = server(reporting_dispatch(self(), fn -> {:ok, %{"echo" => @marker}} end))
       call(state, :echo, %{"k" => @marker})
+      assert_dispatch_saw_marker()
 
       assert_receive {[:beam_mcp, :dispatch, :stop], measurements, metadata}
       refute inspect(measurements) =~ @marker
@@ -225,6 +244,9 @@ defmodule BeamMCP.Connectome.ObservedTest do
       assert_receive {[:beam_mcp, :dispatch, :stop], %{duration: _, monotonic_time: _}, stop_meta}
       assert %{server_name: @server_name, tool: :echo, telemetry_span_context: _} = start_meta
       assert %{server_name: @server_name, tool: :echo, outcome: :ok} = stop_meta
+
+      call(server(fn _, _, _ -> {:error, "no"} end), :echo)
+      assert_receive {[:beam_mcp, :dispatch, :stop], _, %{outcome: :error}}
     end
 
     test "exception is span/3's own shape: the host's raised reason travels in it, and the collector still counts the attempt" do

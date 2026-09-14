@@ -118,6 +118,10 @@ defmodule BeamMCP.Connectome.TracerTest do
     test "stop/0 is the third way out, and clears the same way", %{collector: c} do
       {:ok, _} = start(c, modules: [Alpha])
       assert {:traced, :local} = :erlang.trace_info({Alpha, :run, 1}, :traced)
+      # While it runs, every process is call-traced WITH the arity flag: a trace message
+      # carries {m, f, arity}, never the arguments.
+      {:flags, flags} = :erlang.trace_info(self(), :flags)
+      assert :call in flags and :arity in flags
       :ok = Tracer.stop()
       assert {:traced, false} = :erlang.trace_info({Alpha, :run, 1}, :traced)
       assert :ok = Tracer.stop()
