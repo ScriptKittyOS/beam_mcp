@@ -30,6 +30,22 @@ step "credo"    mix credo --strict
 # artefact in a throwaway consumer project, because a compile that "succeeded" is not evidence.
 step "optional deps" bash tools/probe_optional_deps.sh
 
+# The benchmark gate. `bench/overhead.exs` measures the observed collector's per-call
+# overhead and exits 1 over its threshold -- a ceiling the owner set, with its reasoning in
+# the script; `bench/diff.exs` records the diff engine's cost on a 10 000-edge fixture and
+# judges nothing, because no threshold has been set for it. Both scripts are run here, so a
+# file under bench/ that does not compile fails this step rather than sitting outside every
+# population the gate reads (the defect tools/ once had). Their one-line figures are kept in
+# the note, because a pass that hides its number is a number nobody can compare later.
+bench_out=$(mix run bench/overhead.exs 2>&1); bench_rc=$?
+diff_out=$(mix run bench/diff.exs 2>&1); diff_rc=$?
+if [ "$bench_rc" -eq 0 ] && [ "$diff_rc" -eq 0 ]; then
+  note "bench" "pass ($(printf '%s\n' "$bench_out" | tail -1); $(printf '%s\n' "$diff_out" | tail -1))"
+else
+  note "bench" "FAIL (overhead exit $bench_rc, diff exit $diff_rc)"
+  printf '%s\n%s\n' "$bench_out" "$diff_out" | sed 's/^/      /'; fail=1
+fi
+
 # `mix docs` EXITS 0 ON A WARNING, so its status is not a verdict and this step reads its output.
 #
 # A hidden module referenced by the docs shipped in 0.1.0 as `BeamMCP.Server`, and the CHANGELOG
