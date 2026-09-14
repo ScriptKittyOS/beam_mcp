@@ -435,6 +435,13 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
       assert :persistent_term.get({Tracer, :running}, nil) == foreign
       :persistent_term.erase({Tracer, :running})
+
+      # And with no term at all in place, it still clears its own patterns.
+      {:ok, pid} = start(c, modules: [Beta])
+      :persistent_term.erase({Tracer, :running})
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
     end
 
     test "the double-kill window: a companion killed and then its tracer leaves patterns, and the next start clears them, whatever modules it names",
