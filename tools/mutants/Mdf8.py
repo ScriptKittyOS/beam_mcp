@@ -10,7 +10,7 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "        with {:ok, _} <- Canonical.encode_value(window), do: {:ok, window}"
+old = "        with {:ok, _} <- Canonical.encode_value(window, :window), do: {:ok, window}"
 new = "        {:ok, window}"
 
 if s.count(old) != 1:
