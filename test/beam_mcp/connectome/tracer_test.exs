@@ -141,6 +141,146 @@ defmodule BeamMCP.Connectome.TracerTest do
     end
   end
 
+  describe "under load, and under things that skip the orderly stop" do
+    # Found by a lane that ran the tracer against sixty-four hot callers: max_messages
+    # bounded what was HANDLED, the mailbox held 12.8 million trace messages (2.58 GB)
+    # before the thousandth was handled; the duration timer, stop/0 and the collector's
+    # DOWN all queued behind them; and two exit paths left the call patterns set with no
+    # tracer -- feeding a host's later :call tracer with arguments.
+    test "when more is queued than the limit allows, generation is stopped on the first handled message, not after the limit-th",
+         %{
+           collector: c
+         } do
+      {:ok, pid} = start(c, modules: [Beta], max_messages: 10, max_duration_ms: 60_000)
+      ref = Process.monitor(pid)
+      :sys.suspend(pid)
+      for _ <- 1..100, do: Traced.wrapped(1)
+      :sys.resume(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_messages, 10}}},
+                     5_000
+
+      # Rows show how many it wrote before it knew it was over: fewer than the limit.
+      {:ok, g} = Observed.snapshot(c)
+      assert [%Edge{weight: w}] = g.edges
+      assert w < 10
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+    end
+
+    test "the duration limit stops tracing on time even when the tracer is not being scheduled",
+         %{
+           collector: c
+         } do
+      {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000, max_duration_ms: 50)
+      ref = Process.monitor(pid)
+      :sys.suspend(pid)
+      Process.sleep(150)
+      # The tracer has not handled a thing; the patterns must be gone regardless.
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      :sys.resume(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_duration_ms, 50}}},
+                     5_000
+    end
+
+    test "a failed start leaves no pattern set and is a named refusal, not a raise", %{
+      collector: c
+    } do
+      # A process already traced by someone else makes :erlang.trace/3 raise badarg; the
+      # first tracer had set its call patterns before reaching that line and raised out of
+      # start/1 with the patterns still set.
+      other = spawn(fn -> receive do: (_ -> :ok) end)
+      Process.register(self(), :tracer_test_owned)
+      :erlang.trace(self(), true, [:send, {:tracer, other}])
+      on_exit(fn -> Process.unregister(:tracer_test_owned) end)
+
+      result = start(c, modules: [Beta], processes: [:tracer_test_owned])
+      :erlang.trace(self(), false, [:all])
+
+      assert {:error, {:init_failed, _}} = result
+      refute Tracer.running?()
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+    end
+
+    test "a kill leaves no pattern set: someone watches the tracer and clears what it set", %{
+      collector: c
+    } do
+      {:ok, pid} = start(c, modules: [Beta])
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      Process.exit(pid, :kill)
+      refute Process.alive?(pid)
+
+      assert Enum.any?(1..100, fn _ ->
+               Process.sleep(10)
+               :erlang.trace_info({Beta, :run, 1}, :traced) == {:traced, false}
+             end)
+    end
+
+    test "the wildcard module is refused, and so is a module that cannot be loaded", %{
+      collector: c
+    } do
+      # modules: [:_] set the node-wide pattern and then, on stop, wiped every local
+      # pattern in the node, the host's own included.
+      assert {:error, {:invalid, :modules, [:_]}} = start(c, modules: [:_])
+      assert {:error, {:invalid, :modules, [NoSuch.Module]}} = start(c, modules: [NoSuch.Module])
+    end
+
+    test "a name in processes: that is not registered is refused, not silently traced as nothing",
+         %{collector: c} do
+      assert {:error, {:not_registered, :tracer_test_nobody}} =
+               start(c, processes: [:tracer_test_nobody])
+    end
+
+    test "it never traces its own writes: the BEAM discards an event whose tracer is the generator",
+         %{
+           collector: c
+         } do
+      {:ok, pid} = start(c, modules: [Observed], max_messages: 20, max_duration_ms: 60_000)
+      Traced.wrapped(1)
+      Process.sleep(50)
+      assert Tracer.running?()
+      :ok = Tracer.stop()
+      {:ok, g} = Observed.snapshot(c)
+      tracer_id = Node.id({:module, @server, Tracer})
+      refute Enum.any?(g.edges, &(&1.from == tracer_id))
+      _ = pid
+    end
+
+    test "a receiver that unregistered between the send and the handling is dropped", %{
+      collector: c
+    } do
+      parent = self()
+
+      receiver =
+        spawn_link(fn ->
+          Process.register(self(), :tracer_test_fleeting)
+          send(parent, :registered)
+          receive do: (:go -> Process.unregister(:tracer_test_fleeting))
+          receive do: (:done -> :ok)
+        end)
+
+      assert_receive :registered
+      Process.register(self(), :tracer_test_sender5)
+      {:ok, pid} = start(c, processes: [:tracer_test_sender5])
+      :sys.suspend(pid)
+      send(receiver, :go)
+      Process.sleep(20)
+      :sys.resume(pid)
+      :ok = Tracer.stop()
+      send(receiver, :done)
+      Process.unregister(:tracer_test_sender5)
+      {:ok, g} = Observed.snapshot(c)
+      refute Enum.any?(g.edges, &(&1.to == Node.id({:process, @server, :tracer_test_fleeting})))
+    end
+
+    test "negative and float limits are refused like zero", %{collector: c} do
+      assert {:error, {:invalid, :max_messages, -1}} = start(c, modules: [Beta], max_messages: -1)
+
+      assert {:error, {:invalid, :max_duration_ms, 1.5}} =
+               start(c, modules: [Beta], max_duration_ms: 1.5)
+    end
+  end
+
   describe "what it writes" do
     test "a traced call is a module-level :invoke edge from the caller's module to the callee's, and nothing of the arguments",
          %{
