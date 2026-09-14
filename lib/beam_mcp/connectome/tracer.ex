@@ -150,7 +150,7 @@ defmodule BeamMCP.Connectome.Tracer do
         case running_term() do
           {flag, modules, _companion} ->
             clear(modules, [])
-            :atomics.put(flag, 1, @stop)
+            put_flag(flag, @stop)
 
           # Nobody's, or a forgery: the tracer's own exit clears what it set.
           _ ->
@@ -183,12 +183,13 @@ defmodule BeamMCP.Connectome.Tracer do
     end
   end
 
-  # The term is public and unowned, so only its own shape is trusted: the flag a
-  # reference, the modules a proper list of atoms -- what `:atomics.put/3` and
-  # `trace_pattern/3` would raise on otherwise. Anything else is `:malformed`.
+  # The term is public and unowned, so only its own shape is trusted: a three-tuple whose
+  # modules are a proper list of atoms -- what `trace_pattern/3` would raise on otherwise.
+  # Anything else is `:malformed`. (The flag's type is opaque to Dialyzer, so it is not
+  # guarded here; a flag that is no atomics reference is met at the one put, below.)
   defp running_term do
     case :persistent_term.get(@running, nil) do
-      {flag, modules, _companion} = term when is_reference(flag) ->
+      {_flag, modules, _companion} = term ->
         if atoms?(modules), do: term, else: :malformed
 
       nil ->
@@ -197,6 +198,14 @@ defmodule BeamMCP.Connectome.Tracer do
       _ ->
         :malformed
     end
+  end
+
+  # A forged flag is no atomics reference and the put raises; the stop goes on without it,
+  # since the tracer's own exit clears everything the flag would have stopped.
+  defp put_flag(flag, value) do
+    :atomics.put(flag, 1, value)
+  rescue
+    ArgumentError -> :ok
   end
 
   defp atoms?([m | rest]) when is_atom(m), do: atoms?(rest)

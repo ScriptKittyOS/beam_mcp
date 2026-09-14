@@ -4,14 +4,14 @@
 # Run by tools/mutate.sh with TARGET=lib/beam_mcp/connectome/tracer.ex, which passes the
 # file to mutate as argv[1].
 #
-# Mtr22 -- THE FLAG IN THE RUNNING TERM IS TRUSTED UNCHECKED: stop/0 raises on a forged one after clearing, with the tracer left alive.
+# Mtr22 -- THE PUT ON A FORGED FLAG RAISES OUT OF stop/0 after the patterns are cleared, with the tracer left alive.
 import sys
 
 p = sys.argv[1]
 s = open(p).read()
 
-old = "      {flag, modules, _companion} = term when is_reference(flag) ->"
-new = "      {flag, modules, _companion} = term when is_reference(flag) or is_atom(flag) ->"
+old = "  rescue\n    ArgumentError -> :ok"
+new = "  rescue\n    ArithmeticError -> :ok"
 
 if s.count(old) != 1:
     sys.exit("Mtr22: anchor found %d times" % s.count(old))
