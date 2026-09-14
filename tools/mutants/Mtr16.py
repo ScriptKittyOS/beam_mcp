@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "    for p <- processes,\n        pid = Process.whereis(p),\n        is_pid(pid),\n        do: :erlang.trace(pid, false, [:send])"
-new = "    _ = processes\n    :erlang.trace(:all, false, [:all])"
+old = "    for pid <- pids,\n        :erlang.trace_info(pid, :tracer) == {:tracer, tracer},\n        do: :erlang.trace(pid, false, [:send])"
+new = "    _ = {pids, tracer}\n    :erlang.trace(:all, false, [:all])"
 
 if s.count(old) != 1:
     sys.exit("Mtr16: anchor found %d times" % s.count(old))
