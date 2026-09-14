@@ -10,8 +10,8 @@ defmodule BeamMCP.Connectome.Observed do
       children = [{BeamMCP.Connectome.Observed, name: MyApp.Observed}]
 
   Off unless started. While it runs it owns one ETS set and one `:telemetry` handler on
-  `[:beam_mcp, :dispatch, :stop]`; every `tools/call` that reached the host's dispatch
-  function becomes one row keyed by the canonical edge key -- the server node to the tool
+  `[:beam_mcp, :dispatch, :stop]` and `[:beam_mcp, :dispatch, :exception]`; every
+  `tools/call` that reached the host's dispatch function becomes one row keyed by the canonical edge key -- the server node to the tool
   node, kind `:invoke`, provenance `:observed` -- with a call count and a latency summary.
   A repeated call is the same row with the count incremented; the table is bounded by the
   number of distinct edges, never by the number of calls.
@@ -22,7 +22,10 @@ defmodule BeamMCP.Connectome.Observed do
   **The table dies with this process.** It is created in `init/1` and is gone when the
   process is; a restart under the host's supervisor starts from no rows, so what a host
   loses on a crash is every observation since the last snapshot it kept. The declared
-  connectome is unaffected -- it is built from the tree, not from what ran.
+  connectome is unaffected -- it is built from the tree, not from what ran. A kill that
+  skips `terminate/2` leaves the old handler attached until the restart replaces it; a
+  call in that gap is answered normally, the stale handler fails once against the missing
+  table and telemetry detaches it, logging that once.
 
   **Writes happen in the caller's process**, not in this one. The table is `:public` with
   write concurrency, and the handler runs in whichever process dispatched the call; this
@@ -140,8 +143,10 @@ defmodule BeamMCP.Connectome.Observed do
   @impl true
   def init(name) do
     # Trap exits so a supervisor's shutdown reaches terminate/2 and the handler is detached
-    # with the table. On a kill that skips terminate/2, telemetry detaches the handler
-    # itself the first time it fails against the missing table, and logs that once.
+    # with the table. A kill skips terminate/2 and leaves the handler attached; a restart
+    # must not trip over it, so the attach is made idempotent by detaching first. Found by
+    # a lane that killed the collector under a real supervisor: the restarted init's attach
+    # answered already_exists, the child crash-looped, and the host's supervisor went down.
     Process.flag(:trap_exit, true)
 
     ^name =
@@ -153,6 +158,7 @@ defmodule BeamMCP.Connectome.Observed do
         {:read_concurrency, true}
       ])
 
+    _ = :telemetry.detach({__MODULE__, name})
     :ok = :telemetry.attach_many({__MODULE__, name}, @events, &__MODULE__.handle_event/4, name)
     {:ok, name}
   end

@@ -41,7 +41,9 @@ the hot path. Per-call cost is a number in the release notes, not a claim here.
 
 `snapshot/1` is the graph: one node per server and tool seen, one edge per row with the
 count as its weight, every sign `:unknown`, built through the same constructors as the
-declared side, on the same ids — the two graphs join. When no collector runs under the
+declared side, on the same ids — the two graphs join on ids and on edge keys. Observed
+nodes carry no labels: the collector saw a call, not a catalog entry, so a declared tool
+node and its observed counterpart differ in `labels` while sharing an id. When no collector runs under the
 name it is a **named refusal**, `{:error, :not_started}`, and not an empty graph: an empty
 observed connectome says "nothing ran", which is a different claim from "nothing was
 watching", and a diff that took the first for the second would report every declared edge
@@ -52,7 +54,9 @@ the samples. It is not part of any hash and not part of the canonical sidecar.
 
 **The table dies with its process.** A restart under the host's supervisor starts from no
 rows; what a host loses is every observation since the last snapshot it kept. The declared
-side is unaffected.
+side is unaffected. A kill that skips the orderly stop leaves the old handler attached until
+the restart replaces it; a call in that gap is answered normally, and the stale handler
+fails once against the missing table and is detached by telemetry, logged once.
 
 ## The tracer
 
@@ -61,7 +65,9 @@ process sending to a process. It is off until a host starts it, runs one at a ti
 refuses to start without a running collector or with a limit that is not a positive
 integer — there is no unbounded mode. It stops itself at `max_messages` trace messages or
 `max_duration_ms`, clearing every pattern and flag it set, and exits
-`{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out. It never calls `:dbg`.
+`{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out; the collector dying
+under it is the fourth, `{:shutdown, :collector_gone}`, which it watches for rather than
+failing on the next traced call. It never calls `:dbg`.
 
 What it writes, through the same collector: a call into a traced module as a
 module-level `:invoke` edge from the caller's module to the callee's, with the `:arity`

@@ -33,7 +33,10 @@ defmodule BeamMCP.Connectome.Tracer do
   positive integer -- there is no unbounded mode. It stops itself when `max_messages` trace
   messages have arrived or `max_duration_ms` has elapsed, clearing every pattern it set and
   every flag it set, and exits `{:shutdown, {:limit, which, value}}` so a host that monitors
-  it knows why. `stop/0` is the third way out and clears the same way.
+  it knows why. `stop/0` is the third way out and clears the same way. The fourth is the
+  collector dying under it: it monitors the collector and exits
+  `{:shutdown, :collector_gone}`, clearing the same way, rather than failing on the next
+  traced call into a table that is no longer there.
 
   It never calls `:dbg`. The tracer process is the trace receiver itself, so a slow host
   cannot make it drop into someone else's mailbox.
@@ -104,6 +107,11 @@ defmodule BeamMCP.Connectome.Tracer do
 
     timer = Process.send_after(self(), :max_duration, Keyword.fetch!(opts, :max_duration_ms))
 
+    # The collector's death is a way out by name, not a badarg on the next traced call into
+    # a table that is gone (found by a lane that killed the collector under a running tracer).
+    collector = Keyword.fetch!(opts, :collector)
+    _ = Process.monitor(:ets.info(collector, :owner))
+
     {:ok,
      %{
        collector: Keyword.fetch!(opts, :collector),
@@ -149,6 +157,10 @@ defmodule BeamMCP.Connectome.Tracer do
 
   def handle_info(:max_duration, state) do
     {:stop, {:shutdown, {:limit, :max_duration_ms, state.max_duration_ms}}, state}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _owner, _reason}, state) do
+    {:stop, {:shutdown, :collector_gone}, state}
   end
 
   def handle_info(_other, state), do: {:noreply, state}
