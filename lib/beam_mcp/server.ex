@@ -4,6 +4,7 @@
 defmodule BeamMCP.Server do
   alias BeamMCP.Catalog
   alias BeamMCP.Schema
+  alias BeamMCP.Stacktrace
 
   @moduledoc """
   The protocol core: one message in, one response out, no process and no state of its own.
@@ -75,8 +76,31 @@ defmodule BeamMCP.Server do
           tools_ttl_ms: non_neg_integer()
         }
 
+  # Every option `new/1` accepts, with the shape it must have. Read as a table so that a
+  # wrong option is refused HERE, by name, the way the catalog is -- not held and raised on
+  # far from the call that supplied it (measured: a non-binary `server_name` was held, and
+  # raised inside the connectome's id derivation at snapshot time). `:catalog` is in the
+  # table for the unknown-key check; its shape is `Catalog.validate/1`'s.
+  @options [
+    catalog: "a module implementing the BeamMCP.Catalog behaviour",
+    dispatch: "a function of three arguments, or absent",
+    dispatch_opts: "a keyword list",
+    server_name: "a string",
+    tools_ttl_ms: "a non-negative integer",
+    tools_cache_scope: "a string"
+  ]
+
+  defp valid?(:catalog, value), do: is_atom(value)
+  defp valid?(:dispatch, value), do: is_nil(value) or is_function(value, 3)
+  defp valid?(:dispatch_opts, value), do: Keyword.keyword?(value)
+  defp valid?(:server_name, value), do: is_binary(value)
+  defp valid?(:tools_ttl_ms, value), do: is_integer(value) and value >= 0
+  defp valid?(:tools_cache_scope, value), do: is_binary(value)
+
   @spec new(keyword()) :: state()
   def new(opts \\ []) do
+    validate_options!(opts)
+
     %{
       dispatch: Keyword.get(opts, :dispatch),
       dispatch_opts: Keyword.get(opts, :dispatch_opts, []),
@@ -308,6 +332,29 @@ defmodule BeamMCP.Server do
   # host's `capabilities/0` is safe -- unlike `Transport.HTTP.init/1`, which under Plug's
   # default init_mode is the host's COMPILE time. Same pattern as `:authorize`: a host that
   # mis-wires this learns when it starts, not from a BadMapError in a request path.
+  defp validate_options!(opts) do
+    unless Keyword.keyword?(opts) do
+      raise ArgumentError, "BeamMCP.Server.new/1 takes a keyword list, got: #{inspect(opts)}"
+    end
+
+    for {key, value} <- opts do
+      case Keyword.fetch(@options, key) do
+        {:ok, shape} ->
+          unless valid?(key, value) do
+            raise ArgumentError,
+                  "BeamMCP.Server.new/1: #{inspect(key)} must be #{shape}, got: #{inspect(value)}"
+          end
+
+        :error ->
+          raise ArgumentError,
+                "BeamMCP.Server.new/1 does not take #{inspect(key)}; the options are " <>
+                  Enum.map_join(Keyword.keys(@options), ", ", &inspect/1)
+      end
+    end
+
+    :ok
+  end
+
   defp fetch_catalog!(opts) do
     catalog = Keyword.fetch!(opts, :catalog)
 
@@ -381,48 +428,16 @@ defmodule BeamMCP.Server do
         :telemetry.execute(
           [:beam_mcp, :dispatch, :exception],
           %{duration: stop - start, monotonic_time: stop},
-          Map.merge(meta, %{kind: kind, reason: reason, stacktrace: arities(stacktrace)})
+          Map.merge(meta, %{
+            kind: kind,
+            reason: reason,
+            stacktrace: Stacktrace.arities(stacktrace)
+          })
         )
 
         :erlang.raise(kind, reason, stacktrace)
     end
   end
-
-  # A frame with an argument list becomes the same frame with the list's length, and its
-  # location keeps file and line only: a host can put any term into a frame through
-  # `:erlang.error/3`'s error_info, and it would have travelled in the keywords. Total over
-  # whatever a host hands `:erlang.raise/3` -- a location that is no keyword list, an
-  # improper argument list, a file or a line of another type -- because this runs inside
-  # the catch clause, where a raise of its own would replace the host's error and leave
-  # the span open (measured, by a lane).
-  # A frame whose arity position is neither a list nor an integer is no frame the BEAM
-  # writes and is dropped, as a fun frame is: a lane put the arguments there and they
-  # travelled verbatim (measured).
-  defp arities(stacktrace) do
-    for {m, f, args_or_arity, loc} <- stacktrace,
-        is_list(args_or_arity) or is_integer(args_or_arity) do
-      {m, f, arity(args_or_arity), location(loc, [])}
-    end
-  end
-
-  defp arity(args) when is_list(args), do: count(args, 0)
-  defp arity(arity) when is_integer(arity), do: arity
-
-  defp count([_ | rest], n), do: count(rest, n + 1)
-  defp count(_, n), do: n
-
-  # What the compiler writes: a charlist for the file, an integer for the line.
-  defp location([{:file, file} | rest], acc) when is_list(file) do
-    if :io_lib.char_list(file),
-      do: location(rest, [{:file, file} | acc]),
-      else: location(rest, acc)
-  end
-
-  defp location([{:line, line} | rest], acc) when is_integer(line),
-    do: location(rest, [{:line, line} | acc])
-
-  defp location([_ | rest], acc), do: location(rest, acc)
-  defp location(_, acc), do: Enum.reverse(acc)
 
   defp outcome({:ok, _}), do: :ok
   defp outcome(_), do: :error
