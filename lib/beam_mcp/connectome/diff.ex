@@ -9,7 +9,13 @@ defmodule BeamMCP.Connectome.Diff do
 
   ## Labels, not isomorphism
 
-  Two edges are the same edge iff their **label** -- `from`, `to`, `kind` -- is equal. Ids
+  Two edges are the same edge iff their **label** -- `from`, `to`, `kind` -- is equal,
+  compared as the encoder writes them: after NFC (rule 6 of `docs/connectome-canonical.md`).
+  A graph whose ids coincide after NFC has no canonical bytes and so no diff -- refused by
+  name, as `Canonical.encode/1` refuses it -- and a graph carrying the other side's
+  provenance is refused too, so on every admitted input an edge and a label are the same
+  count (a consumer lane found both: it normalised before comparing, as the rule says, and
+  the code did not). Ids
   are structural (`BeamMCP.Connectome.Node.id/1`, one implementation site), so the label is
   the identity, and provenance says only which side an edge came from. This is a set
   difference over labels, and nothing more, on purpose: a graph-isomorphism check is NP-hard
@@ -102,15 +108,16 @@ defmodule BeamMCP.Connectome.Diff do
   canonical bytes (`{:uncanonical, reason}`).
   """
   @spec run(Graph.t(), Graph.t(), keyword()) :: {:ok, t()} | {:error, term()}
-  def run(%Graph{} = declared, %Graph{} = observed, opts) when is_list(opts) do
-    with :ok <- checked(:declared, declared),
+  def run(%Graph{} = declared, %Graph{} = observed, opts) do
+    with :ok <- keyword(opts),
+         :ok <- checked(:declared, declared),
          :ok <- checked(:observed, observed),
          {:ok, window} <- window(opts) do
       d = labels(declared)
       o = labels(observed)
       in_both = Map.keys(d) |> Enum.filter(&Map.has_key?(o, &1))
-      observed_ids = MapSet.new(observed.nodes, & &1.id)
-      declared_ids = MapSet.new(declared.nodes, & &1.id)
+      observed_ids = MapSet.new(observed.nodes, &nfc(&1.id))
+      declared_ids = MapSet.new(declared.nodes, &nfc(&1.id))
 
       {changed, same} =
         Enum.split_with(in_both, fn label -> changed_sign?(d[label], o[label]) end)
@@ -190,11 +197,45 @@ defmodule BeamMCP.Connectome.Diff do
   @spec hash!(t()) :: <<_::256>>
   def hash!(%__MODULE__{} = diff), do: Canonical.hash_value!(to_record(diff))
 
-  # A literal graph is read against everything Graph.new/1 refuses before it is compared.
+  @doc "The hash as lowercase hexadecimal, the form the page writes it in."
+  @spec hash_hex(t()) :: {:ok, String.t()} | {:error, term()}
+  def hash_hex(%__MODULE__{} = diff) do
+    with {:ok, hash} <- hash(diff), do: {:ok, Base.encode16(hash, case: :lower)}
+  end
+
+  @doc "`hash_hex/1`, raising."
+  @spec hash_hex!(t()) :: String.t()
+  def hash_hex!(%__MODULE__{} = diff), do: Base.encode16(hash!(diff), case: :lower)
+
+  defp keyword(opts) do
+    if Keyword.keyword?(opts), do: :ok, else: {:error, {:invalid, :opts, opts}}
+  end
+
+  # A literal graph is read against everything Graph.new/1 refuses, then against
+  # everything the encoder refuses -- a graph with no canonical bytes has no diff -- then
+  # for the other side's provenance, before it is compared.
   defp checked(side, graph) do
-    case Graph.check(graph) do
-      :ok -> :ok
-      {:error, reason} -> {:error, {side, reason}}
+    with :ok <- named(side, Graph.check(graph)),
+         :ok <- named(side, canonical(graph)),
+         do: named(side, provenance(side, graph))
+  end
+
+  defp named(_side, :ok), do: :ok
+  defp named(side, {:error, reason}), do: {:error, {side, reason}}
+
+  # `Graph.check/1` has already passed, so what remains of `Canonical.check/1` is the
+  # canonical form's own refusals, given under their own names.
+  defp canonical(graph) do
+    case Canonical.check(graph) do
+      {:error, {:uncanonical, {:invalid_graph, reason}}} -> {:error, reason}
+      other -> other
+    end
+  end
+
+  defp provenance(side, %Graph{edges: edges}) do
+    case Enum.find(edges, &(&1.provenance != side)) do
+      nil -> :ok
+      %Edge{provenance: other} -> {:error, {:invalid, :provenance, other}}
     end
   end
 
@@ -202,24 +243,23 @@ defmodule BeamMCP.Connectome.Diff do
   # so a diff is refused at run/2, not at encode/1.
   defp window(opts) do
     case Keyword.fetch(opts, :window) do
-      {:ok, window} when is_map(window) ->
-        with {:ok, _} <- Canonical.encode_value(window), do: {:ok, window}
-
-      {:ok, other} ->
-        {:error, {:uncanonical, {:label_value, "record", :window, other}}}
+      {:ok, window} ->
+        with {:ok, _} <- Canonical.encode_value(window, :window), do: {:ok, window}
 
       :error ->
         {:error, {:missing, :window}}
     end
   end
 
-  # label => sign. A graph holds one edge per key and provenance is one per graph, so one
-  # edge per label.
+  # label => sign, the ids NFC as the encoder writes them. A graph holds one edge per key
+  # and provenance is one per graph (checked), so one edge per label.
   defp labels(%Graph{edges: edges}) do
     Map.new(edges, fn %Edge{from: from, to: to, kind: kind, sign: sign} ->
-      {{from, to, kind}, sign}
+      {{nfc(from), nfc(to), kind}, sign}
     end)
   end
+
+  defp nfc(s), do: String.normalize(s, :nfc)
 
   # Both supplied and different. `:unknown` on either side is not a change.
   defp changed_sign?(declared, observed),
@@ -230,7 +270,7 @@ defmodule BeamMCP.Connectome.Diff do
   # The canonical order: UTF-16 code units on from, then to, then the kind's name -- the same
   # order the encoder gives object keys, so the list order is the bytes' order.
   defp sort_labels(labels) do
-    Enum.sort_by(labels, &{utf16(&1.from), utf16(&1.to), Atom.to_string(&1.kind)})
+    Enum.sort_by(labels, &{utf16(&1.from), utf16(&1.to), utf16(Atom.to_string(&1.kind))})
   end
 
   defp utf16(s), do: :unicode.characters_to_binary(s, :utf8, {:utf16, :big})

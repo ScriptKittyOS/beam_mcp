@@ -74,6 +74,21 @@ defmodule BeamMCP.Connectome.Canonical do
   def encode!(graph), do: bang(encode(graph), "encode")
 
   @doc """
+  Everything `encode/1` refuses, without writing a byte: `Graph.check/1`'s refusals as
+  `{:uncanonical, {:invalid_graph, reason}}`, then the canonical form's own -- two ids or
+  two label keys that coincide after NFC, a string that is not UTF-8, a label value with no
+  byte form. A graph this answers `:ok` for has canonical bytes; one it refuses has none.
+  """
+  @spec check(Graph.t()) :: :ok | {:error, {:uncanonical, uncanonical()}}
+  def check(%Graph{} = graph) do
+    with :ok <- checked(graph),
+         {:ok, _nodes} <- canonical_nodes(graph.nodes),
+         {:ok, _edges} <- canonical_edges(graph.edges) do
+      :ok
+    end
+  end
+
+  @doc """
   The canonical bytes of a value in the label grammar: the rules of a node's `"labels"`
   object (rule 4 of `docs/connectome-canonical.md`), applied to a map on its own.
 
@@ -82,14 +97,17 @@ defmodule BeamMCP.Connectome.Canonical do
   NFC, atoms as strings under their field names, integers, booleans, `null`, lists, nested
   maps; nothing else, refused by name. A consumer's verifier for a labels object reads it
   unchanged. A refusal names the value as a labels object would, with `"record"` in the
-  id position.
+  id position and `field` -- `:record` unless the caller names one -- in the key position.
   """
-  @spec encode_value(map()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
-  def encode_value(value) when is_map(value) and not is_struct(value) do
-    with {:ok, object} <- value(value, "record", :record), do: {:ok, json(object)}
+  @spec encode_value(map(), atom()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
+  def encode_value(value, field \\ :record)
+
+  def encode_value(value, field) when is_map(value) and not is_struct(value) do
+    with {:ok, object} <- value(value, "record", field), do: {:ok, json(object)}
   end
 
-  def encode_value(value), do: {:error, {:uncanonical, {:label_value, "record", :record, value}}}
+  def encode_value(value, field),
+    do: {:error, {:uncanonical, {:label_value, "record", field, value}}}
 
   @doc "`encode_value/1`, raising."
   @spec encode_value!(map()) :: binary()
