@@ -77,8 +77,10 @@ process in the node, present and future.
 
 It stops itself at `max_messages` handled trace messages of any shape, a send to a dead
 process included, or at `max_duration_ms`, clearing every pattern and flag it set, and
-exits `{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out; the collector
-dying under it is the fourth, `{:shutdown, :collector_gone}`. **What the limits bound:**
+exits `{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out; each of the
+three ends the tracer on the next message it handles, and what was still queued behind it
+is discarded, not written; the collector dying under it is the fourth,
+`{:shutdown, :collector_gone}`. **What the limits bound:**
 `max_messages` counts messages as they are handled while the BEAM queues them as they
 arrive, so the tracer runs at high priority and clears its patterns the moment handled plus
 queued reaches the limit — generation stops there. The queue's size is the node-wide call
@@ -89,8 +91,13 @@ companion process enforces `max_duration_ms` from outside the tracer's mailbox �
 the patterns at the deadline and raising a flag the tracer reads before every write — and
 clears on the tracer's exit for any reason, a kill included, so no pattern is left set with
 no tracer behind it: a leftover pattern would cost every call to that module a breakpoint
-and would feed a host's own later call tracer with arguments. Patterns are global in the
-BEAM; clearing a module's patterns clears any someone else set on it. It never calls `:dbg`.
+and would feed a host's own later call tracer with arguments. The tracer watches the
+companion back and exits `{:shutdown, :companion_gone}` if it dies. Nothing is cleared
+that the tracer did not set — its patterns and the send flag on the processes it named;
+never every process's flags. Patterns are global in the BEAM; clearing a module's patterns
+clears any someone else set on it. The collector dying under the tracer is met as its DOWN
+or as the first write into the table that is gone, whichever is first in the queue, and is
+`{:shutdown, :collector_gone}` either way. It never calls `:dbg`.
 
 What it writes, through the same collector: a call into a traced module as a
 module-level `:invoke` edge from the caller's module to the callee's, with the `:arity`

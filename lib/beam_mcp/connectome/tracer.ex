@@ -60,15 +60,23 @@ defmodule BeamMCP.Connectome.Tracer do
   finite wait.
 
   **Nothing left behind, on every path.** The companion process monitors the tracer and
-  clears the patterns and flags on any exit -- a kill included, which skips `terminate/2`.
-  A pattern left set with no tracer would cost every call to that module a breakpoint and
-  would feed a host's own later `:call` tracer with arguments (measured); that is what the
-  companion exists to prevent. Patterns are global and unowned in the BEAM: clearing the
-  patterns on a module clears any that someone else set on it too.
+  clears the patterns on any exit -- a kill included, which skips `terminate/2`; the BEAM
+  removes a dead tracer's flags itself. A pattern left set with no tracer would cost every
+  call to that module a breakpoint and would feed a host's own later `:call` tracer with
+  arguments (measured); that is what the companion exists to prevent. The tracer watches
+  the companion back and leaves `{:shutdown, :companion_gone}` if it dies, since it is the
+  only enforcer of the deadline and of the clear-on-kill. A new tracer waits for a previous
+  companion to finish before it starts (measured: without that, the old companion's late
+  erase landed on the new tracer's running term 499 times in 500). Patterns are global and
+  unowned in the BEAM: clearing the patterns on a module clears any that someone else set
+  on it too. Nothing is cleared that the tracer did not set: only its patterns and the send
+  flag on the processes it named -- a node-wide flag clear would wipe a host's own trace
+  flags on unrelated processes (measured).
 
   Exits: `{:shutdown, {:limit, :max_messages, n}}`, `{:shutdown, {:limit, :max_duration_ms,
-  ms}}`, `:normal` from `stop/0`, and `{:shutdown, :collector_gone}` when the collector
-  dies under it. It never calls `:dbg`.
+  ms}}`, `:normal` from `stop/0`, `{:shutdown, :collector_gone}` when the collector dies
+  under it -- met as its DOWN or as the first write into the table that is gone, whichever
+  comes first in the queue -- and `{:shutdown, :companion_gone}`. It never calls `:dbg`.
   """
   use GenServer
 
@@ -77,6 +85,7 @@ defmodule BeamMCP.Connectome.Tracer do
   @name __MODULE__
   @defaults [max_messages: 1_000, max_duration_ms: 5_000, modules: [], processes: []]
   @stop_timeout 5_000
+  @await_companion 1_000
   # A one-word flag the tracer reads on every handled message, set from outside its
   # mailbox: 1 = the deadline passed, 2 = stop/0 was called. A message would queue behind
   # what is already there; the flag is read before the next write. Kept beside the module
@@ -129,8 +138,8 @@ defmodule BeamMCP.Connectome.Tracer do
 
       pid ->
         case :persistent_term.get(@running, nil) do
-          {flag, modules} ->
-            clear(modules)
+          {flag, modules, _companion} ->
+            clear(modules, [])
             :atomics.put(flag, 1, @stop)
 
           nil ->
@@ -156,13 +165,20 @@ defmodule BeamMCP.Connectome.Tracer do
     max_duration_ms = Keyword.fetch!(opts, :max_duration_ms)
     collector = Keyword.fetch!(opts, :collector)
 
+    # A previous tracer's companion may still be clearing after a kill or a failed start;
+    # its erase would land on this tracer's term (measured: 499 of 500 starts after a kill).
+    # Wait for it to be gone before anything is put.
+    await_previous_companion()
+
     flag = :atomics.new(1, [])
-    :persistent_term.put(@running, {flag, modules})
 
     # The companion is up before anything is set, so whatever this function sets is cleared
     # whatever happens next: it clears on the tracer's exit, kill included, and at the
-    # deadline. It runs at high priority for the same reason the tracer does.
-    companion = spawn_companion(self(), modules, max_duration_ms, flag)
+    # deadline. It runs at high priority for the same reason the tracer does, and the
+    # tracer watches it back: a companion that died is a way out by name.
+    companion = spawn_companion(self(), modules, processes, max_duration_ms, flag)
+    _ = Process.monitor(companion)
+    :persistent_term.put(@running, {flag, modules, companion})
 
     # The per-process flags first: a process already traced by someone else raises here,
     # and then nothing has been set yet. Should anything below raise after a pattern is
@@ -194,34 +210,50 @@ defmodule BeamMCP.Connectome.Tracer do
      }}
   end
 
+  defp await_previous_companion do
+    case :persistent_term.get(@running, nil) do
+      {_flag, _modules, previous} when is_pid(previous) ->
+        ref = Process.monitor(previous)
+
+        receive do
+          {:DOWN, ^ref, :process, ^previous, _} -> :ok
+        after
+          @await_companion -> Process.demonitor(ref, [:flush])
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
   @impl true
   def handle_info({:trace, _pid, :call, {m, _f, _arity}, {cm, _cf, _ca}}, state) do
-    Observed.observe(
-      state.collector,
-      {:module, state.server, cm},
-      {:module, state.server, m},
-      :invoke
-    )
-
-    counted(state)
+    written(state, fn ->
+      Observed.observe(
+        state.collector,
+        {:module, state.server, cm},
+        {:module, state.server, m},
+        :invoke
+      )
+    end)
   end
 
   def handle_info({:trace, _pid, :call, _mfa, :undefined}, state), do: counted(state)
 
   def handle_info({:trace, from, :send, _message, to}, state) do
     # A send to the tracer itself (stop/0 is one) is the tracer's own business, not an edge.
-    with false <- to == self() or to == @name,
-         {:ok, from_name} <- registered(from),
-         {:ok, to_name} <- registered(to) do
-      Observed.observe(
-        state.collector,
-        {:process, state.server, from_name},
-        {:process, state.server, to_name},
-        :message
-      )
-    end
-
-    counted(state)
+    written(state, fn ->
+      with false <- to == self() or to == @name,
+           {:ok, from_name} <- registered(from),
+           {:ok, to_name} <- registered(to) do
+        Observed.observe(
+          state.collector,
+          {:process, state.server, from_name},
+          {:process, state.server, to_name},
+          :message
+        )
+      end
+    end)
   end
 
   # A send to a process that is gone arrives under its own tag; it is counted like any
@@ -233,6 +265,10 @@ defmodule BeamMCP.Connectome.Tracer do
     {:stop, {:shutdown, {:limit, :max_duration_ms, state.max_duration_ms}}, state}
   end
 
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, %{companion: pid} = state) do
+    {:stop, {:shutdown, :companion_gone}, state}
+  end
+
   def handle_info({:DOWN, _ref, :process, _owner, _reason}, state) do
     {:stop, {:shutdown, :collector_gone}, state}
   end
@@ -242,10 +278,19 @@ defmodule BeamMCP.Connectome.Tracer do
 
   @impl true
   def terminate(_reason, state) do
-    clear(state.modules)
+    clear(state.modules, state.processes)
     send(state.companion, :cancel)
     :persistent_term.erase(@running)
     :ok
+  end
+
+  # A write into a table that is gone -- the collector died with messages still queued
+  # ahead of its DOWN -- is the same way out as the DOWN itself.
+  defp written(state, write) do
+    write.()
+    counted(state)
+  rescue
+    ArgumentError -> {:stop, {:shutdown, :collector_gone}, state}
   end
 
   # On every handled message: the flag first -- a deadline or a stop/0 that could not reach
@@ -255,7 +300,14 @@ defmodule BeamMCP.Connectome.Tracer do
   defp counted(%{seen: seen, max_messages: max, flag: flag} = state) do
     seen = seen + 1
     state = %{state | seen: seen}
-    {:message_queue_len, queued} = Process.info(self(), :message_queue_len)
+
+    # The queue length is read every 32nd message: under arrival the read fetches the
+    # in-transit signals and costs ~2 µs against ~0.1 µs for the handling itself
+    # (measured), and the window it widens is 32 messages.
+    queued =
+      if rem(seen, 32) == 0 or seen == 1,
+        do: elem(Process.info(self(), :message_queue_len), 1),
+        else: 0
 
     case :atomics.get(flag, 1) do
       @deadline ->
@@ -265,7 +317,7 @@ defmodule BeamMCP.Connectome.Tracer do
         {:stop, :normal, state}
 
       _ when seen + queued >= max ->
-        clear(state.modules)
+        clear(state.modules, state.processes)
         {:stop, {:shutdown, {:limit, :max_messages, max}}, state}
 
       _ ->
@@ -273,26 +325,31 @@ defmodule BeamMCP.Connectome.Tracer do
     end
   end
 
-  # Everything the tracer sets, unset: the pattern on every named module and the flags on
-  # every process. Idempotent; run from the tracer, from stop/0, and from the companion at
-  # the deadline.
-  defp clear(modules) do
+  # What the tracer set, unset: the pattern on every named module, and the send flag on
+  # every named process. The call flags set on every process are not touched here: with
+  # no pattern nothing is generated, and the BEAM removes a tracer's flags when it exits.
+  # Clearing every process's flags -- `trace(:all, false, [:all])` -- wiped a host's own
+  # trace flags on unrelated processes (measured), and cannot be scoped to one tracer.
+  defp clear(modules, processes) do
     clear_patterns(modules)
-    :erlang.trace(:all, false, [:all])
+
+    for p <- processes,
+        pid = Process.whereis(p),
+        is_pid(pid),
+        do: :erlang.trace(pid, false, [:send])
+
     :ok
   end
 
-  # After the tracer is dead only the patterns need clearing: the BEAM removes a tracer's
-  # flags when the tracer exits, and clearing the flags of every process here would clear a
-  # NEXT tracer's flags too, if one started in the gap (measured as a flake between tests).
   defp clear_patterns(modules) do
     for m <- modules, do: :erlang.trace_pattern({m, :_, :_}, false, [:local])
     :ok
   end
 
   # High priority, monitoring the tracer. At the deadline it clears and tells the tracer to
-  # leave by name; on the tracer's exit for any reason it clears.
-  defp spawn_companion(tracer, modules, max_duration_ms, flag) do
+  # leave by name; on the tracer's exit for any reason it clears -- and erases the running
+  # term only if the term is still its own tracer's.
+  defp spawn_companion(tracer, modules, processes, max_duration_ms, flag) do
     spawn(fn ->
       Process.flag(:priority, :high)
       ref = Process.monitor(tracer)
@@ -302,24 +359,28 @@ defmodule BeamMCP.Connectome.Tracer do
           :ok
 
         {:DOWN, ^ref, :process, ^tracer, _reason} ->
-          clear_patterns(modules)
-          :persistent_term.erase(@running)
+          after_death(flag, modules)
       after
         max_duration_ms ->
-          clear(modules)
+          clear(modules, processes)
           :atomics.put(flag, 1, @deadline)
           send(tracer, :max_duration)
 
           receive do
-            {:DOWN, ^ref, :process, ^tracer, _reason} ->
-              clear_patterns(modules)
-              :persistent_term.erase(@running)
-
-            :cancel ->
-              :ok
+            {:DOWN, ^ref, :process, ^tracer, _reason} -> after_death(flag, modules)
+            :cancel -> :ok
           end
       end
     end)
+  end
+
+  defp after_death(flag, modules) do
+    clear_patterns(modules)
+
+    case :persistent_term.get(@running, nil) do
+      {^flag, _, _} -> :persistent_term.erase(@running)
+      _ -> :ok
+    end
   end
 
   defp registered(name) when is_atom(name), do: {:ok, name}
