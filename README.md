@@ -363,7 +363,8 @@ bytes whoever wrote it.
   the one dispatch site and a host-started ETS collector, plus an optional, off-by-default,
   guarded tracer for module-level edges (`BeamMCP.Connectome.Tracer`). Edge identity only —
   never a payload byte. The collector's per-call cost is measured and gated at 1.5 µs per
-  `tools/call`, a ceiling on an optional feature and not a performance promise.
+  `tools/call` — the owner's ceiling, set 2026-09-14 with its reasoning in `bench/overhead.exs`;
+  a ceiling on an optional feature and not a performance promise.
 - **Canonical bytes** — `BeamMCP.Connectome.Canonical` writes RFC 8785-style key order, NFC
   strings and one float rule, specified in [`docs/connectome-canonical.md`](docs/connectome-canonical.md)
   completely enough that three blind re-derivations reproduced the hash.

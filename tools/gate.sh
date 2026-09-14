@@ -30,9 +30,10 @@ echo "== beam_mcp gate =="
 # count is printed beside the verdict. The glob stays in `.formatter.exs` for a developer's
 # bare `mix format`, and lists the same directories today; disagreeing with it is this
 # step's job, not a defect in it.
-fmt_files=$(git ls-files -- '*.ex' '*.exs')
-fmt_n=$(printf '%s\n' "$fmt_files" | grep -c .)
-fmt_out=$(printf '%s\n' "$fmt_files" | xargs mix format --check-formatted 2>&1); fmt_rc=$?
+# Read with -z / -0 so a name with whitespace is one name, as the REUSE and publication
+# steps read theirs.
+fmt_n=$(git ls-files -- '*.ex' '*.exs' | grep -c .)
+fmt_out=$(git ls-files -z -- '*.ex' '*.exs' | xargs -0 mix format --check-formatted 2>&1); fmt_rc=$?
 if [ "$fmt_rc" -eq 0 ] && [ "$fmt_n" -gt 0 ]; then
   note "format" "pass ($fmt_n tracked .ex/.exs)"
 else
