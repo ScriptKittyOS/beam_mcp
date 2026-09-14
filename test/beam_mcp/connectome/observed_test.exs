@@ -226,6 +226,35 @@ defmodule BeamMCP.Connectome.ObservedTest do
       assert %{server_name: @server_name, tool: :echo, telemetry_span_context: _} = start_meta
       assert %{server_name: @server_name, tool: :echo, outcome: :ok} = stop_meta
     end
+
+    test "exception is span/3's own shape: the host's raised reason travels in it, and the collector still counts the attempt" do
+      id = {__MODULE__, :exception, System.unique_integer()}
+
+      :ok =
+        :telemetry.attach(id, [:beam_mcp, :dispatch, :exception], &__MODULE__.forward/4, self())
+
+      on_exit(fn -> :telemetry.detach(id) end)
+      {name, _} = start_collector()
+
+      assert_raise RuntimeError, fn ->
+        call(server(fn _, _, _ -> raise "host's own: #{@marker}" end), :echo)
+      end
+
+      assert_receive {[:beam_mcp, :dispatch, :exception], %{duration: _, monotonic_time: _}, meta}
+
+      assert %{
+               server_name: @server_name,
+               tool: :echo,
+               kind: :error,
+               reason: %RuntimeError{},
+               stacktrace: _
+             } = meta
+
+      refute Map.has_key?(meta, :outcome)
+      # The document says so: the reason is the host's, and travels as span/3 defines.
+      assert Exception.message(meta.reason) =~ @marker
+      assert_marker_absent(name)
+    end
   end
 
   describe "latency/1" do
