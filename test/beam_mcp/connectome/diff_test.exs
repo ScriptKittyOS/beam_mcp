@@ -228,6 +228,12 @@ defmodule BeamMCP.Connectome.DiffTest do
     test "the options are a keyword list, refused by name otherwise; the hash is also given as hex" do
       {declared, observed} = crafted()
       assert {:error, {:invalid, :opts, %{}}} = Diff.run(declared, observed, %{window: @window})
+      # An option run/3 does not take is refused by name, as Server.new/1 refuses one.
+      assert {:error, {:invalid, :opts, [:windw]}} = Diff.run(declared, observed, windw: @window)
+
+      assert {:error, {:invalid, :opts, [:other]}} =
+               Diff.run(declared, observed, window: @window, other: 1)
+
       {:ok, diff} = Diff.run(declared, observed, window: @window)
       assert {:ok, hex} = Diff.hash_hex(diff)
       assert hex == Base.encode16(Diff.hash!(diff), case: :lower) and Diff.hash_hex!(diff) == hex
