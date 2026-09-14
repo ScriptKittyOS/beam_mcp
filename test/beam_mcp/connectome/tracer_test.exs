@@ -422,11 +422,14 @@ defmodule BeamMCP.Connectome.TracerTest do
            collector: c
          } do
       {:ok, pid} = start(c, modules: [Beta])
-      :persistent_term.erase({Tracer, :running})
+      # Another tracer's term in place of this one's: the companion must leave it alone.
+      foreign = {:atomics.new(1, []), [], self()}
+      :persistent_term.put({Tracer, :running}, foreign)
       Process.exit(pid, :kill)
       Process.sleep(50)
       assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
+      assert :persistent_term.get({Tracer, :running}, nil) == foreign
+      :persistent_term.erase({Tracer, :running})
     end
 
     test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",
