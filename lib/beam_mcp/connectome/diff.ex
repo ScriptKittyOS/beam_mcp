@@ -110,9 +110,17 @@ defmodule BeamMCP.Connectome.Diff do
 
   @doc """
   The diff of `declared` against `observed`. `opts` carries `window:` (required, a map in
-  the label grammar). Refuses by name: a graph `Graph.check/1` refuses (`{:declared, reason}`
-  or `{:observed, reason}`), a missing window (`{:missing, :window}`), a window with no
-  canonical bytes (`{:uncanonical, reason}`).
+  the label grammar) and nothing else.
+
+  Refuses by name, in this order: options that are not a keyword list or carry a key this
+  function does not take (`{:invalid, :opts, given_or_keys}`); the declared graph, then the
+  observed, each as `{:declared | :observed, reason}` -- `reason` being what `Graph.new/1`
+  refuses, then what `Canonical.encode/1` refuses (a graph with no canonical bytes has no
+  diff: `{:uncanonical, {:duplicate_id_after_nfc, id}}` and the rest), then an edge of the
+  other side's provenance (`{:invalid, :provenance, other}`); a missing window
+  (`{:missing, :window}`); a window with no canonical bytes
+  (`{:uncanonical, {:label_value, "record", :window, value}}`). The first refusal in that
+  order is the one answered.
   """
   @spec run(Graph.t(), Graph.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def run(%Graph{} = declared, %Graph{} = observed, opts) do
@@ -218,8 +226,16 @@ defmodule BeamMCP.Connectome.Diff do
   @spec hash_hex!(t()) :: String.t()
   def hash_hex!(%__MODULE__{} = diff), do: Base.encode16(hash!(diff), case: :lower)
 
+  @options [:window]
+
+  # A keyword list carrying only the options run/3 takes: a typo is refused by name, as
+  # `Server.new/1` refuses one, rather than read as "no window given".
   defp keyword(opts) do
-    if Keyword.keyword?(opts), do: :ok, else: {:error, {:invalid, :opts, opts}}
+    cond do
+      not Keyword.keyword?(opts) -> {:error, {:invalid, :opts, opts}}
+      (unknown = Keyword.keys(opts) -- @options) != [] -> {:error, {:invalid, :opts, unknown}}
+      true -> :ok
+    end
   end
 
   # A literal graph is read against everything Graph.new/1 refuses, then against
