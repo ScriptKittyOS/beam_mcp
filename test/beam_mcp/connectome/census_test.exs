@@ -141,7 +141,7 @@ defmodule BeamMCP.Connectome.CensusTest do
     "declared_sign: Edge.sign()",
     "observed_sign: Edge.sign()",
     "%Edge{from: from, to: to, kind: kind, sign: sign}",
-    "{{from, to, kind}, sign}"
+    "{{nfc(from), nfc(to), kind}, sign}"
   ]
 
   defp permitted_sign_line?(line) do
