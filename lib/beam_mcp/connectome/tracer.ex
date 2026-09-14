@@ -30,7 +30,8 @@ defmodule BeamMCP.Connectome.Tracer do
     sends to them are edges too; a host that wants only its own graph filters them.
 
   Calls are traced on every process in the node, the ones alive now and the ones spawned
-  while the tracer runs. The BEAM discards a trace event whose tracer is the process that
+  while the tracer runs -- except one a host already traces under its own tracer, which
+  the BEAM skips (one tracer per process) and logs once; its calls are no edges. The BEAM discards a trace event whose tracer is the process that
   generated it, so the tracer never traces its own writes (measured).
 
   What it refuses: a second tracer while one runs (`{:error, :already_running}`); starting

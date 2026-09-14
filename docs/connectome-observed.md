@@ -30,8 +30,9 @@ of a `function_clause` or a BIF error's stacktrace, so the frames in the event c
 arity in that position and never the list, and a frame's location keeps file and line
 only, and only as the compiler writes them — a charlist and an integer — a host can put
 any term into a frame through `:erlang.error/3`'s `error_info` or hand `:erlang.raise/3`
-frames of any shape, and none of it travels or breaks the rewrite; the host's own
-stacktrace is re-raised untouched. The file in a frame is the path the module was
+frames of any shape, and none of it travels or breaks the rewrite — a frame whose arity
+position is neither a list nor an integer is dropped from the event, as a fun frame is;
+the host's own stacktrace is re-raised untouched. The file in a frame is the path the module was
 compiled from, verbatim, as in any stacktrace; a handler that ships the event off the node
 ships that path. `reason` is the
 exception the host's dispatch raised, whatever the host put in it (a `KeyError` can carry
@@ -86,7 +87,9 @@ refuses to start without a running collector, with a limit that is not a positiv
 — there is no unbounded mode — with the wildcard or an unloadable module in `modules:`, or
 with a name in `processes:` that is not registered; a start that fails part-way clears
 what it set and answers `{:error, {:init_failed, reason}}`. Calls are traced on every
-process in the node, present and future.
+process in the node, present and future — except a process a host already traces under
+its own tracer, which the BEAM skips (one tracer per process) and logs once, so its calls
+are no edges.
 
 It stops itself at `max_messages` handled trace messages of any shape, a send to a dead
 process included, or at `max_duration_ms`, clearing every pattern and flag it set, and
@@ -121,7 +124,7 @@ names nothing, is erased by the next `start/1` or `stop/0` or by the tracer's ow
 and makes neither raise; a term of the right shape put there by someone else names what
 it names, and the next `start/1` or `stop/0` clears those modules' patterns, a host's own
 included. A running tracer's `stop/0` reads the tracer's own claim — flag, modules, the
-named processes — from the tracer's process dictionary, which nothing outside it can
+named processes' pids — from the tracer's process dictionary, which nothing outside it can
 write; its companion holds the same claim from the start, and reads a dictionary only to
 learn what a tracer running at its death claims. A claim of another shape — a process
 that took the tracer's name and put one there — is no claim: `stop/0` is `:ok` and clears
