@@ -40,6 +40,7 @@ is claimed.
   window. It is evidence the host can use to narrow what it declares; it is not a fault.
 - A **coverage bound** is the measured fraction of one graph the other accounts for, stated with
   the window it was measured over. It is reported as a number, never assumed complete.
+  `docs/connectome-diff.md` defines the classes and the counts the fractions are made from.
 
 ## Node kinds
 

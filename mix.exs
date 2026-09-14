@@ -29,7 +29,8 @@ defmodule BeamMCP.MixProject do
           "CHANGELOG.md",
           "docs/connectome.md",
           "docs/connectome-canonical.md",
-          "docs/connectome-observed.md"
+          "docs/connectome-observed.md",
+          "docs/connectome-diff.md"
         ]
       ]
     ]
