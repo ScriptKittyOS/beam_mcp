@@ -509,6 +509,111 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert :persistent_term.get({Tracer, :running}, nil) == nil
     end
 
+    test "a name reused during the run is not the tracer's to clear: a host's own flags on the new holder survive stop/0 and the deadline",
+         %{collector: c} do
+      # Found by the safety lane: the flags were cleared by NAME at clear time, so a process
+      # that took a named process's name after it died lost the host's own :send trace,
+      # silently, on both exit paths.
+      host_tracer = spawn_link(fn -> receive do: (_ -> :ok) end)
+
+      for exit_path <- [:stop, :deadline] do
+        holder1 = spawn(fn -> receive do: (_ -> :ok) end)
+        Process.register(holder1, :tracer_test_reused)
+
+        {:ok, pid} =
+          start(c,
+            modules: [],
+            processes: [:tracer_test_reused],
+            max_duration_ms: if(exit_path == :deadline, do: 100, else: 60_000)
+          )
+
+        ref = Process.monitor(pid)
+        ref1 = Process.monitor(holder1)
+        send(holder1, :die)
+        assert_receive {:DOWN, ^ref1, :process, ^holder1, _}
+        holder2 = spawn(fn -> receive do: (_ -> :ok) end)
+        Process.register(holder2, :tracer_test_reused)
+        :erlang.trace(holder2, true, [:send, :receive, {:tracer, host_tracer}])
+
+        case exit_path do
+          :stop ->
+            assert :ok = Tracer.stop()
+            assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+
+          :deadline ->
+            assert_receive {:DOWN, ^ref, :process, ^pid,
+                            {:shutdown, {:limit, :max_duration_ms, 100}}},
+                           5_000
+        end
+
+        {:flags, flags} = :erlang.trace_info(holder2, :flags)
+        assert Enum.sort(flags) == [:receive, :send]
+        assert {:tracer, ^host_tracer} = :erlang.trace_info(holder2, :tracer)
+        :erlang.trace(holder2, false, [:all])
+        send(holder2, :die)
+      end
+    end
+
+    test "a named process the host re-traced under its own tracer keeps that flag: only this tracer's flag is cleared",
+         %{collector: c} do
+      host_tracer = spawn_link(fn -> receive do: (_ -> :ok) end)
+      Process.register(self(), :tracer_test_retraced)
+      {:ok, pid} = start(c, modules: [], processes: [:tracer_test_retraced])
+      assert {:tracer, ^pid} = :erlang.trace_info(self(), :tracer)
+
+      # The host takes the process over: flags are global, and it may.
+      :erlang.trace(self(), false, [:all])
+      :erlang.trace(self(), true, [:send, {:tracer, host_tracer}])
+
+      assert :ok = Tracer.stop()
+      assert {:flags, [:send]} = :erlang.trace_info(self(), :flags)
+      assert {:tracer, ^host_tracer} = :erlang.trace_info(self(), :tracer)
+      :erlang.trace(self(), false, [:all])
+      Process.unregister(:tracer_test_retraced)
+    end
+
+    test "stop/0 reads the tracer's own claim, not the public term: under a forged term it still clears first and ends on the next message",
+         %{collector: c} do
+      # Measured by the safety lane: with a term that was not the tracer's, stop/0 had no
+      # flag and no modules to clear and queued behind everything -- 9 million rows
+      # written after the call, :ok at 5 s with the tracer alive and its pattern set.
+      {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000, max_duration_ms: 60_000)
+      ref = Process.monitor(pid)
+      true = :erlang.suspend_process(pid)
+      for _ <- 1..500, do: Traced.wrapped(1)
+      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), @marker, dead_pid()})
+      test = self()
+      spawn(fn -> send(test, {:stopped, Tracer.stop()}) end)
+      Process.sleep(50)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      true = :erlang.resume_process(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+      assert_receive {:stopped, :ok}, 5_000
+      {:ok, g} = Observed.snapshot(c)
+      assert [%Edge{weight: w}] = g.edges
+      assert w < 500
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+    end
+
+    test "a claim is honoured only from a tracer that is running: a forged well-shaped term does not keep a killed tracer's patterns set",
+         %{collector: c} do
+      # Measured by the safety lane: the companion took any well-shaped term whose flag was
+      # not its own as a newer tracer's claim, and a forged one naming its own modules
+      # left the killed tracer's pattern set with no tracer behind it.
+      {:ok, pid} = start(c, modules: [Beta])
+      {_, _, companion} = :persistent_term.get({Tracer, :running})
+      forged = {:atomics.new(1, []), [Beta], dead_pid()}
+      :persistent_term.put({Tracer, :running}, forged)
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+      refute Process.alive?(companion)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      # Not its own: left for the next start or stop, which erase it.
+      assert :persistent_term.get({Tracer, :running}, nil) == forged
+      assert :ok = Tracer.stop()
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+    end
+
     test "a running term of another shape is nobody's: stop/0 with no tracer erases it and answers :ok, and the next start proceeds",
          %{collector: c} do
       # The term is public and unowned. A lane forged it in six shapes and every one made
