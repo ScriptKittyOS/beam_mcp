@@ -46,7 +46,8 @@ defmodule BeamMCP.Connectome.Tracer do
   scheduled less often than the processes it traces. Two things keep that queue small: the
   tracer runs at high priority, and on every handled message it compares handled + queued
   against the limit and, the moment the sum reaches it, clears its patterns -- generation
-  stops there, and the tracer exits after what was already queued. So the memory bound is
+  stops there, and the tracer exits on the next message it handles; what was queued behind
+  it is discarded. So the memory bound is
   the node-wide call rate into the named modules times the tracer's scheduling latency at
   high priority, not `max_messages` (measured: 64 hot callers against a limit of 1 000
   peaked at 12.8 million queued messages before these two measures, and at 140 000 after;
@@ -65,7 +66,9 @@ defmodule BeamMCP.Connectome.Tracer do
   call to that module a breakpoint and would feed a host's own later `:call` tracer with
   arguments (measured); that is what the companion exists to prevent. The tracer watches
   the companion back and leaves `{:shutdown, :companion_gone}` if it dies, since it is the
-  only enforcer of the deadline and of the clear-on-kill. A new tracer waits for a previous
+  only enforcer of the deadline and of the clear-on-kill; a hot reload of this module
+  purges the companion, an anonymous function of the old code, and ends a running trace
+  that way (measured). A new tracer waits for a previous
   companion to finish before it starts (measured: without that, the old companion's late
   erase landed on the new tracer's running term 499 times in 500). Patterns are global and
   unowned in the BEAM: clearing the patterns on a module clears any that someone else set
@@ -301,9 +304,12 @@ defmodule BeamMCP.Connectome.Tracer do
     seen = seen + 1
     state = %{state | seen: seen}
 
-    # The queue length is read every 32nd message: under arrival the read fetches the
-    # in-transit signals and costs ~2 µs against ~0.1 µs for the handling itself
-    # (measured), and the window it widens is 32 messages.
+    # The queue length is read every 32nd message: under arrival the read costs ~2 µs
+    # against ~0.1 µs for the handling itself (measured), and the window it widens is 32
+    # messages. The read is best effort: a non-message signal ahead of the queue -- a
+    # persistent-term erase sends every process one -- hides what is queued behind it
+    # from the count (measured: a first read of 2..5 with 100 queued, in about one run in
+    # fifteen). The hard bound does not depend on it: handled never exceeds the limit.
     queued =
       if rem(seen, 32) == 0 or seen == 1,
         do: elem(Process.info(self(), :message_queue_len), 1),

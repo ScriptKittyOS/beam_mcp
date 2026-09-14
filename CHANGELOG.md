@@ -46,8 +46,8 @@ All notable changes to this project are documented here. The format follows
   guessed at: a float, two ids or two label keys that coincide after normalisation, and a string
   that is not valid UTF-8; and, by `to_graphml/1` alone, a character XML 1.0 cannot carry.
 - **The observed connectome: a span on the dispatch path, a collector, a guarded tracer.**
-  `BeamMCP.Server` emits `[:beam_mcp, :dispatch, :start | :stop | :exception]` through
-  `:telemetry.span/3` around the host's dispatch function — metadata `server_name` and `tool`,
+  `BeamMCP.Server` emits `[:beam_mcp, :dispatch, :start | :stop | :exception]` in
+  `:telemetry.span/3`'s shape around the host's dispatch function — metadata `server_name` and `tool`,
   plus `outcome` on stop; no argument, result or header bytes — and `:telemetry` is a new
   required dependency (Apache-2.0, no dependencies of its own). `BeamMCP.Connectome.Observed`
   is a process the host adds to its own tree: it turns every attempt into one row keyed by
