@@ -17,6 +17,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
   alias BeamMCP.Connectome.{Canonical, Edge, Graph, Node, Observed}
   alias BeamMCP.Fixture.ObservedCatalog, as: Catalog
   alias BeamMCP.Server
+  alias BeamMCP.Transport.HTTP
 
   @marker "PAYLOAD-MARKER-7f3a9c"
   @server_name "srv"
@@ -417,7 +418,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
       {name, _} = start_collector()
 
       opts =
-        BeamMCP.Transport.HTTP.init(
+        HTTP.init(
           catalog: Catalog,
           dispatch: fn _, a, _ -> {:ok, a} end,
           authorize: fn _ -> :ok end,
@@ -442,7 +443,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
         |> put_req_header("authorization", "Bearer #{@marker}")
         |> put_req_header("x-secret", @marker)
         |> put_req_header("user-agent", @marker)
-        |> BeamMCP.Transport.HTTP.call(opts)
+        |> HTTP.call(opts)
 
       assert conn.status == 200
       assert_receive {[:beam_mcp, :dispatch, :start], _, start_meta}
