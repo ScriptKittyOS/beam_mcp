@@ -117,12 +117,16 @@ patterns set until the next `start/1` or `stop/0`, either of which clears what t
 tracer's running term names. That term, `{BeamMCP.Connectome.Tracer, :running}`, is a
 public persistent term and is trusted only in its own shape — a three-tuple whose second
 element is a list of module atoms; a term of another shape put there by someone else
-names nothing, is erased by the next `start/1` or `stop/0`, and makes neither raise; a
-term of the right shape put there by someone else names what it names, and the next
-`start/1` or `stop/0` clears those modules' patterns, a host's own included. A running
-tracer's `stop/0` and its companion read the tracer's own claim — flag, modules, the
+names nothing, is erased by the next `start/1` or `stop/0` or by the tracer's own exit,
+and makes neither raise; a term of the right shape put there by someone else names what
+it names, and the next `start/1` or `stop/0` clears those modules' patterns, a host's own
+included. A running tracer's `stop/0` reads the tracer's own claim — flag, modules, the
 named processes — from the tracer's process dictionary, which nothing outside it can
-write: a forged term neither delays a stop nor passes for a newer tracer's claim. A
+write; its companion holds the same claim from the start, and reads a dictionary only to
+learn what a tracer running at its death claims. A claim of another shape — a process
+that took the tracer's name and put one there — is no claim: `stop/0` is `:ok` and clears
+nothing it names. So a forged term neither delays a stop nor passes for a newer tracer's
+claim. A
 `start/1` waits a bounded second for a previous companion still clearing after a kill;
 `stop/0` waits a bounded five seconds for the tracer to leave and is `:ok` either way. A
 companion that outlives a kill clears only the modules no tracer running at that moment
