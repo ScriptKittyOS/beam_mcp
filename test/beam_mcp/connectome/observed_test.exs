@@ -438,13 +438,20 @@ defmodule BeamMCP.Connectome.ObservedTest do
       on_exit(fn -> :telemetry.detach(id) end)
       {name, _} = start_collector()
 
+      # The arity position too: a lane put the arguments there, as a map, a tuple, a
+      # binary and an atom, and each travelled verbatim. A frame whose arity is neither
+      # a list nor an integer is no frame the BEAM writes, and is dropped.
       built = fn args ->
         [
           {Enum, :x, 1, [args]},
           {Enum, :y, [args | args], []},
           {Enum, :z, 2, [file: @marker, line: @marker]},
           {Enum, :w, 0, [file: ~c"a.ex", line: 7, error_info: %{cause: args}]},
-          {Enum, :u, 1, [file: [args], line: 1.5]}
+          {Enum, :u, 1, [file: [args], line: 1.5]},
+          {Enum, :t, args, []},
+          {Enum, :s, {args, @marker}, []},
+          {Enum, :r, @marker, []},
+          {Enum, :q, :"#{@marker}", []}
         ]
       end
 
@@ -471,6 +478,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
                {Enum, :u, 1, []}
              ]
 
+      refute inspect(frames, limit: :infinity, printable_limit: :infinity) =~ @marker
       refute_received {[:beam_mcp, :dispatch, :stop], _, _}
       assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
       assert_marker_absent(name)
