@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "          clear(modules, processes)\n          :atomics.put(flag, 1, @deadline)\n          send(tracer, :max_duration)"
-new = "          _ = {modules, processes}\n          :atomics.put(flag, 1, @deadline)\n          send(tracer, :max_duration)"
+old = "          clear(modules, pids, tracer)\n          :atomics.put(flag, 1, @deadline)\n          send(tracer, :max_duration)"
+new = "          _ = {modules, pids}\n          :atomics.put(flag, 1, @deadline)\n          send(tracer, :max_duration)"
 
 if s.count(old) != 1:
     sys.exit("Mtr12: anchor found %d times" % s.count(old))

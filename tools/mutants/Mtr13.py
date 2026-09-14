@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "      {^flag, _, _} ->\n        clear_patterns(modules)\n        :persistent_term.erase(@running)\n\n      {_other, claimed, _} ->\n        clear_patterns(modules -- claimed)"
-new = "      {^flag, _, _} ->\n        clear_patterns(modules)\n        :persistent_term.erase(@running)\n\n      {_other, claimed, _} ->\n        clear_patterns(modules -- claimed)\n        :persistent_term.erase(@running)"
+old = "      {^flag, _, _} -> :persistent_term.erase(@running)\n      _ -> :ok"
+new = "      {^flag, _, _} -> :persistent_term.erase(@running)\n      _ -> :persistent_term.erase(@running)"
 
 if s.count(old) != 1:
     sys.exit("Mtr13: anchor found %d times" % s.count(old))
