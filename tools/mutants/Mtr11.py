@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "        {:DOWN, ^ref, :process, ^tracer, _reason} ->\n          clear_patterns(modules)\n          :persistent_term.erase(@running)\n      after"
-new = "        {:DOWN, ^ref, :process, ^tracer, _reason} ->\n          :persistent_term.erase(@running)\n      after"
+old = "        {:DOWN, ^ref, :process, ^tracer, _reason} ->\n          after_death(flag, modules)\n      after"
+new = "        {:DOWN, ^ref, :process, ^tracer, _reason} ->\n          after_death(flag, [])\n      after"
 
 if s.count(old) != 1:
     sys.exit("Mtr11: anchor found %d times" % s.count(old))

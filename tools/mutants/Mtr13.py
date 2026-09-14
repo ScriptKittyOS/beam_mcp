@@ -11,7 +11,7 @@ p = sys.argv[1]
 s = open(p).read()
 
 old = "      {^flag, _, _} -> :persistent_term.erase(@running)\n      _ -> :ok"
-new = "      {_, _, _} -> :persistent_term.erase(@running)\n      _ -> :ok"
+new = "      {_, _, _} -> :persistent_term.erase(@running)\n      _ -> flag"
 
 if s.count(old) != 1:
     sys.exit("Mtr13: anchor found %d times" % s.count(old))
