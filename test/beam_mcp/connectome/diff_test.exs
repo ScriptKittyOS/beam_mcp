@@ -218,6 +218,7 @@ defmodule BeamMCP.Connectome.DiffTest do
       assert {:ok, ~s({"a":[1,"café"],"b":{"k":"v"},"z":true})} =
                Canonical.encode_value(%{"b" => %{k: :v}, z: true, a: [1, "cafe\u0301"]})
 
+      assert {:error, {:uncanonical, _}} = Canonical.encode_value([1, 2])
       assert {:error, {:uncanonical, _}} = Canonical.encode_value(%{f: 1.5})
       assert {:error, {:uncanonical, _}} = Canonical.encode_value(%{t: {1, 2}})
       assert {:error, {:uncanonical, _}} = Canonical.encode_value(%{"é" => 1, "e\u0301" => 2})
