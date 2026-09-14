@@ -1,0 +1,254 @@
+<!--
+SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# The connectome, from its JSON export
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.19"},
+  {:jason, "~> 1.4"}
+])
+```
+
+## What this notebook is
+
+beam_mcp exports a composed MCP system's call graph twice -- **declared** (what can
+happen, from the catalog and `:xref`) and **observed** (what did happen, from a
+telemetry span on the one dispatch site) -- and diffs the two into four classes. Every
+export is canonical JSON (`docs/connectome-canonical.md`): the same graph gives the same
+bytes and the same SHA-256, whoever wrote it.
+
+This notebook renders those exports and nothing else. It does not install `beam_mcp`, and
+no cell names it: a reader with only the JSON -- a reviewer, an auditor, a consumer on
+another platform -- sees exactly what a reader with the package sees. Run it from a
+checkout of the repository; the four files it reads sit beside it under `exports/`, and
+each is held by a test to what the package produces from its fixtures today. To render
+your own system, point the next cell at your own exports.
+
+The fixture is small on purpose: a server `fx` declaring two tools, one resource, one
+prompt and six modules, and a run of the collector in which the *running* catalog carried
+a third tool the declaration never mentioned.
+
+```elixir
+read = fn name ->
+  __DIR__
+  |> Path.join("exports/#{name}")
+  |> File.read!()
+  |> Jason.decode!()
+end
+
+declared = read.("fx.declared.json")
+observed = read.("fx.observed.json")
+sidecar = read.("fx.observed.sidecar.json")
+diff = read.("fx.diff.json")
+
+Kino.Markdown.new("""
+| export | schema | nodes | edges |
+| -- | -- | -- | -- |
+| declared | #{declared["schema_version"]} | #{length(declared["nodes"])} | #{length(declared["edges"])} |
+| observed | #{observed["schema_version"]} | #{length(observed["nodes"])} | #{length(observed["edges"])} |
+| observed sidecar | #{sidecar["schema_version"]} | -- | #{length(sidecar["weights"])} weights |
+| diff | #{diff["schema_version"]} | -- | #{diff["classes"] |> Map.values() |> Enum.map(&length/1) |> Enum.sum()} classified |
+""")
+```
+
+## The renderer
+
+One module, from the JSON's own vocabulary: a node's `kind` picks its shape, an edge's
+`kind` picks its arrow, and a weight from the sidecar (the observed graph carries none in
+its hashed bytes -- the sidecar is the unsigned companion) labels the arrow it belongs to.
+Node ids are the graph's, shown verbatim; Mermaid gets a short alias for each because an
+id like `fx/resource/r:%2F%2Fa` is not a Mermaid identifier.
+
+```elixir
+defmodule Wiring do
+  @moduledoc """
+  Mermaid source from a canonical connectome export. Nothing here is inferred: every
+  node, edge, weight and class comes from the JSON it is handed.
+  """
+
+  @arrow %{"invoke" => "-->", "read" => "-.->", "message" => "==>"}
+
+  @doc "A wiring diagram of one graph; `weights:` takes the observed sidecar."
+  def graph(graph, opts \\ []) do
+    weights = weights(opts[:weights])
+    alias_of = aliases(graph["nodes"])
+
+    lines =
+      Enum.map(graph["nodes"], &node(&1, alias_of)) ++
+        Enum.map(graph["edges"], fn e ->
+          label =
+            case Map.get(weights, {e["from"], e["to"], e["kind"]}) do
+              nil -> ""
+              w -> "|#{w}|"
+            end
+
+          "  #{alias_of[e["from"]]} #{@arrow[e["kind"]]}#{label} #{alias_of[e["to"]]}"
+        end)
+
+    Kino.Mermaid.new(Enum.join(["graph LR" | lines], "\n"))
+  end
+
+  @doc """
+  The diff over the union of both graphs' nodes: one arrow per classified label, coloured
+  by class; a node only one side knows is drawn dashed.
+  """
+  def diff(diff, declared, observed) do
+    d_ids = MapSet.new(declared["nodes"], & &1["id"])
+    o_ids = MapSet.new(observed["nodes"], & &1["id"])
+    nodes = Enum.uniq_by(declared["nodes"] ++ observed["nodes"], & &1["id"])
+    alias_of = aliases(nodes)
+
+    classified =
+      for {class, edges} <- diff["classes"], e <- edges, do: {class, e}
+
+    node_lines = Enum.map(nodes, &node(&1, alias_of))
+
+    edge_lines =
+      Enum.map(classified, fn {_class, e} ->
+        "  #{alias_of[e["from"]]} #{@arrow[e["kind"]]} #{alias_of[e["to"]]}"
+      end)
+
+    link_styles =
+      classified
+      |> Enum.with_index()
+      |> Enum.map(fn {{class, _}, i} -> "  linkStyle #{i} stroke:#{colour(class)},stroke-width:2px" end)
+
+    one_side =
+      for %{"id" => id} <- nodes,
+          not (MapSet.member?(d_ids, id) and MapSet.member?(o_ids, id)),
+          do: "  style #{alias_of[id]} stroke-dasharray: 5 5"
+
+    Kino.Mermaid.new(
+      Enum.join(["graph LR" | node_lines ++ edge_lines ++ link_styles ++ one_side], "\n")
+    )
+  end
+
+  @doc "The legend for `diff/3`, in the same colours."
+  def legend do
+    Kino.Markdown.new(
+      Enum.map_join(
+        [
+          {"declared_and_observed", "declared, and seen in the window"},
+          {"declared_never_observed", "dead authority: declared, never seen"},
+          {"observed_but_undeclared", "a drift finding: seen, never declared"},
+          {"changed_sign", "in both, with a sign that differs"}
+        ],
+        "\n",
+        fn {class, meaning} ->
+          "- <span style=\"color:#{colour(class)}\">&#9644;</span> `#{class}` -- #{meaning}"
+        end
+      ) <> "\n- a dashed node is known to one side only"
+    )
+  end
+
+  defp colour("declared_and_observed"), do: "#2a9d8f"
+  defp colour("declared_never_observed"), do: "#8d99ae"
+  defp colour("observed_but_undeclared"), do: "#e63946"
+  defp colour("changed_sign"), do: "#f4a261"
+
+  defp aliases(nodes) do
+    nodes
+    |> Enum.map(& &1["id"])
+    |> Enum.with_index()
+    |> Map.new(fn {id, i} -> {id, "n#{i}"} end)
+  end
+
+  defp node(%{"id" => id, "kind" => kind}, alias_of) do
+    {open, close} =
+      case kind do
+        "server" -> {"[[", "]]"}
+        "tool" -> {"([", "])"}
+        "resource" -> {"[(", ")]"}
+        "prompt" -> {">", "]"}
+        _ -> {"[", "]"}
+      end
+
+    ~s(  #{alias_of[id]}#{open}"#{String.replace(id, ~s("), "#quot;")}"#{close})
+  end
+
+  defp weights(nil), do: %{}
+
+  defp weights(%{"weights" => rows}),
+    do: Map.new(rows, &{{&1["from"], &1["to"], &1["kind"]}, &1["weight"]})
+end
+```
+
+## Declared: what can happen
+
+The catalog's tools, resources and prompts hang off the server node; the modules and the
+`invoke` edges between them are what `:xref` found in the host's beams. Signs are the
+host's to populate and the package never does, so every edge here reads `unknown` in the
+JSON and the diagram draws none.
+
+```elixir
+Wiring.graph(declared)
+```
+
+## Observed: what did happen
+
+Edge identity only -- never a payload byte -- with the count of each edge in the window
+from the sidecar. Three calls to `echo`, one to `write`, and one to a tool the declaration
+does not know.
+
+```elixir
+Wiring.graph(observed, weights: sidecar)
+```
+
+## The diff: every edge of either graph, in exactly one class
+
+```elixir
+Wiring.legend()
+```
+
+```elixir
+Wiring.diff(diff, declared, observed)
+```
+
+The classes as rows, in the diff's own order (labels sorted by their canonical bytes):
+
+```elixir
+diff["classes"]
+|> Enum.flat_map(fn {class, edges} ->
+  Enum.map(edges, &%{class: class, from: &1["from"], kind: &1["kind"], to: &1["to"]})
+end)
+|> Kino.DataTable.new(keys: [:class, :from, :kind, :to], name: "classified labels")
+```
+
+## Coverage: integers the consumer divides
+
+A float has no canonical bytes, so the diff carries counts and the consumer -- this
+notebook, here -- does the division. The two figures a reader wants first are
+**completeness** (observed edges whose both ends are declared nodes, over observed edges:
+how much of what ran was even nameable) and **endpoint coverage** (declared edges whose
+both ends the window saw as nodes, over declared edges: how much of the declaration the
+window reached at all).
+
+```elixir
+c = diff["coverage"]
+
+ratio = fn num, den ->
+  if den == 0, do: "#{num} / 0 (undefined)", else: "#{num} / #{den} = #{Float.round(num / den, 3)}"
+end
+
+Kino.DataTable.new(
+  [
+    %{figure: "declared edges observed", value: ratio.(c["declared_and_observed"], c["declared_edges"])},
+    %{figure: "observed edges declared", value: ratio.(c["declared_and_observed"], c["observed_edges"])},
+    %{figure: "completeness", value: ratio.(c["observed_endpoint_declared"], c["observed_edges"])},
+    %{figure: "endpoint coverage", value: ratio.(c["declared_endpoint_covered"], c["declared_edges"])},
+    %{figure: "nodes in both", value: ratio.(c["nodes_in_both"], c["declared_nodes"])}
+  ],
+  keys: [:figure, :value],
+  name: "coverage, divided here"
+)
+```
+
+## What this notebook does not do
+
+It renders what an export says and never what a renderer might guess: no layout hint, no
+weight, no sign and no class is drawn that the JSON did not carry. It computes no diff of
+its own -- the diff is the package's, hashed, and this is a view of it. And it holds no
+tools, no domain and no policy, which is beam_mcp's thesis applied to its own pictures.

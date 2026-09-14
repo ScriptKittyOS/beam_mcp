@@ -1,0 +1,1 @@
+{"schema_version":1,"weights":[{"from":"fx/server","kind":"invoke","provenance":"observed","to":"fx/tool/echo","weight":3},{"from":"fx/server","kind":"invoke","provenance":"observed","to":"fx/tool/probe","weight":1},{"from":"fx/server","kind":"invoke","provenance":"observed","to":"fx/tool/write","weight":1}]}

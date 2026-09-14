@@ -10,6 +10,8 @@ defmodule BeamMCP.LivebookTest do
   # does that by hand, with its run recorded, and this test does the rest offline.
   use ExUnit.Case, async: true
 
+  alias BeamMCP.Fixture.Livebook, as: Fixture
+
   @root Path.expand("../..", __DIR__)
   @exports_dir "livebooks/exports"
 
@@ -26,7 +28,7 @@ defmodule BeamMCP.LivebookTest do
 
   describe "the exports" do
     test "every tracked export is what the package produces from the fixtures, and nothing else is tracked there" do
-      expected = BeamMCP.Fixture.Livebook.exports()
+      expected = Fixture.exports()
       files = tracked(@exports_dir)
       json = Enum.filter(files, &String.ends_with?(&1, ".json"))
 
@@ -45,7 +47,7 @@ defmodule BeamMCP.LivebookTest do
     end
 
     test "the export shows three classes and the drift the running catalog carries" do
-      diff = Jason.decode!(BeamMCP.Fixture.Livebook.exports()["fx.diff.json"])
+      diff = Jason.decode!(Fixture.exports()["fx.diff.json"])
       assert length(diff["classes"]["declared_and_observed"]) == 2
       assert length(diff["classes"]["declared_never_observed"]) == 2
       assert [%{"to" => "fx/tool/probe"}] = diff["classes"]["observed_but_undeclared"]
@@ -70,9 +72,10 @@ defmodule BeamMCP.LivebookTest do
           assert {:ok, _} = Code.string_to_quoted(code), "#{path}: cell #{i} does not parse"
         end
 
+        # Every string literal naming a .json file is an export the notebook reads.
         named =
           cells
-          |> Enum.flat_map(&Regex.scan(~r/"exports\/([^"]+)"/, &1, capture: :all_but_first))
+          |> Enum.flat_map(&Regex.scan(~r/"([^"#]+\.json)"/, &1, capture: :all_but_first))
           |> List.flatten()
           |> Enum.uniq()
 
