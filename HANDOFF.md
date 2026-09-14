@@ -21,13 +21,14 @@ each round closed.
   writes it. `git log main..slice/015-release-0-4-0` is the authority.
 - Gate green on the branch head, **thirteen steps**, every line read as `pass`: format
   (56 tracked `.ex`/`.exs` — the population is now the tracked set), compile, instruments
-  (10 tracked `.sh`, 130 tracked `.py` parse), test, credo, properties (5 at 1 000 generations),
+  (10 tracked `.sh`, 130 tracked `.py` parse), test, credo, properties (6 at 1 000 generations),
   optional deps, bench (the collector's overhead under the 1.5 µs ceiling; the diff engine's
   cost recorded), docs, reuse, licence files, publication, messages. Archived per commit.
-- **5 properties, 430 tests, 0 failures**, under `systemd-run --user --scope -p MemoryMax=32G`.
+- **6 properties, 430 tests, 0 failures**, under `systemd-run --user --scope -p MemoryMax=32G`.
   Derivation: 420 + 4 properties at the branch's opening (014 merged); +1 property (the diff's
   determinism, promoted from a test); +3 (the Livebook and its exports); +1 (the docs census);
-  +6 (README claims pinned). Each step is one commit and its count is in that commit's message.
+  +6 (README claims pinned); +1 property (the gate's generation count, held by the suite —
+  a review finding). Each step is one commit and its count is in that commit's message.
 - `mix hex.build` clean on the branch head (exit 0, no warning; the tarball is git-ignored and
   was removed) and again on a preview of the release commit, where it builds `beam_mcp-0.4.0`.
 - Version **`0.3.1`** in `mix.exs`, unchanged. **`0.3.1` is published on Hex and tagged**; its
@@ -59,6 +60,13 @@ each round closed.
 
 Every feature above has its red archived before its green, and the gate's output is archived
 at every commit with its exit code.
+
+**Review.** Three rounds, two lanes. Round 1 read the whole slice (both approve; thirteen
+findings, every one taken as an edit with its own red — among them a bench that would have
+passed green over a collector that collected nothing, a properties line that printed a count
+nothing measured, and fifteen short aliases ExDoc left unlinked). Rounds 2 and 3 were delta
+reads of those edits (both approve). The signoff tool verifies two approvals on the reviewed
+tree; this file's count line and this paragraph are the release commit's, made after it.
 
 ## Owner decisions still open
 
