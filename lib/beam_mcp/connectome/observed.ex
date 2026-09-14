@@ -44,11 +44,12 @@ defmodule BeamMCP.Connectome.Observed do
 
   @typedoc """
   A row: the canonical edge key, the call count, the latency sum and max in native time
-  units, and the server name and tool the key was derived from -- an id is never parsed
-  back, so the parts travel beside it and the snapshot rebuilds the nodes from them.
+  units, and the two node identities the key was derived from -- an id is never parsed
+  back, so the identities travel beside it and the snapshot rebuilds the nodes from them.
   """
   @type row ::
-          {Edge.key(), pos_integer(), non_neg_integer(), non_neg_integer(), String.t(), atom()}
+          {Edge.key(), pos_integer(), non_neg_integer(), non_neg_integer(), Node.identity(),
+           Node.identity()}
 
   @doc """
   Starts the collector. Options: `name:` (required; the registered name, also the table's).
@@ -74,14 +75,12 @@ defmodule BeamMCP.Connectome.Observed do
     with {:ok, rows} <- fetch_rows(name) do
       nodes =
         rows
-        |> Enum.flat_map(fn {_key, _count, _sum, _max, server, tool} ->
-          [{:server, server}, {:tool, server, tool}]
-        end)
+        |> Enum.flat_map(fn {_key, _count, _sum, _max, from, to} -> [from, to] end)
         |> Enum.uniq()
         |> Enum.map(&build_node/1)
 
       edges =
-        for {{from, to, kind, provenance}, count, _sum, _max, _server, _tool} <- rows do
+        for {{from, to, kind, provenance}, count, _sum, _max, _from, _to} <- rows do
           Edge.new!(from: from, to: to, kind: kind, provenance: provenance, weight: count)
         end
 
@@ -99,7 +98,7 @@ defmodule BeamMCP.Connectome.Observed do
   def latency(name) do
     case fetch_rows(name) do
       {:ok, rows} ->
-        Map.new(rows, fn {key, count, sum, max, _server, _tool} ->
+        Map.new(rows, fn {key, count, sum, max, _from, _to} ->
           {key,
            %{
              count: count,
@@ -160,12 +159,23 @@ defmodule BeamMCP.Connectome.Observed do
   @doc false
   # Runs in the dispatching process. Reads three things from the event and nothing else.
   def handle_event(_event, %{duration: duration}, %{server_name: server, tool: tool}, name) do
-    key = {Node.id({:server, server}), Node.id({:tool, server, tool}), :invoke, :observed}
+    observe(name, {:server, server}, {:tool, server, tool}, :invoke, duration)
+  end
+
+  @doc """
+  Records one observation of the edge `from` → `to` of `kind` into the table under `name`,
+  with a latency sample in native time units (0 when there is none). Identity only: the
+  two node identities and a kind. This is what the telemetry handler and the tracer call;
+  a host may call it too for an edge it observed by its own means.
+  """
+  @spec observe(atom(), Node.identity(), Node.identity(), Edge.kind(), non_neg_integer()) :: :ok
+  def observe(name, from, to, kind, duration \\ 0) do
+    key = {Node.id(from), Node.id(to), kind, :observed}
     duration = max(duration, 0)
 
     # Count and sum in one atomic step, inserting the row on first sight; then the max as an
     # atomic compare-and-set, so two callers racing never lose the larger value.
-    :ets.update_counter(name, key, [{2, 1}, {3, duration}], {key, 0, 0, 0, server, tool})
+    :ets.update_counter(name, key, [{2, 1}, {3, duration}], {key, 0, 0, 0, from, to})
 
     :ets.select_replace(name, [
       {{key, :"$1", :"$2", :"$3", :"$4", :"$5"}, [{:<, :"$3", duration}],
@@ -182,9 +192,17 @@ defmodule BeamMCP.Connectome.Observed do
     end
   end
 
+  # The node behind an identity, by the identity's own shape: the kind and level a builder
+  # would give it. The four shapes the collector and the tracer write.
   defp build_node({:server, _} = identity),
     do: Node.new!(kind: :server, level: :server, identity: identity)
 
   defp build_node({:tool, _, _} = identity),
     do: Node.new!(kind: :tool, level: :server, identity: identity)
+
+  defp build_node({:process, _, _} = identity),
+    do: Node.new!(kind: :process, level: :server, identity: identity)
+
+  defp build_node({:module, _, m} = identity) when is_atom(m),
+    do: Node.new!(kind: :module, level: :module, identity: identity)
 end
