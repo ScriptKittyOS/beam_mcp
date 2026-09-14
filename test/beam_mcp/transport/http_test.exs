@@ -300,6 +300,39 @@ defmodule BeamMCP.Transport.HTTPTest do
       refute conn.resp_body =~ "exploded"
       assert body!(conn)["error"]["message"] == "Internal error"
     end
+
+    test "and the log carries the frames with arities, never the caller's arguments" do
+      # Found by a review lane: the BEAM puts a call's argument list in the top frame of a
+      # BIF or function_clause error, and the fault log printed the host's stacktrace
+      # untouched -- a caller's bytes in the host's log, and in whatever the host ships its
+      # logs to. The log keeps the diagnosis (module, function, arity, file, line) and drops
+      # the arguments, the same rewrite the telemetry event carries.
+      # The dispatch proves it saw the marker before it raises with it in the frame: the
+      # first draft of this test sent it under a mirrored-header key and was refused with a
+      # 400 before dispatch -- a vacuous marker test, the shape 013 taught.
+      me = self()
+
+      o =
+        opts(
+          dispatch: fn _n, a, _o ->
+            send(me, {:dispatched, a})
+            :erlang.binary_to_integer(a)
+          end
+        )
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn = post(call_body(%{"plain" => "PAYLOAD-MARKER-http"}), call_headers([]), o)
+          assert conn.status == 500
+          refute conn.resp_body =~ "PAYLOAD-MARKER"
+        end)
+
+      assert_received {:dispatched, %{plain: "PAYLOAD-MARKER-http"}}
+
+      assert log =~ "binary_to_integer"
+      assert log =~ "ArgumentError"
+      refute log =~ "PAYLOAD-MARKER-http"
+    end
   end
 
   describe "the standard request headers the specification requires" do

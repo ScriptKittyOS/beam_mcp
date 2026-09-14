@@ -37,6 +37,67 @@ defmodule BeamMCP.ServerTest do
     end
   end
 
+  describe "new/1 refuses a wrong option by name, at construction" do
+    # Found by a review lane: `server_name` was held whatever it was, and a non-binary one
+    # raised inside the connectome's id derivation at snapshot time, far from the call that
+    # supplied it. The catalog was the only option validated. Every option `new/1` accepts
+    # is now read the way the catalog is: refused at `new/1` with a message naming the key
+    # and the shape it wanted, never guessed at.
+    test "server_name must be a string" do
+      for bad <- [:beam_mcp, ~c"beam_mcp", 1, nil] do
+        assert_raise ArgumentError, ~r/:server_name/, fn ->
+          Server.new(catalog: FakeCatalog, server_name: bad)
+        end
+      end
+
+      assert %{server_name: "s"} = Server.new(catalog: FakeCatalog, server_name: "s")
+    end
+
+    test "dispatch, when given, must be a function of three arguments" do
+      for bad <- [fn -> :ok end, fn _, _ -> :ok end, :dispatch, &Function.identity/1] do
+        assert_raise ArgumentError, ~r/:dispatch/, fn ->
+          Server.new(catalog: FakeCatalog, dispatch: bad)
+        end
+      end
+
+      # Absent is allowed: a server that serves no tools/call needs none.
+      assert %{dispatch: nil} = Server.new(catalog: FakeCatalog)
+    end
+
+    test "dispatch_opts must be a keyword list" do
+      for bad <- [%{a: 1}, [1, 2], "opts"] do
+        assert_raise ArgumentError, ~r/:dispatch_opts/, fn ->
+          Server.new(catalog: FakeCatalog, dispatch_opts: bad)
+        end
+      end
+
+      assert %{dispatch_opts: [a: 1]} = Server.new(catalog: FakeCatalog, dispatch_opts: [a: 1])
+    end
+
+    test "tools_ttl_ms must be a non-negative integer, tools_cache_scope a string" do
+      for bad <- [-1, 1.5, "0", nil] do
+        assert_raise ArgumentError, ~r/:tools_ttl_ms/, fn ->
+          Server.new(catalog: FakeCatalog, tools_ttl_ms: bad)
+        end
+      end
+
+      for bad <- [:public, 1, nil] do
+        assert_raise ArgumentError, ~r/:tools_cache_scope/, fn ->
+          Server.new(catalog: FakeCatalog, tools_cache_scope: bad)
+        end
+      end
+
+      assert %{tools_ttl_ms: 0, tools_cache_scope: "public"} =
+               Server.new(catalog: FakeCatalog, tools_ttl_ms: 0, tools_cache_scope: "public")
+    end
+
+    test "an option new/1 does not accept is refused by name too" do
+      assert_raise ArgumentError, ~r/:server_nam\b/, fn ->
+        Server.new(catalog: FakeCatalog, server_nam: "typo")
+      end
+    end
+  end
+
   test "initialize advertises MCP tool capability" do
     state = Server.new(catalog: FakeCatalog)
 
