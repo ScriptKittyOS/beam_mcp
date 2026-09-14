@@ -54,6 +54,10 @@ defmodule BeamMCP.Connectome.ObservedTest do
     end
   end
 
+  # A function with one clause that no dispatch argument matches: the BEAM's
+  # function_clause error puts the arguments in the stacktrace's top frame.
+  def no_clause_for(:never), do: :ok
+
   defp flush do
     receive do
       _ -> flush()
@@ -352,6 +356,98 @@ defmodule BeamMCP.Connectome.ObservedTest do
       refute Map.has_key?(meta, :outcome)
       # The document says so: the reason is the host's, and travels as span/3 defines.
       assert Exception.message(meta.reason) =~ @marker
+      assert_marker_absent(name)
+    end
+
+    test "the :exception stacktrace carries arities, never arguments: a function_clause or a BIF error would have put the call's arguments in its top frame" do
+      # An adversarial read found the BEAM's own stacktrace carrying the argument list for
+      # a function_clause and for a BIF badarg -- three of four common failure shapes --
+      # while the page said no argument bytes are in any event.
+      id = {__MODULE__, :frames, System.unique_integer()}
+
+      :ok =
+        :telemetry.attach(id, [:beam_mcp, :dispatch, :exception], &__MODULE__.forward/4, self())
+
+      on_exit(fn -> :telemetry.detach(id) end)
+      {name, _} = start_collector()
+
+      for dispatch <- [
+            fn _, args, _ -> :erlang.binary_to_atom(args, :utf8) end,
+            fn _, args, _ -> Map.fetch!(args, :missing) end,
+            fn _, args, _ -> __MODULE__.no_clause_for(args) end
+          ] do
+        state =
+          server(reporting_dispatch(self(), fn -> :unused end) |> then(fn _ -> dispatch end))
+
+        try do
+          call(state, :echo, %{"k" => @marker})
+        rescue
+          _ -> :raised
+        end
+
+        assert_receive {[:beam_mcp, :dispatch, :exception], _, %{stacktrace: frames}}
+        refute inspect(frames, limit: :infinity, printable_limit: :infinity) =~ @marker
+
+        for frame <- frames do
+          assert {_m, _f, arity, _loc} = frame
+          assert is_integer(arity)
+        end
+      end
+
+      assert_marker_absent(name)
+    end
+  end
+
+  describe "through the HTTP transport" do
+    use Plug.Test
+
+    test "request headers carrying the marker reach neither the events nor the rows" do
+      id = {__MODULE__, :http, System.unique_integer()}
+
+      :ok =
+        :telemetry.attach_many(
+          id,
+          [[:beam_mcp, :dispatch, :start], [:beam_mcp, :dispatch, :stop]],
+          &__MODULE__.forward/4,
+          self()
+        )
+
+      on_exit(fn -> :telemetry.detach(id) end)
+      {name, _} = start_collector()
+
+      opts =
+        BeamMCP.Transport.HTTP.init(
+          catalog: Catalog,
+          dispatch: fn _, a, _ -> {:ok, a} end,
+          authorize: fn _ -> :ok end,
+          allowed_origins: :any,
+          server_name: @server_name
+        )
+
+      body = %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/call",
+        "params" => %{"name" => "echo", "arguments" => %{"k" => "v"}}
+      }
+
+      conn =
+        :post
+        |> conn("/mcp", Jason.encode!(body))
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("mcp-protocol-version", "2026-07-28")
+        |> put_req_header("mcp-method", "tools/call")
+        |> put_req_header("mcp-name", "echo")
+        |> put_req_header("authorization", "Bearer #{@marker}")
+        |> put_req_header("x-secret", @marker)
+        |> put_req_header("user-agent", @marker)
+        |> BeamMCP.Transport.HTTP.call(opts)
+
+      assert conn.status == 200
+      assert_receive {[:beam_mcp, :dispatch, :start], _, start_meta}
+      assert_receive {[:beam_mcp, :dispatch, :stop], _, stop_meta}
+      refute inspect(start_meta) =~ @marker
+      refute inspect(stop_meta) =~ @marker
       assert_marker_absent(name)
     end
   end
