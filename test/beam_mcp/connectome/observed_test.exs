@@ -423,7 +423,8 @@ defmodule BeamMCP.Connectome.ObservedTest do
       # A lane raised through `:erlang.raise/3` with frames no compiler writes: a location
       # that is not a keyword list, an improper argument list, a file and a line of the wrong
       # type. The rewrite raised inside the catch clause -- `:start` with no `:exception`,
-      # no row, and the host's error replaced by ours.
+      # no row, and the host's error replaced by ours. (A location that is not a list at
+      # all never arrives: `:erlang.raise/3` answers `:badarg` for it instead of raising.)
       id = {__MODULE__, :built, System.unique_integer()}
 
       :ok =
@@ -443,7 +444,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
           {Enum, :y, [args | args], []},
           {Enum, :z, 2, [file: @marker, line: @marker]},
           {Enum, :w, 0, [file: ~c"a.ex", line: 7, error_info: %{cause: args}]},
-          {Enum, :v, 3, @marker}
+          {Enum, :u, 1, [file: [args], line: 1.5]}
         ]
       end
 
@@ -467,7 +468,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
                {Enum, :y, 1, []},
                {Enum, :z, 2, []},
                {Enum, :w, 0, [file: ~c"a.ex", line: 7]},
-               {Enum, :v, 3, []}
+               {Enum, :u, 1, []}
              ]
 
       refute_received {[:beam_mcp, :dispatch, :stop], _, _}

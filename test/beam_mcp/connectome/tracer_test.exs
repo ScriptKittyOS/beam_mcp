@@ -32,6 +32,13 @@ defmodule BeamMCP.Connectome.TracerTest do
     Tracer.start(Keyword.merge([collector: collector, server: @server], opts))
   end
 
+  # A pid that is already gone, for a forged term's companion slot: a live one there is a
+  # previous companion the next start waits on, which is pinned elsewhere.
+  defp dead_pid do
+    {pid, ref} = spawn_monitor(fn -> :ok end)
+    receive do: ({:DOWN, ^ref, :process, ^pid, _} -> pid)
+  end
+
   describe "off by default, and guarded" do
     test "nothing is traced until a host starts the tracer: no flags on any process, no pattern on any module",
          %{
@@ -507,15 +514,16 @@ defmodule BeamMCP.Connectome.TracerTest do
       # The term is public and unowned. A lane forged it in six shapes and every one made
       # stop/0 raise into its caller and left the term, so no later start could succeed.
       ref = :atomics.new(1, [])
+      dead = dead_pid()
 
       for forged <- [
             @marker,
-            {ref, @marker, self()},
-            {ref, [@marker], self()},
+            {ref, @marker, dead},
+            {ref, [@marker], dead},
             {ref, [Beta]},
-            {ref, [Beta], self(), :extra},
-            {ref, [Beta | Beta], self()},
-            {:not_a_reference, [Beta], self()}
+            {ref, [Beta], dead, :extra},
+            {ref, [Beta | Beta], dead},
+            {:not_a_reference, [Beta], dead}
           ] do
         :persistent_term.put({Tracer, :running}, forged)
         assert :ok = Tracer.stop()
@@ -533,7 +541,9 @@ defmodule BeamMCP.Connectome.TracerTest do
       # With a non-atomics flag in the term, stop/0 cleared the patterns and then raised on
       # the flag, leaving the tracer alive; with a non-list module field it raised before
       # anything was cleared.
-      for forged <- [{:not_a_reference, [Beta], self()}, {:atomics.new(1, []), @marker, self()}] do
+      dead = dead_pid()
+
+      for forged <- [{:not_a_reference, [Beta], dead}, {:atomics.new(1, []), @marker, dead}] do
         {:ok, pid} = start(c, modules: [Beta])
         :persistent_term.put({Tracer, :running}, forged)
         assert :ok = Tracer.stop()
@@ -549,7 +559,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       # it died with the patterns set, and neither start/1 nor stop/0 could take them away.
       {:ok, pid} = start(c, modules: [Beta])
       {_, _, companion} = :persistent_term.get({Tracer, :running})
-      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), @marker, self()})
+      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), @marker, dead_pid()})
       Process.exit(pid, :kill)
       Process.sleep(50)
       refute Process.alive?(companion)
@@ -567,16 +577,16 @@ defmodule BeamMCP.Connectome.TracerTest do
       receiver = spawn_link(fn -> receive do: (m -> send(test, {:got, m})) end)
       Process.register(receiver, name)
       Process.register(self(), :tracer_test_sender)
-      on_exit(fn -> Process.unregister(:tracer_test_sender) end)
 
       {:ok, tracer} = start(c, modules: [], processes: [:tracer_test_sender])
       send(name, {:secret, "the-message-#{@marker}"})
       assert_receive {:got, {:secret, _}}
       _ = :sys.get_state(tracer)
       :ok = Tracer.stop()
+      Process.unregister(:tracer_test_sender)
 
       {:ok, graph} = Observed.snapshot(c)
-      bytes = Canonical.encode(graph)
+      {:ok, bytes} = Canonical.encode(graph)
       assert bytes =~ Atom.to_string(name)
       refute bytes =~ "the-message-"
       refute inspect(Observed.rows(c), printable_limit: :infinity) =~ "the-message-"
