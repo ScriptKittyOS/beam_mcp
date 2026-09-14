@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "  defp counted(%{seen: seen, max_messages: max} = state) when seen + 1 >= max do"
-new = "  defp counted(%{seen: seen, max_messages: max} = state) when seen + 1 >= max and max < 0 do"
+old = "      _ when seen + queued >= max ->"
+new = "      _ when seen + queued >= max and max < 0 ->"
 
 if s.count(old) != 1:
     sys.exit("Mtr1: anchor found %d times" % s.count(old))
