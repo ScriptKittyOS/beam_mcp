@@ -158,11 +158,16 @@ defmodule BeamMCP.Connectome.DiffTest do
       # AND not endpoint-covered. Counts are integers; the fractions are the consumer's.
       {declared, observed} = crafted()
 
+      # And a -> d: one endpoint observed (a), one not (d). Both ends must be observed for
+      # the edge to count -- a mutant that took either was not killed until this edge.
       declared =
-        graph(declared.nodes ++ [tool(:d), tool(:e)], declared.edges ++ [edge(:d, :e, :declared)])
+        graph(
+          declared.nodes ++ [tool(:d), tool(:e)],
+          declared.edges ++ [edge(:d, :e, :declared), edge(:a, :d, :declared)]
+        )
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
-      assert diff.coverage.declared_edges == 5
+      assert diff.coverage.declared_edges == 6
       assert diff.coverage.declared_endpoint_covered == 4
       assert diff.coverage.declared_nodes == 6
       assert diff.coverage.nodes_in_both == 4
