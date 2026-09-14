@@ -217,15 +217,45 @@ defmodule BeamMCP.Connectome.DiffTest do
       # c->a, b->a); labels in both 3 (a->b, c->a, b->a); declared nodes 4 (srv, a, b, c);
       # observed nodes 4; nodes in both 4; declared edges whose both endpoints are observed
       # nodes: all 4 (a, b, c are all observed nodes).
+      # ... and observed edges whose both endpoints are declared nodes: all 4 (a, b, c are
+      # all declared nodes) -- the completeness figure with the connectomics roles kept.
       assert diff.coverage == %{
                declared_edges: 4,
                observed_edges: 4,
                declared_and_observed: 3,
                declared_endpoint_covered: 4,
+               observed_endpoint_declared: 4,
                declared_nodes: 4,
                observed_nodes: 4,
                nodes_in_both: 4
              }
+    end
+
+    test "completeness keeps the connectomics roles: what ran is the population, the declaration is the condition" do
+      # A review lane found the first transposition was the dual -- population and condition
+      # swapped. Two pairs where the two figures differ, from its report:
+      #   (k) declared a->b, a->c, b->c; observed a->b, c->b: endpoint coverage 3/3 while
+      #       only 1 of 3 declared edges ran; completeness 2/2 -- c->b ran between declared
+      #       parts though nobody declared it, exactly the source's semantics.
+      #   (d) declared holds a and nothing else; observed x->y: completeness 0/1 -- the run
+      #       happened wholly outside the declared parts, invisible to every other figure.
+      nodes = [srv(), tool(:a), tool(:b), tool(:c)]
+
+      declared =
+        graph(nodes, [edge(:a, :b, :declared), edge(:a, :c, :declared), edge(:b, :c, :declared)])
+
+      observed = graph(nodes, [edge(:a, :b, :observed), edge(:c, :b, :observed)])
+      {:ok, k} = Diff.run(declared, observed, window: @window)
+      assert k.coverage.declared_and_observed == 1
+      assert k.coverage.declared_endpoint_covered == 3
+      assert k.coverage.observed_endpoint_declared == 2
+
+      declared = graph([srv(), tool(:a)], [])
+      observed = graph([srv(), tool(:x), tool(:y)], [edge(:x, :y, :observed)])
+      {:ok, d} = Diff.run(declared, observed, window: @window)
+      assert d.coverage.observed_edges == 1
+      assert d.coverage.observed_endpoint_declared == 0
+      assert d.coverage.declared_endpoint_covered == 0
     end
 
     test "an endpoint the observed side never saw as a node lowers the completeness count and nothing else" do
@@ -283,6 +313,7 @@ defmodule BeamMCP.Connectome.DiffTest do
              )
 
       assert bytes =~ ~s("schema_version":1)
+      assert bytes =~ ~s("observed_endpoint_declared":4,"observed_nodes":4)
 
       assert bytes =~
                ~s("window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"})
@@ -360,6 +391,16 @@ defmodule BeamMCP.Connectome.DiffTest do
         # The count of labels in both is the two "in both" classes together.
         assert diff.coverage.declared_and_observed ==
                  length(diff.classes.declared_and_observed) + length(diff.classes.changed_sign)
+
+        # A label in both has both ends in both graphs, so each endpoint figure is a ceiling
+        # on the shared count and never exceeds its own population.
+        c = diff.coverage
+
+        assert c.declared_and_observed <= c.declared_endpoint_covered and
+                 c.declared_endpoint_covered <= c.declared_edges
+
+        assert c.declared_and_observed <= c.observed_endpoint_declared and
+                 c.observed_endpoint_declared <= c.observed_edges
       end
     end
   end
