@@ -457,38 +457,72 @@ defmodule BeamMCP.Connectome.DiffTest do
 
         assert c.declared_and_observed <= c.observed_endpoint_declared and
                  c.observed_endpoint_declared <= c.observed_edges
+
+        # With the node sets drawn per side, the endpoint counts are exact, not bounds: each
+        # is the page's definition computed here from the two graphs' own ids. Before the
+        # per-side draw both sides shared every node and the two counts could only ever
+        # equal their own populations, so a mutant counting one endpoint as enough (Mdf4)
+        # survived this property alone; it does not now.
+        d_ids = MapSet.new(declared.nodes, & &1.id)
+        o_ids = MapSet.new(observed.nodes, & &1.id)
+        both = fn ids, e -> MapSet.member?(ids, e.from) and MapSet.member?(ids, e.to) end
+        assert c.declared_endpoint_covered == Enum.count(declared.edges, &both.(o_ids, &1))
+        assert c.observed_endpoint_declared == Enum.count(observed.edges, &both.(d_ids, &1))
+        assert c.declared_nodes == MapSet.size(d_ids)
+        assert c.observed_nodes == MapSet.size(o_ids)
+        assert c.nodes_in_both == MapSet.size(MapSet.intersection(d_ids, o_ids))
+      end
+    end
+
+    property "the diff is a function of the two graphs, not of the order their lists were built in" do
+      check all({declared, observed} <- pair_gen()) do
+        {:ok, a} = Diff.run(declared, observed, window: @window)
+        # ExUnit seeds :rand for the test process from --seed, so the shuffle replays.
+        shuffle = fn g -> graph(Enum.shuffle(g.nodes), Enum.shuffle(g.edges)) end
+
+        {:ok, b} = Diff.run(shuffle.(declared), shuffle.(observed), window: @window)
+        assert Diff.encode!(a) == Diff.encode!(b)
+        assert Diff.hash!(a) == Diff.hash!(b)
+        assert a == b
       end
     end
   end
 
+  # A pair with its node set drawn PER SIDE, so a node can be declared and never observed
+  # or observed and never declared, and the endpoint counts have something to count. Each
+  # side keeps one fixed name so its edge generator never draws from an empty list, and the
+  # two fixed names differ so neither side is a superset of the other by construction.
   defp pair_gen do
     gen all(
-          # A subset of five names, drawn without a uniqueness generator (a five-term space
+          # Two subsets of six names, drawn without a uniqueness generator (a six-term space
           # makes stream_data give up on uniqueness at small sizes).
-          picks <- list_of(boolean(), length: 5),
-          names = [:a | for({n, true} <- Enum.zip([:b, :c, :d, :e, :f], picks), do: n)],
-          d_pairs <-
-            list_of(
-              {member_of(names), member_of(names), member_of([:invoke, :read, :message]),
-               member_of([:allow, :deny, :unknown])},
-              max_length: 8
-            ),
-          o_pairs <-
-            list_of(
-              {member_of(names), member_of(names), member_of([:invoke, :read, :message]),
-               member_of([:allow, :deny, :unknown])},
-              max_length: 8
-            )
+          d_picks <- list_of(boolean(), length: 6),
+          o_picks <- list_of(boolean(), length: 6),
+          d_names = names([:a | picked(d_picks)]),
+          o_names = names([:f | picked(o_picks)]),
+          d_pairs <- pairs(d_names),
+          o_pairs <- pairs(o_names)
         ) do
-      nodes = [srv() | Enum.map(names, &tool/1)]
-
       build = fn pairs, prov ->
         pairs
         |> Enum.map(fn {a, b, k, s} -> edge(a, b, prov, kind: k, sign: s) end)
         |> Enum.uniq_by(&Edge.key/1)
       end
 
-      {graph(nodes, build.(d_pairs, :declared)), graph(nodes, build.(o_pairs, :observed))}
+      {graph([srv() | Enum.map(d_names, &tool/1)], build.(d_pairs, :declared)),
+       graph([srv() | Enum.map(o_names, &tool/1)], build.(o_pairs, :observed))}
     end
+  end
+
+  @names [:a, :b, :c, :d, :e, :f]
+  defp picked(picks), do: for({n, true} <- Enum.zip(@names, picks), do: n)
+  defp names(list), do: Enum.uniq(list)
+
+  defp pairs(names) do
+    list_of(
+      {member_of(names), member_of(names), member_of([:invoke, :read, :message]),
+       member_of([:allow, :deny, :unknown])},
+      max_length: 8
+    )
   end
 end
