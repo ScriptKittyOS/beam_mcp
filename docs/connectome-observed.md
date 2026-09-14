@@ -12,8 +12,9 @@ is the contract a consumer attaches to and the bounds of what it sees.
 
 ## The events
 
-Every `tools/call` that reaches the host's dispatch function is wrapped in one
-`:telemetry.span/3`, at one private site in `BeamMCP.Server` (`dispatch/3`):
+Every `tools/call` that reaches the host's dispatch function emits three events in the
+shape `:telemetry.span/3` gives them, from one private site in `BeamMCP.Server`
+(`dispatch/3`):
 
 | event | measurements | metadata |
 | -- | -- | -- |
@@ -63,7 +64,10 @@ durations are the host's dispatch function's own timing, as the counts are its o
 rows; what a host loses is every observation since the last snapshot it kept. The declared
 side is unaffected. A kill that skips the orderly stop leaves the old handler attached until
 the restart replaces it; a call in that gap is answered normally, and the stale handler
-fails once against the missing table and is detached by telemetry, logged once.
+fails against the missing table and is detached by telemetry, which logs one failure per
+dispatching process that was in the gap. A hot reload of the collector's module keeps the
+handler and the rows; a hot reload of the tracer's module purges its companion and ends a
+running trace as `{:shutdown, :companion_gone}`.
 
 ## The tracer
 
@@ -85,8 +89,11 @@ is discarded, not written; the collector dying under it is the fourth,
 arrive, so the tracer runs at high priority and clears its patterns the moment handled plus
 queued reaches the limit — generation stops there. The queue's size is the node-wide call
 rate into the named modules times the tracer's scheduling latency, not `max_messages`
-(measured: 64 hot callers against a limit of 1 000 peaked at 140 000 queued messages; with
-a limit too large to reach, 32 hot callers queued 3 million in a 100 ms window). A
+(measured: 64 hot callers against a limit of 1 000 peaked at 110 000 queued messages; with
+a limit too large to reach, 32 hot callers queued 3 million in a 100 ms window). The
+early clear is best effort — the queue is read every 32nd message — while the hard bounds
+hold on every path: at most `max_messages` handled, the patterns cleared at the limit and
+on every exit. A
 companion process enforces `max_duration_ms` from outside the tracer's mailbox — clearing
 the patterns at the deadline and raising a flag the tracer reads before every write — and
 clears on the tracer's exit for any reason, a kill included, so no pattern is left set with

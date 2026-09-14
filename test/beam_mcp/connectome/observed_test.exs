@@ -194,6 +194,8 @@ defmodule BeamMCP.Connectome.ObservedTest do
       assert e.from == Node.id({:server, @server_name})
       assert e.to == Node.id({:tool, @server_name, :echo})
       assert Enum.map(g.nodes, & &1.id) |> Enum.sort() == Enum.sort([e.from, e.to])
+      # Observed nodes carry no labels: the collector saw a call, not a catalog entry.
+      assert Enum.all?(g.nodes, &(&1.labels == %{}))
     end
 
     test "a declared but uninvoked tool produces no observed edge" do
@@ -317,8 +319,12 @@ defmodule BeamMCP.Connectome.ObservedTest do
                       start_meta}
 
       assert_receive {[:beam_mcp, :dispatch, :stop], %{duration: _, monotonic_time: _}, stop_meta}
-      assert %{server_name: @server_name, tool: :echo, telemetry_span_context: _} = start_meta
-      assert %{server_name: @server_name, tool: :echo, outcome: :ok} = stop_meta
+      assert %{server_name: @server_name, tool: :echo, telemetry_span_context: ctx} = start_meta
+
+      assert %{server_name: @server_name, tool: :echo, outcome: :ok, telemetry_span_context: ^ctx} =
+               stop_meta
+
+      assert map_size(start_meta) == 3 and map_size(stop_meta) == 4
 
       call(server(fn _, _, _ -> {:error, "no"} end), :echo)
       assert_receive {[:beam_mcp, :dispatch, :stop], _, %{outcome: :error}}
@@ -351,9 +357,11 @@ defmodule BeamMCP.Connectome.ObservedTest do
                tool: :echo,
                kind: :error,
                reason: %RuntimeError{},
-               stacktrace: _
+               stacktrace: _,
+               telemetry_span_context: ctx
              } = meta
 
+      assert is_reference(ctx) and map_size(meta) == 6
       refute Map.has_key?(meta, :outcome)
       # The document says so: the reason is the host's, and travels as span/3 defines.
       assert Exception.message(meta.reason) =~ @marker

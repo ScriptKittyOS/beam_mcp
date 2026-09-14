@@ -24,8 +24,9 @@ defmodule BeamMCP.Connectome.Observed do
   loses on a crash is every observation since the last snapshot it kept. The declared
   connectome is unaffected -- it is built from the tree, not from what ran. A kill that
   skips `terminate/2` leaves the old handler attached until the restart replaces it; a
-  call in that gap is answered normally, the stale handler fails once against the missing
-  table and telemetry detaches it, logging that once.
+  call in that gap is answered normally, the stale handler fails against the missing table
+  and telemetry detaches it, logging one failure per dispatching process that was in the
+  gap (measured: sixteen concurrent callers, sixteen lines).
 
   **Writes happen in the caller's process**, not in this one. The table is `:public` with
   write concurrency, and the handler runs in whichever process dispatched the call; this
