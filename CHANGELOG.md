@@ -57,6 +57,16 @@ All notable changes to this project are documented here. The format follows
   when nothing is watching. `BeamMCP.Connectome.Tracer` is off by default, one at a time,
   stops itself at its limits, and writes module-to-module and name-to-name edges with the
   `:arity` flag and without reading a message. `docs/connectome-observed.md` is the contract.
+- **The diff engine.** `BeamMCP.Connectome.Diff.run/3` takes the declared and the observed graph
+  and a window the consumer supplies, and puts every edge of either in exactly one of four classes
+  — declared-and-observed, declared-never-observed (dead authority), observed-but-undeclared (a
+  drift finding), changed-sign (both signs supplied and different) — with a coverage bound as
+  counts the consumer divides. The diff is a set difference over edge labels (from, to, kind),
+  never an isomorphism, and says why. Its record has canonical bytes through
+  `BeamMCP.Connectome.Canonical.encode_value/1` — the label grammar of a node's labels object,
+  applied to a record on its own, so a consumer's verifier reads it unchanged — and
+  `docs/connectome-diff.md` is the contract, with a worked example that reproduces with
+  `sha256sum`.
 - **`BeamMCP.Stacktrace.arities/1`** — the one rewrite that turns a stacktrace's argument lists
   into arities and its locations into what the compiler writes, used by the `:exception` event
   and by the HTTP transport's fault log, which had logged a dispatch's stacktrace untouched —
