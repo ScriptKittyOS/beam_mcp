@@ -11,17 +11,18 @@ defmodule BeamMCP.Connectome.Diff do
 
   Two edges are the same edge iff their **label** -- `from`, `to`, `kind` -- is equal,
   compared as the encoder writes them: after NFC (rule 6 of `docs/connectome-canonical.md`).
-  A graph whose ids coincide after NFC has no canonical bytes and so no diff -- refused by
-  name, as `Canonical.encode/1` refuses it -- and a graph carrying the other side's
-  provenance is refused too, so on every admitted input an edge and a label are the same
-  count (a consumer lane found both: it normalised before comparing, as the rule says, and
-  the code did not). Ids
-  are structural (`BeamMCP.Connectome.Node.id/1`, one implementation site), so the label is
-  the identity, and provenance says only which side an edge came from. This is a set
-  difference over labels, and nothing more, on purpose: a graph-isomorphism check is NP-hard
-  in general and would be *wrong* here besides -- it would call two differently named tools
-  "the same" whenever their neighbourhoods matched. Nobody improves this into an isomorphism
-  check; this paragraph is why.
+  Ids are structural (`BeamMCP.Connectome.Node.id/1`, one implementation site), so the
+  label is the identity, and provenance says only which side an edge came from. This is a
+  set difference over labels, and nothing more, on purpose: a graph-isomorphism check is
+  NP-hard in general and would be *wrong* here besides -- it would call two differently
+  named tools "the same" whenever their neighbourhoods matched. Nobody improves this into an
+  isomorphism check; this paragraph is why.
+
+  Two inputs are admitted only as the encoder would admit them. A graph whose ids coincide
+  after NFC has no canonical bytes and so no diff -- refused by name, as `Canonical.encode/1`
+  refuses it -- and a graph carrying the other side's provenance is refused too, so on every
+  admitted input an edge and a label are the same count (a consumer lane found both: it
+  normalised before comparing, as the rule says, and the code did not).
 
   ## The four classes
 
