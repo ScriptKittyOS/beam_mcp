@@ -62,10 +62,12 @@ defmodule BeamMCP.Connectome.Tracer do
   the next message it handles rather than after draining what was queued -- the read
   follows that message's write, so at most one row lands after the flag is raised.
   `stop/0` clears the patterns and raises the same flag, for the same reason, then stops
-  the tracer with a finite wait of five seconds. Both read the tracer's own claim
+  the tracer with a finite wait of five seconds. `stop/0` reads the tracer's own claim
   -- flag, modules, the named pids, in its process dictionary -- never the public running
   term, which anyone can write (measured: under a forged term a stop had no flag to raise
-  and queued behind nine million rows).
+  and queued behind nine million rows); the companion holds the same claim in its closure
+  from the start. A claim of another shape, put there by a process that took the name, is
+  no claim (measured: it had made `stop/0` raise).
 
   **Nothing left behind, on every path but one.** The companion process monitors the tracer
   and clears the patterns on any exit -- a kill included, which skips `terminate/2`; the BEAM
@@ -217,13 +219,17 @@ defmodule BeamMCP.Connectome.Tracer do
   end
 
   # No claim, whether the process is gone (`Process.info/2` answers nil for a dead pid --
-  # the tracer left between the whereis and this read) or has none: the same answer.
+  # the tracer left between the whereis and this read), has none, or holds one of another
+  # shape: the same answer. The name can be taken by any process, and one that squats it
+  # with a crafted claim already refuses every start; it must not turn `stop/0` into a
+  # raise, or name a host's modules for clearing (measured, by a lane).
   defp claim(pid) do
     with {:dictionary, dictionary} <- Process.info(pid, :dictionary),
-         {@claim, claim} <- List.keyfind(dictionary, @claim, 0) do
+         {@claim, {flag, modules, _pids} = claim} <- List.keyfind(dictionary, @claim, 0),
+         true <- is_reference(flag) and atoms?(modules) do
       claim
     else
-      nil -> nil
+      _ -> nil
     end
   end
 
