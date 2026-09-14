@@ -88,8 +88,8 @@ refuses to start without a running collector, with a limit that is not a positiv
 with a name in `processes:` that is not registered; a start that fails part-way clears
 what it set and answers `{:error, {:init_failed, reason}}`. Calls are traced on every
 process in the node, present and future — except a process a host already traces under
-its own tracer, which the BEAM skips (one tracer per process) and logs once, so its calls
-are no edges.
+its own tracer, which the BEAM skips silently (one tracer per process), so its calls are
+no edges.
 
 It stops itself at `max_messages` handled trace messages of any shape, a send to a dead
 process included, or at `max_duration_ms`, clearing every pattern and flag it set, and

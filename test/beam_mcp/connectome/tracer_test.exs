@@ -204,7 +204,9 @@ defmodule BeamMCP.Connectome.TracerTest do
 
       {:ok, g} = Observed.snapshot(c)
       assert [%Edge{weight: w}] = g.edges
-      assert w < 500
+      # The page's number: the flag is read after the write, so exactly one row lands after
+      # it is raised -- the first queued message's, by mailbox order.
+      assert w == 1
     end
 
     test "stop/0 ends the drain on the next message too, and is :ok", %{collector: c} do
@@ -223,7 +225,9 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:stopped, :ok}, 5_000
       {:ok, g} = Observed.snapshot(c)
       assert [%Edge{weight: w}] = g.edges
-      assert w < 500
+      # The page's number: the flag is read after the write, so exactly one row lands after
+      # it is raised -- the first queued message's, by mailbox order.
+      assert w == 1
     end
 
     test "a kill after the deadline is cleared by the companion as well", %{collector: c} do
@@ -604,7 +608,9 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:stopped, :ok}, 5_000
       {:ok, g} = Observed.snapshot(c)
       assert [%Edge{weight: w}] = g.edges
-      assert w < 500
+      # The page's number: the flag is read after the write, so exactly one row lands after
+      # it is raised -- the first queued message's, by mailbox order.
+      assert w == 1
       assert :persistent_term.get({Tracer, :running}, nil) == nil
     end
 
@@ -763,6 +769,38 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert bytes =~ Atom.to_string(name)
       refute bytes =~ "the-message-"
       refute inspect(Observed.rows(c), printable_limit: :infinity) =~ "the-message-"
+    end
+
+    test "a process a host already traces is skipped by the call trace, silently: its calls are no edges and its flags stay the host's",
+         %{collector: c} do
+      # A consumer lane measured it: the BEAM refuses a second tracer on a process without
+      # a log line on this path; the log the page once promised never came.
+      host_tracer = spawn_link(fn -> Process.sleep(:infinity) end)
+      test = self()
+
+      host_traced =
+        spawn_link(fn ->
+          receive do
+            :call ->
+              Beta.run(1)
+              send(test, :called)
+              Process.sleep(:infinity)
+          end
+        end)
+
+      :erlang.trace(host_traced, true, [:call, {:tracer, host_tracer}])
+      {:ok, tracer} = start(c, modules: [Beta])
+      send(host_traced, :call)
+      assert_receive :called
+      Beta.run(1)
+      _ = :sys.get_state(tracer)
+      :ok = Tracer.stop()
+
+      {:ok, g} = Observed.snapshot(c)
+      assert [%Edge{weight: 1}] = g.edges
+      assert {:tracer, ^host_tracer} = :erlang.trace_info(host_traced, :tracer)
+      assert {:flags, [:call]} = :erlang.trace_info(host_traced, :flags)
+      :erlang.trace(host_traced, false, [:all])
     end
 
     test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",
