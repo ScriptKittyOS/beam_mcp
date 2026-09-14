@@ -216,16 +216,14 @@ defmodule BeamMCP.Connectome.Tracer do
     end
   end
 
+  # No claim, whether the process is gone (`Process.info/2` answers nil for a dead pid --
+  # the tracer left between the whereis and this read) or has none: the same answer.
   defp claim(pid) do
-    case Process.info(pid, :dictionary) do
-      {:dictionary, dictionary} ->
-        case List.keyfind(dictionary, @claim, 0) do
-          {@claim, claim} -> claim
-          nil -> nil
-        end
-
-      nil ->
-        nil
+    with {:dictionary, dictionary} <- Process.info(pid, :dictionary),
+         {@claim, claim} <- List.keyfind(dictionary, @claim, 0) do
+      claim
+    else
+      nil -> nil
     end
   end
 
