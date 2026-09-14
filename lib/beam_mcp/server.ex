@@ -337,22 +337,21 @@ defmodule BeamMCP.Server do
       raise ArgumentError, "BeamMCP.Server.new/1 takes a keyword list, got: #{inspect(opts)}"
     end
 
-    for {key, value} <- opts do
-      case Keyword.fetch(@options, key) do
-        {:ok, shape} ->
-          unless valid?(key, value) do
-            raise ArgumentError,
-                  "BeamMCP.Server.new/1: #{inspect(key)} must be #{shape}, got: #{inspect(value)}"
-          end
+    Enum.each(opts, &validate_option!/1)
+  end
 
-        :error ->
+  defp validate_option!({key, value}) do
+    case Keyword.fetch(@options, key) do
+      {:ok, shape} ->
+        valid?(key, value) ||
           raise ArgumentError,
-                "BeamMCP.Server.new/1 does not take #{inspect(key)}; the options are " <>
-                  Enum.map_join(Keyword.keys(@options), ", ", &inspect/1)
-      end
-    end
+                "BeamMCP.Server.new/1: #{inspect(key)} must be #{shape}, got: #{inspect(value)}"
 
-    :ok
+      :error ->
+        raise ArgumentError,
+              "BeamMCP.Server.new/1 does not take #{inspect(key)}; the options are " <>
+                Enum.map_join(Keyword.keys(@options), ", ", &inspect/1)
+    end
   end
 
   defp fetch_catalog!(opts) do
