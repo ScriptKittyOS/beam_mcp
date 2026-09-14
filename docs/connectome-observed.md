@@ -114,9 +114,10 @@ companion back and exits `{:shutdown, :companion_gone}` if it dies. One window i
 the companion killed and then the tracer killed before it handles that death leaves the
 patterns set until the next `start/1` or `stop/0`, either of which clears what the
 tracer's running term names. That term, `{BeamMCP.Connectome.Tracer, :running}`, is a
-public persistent term and is trusted only in its own shape — a reference, a list of
-module atoms, a pid; a term of another shape put there by someone else names nothing,
-is erased by the next `start/1` or `stop/0`, and makes neither raise. A companion that
+public persistent term and is trusted only in its own shape — a three-tuple whose second
+element is a list of module atoms; a term of another shape put there by someone else
+names nothing, is erased by the next `start/1` or `stop/0`, and makes neither raise, and
+a flag in it that is no atomics reference is skipped, not raised on. A companion that
 outlives a kill clears only the modules no newer tracer has claimed. A `:send` trace message
 carries the sent term into the tracer's mailbox until it is handled, where anything that
 can read that process's queue can see it; nothing of it is written. Nothing is cleared
