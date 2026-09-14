@@ -14,15 +14,17 @@ and refuses one that is not; what a tool *does* is the host's business.
 
 ```elixir
 def deps do
-  [{:beam_mcp, "~> 0.3.0"}]
+  [{:beam_mcp, "~> 0.4.0"}]
 end
 ```
 
-**`~> 0.3.0`, not the more usual `~> 0.3`.** While this package is `0.x` it documents wire
-breaks at the **minor** position, and it has used that position twice: `0.2.0` removed two
-fields from results for legacy-declared requests, and `0.3.0` adds the HTTP transport and the
-`ttlMs`/`cacheScope` fields `2026-07-28` requires on `tools/list`. `~> 0.3` admits `0.4.0`, so
-it would carry you across the next such break on a routine `mix deps.update`; `~> 0.3.0` does
+**`~> 0.4.0`, not the more usual `~> 0.4`.** While this package is `0.x` it documents
+breaks at the **minor** position, and it has used that position three times: `0.2.0` removed
+two fields from results for legacy-declared requests, `0.3.0` added the HTTP transport and the
+`ttlMs`/`cacheScope` fields `2026-07-28` requires on `tools/list`, and `0.4.0` replaces the
+catalog behaviour a host implements — `BeamMCP.ToolCatalog` by `BeamMCP.Catalog` — a break in
+the host contract rather than on the wire, at the same position. `~> 0.4` admits `0.5.0`, so
+it would carry you across the next such break on a routine `mix deps.update`; `~> 0.4.0` does
 not. The tighter form is deliberate and is not an over-pin to be tidied away.
 
 ## Two contracts
