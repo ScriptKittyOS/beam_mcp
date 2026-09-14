@@ -399,7 +399,8 @@ defmodule BeamMCP.Connectome.ObservedTest do
   end
 
   describe "through the HTTP transport" do
-    use Plug.Test
+    import Plug.Test
+    import Plug.Conn
 
     test "request headers carrying the marker reach neither the events nor the rows" do
       id = {__MODULE__, :http, System.unique_integer()}

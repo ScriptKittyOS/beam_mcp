@@ -347,15 +347,52 @@ defmodule BeamMCP.Server do
   # The one site that emits `[:beam_mcp, :dispatch, :start | :stop | :exception]`. The
   # metadata is the edge's identity -- the server's name and the tool's -- and nothing the
   # call carried: no arguments, no result, no headers. `:exception` is `:telemetry.span/3`'s
-  # own shape, so its reason is whatever the host's dispatch raised. A validation failure
-  # never reaches here: it is not a dispatch, and it is not an edge.
+  # shape with one difference: the stacktrace's frames carry arities, never argument lists.
+  # The BEAM puts the arguments in the top frame of a function_clause or a BIF error, so
+  # span/3's own catch would have handed every handler the call's arguments; the reason is
+  # still the host's, verbatim, and the host's stacktrace is re-raised untouched. A
+  # validation failure never reaches here: it is not a dispatch, and it is not an edge.
   defp dispatch(state, %ToolSpec{name: tool}, args) do
-    meta = %{server_name: state.server_name, tool: tool}
+    meta = %{server_name: state.server_name, tool: tool, telemetry_span_context: make_ref()}
+    start = System.monotonic_time()
 
-    :telemetry.span([:beam_mcp, :dispatch], meta, fn ->
+    :telemetry.execute(
+      [:beam_mcp, :dispatch, :start],
+      %{system_time: System.system_time(), monotonic_time: start},
+      meta
+    )
+
+    try do
       result = state.dispatch.(tool, args, state.dispatch_opts)
-      {result, Map.put(meta, :outcome, outcome(result))}
-    end)
+      stop = System.monotonic_time()
+
+      :telemetry.execute(
+        [:beam_mcp, :dispatch, :stop],
+        %{duration: stop - start, monotonic_time: stop},
+        Map.put(meta, :outcome, outcome(result))
+      )
+
+      result
+    catch
+      kind, reason ->
+        stacktrace = __STACKTRACE__
+        stop = System.monotonic_time()
+
+        :telemetry.execute(
+          [:beam_mcp, :dispatch, :exception],
+          %{duration: stop - start, monotonic_time: stop},
+          Map.merge(meta, %{kind: kind, reason: reason, stacktrace: arities(stacktrace)})
+        )
+
+        :erlang.raise(kind, reason, stacktrace)
+    end
+  end
+
+  # A frame with an argument list becomes the same frame with the list's length.
+  defp arities(stacktrace) do
+    for {m, f, args_or_arity, loc} <- stacktrace do
+      {m, f, if(is_list(args_or_arity), do: length(args_or_arity), else: args_or_arity), loc}
+    end
   end
 
   defp outcome({:ok, _}), do: :ok
