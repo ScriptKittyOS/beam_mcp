@@ -10,9 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "        :error ->\n          raise ArgumentError,\n                \"BeamMCP.Server.new/1 does not take #{inspect(key)}; the options are \" <>\n                  Enum.map_join(Keyword.keys(@options), \", \", &inspect/1)"
-new = "        :error ->\n          :ok"
-
+old = "      :error ->\n        raise ArgumentError,\n              \"BeamMCP.Server.new/1 does not take #{inspect(key)}; the options are \" <>\n                Enum.map_join(Keyword.keys(@options), \", \", &inspect/1)"
+new = "      :error ->\n        :ok"
 if s.count(old) != 1:
     sys.exit("Msv10: anchor found %d times" % s.count(old))
 
