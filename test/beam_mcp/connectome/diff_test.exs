@@ -270,7 +270,9 @@ defmodule BeamMCP.Connectome.DiffTest do
       #       only 1 of 3 declared edges ran; completeness 2/2 -- c->b ran between declared
       #       parts though nobody declared it, exactly the source's semantics.
       #   (d) declared holds a and nothing else; observed x->y: completeness 0/1 -- the run
-      #       happened wholly outside the declared parts, invisible to every other figure.
+      #       happened wholly outside the declared parts; no other figure tells that apart
+      #       from an undeclared edge between declared parts (both are drift, both lower
+      #       "observed edges declared" the same).
       nodes = [srv(), tool(:a), tool(:b), tool(:c)]
 
       declared =
