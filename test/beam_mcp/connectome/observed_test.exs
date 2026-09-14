@@ -1,0 +1,238 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+
+defmodule BeamMCP.Connectome.ObservedTest do
+  @moduledoc """
+  The observed collector: telemetry from the dispatch path into a bounded ETS set, keyed by
+  the canonical edge key, and out again as a Graph whose provenance is `:observed` and whose
+  every sign is `:unknown`.
+
+  Edge identity only. The marker tests are the ones that matter: a string a host put in an
+  argument, a resource URI, an error or an exception must be absent from every row, from the
+  snapshot's canonical bytes, from the sidecar and from the latency summary.
+  """
+  use ExUnit.Case, async: false
+  use ExUnitProperties
+
+  alias BeamMCP.Connectome.{Canonical, Edge, Graph, Node, Observed}
+  alias BeamMCP.Fixture.Declared.Catalog
+  alias BeamMCP.Server
+
+  @marker "PAYLOAD-MARKER-7f3a9c"
+  @server_name "srv"
+
+  # A collector under a fresh name per test; the process is linked to the test and its
+  # table dies with it.
+  defp start_collector(opts \\ []) do
+    name = Module.concat(__MODULE__, :"c#{System.unique_integer([:positive])}")
+    pid = start_supervised!({Observed, Keyword.merge([name: name], opts)})
+    {name, pid}
+  end
+
+  defp server(dispatch) do
+    Server.new(dispatch: dispatch, catalog: Catalog, server_name: @server_name)
+  end
+
+  defp call(state, tool, arguments \\ %{}) do
+    Server.handle_message(state, %{
+      "jsonrpc" => "2.0",
+      "id" => 1,
+      "method" => "tools/call",
+      "params" => %{"name" => Atom.to_string(tool), "arguments" => arguments}
+    })
+  end
+
+  defp ok_dispatch, do: fn _name, _args, _opts -> {:ok, %{"done" => true}} end
+
+  describe "snapshot/1 when nothing is watching" do
+    test "a collector that was never started is a named refusal, not an empty graph" do
+      # An empty observed connectome says "nothing ran"; a collector that is not running says
+      # "nothing was watching". A diff that took the first for the second would report every
+      # declared edge as dead authority.
+      assert Observed.snapshot(:"#{__MODULE__}.never_started") == {:error, :not_started}
+    end
+
+    test "a started collector that has seen no calls is an empty graph, distinct from the refusal" do
+      {name, _pid} = start_collector()
+      assert {:ok, %Graph{nodes: [], edges: []}} = Observed.snapshot(name)
+    end
+
+    test "the table dies with its owner: after the collector stops, snapshot/1 refuses by name again" do
+      {name, pid} = start_collector()
+      state = server(ok_dispatch())
+      call(state, :echo)
+      assert {:ok, %Graph{edges: [_]}} = Observed.snapshot(name)
+
+      :ok = stop_supervised!(name)
+      refute Process.alive?(pid)
+      assert Observed.snapshot(name) == {:error, :not_started}
+    end
+  end
+
+  describe "one call, one edge" do
+    test "exercising one fixture tool call produces exactly one observed edge with weight >= 1" do
+      {name, _} = start_collector()
+      state = server(ok_dispatch())
+      {_state, %{"result" => _}} = call(state, :echo)
+
+      assert {:ok, %Graph{} = g} = Observed.snapshot(name)
+      assert [%Edge{} = e] = g.edges
+      assert e.weight >= 1
+      assert e.kind == :invoke
+      assert e.provenance == :observed
+      assert e.sign == :unknown
+      # The ids are the ones the declared builder would derive for the same server and tool,
+      # so the two graphs join.
+      assert e.from == Node.id({:server, @server_name})
+      assert e.to == Node.id({:tool, @server_name, :echo})
+      assert Enum.map(g.nodes, & &1.id) |> Enum.sort() == Enum.sort([e.from, e.to])
+    end
+
+    test "a declared but uninvoked tool produces no observed edge" do
+      {name, _} = start_collector()
+      state = server(ok_dispatch())
+      call(state, :echo)
+
+      {:ok, g} = Observed.snapshot(name)
+      write = Node.id({:tool, @server_name, :write})
+      refute Enum.any?(g.edges, &(&1.to == write))
+      refute Enum.any?(g.nodes, &(&1.id == write))
+    end
+
+    test "a failed call is still one edge: the edge is the attempt, not the outcome" do
+      {name, _} = start_collector()
+      state = server(fn _, _, _ -> {:error, "nope"} end)
+      {_state, %{"result" => %{"isError" => true}}} = call(state, :echo)
+      assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
+    end
+  end
+
+  property "N repeated calls are one row with weight N, and the table is bounded by distinct edges, not by N" do
+    check all(n <- integer(1..40), max_runs: 20) do
+      {name, _} = start_collector()
+      state = server(ok_dispatch())
+      for _ <- 1..n, do: call(state, :echo)
+
+      assert {:ok, %Graph{edges: [%Edge{weight: ^n}]}} = Observed.snapshot(name)
+      assert Observed.size(name) == 1
+      :ok = stop_supervised!(name)
+    end
+  end
+
+  describe "edge identity only: the marker never enters" do
+    # The marker travels every way a host could send it: nested inside an argument map, as a
+    # resource URI argument, in the error a dispatch returns, in the exception a dispatch
+    # raises. It must be absent from the rows, the canonical bytes, the sidecar and the
+    # latency summary.
+    test "a marker in a nested argument map and in a uri argument is absent from rows, bytes, sidecar and latency" do
+      {name, _} = start_collector()
+      state = server(ok_dispatch())
+
+      call(state, :echo, %{
+        "note" => %{"deep" => %{"deeper" => @marker}},
+        "uri" => "r://#{@marker}/x"
+      })
+
+      assert_marker_absent(name)
+    end
+
+    test "a marker in the error a dispatch returns is absent" do
+      {name, _} = start_collector()
+      state = server(fn _, _, _ -> {:error, "failed: #{@marker}"} end)
+      call(state, :echo, %{"k" => @marker})
+      assert_marker_absent(name)
+    end
+
+    test "a marker in an exception a dispatch raises is absent, and the edge was still recorded" do
+      {name, _} = start_collector()
+      state = server(fn _, _, _ -> raise "exploded: #{@marker}" end)
+
+      assert_raise RuntimeError, ~r/exploded/, fn -> call(state, :echo, %{"k" => @marker}) end
+
+      assert_marker_absent(name)
+      assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
+    end
+
+    test "the :stop event itself carries no argument, result or header bytes" do
+      {name, _} = start_collector()
+      test = self()
+      id = {__MODULE__, :probe, System.unique_integer()}
+
+      :ok =
+        :telemetry.attach(
+          id,
+          [:beam_mcp, :dispatch, :stop],
+          fn event, measurements, metadata, _ ->
+            send(test, {:event, event, measurements, metadata})
+          end,
+          nil
+        )
+
+      on_exit(fn -> :telemetry.detach(id) end)
+      state = server(fn _, _, _ -> {:ok, %{"echo" => @marker}} end)
+      call(state, :echo, %{"k" => @marker})
+
+      assert_receive {:event, [:beam_mcp, :dispatch, :stop], measurements, metadata}
+      refute inspect(measurements) =~ @marker
+      refute inspect(metadata) =~ @marker
+      assert metadata.server_name == @server_name
+      assert metadata.tool == :echo
+      assert metadata.outcome == :ok
+      assert is_integer(measurements.duration)
+      _ = name
+    end
+
+    defp assert_marker_absent(name) do
+      rows = Observed.rows(name)
+      assert rows != []
+      refute inspect(rows, limit: :infinity, printable_limit: :infinity) =~ @marker
+
+      {:ok, g} = Observed.snapshot(name)
+      refute Canonical.encode!(g) =~ @marker
+      refute Canonical.sidecar!(g) =~ @marker
+
+      refute inspect(Observed.latency(name), limit: :infinity, printable_limit: :infinity) =~
+               @marker
+    end
+  end
+
+  describe "the events, as a contract" do
+    test "start and stop are emitted around every tools/call with the documented names and shapes" do
+      test = self()
+      id = {__MODULE__, :contract, System.unique_integer()}
+
+      :ok =
+        :telemetry.attach_many(
+          id,
+          [[:beam_mcp, :dispatch, :start], [:beam_mcp, :dispatch, :stop]],
+          fn event, measurements, metadata, _ -> send(test, {event, measurements, metadata}) end,
+          nil
+        )
+
+      on_exit(fn -> :telemetry.detach(id) end)
+      call(server(ok_dispatch()), :echo)
+
+      assert_receive {[:beam_mcp, :dispatch, :start], %{system_time: _, monotonic_time: _},
+                      start_meta}
+
+      assert_receive {[:beam_mcp, :dispatch, :stop], %{duration: _, monotonic_time: _}, stop_meta}
+      assert %{server_name: @server_name, tool: :echo, telemetry_span_context: _} = start_meta
+      assert %{server_name: @server_name, tool: :echo, outcome: :ok} = stop_meta
+    end
+  end
+
+  describe "latency/1" do
+    test "a summary per edge: count, mean and max in microseconds, never a raw sample list" do
+      {name, _} = start_collector()
+      state = server(ok_dispatch())
+      for _ <- 1..3, do: call(state, :echo)
+
+      key =
+        {Node.id({:server, @server_name}), Node.id({:tool, @server_name, :echo}), :invoke,
+         :observed}
+
+      assert %{^key => %{count: 3, mean_us: mean, max_us: max}} = Observed.latency(name)
+      assert is_number(mean) and is_integer(max) and max >= 0 and mean <= max
+    end
+  end
+end
