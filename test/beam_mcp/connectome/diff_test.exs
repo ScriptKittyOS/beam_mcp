@@ -133,6 +133,81 @@ defmodule BeamMCP.Connectome.DiffTest do
     end
   end
 
+  describe "labels are compared as the encoder writes them: after NFC, one provenance per graph" do
+    # A consumer lane rebuilt the record from the page and diverged on exactly this: it read
+    # rule 6 (strings are NFC before anything else) and normalised before comparing; the code
+    # compared raw, gave two classes for one label, and accepted a graph the encoder refuses.
+    test "ids that coincide after NFC across the two graphs are one label, and the record carries it once" do
+      composed = Node.new!(kind: :tool, level: :server, identity: {:tool, @server, :"\u00E9"})
+      decomposed = Node.new!(kind: :tool, level: :server, identity: {:tool, @server, :"e\u0301"})
+      refute composed.id == decomposed.id
+      assert String.normalize(composed.id, :nfc) == String.normalize(decomposed.id, :nfc)
+
+      declared =
+        graph([srv(), tool(:a), composed], [
+          %{edge(:a, :a, :declared) | to: composed.id, sign: :allow}
+        ])
+
+      observed =
+        graph([srv(), tool(:a), decomposed], [
+          %{edge(:a, :a, :observed) | to: decomposed.id, sign: :deny}
+        ])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+
+      assert [%{to: to, declared_sign: :allow, observed_sign: :deny}] = diff.classes.changed_sign
+      assert to == String.normalize(composed.id, :nfc)
+
+      assert diff.classes.declared_never_observed == [] and
+               diff.classes.observed_but_undeclared == []
+
+      assert diff.coverage == %{
+               declared_edges: 1,
+               observed_edges: 1,
+               declared_and_observed: 1,
+               declared_endpoint_covered: 1,
+               declared_nodes: 3,
+               observed_nodes: 3,
+               nodes_in_both: 3
+             }
+
+      bytes = Diff.encode!(diff)
+      assert length(String.split(bytes, "srv/tool/\u00E9")) == 2
+    end
+
+    test "a graph whose ids coincide after NFC has no canonical bytes, and so no diff: refused by name" do
+      composed = Node.new!(kind: :tool, level: :server, identity: {:tool, @server, :"\u00E9"})
+      decomposed = Node.new!(kind: :tool, level: :server, identity: {:tool, @server, :"e\u0301"})
+      twins = graph([srv(), composed, decomposed], [])
+      {declared, observed} = crafted()
+
+      assert {:error, {:declared, {:uncanonical, {:duplicate_id_after_nfc, _}}}} =
+               Diff.run(twins, observed, window: @window)
+
+      assert {:error, {:observed, {:uncanonical, {:duplicate_id_after_nfc, _}}}} =
+               Diff.run(declared, twins, window: @window)
+    end
+
+    test "a graph carrying the other side's provenance is refused by name, so edges and labels coincide" do
+      {declared, observed} = crafted()
+      mixed = graph(declared.nodes, declared.edges ++ [edge(:a, :b, :observed, weight: 1)])
+
+      assert {:error, {:declared, {:invalid, :provenance, :observed}}} =
+               Diff.run(mixed, observed, window: @window)
+
+      assert {:error, {:observed, {:invalid, :provenance, :declared}}} =
+               Diff.run(declared, mixed, window: @window)
+    end
+
+    test "the options are a keyword list, refused by name otherwise; the hash is also given as hex" do
+      {declared, observed} = crafted()
+      assert {:error, {:invalid, :opts, %{}}} = Diff.run(declared, observed, %{window: @window})
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert {:ok, hex} = Diff.hash_hex(diff)
+      assert hex == Base.encode16(Diff.hash!(diff), case: :lower) and Diff.hash_hex!(diff) == hex
+    end
+  end
+
   describe "the coverage bound, as counts a consumer divides" do
     test "the counts match a hand computation on the crafted pair" do
       {declared, observed} = crafted()
@@ -219,9 +294,12 @@ defmodule BeamMCP.Connectome.DiffTest do
 
     test "a window with no canonical bytes is refused by name" do
       {declared, observed} = crafted()
-      assert {:error, {:uncanonical, _}} = Diff.run(declared, observed, window: %{ratio: 0.5})
-      # A window that is not a map at all is refused the same way.
-      assert {:error, {:uncanonical, _}} = Diff.run(declared, observed, window: "1h")
+      # The refusal names the window as the field, whatever shape was wrong.
+      assert {:error, {:uncanonical, {:label_value, "record", :window, _}}} =
+               Diff.run(declared, observed, window: %{ratio: 0.5})
+
+      assert {:error, {:uncanonical, {:label_value, "record", :window, "1h"}}} =
+               Diff.run(declared, observed, window: "1h")
     end
 
     test "encode_value/1 writes any label-shaped value with the page's rules, and refuses the rest by name" do
