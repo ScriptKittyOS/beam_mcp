@@ -13,7 +13,7 @@ is the contract a consumer attaches to and the bounds of what it sees.
 ## The events
 
 Every `tools/call` that reaches the host's dispatch function is wrapped in one
-`:telemetry.span/3`, at the one site `BeamMCP.Server.dispatch/3`:
+`:telemetry.span/3`, at one private site in `BeamMCP.Server` (`dispatch/3`):
 
 | event | measurements | metadata |
 | -- | -- | -- |
