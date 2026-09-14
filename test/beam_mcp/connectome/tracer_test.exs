@@ -6,6 +6,13 @@ defmodule BeamMCP.Connectome.TracerTest do
   The guarded tracer: opt-in, off by default, one at a time, stops itself at its limits,
   leaves nothing behind, and writes identity only -- a module-to-module `:invoke` from a
   traced call, a name-to-name `:message` from a traced send -- into the collector's table.
+
+  The tests that forge the running term, forge a claim, or squat the tracer's registered
+  name are ROBUSTNESS tests, not security tests: the tracer's threat model (its moduledoc)
+  puts an adversary with code execution on the node out of scope. They stay because they
+  keep `stop/0` and `start/1` total against a term of the wrong shape, which the in-scope
+  stale-term-after-crash case needs, and they are cheap to run. No further guard of that
+  kind is added on their account.
   """
   use ExUnit.Case, async: false
 
@@ -576,6 +583,8 @@ defmodule BeamMCP.Connectome.TracerTest do
       Process.unregister(:tracer_test_retraced)
     end
 
+    # ROBUSTNESS, not security -- this test and the six after it forge the term, forge a
+    # claim, or squat the name; see the moduledoc.
     test "stop/0 reads the tracer's own claim, not the public term: under a forged term it still clears first and ends on the next message",
          %{collector: c} do
       # Measured by the safety lane: with a term that was not the tracer's, stop/0 had no
