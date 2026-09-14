@@ -19,13 +19,19 @@ Every `tools/call` that reaches the host's dispatch function is wrapped in one
 | -- | -- | -- |
 | `[:beam_mcp, :dispatch, :start]` | `system_time`, `monotonic_time` | `server_name`, `tool`, `telemetry_span_context` |
 | `[:beam_mcp, :dispatch, :stop]` | `duration`, `monotonic_time` | as start, plus `outcome: :ok \| :error` |
-| `[:beam_mcp, :dispatch, :exception]` | `duration`, `monotonic_time` | as start, plus `kind`, `reason`, `stacktrace` |
+| `[:beam_mcp, :dispatch, :exception]` | `duration`, `monotonic_time` | as start, plus `kind`, `reason`, `stacktrace` (frames carry arities, never argument lists) |
 
 `server_name` is the string given to `BeamMCP.Server.new/1`; `tool` is the catalog's atom.
-**No argument, result or header bytes are in any measurement or metadata.** A call the
-schema refuses is not a dispatch and emits nothing. `:exception` is `span/3`'s own shape:
-its `reason` is the exception the host's dispatch raised, whatever the host put in it, as
-for every library that uses `span/3`. The collector never reads it.
+**No argument, result or header bytes are in any measurement or metadata that the package
+writes.** A call the schema refuses is not a dispatch and emits nothing. `:exception` is
+`span/3`'s shape with one difference: the BEAM puts a call's argument list in the top frame
+of a `function_clause` or a BIF error's stacktrace, so the frames in the event carry the
+arity in that position and never the list — the host's own stacktrace is re-raised
+untouched. `reason` is the exception the host's dispatch raised, whatever the host put in it
+(a `KeyError` carries the map it was asked, for one); that is the host's, and the collector
+never reads it. The names are identity and do enter: `server_name`, the tool's name, and
+through the tracer a module's name and a registered process's name go verbatim into the
+bytes a consumer signs — a secret in a name is published.
 
 ## The collector
 
@@ -50,7 +56,8 @@ watching", and a diff that took the first for the second would report every decl
 as dead authority. A running collector that has seen no calls is an empty graph.
 
 `latency/1` is a summary per edge — count, mean and maximum in microseconds — and never
-the samples. It is not part of any hash and not part of the canonical sidecar.
+the samples. It is not part of any hash and not part of the canonical sidecar. The
+durations are the host's dispatch function's own timing, as the counts are its own calls.
 
 **The table dies with its process.** A restart under the host's supervisor starts from no
 rows; what a host loses is every observation since the last snapshot it kept. The declared
@@ -63,8 +70,8 @@ fails once against the missing table and is detached by telemetry, logged once.
 `BeamMCP.Connectome.Tracer` sees the edges telemetry cannot: a module calling a module, a
 process sending to a process. It is off until a host starts it, runs one at a time, and
 refuses to start without a running collector or with a limit that is not a positive
-integer — there is no unbounded mode. It stops itself at `max_messages` trace messages or
-`max_duration_ms`, clearing every pattern and flag it set, and exits
+integer — there is no unbounded mode. It stops itself at `max_messages` trace messages of
+any shape, a send to a dead process included, or at `max_duration_ms`, clearing every pattern and flag it set, and exits
 `{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out; the collector dying
 under it is the fourth, `{:shutdown, :collector_gone}`, which it watches for rather than
 failing on the next traced call. It never calls `:dbg`.

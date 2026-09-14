@@ -155,6 +155,12 @@ defmodule BeamMCP.Connectome.Tracer do
     counted(state)
   end
 
+  # A send to a process that is gone arrives under its own tag; it is counted like any
+  # other trace message and never written -- there is no name to write it under. Found by
+  # a lane that sent fifty against a limit of ten and watched the tracer stay up.
+  def handle_info({:trace, _from, :send_to_non_existing_process, _message, _to}, state),
+    do: counted(state)
+
   def handle_info(:max_duration, state) do
     {:stop, {:shutdown, {:limit, :max_duration_ms, state.max_duration_ms}}, state}
   end
