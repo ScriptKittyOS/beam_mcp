@@ -251,10 +251,18 @@ defmodule BeamMCP.Connectome.DiffTest do
       assert k.coverage.declared_endpoint_covered == 3
       assert k.coverage.observed_endpoint_declared == 2
 
+      #   and a -> x observed with a declared, x not: one end in the declaration is not
+      #   between declared parts.
       declared = graph([srv(), tool(:a)], [])
-      observed = graph([srv(), tool(:x), tool(:y)], [edge(:x, :y, :observed)])
+
+      observed =
+        graph([srv(), tool(:a), tool(:x), tool(:y)], [
+          edge(:x, :y, :observed),
+          edge(:a, :x, :observed)
+        ])
+
       {:ok, d} = Diff.run(declared, observed, window: @window)
-      assert d.coverage.observed_edges == 1
+      assert d.coverage.observed_edges == 2
       assert d.coverage.observed_endpoint_declared == 0
       assert d.coverage.declared_endpoint_covered == 0
     end
