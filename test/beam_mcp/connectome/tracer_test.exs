@@ -63,6 +63,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert {:error, {:invalid, :modules, [1]}} = start(c, modules: [1])
       assert {:error, {:invalid, :modules, :not_a_list}} = start(c, modules: :not_a_list)
       assert {:error, {:invalid, :processes, ["x"]}} = start(c, processes: ["x"])
+      assert {:error, {:invalid, :processes, :x}} = start(c, processes: :x)
       assert {:error, {:invalid, :server, nil}} = Tracer.start(collector: c, modules: [Alpha])
       assert {:error, :collector_not_started} = Tracer.start(collector: "c", server: @server)
     end
@@ -167,13 +168,13 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
     end
 
-    test "the duration limit stops tracing on time even when the tracer is not being scheduled",
-         %{
-           collector: c
-         } do
+    test "the duration limit stops tracing on time even when the tracer is not being scheduled, and the tracer leaves on the next message rather than draining the queue",
+         %{collector: c} do
       {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000, max_duration_ms: 50)
       ref = Process.monitor(pid)
       :sys.suspend(pid)
+      # Queue work behind the deadline: these must not all be written before it leaves.
+      for _ <- 1..500, do: Traced.wrapped(1)
       Process.sleep(150)
       # The tracer has not handled a thing; the patterns must be gone regardless.
       assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
@@ -181,6 +182,39 @@ defmodule BeamMCP.Connectome.TracerTest do
 
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_duration_ms, 50}}},
                      5_000
+
+      {:ok, g} = Observed.snapshot(c)
+      assert [%Edge{weight: w}] = g.edges
+      assert w < 500
+    end
+
+    test "stop/0 ends the drain on the next message too, and is :ok", %{collector: c} do
+      {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000, max_duration_ms: 60_000)
+      ref = Process.monitor(pid)
+      # The raw suspend, not :sys.suspend/1: a sys-suspended GenServer still answers system
+      # messages, and GenServer.stop is one, so it would leave before handling any message.
+      true = :erlang.suspend_process(pid)
+      for _ <- 1..500, do: Traced.wrapped(1)
+      test = self()
+      spawn(fn -> send(test, {:stopped, Tracer.stop()}) end)
+      Process.sleep(50)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      true = :erlang.resume_process(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
+      assert_receive {:stopped, :ok}, 5_000
+      {:ok, g} = Observed.snapshot(c)
+      assert [%Edge{weight: w}] = g.edges
+      assert w < 500
+    end
+
+    test "a kill after the deadline is cleared by the companion as well", %{collector: c} do
+      {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000, max_duration_ms: 50)
+      :sys.suspend(pid)
+      Process.sleep(100)
+      Process.exit(pid, :kill)
+      refute Process.alive?(pid)
+      Process.sleep(50)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
     end
 
     test "a failed start leaves no pattern set and is a named refusal, not a raise", %{
@@ -192,10 +226,10 @@ defmodule BeamMCP.Connectome.TracerTest do
       other = spawn(fn -> receive do: (_ -> :ok) end)
       Process.register(self(), :tracer_test_owned)
       :erlang.trace(self(), true, [:send, {:tracer, other}])
-      on_exit(fn -> Process.unregister(:tracer_test_owned) end)
 
       result = start(c, modules: [Beta], processes: [:tracer_test_owned])
       :erlang.trace(self(), false, [:all])
+      Process.unregister(:tracer_test_owned)
 
       assert {:error, {:init_failed, _}} = result
       refute Tracer.running?()
