@@ -44,12 +44,24 @@ defmodule BeamMCP.Connectome.ObservedTest do
 
   defp ok_dispatch, do: fn _name, _args, _opts -> {:ok, %{"done" => true}} end
 
+  # A handler as a named function: telemetry warns about a local function (it is slower to
+  # call), and a host attaching in anger would not use one either.
+  def forward(event, measurements, metadata, test),
+    do: send(test, {event, measurements, metadata})
+
   describe "snapshot/1 when nothing is watching" do
     test "a collector that was never started is a named refusal, not an empty graph" do
       # An empty observed connectome says "nothing ran"; a collector that is not running says
       # "nothing was watching". A diff that took the first for the second would report every
       # declared edge as dead authority.
       assert Observed.snapshot(:"#{__MODULE__}.never_started") == {:error, :not_started}
+    end
+
+    test "the readers answer the not-started case each in their own type: no rows, no latency, size zero" do
+      never = :"#{__MODULE__}.never_started_either"
+      assert Observed.rows(never) == []
+      assert Observed.latency(never) == %{}
+      assert Observed.size(never) == 0
     end
 
     test "a started collector that has seen no calls is an empty graph, distinct from the refusal" do
@@ -66,6 +78,12 @@ defmodule BeamMCP.Connectome.ObservedTest do
       :ok = stop_supervised!(name)
       refute Process.alive?(pid)
       assert Observed.snapshot(name) == {:error, :not_started}
+
+      # And its handler went with it: a handler left behind would fail against the missing
+      # table on the next call and be detached by telemetry with an error logged -- found
+      # when a test's collectors outlived their tests.
+      ids = Enum.map(:telemetry.list_handlers([:beam_mcp, :dispatch, :stop]), & &1.id)
+      refute {Observed, name} in ids
     end
   end
 
@@ -155,24 +173,14 @@ defmodule BeamMCP.Connectome.ObservedTest do
 
     test "the :stop event itself carries no argument, result or header bytes" do
       {name, _} = start_collector()
-      test = self()
       id = {__MODULE__, :probe, System.unique_integer()}
-
-      :ok =
-        :telemetry.attach(
-          id,
-          [:beam_mcp, :dispatch, :stop],
-          fn event, measurements, metadata, _ ->
-            send(test, {:event, event, measurements, metadata})
-          end,
-          nil
-        )
+      :ok = :telemetry.attach(id, [:beam_mcp, :dispatch, :stop], &__MODULE__.forward/4, self())
 
       on_exit(fn -> :telemetry.detach(id) end)
       state = server(fn _, _, _ -> {:ok, %{"echo" => @marker}} end)
       call(state, :echo, %{"k" => @marker})
 
-      assert_receive {:event, [:beam_mcp, :dispatch, :stop], measurements, metadata}
+      assert_receive {[:beam_mcp, :dispatch, :stop], measurements, metadata}
       refute inspect(measurements) =~ @marker
       refute inspect(metadata) =~ @marker
       assert metadata.server_name == @server_name
@@ -198,15 +206,14 @@ defmodule BeamMCP.Connectome.ObservedTest do
 
   describe "the events, as a contract" do
     test "start and stop are emitted around every tools/call with the documented names and shapes" do
-      test = self()
       id = {__MODULE__, :contract, System.unique_integer()}
 
       :ok =
         :telemetry.attach_many(
           id,
           [[:beam_mcp, :dispatch, :start], [:beam_mcp, :dispatch, :stop]],
-          fn event, measurements, metadata, _ -> send(test, {event, measurements, metadata}) end,
-          nil
+          &__MODULE__.forward/4,
+          self()
         )
 
       on_exit(fn -> :telemetry.detach(id) end)
@@ -232,7 +239,9 @@ defmodule BeamMCP.Connectome.ObservedTest do
          :observed}
 
       assert %{^key => %{count: 3, mean_us: mean, max_us: max}} = Observed.latency(name)
-      assert is_number(mean) and is_integer(max) and max >= 0 and mean <= max
+      # Both in microseconds as floats from the native samples, so the mean of the samples
+      # is never above the largest of them by a rounding.
+      assert is_float(mean) and is_float(max) and max >= 0 and mean <= max
     end
   end
 end

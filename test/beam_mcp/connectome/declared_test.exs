@@ -442,7 +442,9 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       assert bound.external_callees == Enum.sort(Enum.uniq(bound.external_callees))
       assert length(bound.external_callees) > 1
 
-      assert {{BeamMCP.Server, :validate_and_dispatch, 3}, {:"$M_EXPR", :"$F_EXPR", 3}} in bound.unresolved_calls
+      # The host's dispatch function is called from Server.dispatch/3, the site that emits the
+      # telemetry span around it (013); before that it was validate_and_dispatch/3.
+      assert {{BeamMCP.Server, :dispatch, 3}, {:"$M_EXPR", :"$F_EXPR", 3}} in bound.unresolved_calls
     end
   end
 end
