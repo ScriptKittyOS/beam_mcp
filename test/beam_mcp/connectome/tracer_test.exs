@@ -437,6 +437,64 @@ defmodule BeamMCP.Connectome.TracerTest do
       :persistent_term.erase({Tracer, :running})
     end
 
+    test "the double-kill window: a companion killed and then its tracer leaves patterns, and the next start clears them, whatever modules it names",
+         %{collector: c} do
+      # Round 3 of the safety lane measured the page's mitigation false: a next tracer over
+      # other modules left the old pattern set 200 times in 200. A start now clears what a
+      # stale term names before it puts its own.
+      {:ok, pid} = start(c, modules: [Beta])
+      {_, _, companion} = :persistent_term.get({Tracer, :running})
+      Process.exit(companion, :kill)
+      Process.exit(pid, :kill)
+      refute Process.alive?(pid)
+      # Nobody cleared: the tracer never handled the companion's death.
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+
+      {:ok, _} = start(c, modules: [Alpha])
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert {_, [Alpha], _} = :persistent_term.get({Tracer, :running})
+      :ok = Tracer.stop()
+    end
+
+    test "a companion that outlives the wait clears only what the new tracer did not claim", %{
+      collector: c
+    } do
+      # A companion suspended from outside (a debugger) runs after the new tracer set its
+      # own pattern on the same module; it must not take that pattern away.
+      {:ok, pid} = start(c, modules: [Beta])
+      {_, _, companion} = :persistent_term.get({Tracer, :running})
+      true = :erlang.suspend_process(companion)
+      Process.exit(pid, :kill)
+      refute Process.alive?(pid)
+
+      {t, {:ok, _}} = :timer.tc(fn -> start(c, modules: [Beta, Alpha]) end)
+      assert t >= 900_000
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+
+      true = :erlang.resume_process(companion)
+      Process.sleep(50)
+      refute Process.alive?(companion)
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert {:traced, :local} = :erlang.trace_info({Alpha, :run, 1}, :traced)
+      assert {_, [Beta, Alpha], _} = :persistent_term.get({Tracer, :running})
+      :ok = Tracer.stop()
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+    end
+
+    test "stop/0 with no tracer running clears what a stale term names and erases it", %{
+      collector: c
+    } do
+      {:ok, pid} = start(c, modules: [Beta])
+      {_, _, companion} = :persistent_term.get({Tracer, :running})
+      Process.exit(companion, :kill)
+      Process.exit(pid, :kill)
+      refute Process.alive?(pid)
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert :ok = Tracer.stop()
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+    end
+
     test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",
          %{
            collector: c
