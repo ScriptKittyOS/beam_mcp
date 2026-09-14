@@ -223,14 +223,10 @@ defmodule BeamMCP.Connectome.Diff do
   defp named(_side, :ok), do: :ok
   defp named(side, {:error, reason}), do: {:error, {side, reason}}
 
-  # `Graph.check/1` has already passed, so what remains of `Canonical.check/1` is the
-  # canonical form's own refusals, given under their own names.
-  defp canonical(graph) do
-    case Canonical.check(graph) do
-      {:error, {:uncanonical, {:invalid_graph, reason}}} -> {:error, reason}
-      other -> other
-    end
-  end
+  # `Graph.check/1` has already passed, so what `Canonical.check/1` can still refuse is the
+  # canonical form's own: ids or label keys coinciding after NFC, a string that is not
+  # UTF-8, a label value with no byte form.
+  defp canonical(graph), do: Canonical.check(graph)
 
   defp provenance(side, %Graph{edges: edges}) do
     case Enum.find(edges, &(&1.provenance != side)) do
