@@ -106,6 +106,19 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert {:traced, false} = :erlang.trace_info({Alpha, :run, 1}, :traced)
     end
 
+    test "the collector dying under it is a named way out, not a crash on the next message", %{
+      collector: c
+    } do
+      # Found by a lane: the tracer kept running idle after the collector died and crashed
+      # with a badarg on the next traced call. It watches the collector and leaves by name.
+      {:ok, pid} = start(c, modules: [Beta])
+      ref = Process.monitor(pid)
+      :ok = stop_supervised!(c)
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :collector_gone}}, 2_000
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      refute Tracer.running?()
+    end
+
     test "stop/0 is :ok even when the tracer dies under it -- the race with its own limit" do
       # A process under the tracer's name that exits for its own reason the moment it is
       # asked to stop, which is what a tracer hitting its limit during stop/0 looks like.

@@ -54,6 +54,14 @@ defmodule BeamMCP.Connectome.ObservedTest do
     end
   end
 
+  defp flush do
+    receive do
+      _ -> flush()
+    after
+      0 -> :ok
+    end
+  end
+
   defp assert_dispatch_saw_marker do
     assert_receive {:dispatched, args}
     assert inspect(args, limit: :infinity, printable_limit: :infinity) =~ @marker
@@ -99,6 +107,68 @@ defmodule BeamMCP.Connectome.ObservedTest do
       # when a test's collectors outlived their tests.
       ids = Enum.map(:telemetry.list_handlers([:beam_mcp, :dispatch, :stop]), & &1.id)
       refute {Observed, name} in ids
+    end
+  end
+
+  describe "under a real supervisor" do
+    test "a kill is survived: the supervisor lives, the collector restarts from no rows, one handler, not two" do
+      # Found by a lane running the collector as a host would: a :kill skips terminate/2,
+      # the handler stayed attached, the restarted init's attach got already_exists, the
+      # child crash-looped and the HOST'S supervisor exited. The doc had promised a restart
+      # from no rows; nothing had tested a restart.
+      name = :"#{__MODULE__}.killed"
+      {:ok, sup} = Supervisor.start_link([{Observed, name: name}], strategy: :one_for_one)
+      Process.unlink(sup)
+      on_exit(fn -> if Process.alive?(sup), do: Supervisor.stop(sup) end)
+
+      call(server(ok_dispatch()), :echo)
+      assert {:ok, %Graph{edges: [_]}} = Observed.snapshot(name)
+
+      pid = Process.whereis(name)
+      ref = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
+
+      # The supervisor restarts it; wait for the new registration.
+      new =
+        Enum.find_value(1..50, fn _ ->
+          Process.sleep(10)
+
+          case Process.whereis(name) do
+            nil -> nil
+            p when p != pid -> p
+          end
+        end)
+
+      assert Process.alive?(sup)
+      assert is_pid(new)
+      assert {:ok, %Graph{nodes: [], edges: []}} = Observed.snapshot(name)
+
+      ids = Enum.map(:telemetry.list_handlers([:beam_mcp, :dispatch, :stop]), & &1.id)
+      assert Enum.count(ids, &(&1 == {Observed, name})) == 1
+
+      call(server(ok_dispatch()), :echo)
+      assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
+    end
+
+    test "the handler runs in the dispatching process, never in the owner" do
+      {name, owner} = start_collector()
+      test = self()
+
+      state =
+        server(fn _, _, _ ->
+          send(test, {:dispatching_in, self()})
+          {:ok, %{}}
+        end)
+
+      call(state, :echo)
+      assert_receive {:dispatching_in, dispatcher}
+      assert dispatcher == self()
+      assert owner != dispatcher
+      # The row is there without the owner having been asked anything: its mailbox is empty
+      # and it answered nothing, because the write went straight to the table.
+      assert {:message_queue_len, 0} = Process.info(owner, :message_queue_len)
+      assert Observed.size(name) == 1
     end
   end
 
@@ -247,6 +317,13 @@ defmodule BeamMCP.Connectome.ObservedTest do
 
       call(server(fn _, _, _ -> {:error, "no"} end), :echo)
       assert_receive {[:beam_mcp, :dispatch, :stop], _, %{outcome: :error}}
+
+      # A call the schema refuses, and a call to no tool, are not dispatches: nothing emits.
+      # (The error call above left its :start in the mailbox; flush first.)
+      flush()
+      {_, %{"result" => %{"isError" => true}}} = call(server(ok_dispatch()), :echo, %{"k" => 1})
+      {_, %{"error" => _}} = call(server(ok_dispatch()), :no_such_tool)
+      refute_receive {[:beam_mcp, :dispatch, _], _, _}, 100
     end
 
     test "exception is span/3's own shape: the host's raised reason travels in it, and the collector still counts the attempt" do
