@@ -90,7 +90,11 @@ enumeration of what static analysis could not see — a different thing from thi
 
 The **window** is the consumer's: any map in the label grammar — string or atom keys
 (an atom is written as its name), nested maps, lists, integers, booleans, `null`; an empty
-map is allowed and written `{}` — carried into the record verbatim. The package never
+map is allowed and written `{}` — carried into the record verbatim, and so is its size:
+the record is at least as large as the window, and the window is encoded twice — once at
+`run/3`, to refuse one with no canonical bytes early, and once at `encode/1` (measured: a
+1 MB window costs ~55 ms at each). Nothing in the package bounds it; a consumer that signs
+records bounds its own windows. The package never
 infers it; a diff without a window is refused by name (`{:error, {:missing, :window}}`),
 and a window with no canonical bytes — a float inside, a struct, a keyword list, two keys
 that coincide after NFC — as `{:error, {:uncanonical, {:label_value, "record", :window,
@@ -119,7 +123,9 @@ nothing else. Its keys, in the order the rule gives them:
 Nothing else enters the record: no weight, no latency, no argument, no label, no name the
 graphs did not already carry — and every name they do carry is in it: a tool's, a
 module's, a registered process's name is identity and is published, as
-`docs/connectome-observed.md` says; a secret in a name is published here too. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1`
+`docs/connectome-observed.md` says; a secret in a name is published here too. `hash/1`
+encodes and hashes; a consumer that wants both the bytes and the hash hashes the bytes it
+already holds rather than paying the encode twice. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1`
 is the same as lowercase hexadecimal, the form this page writes it in.
 
 ## Worked example
