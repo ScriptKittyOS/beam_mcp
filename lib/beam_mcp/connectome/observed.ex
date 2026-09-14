@@ -73,7 +73,9 @@ defmodule BeamMCP.Connectome.Observed do
 
   @doc """
   The observed graph: one node per server and tool seen, one edge per row, weight the call
-  count, every sign `:unknown`. `{:error, :not_started}` when no collector runs under `name`.
+  count, every sign `:unknown`. `{:error, :not_started}` when no collector runs under `name`;
+  `{:error, {:malformed_row, key}}` when a row in the public table is of a shape the
+  builders would not write.
   """
   @spec snapshot(atom()) :: {:ok, Graph.t()} | {:error, :not_started | term()}
   def snapshot(name) do

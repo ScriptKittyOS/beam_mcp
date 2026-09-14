@@ -97,8 +97,8 @@ rate into the named modules times the tracer's scheduling latency, not `max_mess
 (measured: 64 hot callers against a limit of 1 000 peaked at 110 000 queued messages; with
 a limit too large to reach, 32 hot callers queued 3 million in a 100 ms window). The
 early clear is best effort — the queue is read every 32nd message — while the hard bounds
-hold on every path: at most `max_messages` handled, the patterns cleared at the limit and
-on every exit. A
+hold on every path but the one named below: at most `max_messages` handled, the patterns
+cleared at the limit and on every exit. A
 companion process enforces `max_duration_ms` from outside the tracer's mailbox — clearing
 the patterns at the deadline and raising a flag the tracer reads before every write — and
 clears on the tracer's exit for any reason, a kill included, so no pattern is left set with
@@ -106,7 +106,7 @@ no tracer behind it: a leftover pattern would cost every call to that module a b
 and would feed a host's own later call tracer with arguments. The tracer watches the
 companion back and exits `{:shutdown, :companion_gone}` if it dies. One window is open:
 the companion killed and then the tracer killed before it handles that death leaves the
-patterns set until the next tracer starts, which clears them. A `:send` trace message
+patterns set until the next `start/1` or `stop/0`, either of which clears them. A `:send` trace message
 carries the sent term into the tracer's mailbox until it is handled, where anything that
 can read that process's queue can see it; nothing of it is written. Nothing is cleared
 that the tracer did not set — its patterns and the send flag on the processes it named;
