@@ -69,7 +69,7 @@ defmodule Wiring do
   node, edge, weight and class comes from the JSON it is handed.
   """
 
-  @arrow %{"invoke" => "-->", "read" => "-.->", "message" => "==>"}
+  @arrow %{"invoke" => "-->", "read" => "-.->", "message" => "==>", "supervise" => "--o"}
 
   @doc "A wiring diagram of one graph; `weights:` takes the observed sidecar."
   def graph(graph, opts \\ []) do
@@ -178,8 +178,10 @@ end
 
 ## Declared: what can happen
 
-The catalog's tools, resources and prompts hang off the server node; the modules and the
-`invoke` edges between them are what `:xref` found in the host's beams. Signs are the
+The catalog's tools hang off the server node by `invoke` edges; its resource and its prompt
+are nodes with no edge, because the declared builder writes no `read` edge -- a resource
+declared is not a resource read. The modules and the `invoke` edges between them are what
+`:xref` found in the host's beams. Signs are the
 host's to populate and the package never does, so every edge here reads `unknown` in the
 JSON and the diagram draws none.
 
@@ -238,8 +240,7 @@ Kino.DataTable.new(
     %{figure: "declared edges observed", value: ratio.(c["declared_and_observed"], c["declared_edges"])},
     %{figure: "observed edges declared", value: ratio.(c["declared_and_observed"], c["observed_edges"])},
     %{figure: "completeness", value: ratio.(c["observed_endpoint_declared"], c["observed_edges"])},
-    %{figure: "endpoint coverage", value: ratio.(c["declared_endpoint_covered"], c["declared_edges"])},
-    %{figure: "nodes in both", value: ratio.(c["nodes_in_both"], c["declared_nodes"])}
+    %{figure: "endpoint coverage", value: ratio.(c["declared_endpoint_covered"], c["declared_edges"])}
   ],
   keys: [:figure, :value],
   name: "coverage, divided here"

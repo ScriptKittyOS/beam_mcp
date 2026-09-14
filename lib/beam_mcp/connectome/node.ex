@@ -91,7 +91,7 @@ defmodule BeamMCP.Connectome.Node do
   @doc """
   Checks every field of a built node against its domain, refusing by name. Reads only. The id
   is checked for being a string; whether it was derived by `id/1` cannot be checked, because
-  the identity is not stored. `Graph.new/1` runs this over every node it is handed.
+  the identity is not stored. `BeamMCP.Connectome.Graph.new/1` runs this over every node it is handed.
   """
   @spec check(t()) :: :ok | {:error, {:invalid, atom(), term()}}
   def check(%__MODULE__{} = node) do

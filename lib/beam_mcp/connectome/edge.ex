@@ -92,7 +92,7 @@ defmodule BeamMCP.Connectome.Edge do
   @doc """
   Checks every field of a built edge against its domain, refusing by name. Reads only:
   nothing is normalised, defaulted or rewritten, and the sign is checked for membership and
-  nothing else. `Graph.new/1` runs this over every edge it is handed, because a host may
+  nothing else. `BeamMCP.Connectome.Graph.new/1` runs this over every edge it is handed, because a host may
   build an edge by literal and bypass `new/1`.
   """
   @spec check(t()) :: :ok | {:error, {:invalid, atom(), term()}}

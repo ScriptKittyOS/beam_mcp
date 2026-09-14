@@ -106,12 +106,12 @@ take — a typo is not "no window"). Refusals are answered in a fixed order: the
 the declared graph, then the observed graph, then the window — the first refusal found is
 the one returned. A graph a literal built wrong is refused before it is compared, as
 `{:error, {:declared, reason}}` or `{:error, {:observed, reason}}` with the reason
-`Graph.new/1` would have given.
+`BeamMCP.Connectome.Graph.new/1` would have given.
 
 ## The bytes
 
 The record is one object written by rule 4 of `docs/connectome-canonical.md` — the rules of
-a node's `"labels"` object, applied to the whole record (`Canonical.encode_value/1`): keys
+a node's `"labels"` object, applied to the whole record (`BeamMCP.Connectome.Canonical.encode_value/1`): keys
 in UTF-16 code-unit order and unique after NFC, strings NFC, every atom a string under the
 name of its field, integers as integers, arrays in the order given, nested objects the same
 way; nothing else. Its keys, in the order the rule gives them:
@@ -130,7 +130,7 @@ graphs did not already carry — and every name they do carry is in it: a tool's
 a registered process's name is identity and is published, as `docs/connectome-observed.md`
 says; a secret in a name is published here too. `hash/1` encodes and hashes; a consumer that
 wants both the bytes and the hash hashes the bytes it already holds rather than paying the
-encode twice. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1` is
+encode twice. `BeamMCP.Connectome.Diff.hash/1` is SHA-256 over these bytes, the raw 32; `BeamMCP.Connectome.Diff.hash_hex/1` is
 the same as lowercase hexadecimal, the form this page writes it in.
 
 ## Worked example

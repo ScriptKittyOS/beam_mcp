@@ -74,7 +74,7 @@ defmodule BeamMCP.Connectome.Canonical do
   def encode!(graph), do: bang(encode(graph), "encode")
 
   @doc """
-  Everything `encode/1` refuses, without writing a byte: `Graph.check/1`'s refusals as
+  Everything `encode/1` refuses, without writing a byte: `BeamMCP.Connectome.Graph.check/1`'s refusals as
   `{:uncanonical, {:invalid_graph, reason}}`, then the canonical form's own -- two ids or
   two label keys that coincide after NFC, a string that is not UTF-8, a label value with no
   byte form. A graph this answers `:ok` for has canonical bytes; one it refuses has none.

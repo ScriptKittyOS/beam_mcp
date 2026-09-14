@@ -16,6 +16,13 @@ defmodule BeamMCP.DocsCensusTest do
   # ExDoc's forms: `Mod`, `Mod.fun/N`, `c:Mod.callback/N`, `t:Mod.type/N`.
   @ref ~r/`(c:|t:)?(BeamMCP(?:\.[A-Z][A-Za-z0-9]*)+)(?:\.([a-z_][A-Za-z0-9_?!]*)\/(\d+))?`/
 
+  # A short alias -- `Graph.new/1` for `BeamMCP.Connectome.Graph.new/1` -- is what a reader
+  # writes and what ExDoc does NOT link: aliases are not expanded on a page or in a doc, so
+  # the name sits as plain code beside its linked neighbours. Where the alias is a suffix of
+  # exactly one BeamMCP module it is reported, to be qualified; a suffix of none (another
+  # package's module) is not this test's to check.
+  @short ~r/`((?:[A-Z][A-Za-z0-9]*\.)+)([a-z_][A-Za-z0-9_?!]*)\/(\d+)`/
+
   defp tracked(patterns) do
     {out, 0} = System.cmd("git", ["ls-files", "--" | patterns], cd: @root)
     String.split(out, "\n", trim: true)
@@ -38,25 +45,22 @@ defmodule BeamMCP.DocsCensusTest do
     end
   end
 
+  # The modules are the built application's -- the artefact -- not a regex over source,
+  # which dropped a nested module (Declared.Bound, Declared.Result) without a word.
   defp doc_population do
-    for path <- tracked(["lib/**/*.ex"]),
-        module <- modules_in(path),
+    Application.load(:beam_mcp)
+    {:ok, modules} = :application.get_key(:beam_mcp, :modules)
+
+    for module <- modules,
         {:docs_v1, _, _, _, moduledoc, _, docs} = Code.fetch_docs(module),
-        {where, text} <- [
-          {"@moduledoc", doc_text(moduledoc)}
-          | Enum.map(docs, &{"@doc #{inspect(elem(&1, 0))}", doc_text(elem(&1, 3))})
-        ],
+        {where, text} <-
+          [
+            {"@moduledoc", doc_text(moduledoc)}
+            | Enum.map(docs, &{"@doc #{inspect(elem(&1, 0))}", doc_text(elem(&1, 3))})
+          ],
         is_binary(text) do
       {"#{inspect(module)} #{where}", module, text}
     end
-  end
-
-  defp modules_in(path) do
-    ~r/^\s*defmodule ([A-Z][A-Za-z0-9_.]*) do/m
-    |> Regex.scan(File.read!(Path.join(@root, path)), capture: :all_but_first)
-    |> List.flatten()
-    |> Enum.map(&Module.concat([&1]))
-    |> Enum.filter(&Code.ensure_loaded?/1)
   end
 
   defp doc_text(%{"en" => text}), do: text
@@ -75,6 +79,21 @@ defmodule BeamMCP.DocsCensusTest do
   defp bare_refs(module, text) do
     for [fun, arity] <- Regex.scan(@bare, text, capture: :all_but_first),
         do: {module, fun, arity, ""}
+  end
+
+  defp short_refs(text) do
+    for [alias_, fun, arity] <- Regex.scan(@short, text, capture: :all_but_first),
+        not String.starts_with?(alias_, "BeamMCP."),
+        suffix = "." <> String.trim_trailing(alias_, "."),
+        [module] <- [Enum.filter(beam_mcp_modules(), &String.ends_with?(inspect(&1), suffix))] do
+      "#{alias_}#{fun}/#{arity} is a short alias of #{inspect(module)} -- ExDoc will not link it; qualify it"
+    end
+  end
+
+  defp beam_mcp_modules do
+    Application.load(:beam_mcp)
+    {:ok, modules} = :application.get_key(:beam_mcp, :modules)
+    modules
   end
 
   defp pad4([kind, mod]), do: [kind, mod, "", ""]
@@ -161,5 +180,13 @@ defmodule BeamMCP.DocsCensusTest do
 
     assert found == [],
            "named in the docs, absent from the code:\n  " <> Enum.join(Enum.uniq(found), "\n  ")
+
+    unlinked =
+      for {where, text} <- prose ++ Enum.map(docs, &{elem(&1, 0), elem(&1, 2)}),
+          reason <- short_refs(text),
+          do: "#{where}: #{reason}"
+
+    assert unlinked == [],
+           "short aliases ExDoc leaves unlinked:\n  " <> Enum.join(Enum.uniq(unlinked), "\n  ")
   end
 end
