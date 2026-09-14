@@ -618,6 +618,40 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert :persistent_term.get({Tracer, :running}, nil) == nil
     end
 
+    test "a claim of another shape is no claim: a squatter under the tracer's name cannot make stop/0 raise or clear what it names",
+         %{collector: _} do
+      # Found by the safety lane: the claim was read from whatever process held the name,
+      # with none of the shape check the public term gets. A process registered under the
+      # name already refuses every start; it must not turn stop/0 into a raise either.
+      :erlang.trace_pattern({Beta, :_, :_}, true, [:local])
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+
+      for crafted <- [
+            {:atomics.new(1, []), ["not", :atoms], []},
+            {:atomics.new(1, []), @marker, []},
+            {:not_a_reference, [Beta], []}
+          ] do
+        test = self()
+
+        squatter =
+          spawn(fn ->
+            Process.put({Tracer, :claim}, crafted)
+            send(test, :claimed)
+            receive do: (_ -> exit(:squatted))
+          end)
+
+        assert_receive :claimed
+        Process.register(squatter, Tracer)
+        ref = Process.monitor(squatter)
+        assert :ok = Tracer.stop()
+        assert_receive {:DOWN, ^ref, :process, ^squatter, :squatted}
+        # The host's own pattern on a module the crafted claim named is not the squatter's.
+        assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      end
+
+      :erlang.trace_pattern({Beta, :_, :_}, false, [:local])
+    end
+
     test "a running term of another shape is nobody's: stop/0 with no tracer erases it and answers :ok, and the next start proceeds",
          %{collector: c} do
       # The term is public and unowned. A lane forged it in six shapes and every one made
