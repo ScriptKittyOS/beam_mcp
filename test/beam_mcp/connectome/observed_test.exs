@@ -222,6 +222,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
       assert Enum.count(ids, &(&1 == {Observed, name})) == 1
     end
 
+    @tag :hot_reload
     test "a hot reload of the collector's module keeps the process, its handler and its rows, idle and under load" do
       # The handler is an external fun, not a closure over a code version, so a purge does
       # not detach it; the table lives in the process, not the module.

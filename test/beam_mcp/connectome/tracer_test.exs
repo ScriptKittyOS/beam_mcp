@@ -800,6 +800,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       :erlang.trace(host_traced, false, [:all])
     end
 
+    @tag :hot_reload
     test "a hot reload of the tracer's module ends a running trace by name: the companion is old code, and its purge is the companion dying",
          %{collector: c} do
       # The moduledoc says so; a consumer lane ran it for three rounds. Pinned here.
