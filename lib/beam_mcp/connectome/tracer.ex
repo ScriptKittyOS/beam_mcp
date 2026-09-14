@@ -164,22 +164,17 @@ defmodule BeamMCP.Connectome.Tracer do
     # deadline. It runs at high priority for the same reason the tracer does.
     companion = spawn_companion(self(), modules, max_duration_ms, flag)
 
-    try do
-      # The per-process flags first: a process already traced by someone else raises here,
-      # and then nothing has been set yet.
-      for p <- processes, do: :erlang.trace(Process.whereis(p), true, [:send, {:tracer, self()}])
+    # The per-process flags first: a process already traced by someone else raises here,
+    # and then nothing has been set yet. Should anything below raise after a pattern is
+    # set, this process exits and the companion clears the patterns on its DOWN (measured:
+    # a rescue that cleared them here was a mutant nothing could tell apart).
+    for p <- processes, do: :erlang.trace(Process.whereis(p), true, [:send, {:tracer, self()}])
 
-      for m <- modules,
-          do: :erlang.trace_pattern({m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [:local])
+    for m <- modules,
+        do: :erlang.trace_pattern({m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [:local])
 
-      # Calls are traced from every process, with the arity flag so no argument ever arrives.
-      if modules != [], do: :erlang.trace(:all, true, [:call, :arity, {:tracer, self()}])
-    rescue
-      e ->
-        clear(modules)
-        send(companion, :cancel)
-        reraise e, __STACKTRACE__
-    end
+    # Calls are traced from every process, with the arity flag so no argument ever arrives.
+    if modules != [], do: :erlang.trace(:all, true, [:call, :arity, {:tracer, self()}])
 
     # The collector's death is a way out by name, not a badarg on the next traced call into
     # a table that is gone.
@@ -345,12 +340,14 @@ defmodule BeamMCP.Connectome.Tracer do
     end
   end
 
-  # A loaded (or loadable) module, never the wildcard: `{:_, :_, :_}` would trace every
-  # module in the node and, on stop, clear every local pattern in it, the host's included.
+  # A loaded (or loadable) module. That refuses the wildcard too -- `:_` is no module and
+  # cannot be loaded -- and the wildcard is the one that matters: `{:_, :_, :_}` would trace
+  # every module in the node and, on stop, clear every local pattern in it, the host's
+  # included. (A separate `!= :_` test was a mutant nothing could tell apart.)
   defp modules(opts) do
     case Keyword.fetch!(opts, :modules) do
       list when is_list(list) ->
-        if Enum.all?(list, &(is_atom(&1) and &1 != :_ and Code.ensure_loaded?(&1))),
+        if Enum.all?(list, &(is_atom(&1) and Code.ensure_loaded?(&1))),
           do: :ok,
           else: {:error, {:invalid, :modules, list}}
 

@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "    for m <- state.modules, do: :erlang.trace_pattern({m, :_, :_}, false, [:local])"
-new = "    for m <- state.modules, do: m"
+old = "    for m <- modules, do: :erlang.trace_pattern({m, :_, :_}, false, [:local])"
+new = "    for m <- modules, do: m"
 
 if s.count(old) != 1:
     sys.exit("Mtr2: anchor found %d times" % s.count(old))
