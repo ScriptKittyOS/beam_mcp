@@ -315,6 +315,145 @@ defmodule BeamMCP.Connectome.TracerTest do
     end
   end
 
+  describe "the companion, attacked" do
+    # Round 2 of the safety lane: the companion's clear-and-erase after a kill raced the
+    # next tracer's init (499 of 500 after a kill; 200 of 200 after a failed start), which
+    # then ran with no running term and a queue-ordered stop/0; the companion was the sole
+    # enforcer and nobody watched it; the node-wide flag clear wiped a host's own trace
+    # flags; and the collector dying under a loaded tracer was still a badarg.
+    test "a tracer started right after a kill owns the running term, and its stop/0 clears first",
+         %{
+           collector: c
+         } do
+      for _ <- 1..20 do
+        {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000)
+        Process.exit(pid, :kill)
+        refute Process.alive?(pid)
+        {:ok, pid2} = start(c, modules: [Beta], max_messages: 1_000_000)
+        assert {flag, [Beta], _} = :persistent_term.get({Tracer, :running}, nil)
+        assert is_reference(flag)
+        assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+        Process.sleep(5)
+        # Still ours: the old companion's late clear did not take the pattern away.
+        assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+        :ok = Tracer.stop()
+        assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+        assert :persistent_term.get({Tracer, :running}, nil) == nil
+        _ = pid2
+      end
+    end
+
+    test "a tracer started right after a failed start owns the running term", %{collector: c} do
+      other = spawn(fn -> receive do: (_ -> :ok) end)
+      Process.register(self(), :tracer_test_owned2)
+      :erlang.trace(self(), true, [:send, {:tracer, other}])
+
+      assert {:error, {:init_failed, _}} =
+               start(c, modules: [Beta], processes: [:tracer_test_owned2])
+
+      :erlang.trace(self(), false, [:all])
+      Process.unregister(:tracer_test_owned2)
+
+      {:ok, _} = start(c, modules: [Beta])
+      assert {_, [Beta], _} = :persistent_term.get({Tracer, :running}, nil)
+      Process.sleep(5)
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      :ok = Tracer.stop()
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+    end
+
+    test "the companion dying is a named way out, not a tracer with no deadline and no janitor",
+         %{collector: c} do
+      {:ok, pid} = start(c, modules: [Beta], max_duration_ms: 60_000)
+      ref = Process.monitor(pid)
+      {_, _, companion} = :persistent_term.get({Tracer, :running})
+      Process.exit(companion, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :companion_gone}}, 2_000
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+    end
+
+    test "stopping clears what the tracer set and nothing a host set: another tracer's flags on another process survive",
+         %{
+           collector: c
+         } do
+      host_tracer = spawn(fn -> receive do: (_ -> :ok) end)
+      victim = spawn(fn -> receive do: (_ -> :ok) end)
+      :erlang.trace(victim, true, [:procs, {:tracer, host_tracer}])
+
+      {:ok, _} = start(c, modules: [Beta], max_duration_ms: 50)
+      :ok = Tracer.stop()
+      assert {:flags, [:procs]} = :erlang.trace_info(victim, :flags)
+
+      {:ok, pid} = start(c, modules: [Beta], max_duration_ms: 50)
+      ref = Process.monitor(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_duration_ms, 50}}},
+                     2_000
+
+      assert {:flags, [:procs]} = :erlang.trace_info(victim, :flags)
+      :erlang.trace(victim, false, [:all])
+    end
+
+    test "the collector dying under a loaded tracer is still the named way out", %{collector: c} do
+      {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000, max_duration_ms: 60_000)
+      ref = Process.monitor(pid)
+      true = :erlang.suspend_process(pid)
+      for _ <- 1..200, do: Traced.wrapped(1)
+      :ok = stop_supervised!(c)
+      true = :erlang.resume_process(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :collector_gone}}, 5_000
+    end
+
+    test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",
+         %{
+           collector: c
+         } do
+      {:ok, pid} = start(c, modules: [Beta])
+      assert {:priority, :high} = Process.info(pid, :priority)
+      :ok = Tracer.stop()
+
+      # Patterns are global and unowned: the page says a host's own pattern on a module the
+      # tracer named goes with the tracer's.
+      :erlang.trace_pattern({Beta, :_, :_}, true, [:local])
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      {:ok, _} = start(c, modules: [Beta])
+      :ok = Tracer.stop()
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+    end
+
+    test "after a kill and its clear, a host's own later call tracer sees nothing for the old modules",
+         %{
+           collector: c
+         } do
+      {:ok, pid} = start(c, modules: [Beta])
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+
+      test = self()
+      host_tracer = spawn(fn -> receive do: (m -> send(test, {:host_saw, m})) end)
+      :erlang.trace(self(), true, [:call, {:tracer, host_tracer}])
+      Beta.run(:marker)
+      :erlang.trace(self(), false, [:all])
+      refute_receive {:host_saw, _}, 100
+    end
+
+    test "a traced process's sends to one of OTP's own registered processes are edges too", %{
+      collector: c
+    } do
+      Process.register(self(), :tracer_test_sender6)
+      {:ok, _} = start(c, processes: [:tracer_test_sender6])
+      # A call that goes through the code server, from this process.
+      Code.ensure_loaded(BeamMCP.Fixture.Declared.Gamma)
+      :ok = Tracer.stop()
+      Process.unregister(:tracer_test_sender6)
+      {:ok, g} = Observed.snapshot(c)
+      code_server = Node.id({:process, @server, :code_server})
+      assert Enum.any?(g.edges, &(&1.to == code_server and &1.kind == :message))
+    end
+  end
+
   describe "what it writes" do
     test "a traced call is a module-level :invoke edge from the caller's module to the callee's, and nothing of the arguments",
          %{
