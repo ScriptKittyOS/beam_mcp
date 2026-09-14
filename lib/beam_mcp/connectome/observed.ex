@@ -43,13 +43,14 @@ defmodule BeamMCP.Connectome.Observed do
   @events [[:beam_mcp, :dispatch, :stop], [:beam_mcp, :dispatch, :exception]]
 
   @typedoc """
-  A row: the canonical edge key, the call count, the latency sum and max in native time
-  units, and the two node identities the key was derived from -- an id is never parsed
-  back, so the identities travel beside it and the snapshot rebuilds the nodes from them.
+  A row: the edge as identities -- `{from_identity, to_identity, kind}` -- the call count,
+  and the latency sum and max in native time units. The canonical edge key and the nodes
+  are derived from the identities at snapshot time, not on the hot path: deriving two id
+  strings per call cost more than the write itself (measured, 013).
   """
   @type row ::
-          {Edge.key(), pos_integer(), non_neg_integer(), non_neg_integer(), Node.identity(),
-           Node.identity()}
+          {{Node.identity(), Node.identity(), Edge.kind()}, pos_integer(), non_neg_integer(),
+           non_neg_integer()}
 
   @doc """
   Starts the collector. Options: `name:` (required; the registered name, also the table's).
@@ -75,13 +76,19 @@ defmodule BeamMCP.Connectome.Observed do
     with {:ok, rows} <- fetch_rows(name) do
       nodes =
         rows
-        |> Enum.flat_map(fn {_key, _count, _sum, _max, from, to} -> [from, to] end)
+        |> Enum.flat_map(fn {{from, to, _kind}, _count, _sum, _max} -> [from, to] end)
         |> Enum.uniq()
         |> Enum.map(&build_node/1)
 
       edges =
-        for {{from, to, kind, provenance}, count, _sum, _max, _from, _to} <- rows do
-          Edge.new!(from: from, to: to, kind: kind, provenance: provenance, weight: count)
+        for {{from, to, kind}, count, _sum, _max} <- rows do
+          Edge.new!(
+            from: Node.id(from),
+            to: Node.id(to),
+            kind: kind,
+            provenance: :observed,
+            weight: count
+          )
         end
 
       Graph.new(nodes: nodes, edges: edges, schema_version: Graph.schema_version())
@@ -98,8 +105,8 @@ defmodule BeamMCP.Connectome.Observed do
   def latency(name) do
     case fetch_rows(name) do
       {:ok, rows} ->
-        Map.new(rows, fn {key, count, sum, max, _from, _to} ->
-          {key,
+        Map.new(rows, fn {{from, to, kind}, count, sum, max} ->
+          {{Node.id(from), Node.id(to), kind, :observed},
            %{
              count: count,
              mean_us: System.convert_time_unit(sum, :native, :nanosecond) / count / 1000,
@@ -170,17 +177,22 @@ defmodule BeamMCP.Connectome.Observed do
   """
   @spec observe(atom(), Node.identity(), Node.identity(), Edge.kind(), non_neg_integer()) :: :ok
   def observe(name, from, to, kind, duration \\ 0) do
-    key = {Node.id(from), Node.id(to), kind, :observed}
+    key = {from, to, kind}
     duration = max(duration, 0)
 
-    # Count and sum in one atomic step, inserting the row on first sight; then the max as an
-    # atomic compare-and-set, so two callers racing never lose the larger value.
-    :ets.update_counter(name, key, [{2, 1}, {3, duration}], {key, 0, 0, 0, from, to})
+    # Count and sum in one atomic step, inserting the row on first sight. The max is read
+    # first and rewritten only when this sample is larger -- rare once the table is warm --
+    # through an atomic compare-and-set, so two callers racing never lose the larger value.
+    :ets.update_counter(name, key, [{2, 1}, {3, duration}], {key, 0, 0, 0})
 
-    :ets.select_replace(name, [
-      {{key, :"$1", :"$2", :"$3", :"$4", :"$5"}, [{:<, :"$3", duration}],
-       [{{{key}, :"$1", :"$2", duration, :"$4", :"$5"}}]}
-    ])
+    if :ets.lookup_element(name, key, 4) < duration do
+      # `{:const, key}`: a key of nested tuples must be spelled as a constant in the body;
+      # the `{key}` literal form was refused as not a match specification.
+      :ets.select_replace(name, [
+        {{key, :"$1", :"$2", :"$3"}, [{:<, :"$3", duration}],
+         [{{{:const, key}, :"$1", :"$2", duration}}]}
+      ])
+    end
 
     :ok
   end
