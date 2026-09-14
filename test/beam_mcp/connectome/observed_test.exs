@@ -22,6 +22,21 @@ defmodule BeamMCP.Connectome.ObservedTest do
   @marker "PAYLOAD-MARKER-7f3a9c"
   @server_name "srv"
 
+  # A collector whose every start after the first waits, so a supervisor's restart gap can
+  # be held open long enough to call into it.
+  defmodule SlowRestart do
+    def child_spec(opts) do
+      %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
+    end
+
+    def start_link(opts) do
+      {flag, opts} = Keyword.pop!(opts, :flag)
+      if :persistent_term.get(flag, false), do: Process.sleep(300)
+      :persistent_term.put(flag, true)
+      Observed.start_link(opts)
+    end
+  end
+
   # A collector under a fresh name per test; the process is linked to the test and its
   # table dies with it.
   defp start_collector(opts \\ []) do
@@ -154,6 +169,79 @@ defmodule BeamMCP.Connectome.ObservedTest do
 
       call(server(ok_dispatch()), :echo)
       assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
+    end
+
+    test "a call during the restart gap is answered, the stale handler is detached once, and the restarted collector counts from no rows" do
+      # A consumer lane ran this as a script for four rounds; it is a page claim a host relies
+      # on, so it is a test. The child's second start is slowed to hold the gap open.
+      name = :"#{__MODULE__}.gap_#{System.unique_integer([:positive])}"
+      slow = {SlowRestart, :started, name}
+      on_exit(fn -> :persistent_term.erase(slow) end)
+
+      {:ok, sup} =
+        Supervisor.start_link([{SlowRestart, name: name, flag: slow}], strategy: :one_for_one)
+
+      Process.unlink(sup)
+      on_exit(fn -> if Process.alive?(sup), do: Supervisor.stop(sup) end)
+
+      state = server(ok_dispatch())
+      call(state, :echo)
+      assert Observed.size(name) == 1
+
+      pid = Process.whereis(name)
+      ref = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
+
+      # The gap: no collector, the dead one's handler still attached. The call is answered,
+      # not crashed; telemetry detaches the stale handler with one log line, so the next
+      # call in the gap is silent.
+      assert Observed.snapshot(name) == {:error, :not_started}
+      assert {_, %{"result" => %{"isError" => false}}} = call(state, :echo)
+      ids = Enum.map(:telemetry.list_handlers([:beam_mcp, :dispatch, :stop]), & &1.id)
+      refute {Observed, name} in ids
+      assert {_, %{"result" => %{"isError" => false}}} = call(state, :echo)
+
+      # The restart lands; the new collector counts from no rows, with one handler.
+      new =
+        Enum.find_value(1..100, fn _ ->
+          Process.sleep(10)
+          if (p = Process.whereis(name)) && p != pid, do: p
+        end)
+
+      assert is_pid(new)
+      assert {:ok, %Graph{edges: []}} = Observed.snapshot(name)
+      call(state, :echo)
+      assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
+      ids = Enum.map(:telemetry.list_handlers([:beam_mcp, :dispatch, :stop]), & &1.id)
+      assert Enum.count(ids, &(&1 == {Observed, name})) == 1
+    end
+
+    test "a hot reload of the collector's module keeps the process, its handler and its rows, idle and under load" do
+      # The handler is an external fun, not a closure over a code version, so a purge does
+      # not detach it; the table lives in the process, not the module.
+      {name, pid} = start_collector()
+      state = server(ok_dispatch())
+      call(state, :echo)
+
+      reload = fn ->
+        :code.purge(Observed)
+        {:module, Observed} = :code.load_file(Observed)
+        :code.purge(Observed)
+      end
+
+      reload.()
+      assert Process.whereis(name) == pid and Process.alive?(pid)
+      assert {_, %{"result" => %{"isError" => false}}} = call(state, :echo)
+      assert {:ok, %Graph{edges: [%Edge{weight: 2}]}} = Observed.snapshot(name)
+
+      task = Task.async(fn -> for _ <- 1..500, do: call(state, :echo) end)
+      reload.()
+      Task.await(task, 30_000)
+      assert Process.alive?(pid)
+      assert {:ok, %Graph{edges: [%Edge{weight: 502}]}} = Observed.snapshot(name)
+      ids = Enum.map(:telemetry.list_handlers([:beam_mcp, :dispatch, :stop]), & &1.id)
+      assert Enum.count(ids, &(&1 == {Observed, name})) == 1
     end
 
     test "the handler runs in the dispatching process, never in the owner" do

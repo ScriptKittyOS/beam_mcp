@@ -800,6 +800,26 @@ defmodule BeamMCP.Connectome.TracerTest do
       :erlang.trace(host_traced, false, [:all])
     end
 
+    test "a hot reload of the tracer's module ends a running trace by name: the companion is old code, and its purge is the companion dying",
+         %{collector: c} do
+      # The moduledoc says so; a consumer lane ran it for three rounds. Pinned here.
+      {:ok, pid} = start(c, modules: [Beta])
+      ref = Process.monitor(pid)
+      Beta.run(1)
+      _ = :sys.get_state(pid)
+
+      :code.purge(Tracer)
+      {:module, Tracer} = :code.load_file(Tracer)
+      :code.purge(Tracer)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :companion_gone}}, 2_000
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+      refute Tracer.running?()
+      assert {:ok, _} = start(c, modules: [Beta])
+      :ok = Tracer.stop()
+    end
+
     test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",
          %{
            collector: c
@@ -842,6 +862,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       # A call that is a message to the code server from this process, whether or not the
       # module is already loaded (under cover every module is).
       _ = :code.get_path()
+      _ = :sys.get_state(Tracer)
       :ok = Tracer.stop()
       Process.unregister(:tracer_test_sender6)
       {:ok, g} = Observed.snapshot(c)
@@ -857,6 +878,9 @@ defmodule BeamMCP.Connectome.TracerTest do
          } do
       {:ok, _} = start(c, modules: [Beta])
       Traced.wrapped(@marker)
+      # The barrier: a stop ends the tracer on the next message it handles, writing nothing
+      # after the flag, so the trace message must be handled before the stop is asked.
+      _ = :sys.get_state(Tracer)
       :ok = Tracer.stop()
 
       {:ok, %Graph{} = g} = Observed.snapshot(c)
@@ -873,6 +897,7 @@ defmodule BeamMCP.Connectome.TracerTest do
     test "a dynamic call through apply/3 is the same edge as a static one", %{collector: c} do
       {:ok, _} = start(c, modules: [Beta])
       Traced.apply_wrapped(Beta, [@marker])
+      _ = :sys.get_state(Tracer)
       :ok = Tracer.stop()
 
       {:ok, g} = Observed.snapshot(c)
@@ -1011,6 +1036,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       anon = spawn_link(fn -> receive do: (_ -> :ok) end)
       {:ok, _} = start(c, processes: [:tracer_test_sender2])
       send(anon, @marker)
+      _ = :sys.get_state(Tracer)
       :ok = Tracer.stop()
       Process.unregister(:tracer_test_sender2)
 
