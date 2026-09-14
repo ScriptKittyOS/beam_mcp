@@ -114,6 +114,31 @@ defmodule BeamMCP.Connectome.DiffTest do
       assert length(classified) == length(Enum.uniq(classified))
     end
 
+    test "the kind is part of the label: the same from and to under two kinds are two labels, on both sides" do
+      # A review lane dropped the kind from the label in a scratchpad copy and every test
+      # still passed: every edge in this file was :invoke. Two kinds on both sides are two
+      # labels in both; one kind moved to the other side is one dead and one drift.
+      nodes = [srv(), tool(:a), tool(:b)]
+      both = fn prov -> [edge(:a, :b, prov), edge(:a, :b, prov, kind: :read)] end
+
+      {:ok, diff} =
+        Diff.run(graph(nodes, both.(:declared)), graph(nodes, both.(:observed)), window: @window)
+
+      assert length(diff.classes.declared_and_observed) == 2
+      assert diff.coverage.declared_edges == 2 and diff.coverage.declared_and_observed == 2
+
+      {:ok, diff} =
+        Diff.run(
+          graph(nodes, [edge(:a, :b, :declared)]),
+          graph(nodes, [edge(:a, :b, :observed, kind: :read)]),
+          window: @window
+        )
+
+      assert [%{kind: :invoke}] = diff.classes.declared_never_observed
+      assert [%{kind: :read}] = diff.classes.observed_but_undeclared
+      assert diff.classes.declared_and_observed == []
+    end
+
     test "the window is the consumer's, required, and carried verbatim; it is never inferred" do
       {declared, observed} = crafted()
       assert {:error, {:missing, :window}} = Diff.run(declared, observed, [])
@@ -332,6 +357,20 @@ defmodule BeamMCP.Connectome.DiffTest do
       refute bytes =~ "0."
     end
 
+    test "the page's worked example is what the code writes: the bytes and the hash, read from the page" do
+      # docs/connectome-diff.md carries the crafted pair's bytes in its one fenced block and
+      # the hash on the line that follows; a reader reproduces them with sha256sum. This
+      # test reads the page, so the page and the code cannot drift apart silently.
+      page = File.read!("docs/connectome-diff.md")
+      [_, block | _] = String.split(page, "\n```\n")
+      [_, hex] = Regex.run(~r/SHA-256: `([0-9a-f]{64})`/, page)
+      {declared, observed} = crafted()
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert Diff.encode!(diff) == String.trim(block)
+      assert Diff.hash_hex!(diff) == hex
+      assert page =~ "The bytes (#{byte_size(String.trim(block))} of them, one line)"
+    end
+
     test "a window with no canonical bytes is refused by name" do
       {declared, observed} = crafted()
       # The refusal names the window as the field, whatever shape was wrong.
@@ -421,11 +460,15 @@ defmodule BeamMCP.Connectome.DiffTest do
           picks <- list_of(boolean(), length: 5),
           names = [:a | for({n, true} <- Enum.zip([:b, :c, :d, :e, :f], picks), do: n)],
           d_pairs <-
-            list_of({member_of(names), member_of(names), member_of([:allow, :deny, :unknown])},
+            list_of(
+              {member_of(names), member_of(names), member_of([:invoke, :read, :message]),
+               member_of([:allow, :deny, :unknown])},
               max_length: 8
             ),
           o_pairs <-
-            list_of({member_of(names), member_of(names), member_of([:allow, :deny, :unknown])},
+            list_of(
+              {member_of(names), member_of(names), member_of([:invoke, :read, :message]),
+               member_of([:allow, :deny, :unknown])},
               max_length: 8
             )
         ) do
@@ -433,7 +476,7 @@ defmodule BeamMCP.Connectome.DiffTest do
 
       build = fn pairs, prov ->
         pairs
-        |> Enum.map(fn {a, b, s} -> edge(a, b, prov, sign: s) end)
+        |> Enum.map(fn {a, b, k, s} -> edge(a, b, prov, kind: k, sign: s) end)
         |> Enum.uniq_by(&Edge.key/1)
       end
 
