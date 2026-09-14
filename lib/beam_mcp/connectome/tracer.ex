@@ -58,12 +58,15 @@ defmodule BeamMCP.Connectome.Tracer do
   queue is not copied at every collection while it drains (measured: on-heap, a drain
   under continuous arrival fell to 191 µs per message). `max_duration_ms` is enforced by a companion process that clears the
   patterns and flags at the deadline from outside the tracer's mailbox, so tracing stops on
-  time even when the tracer is starved, and raises a flag the tracer reads on every
-  message it handles, so the tracer exits `{:shutdown, {:limit, :max_duration_ms, ms}}` on
-  the next message it handles rather than after draining what was queued -- the read
-  follows that message's write, so at most one row lands after the flag is raised.
-  `stop/0` clears the patterns and raises the same flag, for the same reason, then stops
-  the tracer with a finite wait of five seconds. `stop/0` reads the tracer's own claim
+  time even when the tracer is starved -- the flag is raised first and the patterns cleared
+  second, so the writes stop before the generation does -- and the tracer reads the flag
+  before every write, so it exits `{:shutdown, {:limit, :max_duration_ms, ms}}` on the next
+  message it handles, without a row, rather than after draining what was queued: nothing
+  lands after the flag is raised. `stop/0` raises the same flag and then clears the
+  patterns, for the same reason, then stops the tracer with a finite wait of five seconds
+  (measured, eight hot callers: rows landing during the call fell from 4 900-7 500 to
+  62-939 with the order swapped; what remains is the caller's own scheduling before its
+  first instruction). `stop/0` reads the tracer's own claim
   -- flag, modules, the named pids, in its process dictionary -- never the public running
   term, which anyone can write (measured: under a forged term a stop had no flag to raise
   and queued behind nine million rows); the companion holds the same claim in its closure
@@ -179,12 +182,16 @@ defmodule BeamMCP.Connectome.Tracer do
       pid ->
         # The tracer's own claim, not the public term: under a forged term this had no
         # flag to raise and no modules to clear, and queued behind everything (measured:
-        # nine million rows written after the call). The dictionary read is not
-        # queue-ordered (measured: 16 µs on a suspended tracer with a million queued).
+        # nine million rows written after the call). The keyed dictionary read is not
+        # queue-ordered (measured: 2 µs).
+        # The flag first, the patterns second: the flag stops the writes on the next
+        # message the tracer handles, the clear stops the generation; in the other order,
+        # rows landed for as long as the clear took (measured: 4 900-7 500 under eight hot
+        # callers).
         case claim(pid) do
           {flag, modules, _pids} ->
-            clear_patterns(modules)
             :atomics.put(flag, 1, @stop)
+            clear_patterns(modules)
 
           nil ->
             :ok
@@ -238,9 +245,11 @@ defmodule BeamMCP.Connectome.Tracer do
   # shape: the same answer. The name can be taken by any process, and one that squats it
   # with a crafted claim already refuses every start; it must not turn `stop/0` into a
   # raise, or name a host's modules for clearing (measured, by a lane).
+  # One key, not the whole dictionary: the keyed read costs 2 µs where the copy cost up
+  # to a millisecond on a loaded tracer (measured).
   defp claim(pid) do
-    with {:dictionary, dictionary} <- Process.info(pid, :dictionary),
-         {@claim, {flag, modules, _pids} = claim} <- List.keyfind(dictionary, @claim, 0),
+    with {{:dictionary, @claim}, {flag, modules, _pids} = claim} <-
+           :erlang.process_info(pid, {:dictionary, @claim}),
          true <- is_reference(flag) and atoms?(modules) do
       claim
     else
@@ -396,9 +405,20 @@ defmodule BeamMCP.Connectome.Tracer do
 
   # A write into a table that is gone -- the collector died with messages still queued
   # ahead of its DOWN -- is the same way out as the DOWN itself.
-  defp written(state, write) do
-    write.()
-    counted(state)
+  # The flag before the write, so nothing lands after it is raised: the first message
+  # handled after a stop or the deadline ends the tracer without a row.
+  defp written(%{flag: flag} = state, write) do
+    case :atomics.get(flag, 1) do
+      @deadline ->
+        {:stop, {:shutdown, {:limit, :max_duration_ms, state.max_duration_ms}}, state}
+
+      @stop ->
+        {:stop, :normal, state}
+
+      _ ->
+        write.()
+        counted(state)
+    end
   rescue
     ArgumentError -> {:stop, {:shutdown, :collector_gone}, state}
   end
@@ -407,7 +427,7 @@ defmodule BeamMCP.Connectome.Tracer do
   # the front of the queue ends the drain here -- then handled plus queued against the
   # limit: the moment the sum reaches it, the patterns go, so generation stops here rather
   # than after the limit-th write.
-  defp counted(%{seen: seen, max_messages: max, flag: flag} = state) do
+  defp counted(%{seen: seen, max_messages: max} = state) do
     seen = seen + 1
     state = %{state | seen: seen}
 
@@ -422,19 +442,11 @@ defmodule BeamMCP.Connectome.Tracer do
         do: elem(Process.info(self(), :message_queue_len), 1),
         else: 0
 
-    case :atomics.get(flag, 1) do
-      @deadline ->
-        {:stop, {:shutdown, {:limit, :max_duration_ms, state.max_duration_ms}}, state}
-
-      @stop ->
-        {:stop, :normal, state}
-
-      _ when seen + queued >= max ->
-        clear(state.modules, state.pids, self())
-        {:stop, {:shutdown, {:limit, :max_messages, max}}, state}
-
-      _ ->
-        {:noreply, state}
+    if seen + queued >= max do
+      clear(state.modules, state.pids, self())
+      {:stop, {:shutdown, {:limit, :max_messages, max}}, state}
+    else
+      {:noreply, state}
     end
   end
 
@@ -477,8 +489,8 @@ defmodule BeamMCP.Connectome.Tracer do
           after_death(flag, modules)
       after
         max_duration_ms ->
-          clear(modules, pids, tracer)
           :atomics.put(flag, 1, @deadline)
+          clear(modules, pids, tracer)
           send(tracer, :max_duration)
 
           receive do

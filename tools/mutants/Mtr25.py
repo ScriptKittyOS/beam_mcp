@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "        case claim(pid) do\n          {flag, modules, _pids} ->\n            clear_patterns(modules)\n            :atomics.put(flag, 1, @stop)"
-new = "        case running_term() do\n          {flag, modules, _pids} when is_reference(flag) ->\n            clear_patterns(modules)\n            :atomics.put(flag, 1, @stop)"
+old = "        case claim(pid) do\n          {flag, modules, _pids} ->\n            :atomics.put(flag, 1, @stop)\n            clear_patterns(modules)"
+new = "        case running_term() do\n          {flag, modules, _pids} when is_reference(flag) ->\n            :atomics.put(flag, 1, @stop)\n            clear_patterns(modules)"
 
 if s.count(old) != 1:
     sys.exit("Mtr25: anchor found %d times" % s.count(old))

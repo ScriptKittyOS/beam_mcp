@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "      _ when seen + queued >= max ->"
-new = "      _ when seen + queued >= max and max < 0 ->"
+old = "    if seen + queued >= max do"
+new = "    if seen + queued >= max and max < 0 do"
 
 if s.count(old) != 1:
     sys.exit("Mtr1: anchor found %d times" % s.count(old))
