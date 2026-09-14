@@ -9,9 +9,9 @@ SPDX-License-Identifier: Apache-2.0
 `BeamMCP.Connectome.Graph` values — and a window the consumer supplies, and returns a
 record: every edge of either graph in exactly one of four classes, and a coverage bound as
 counts. The record has canonical bytes, written by the same rules as a node's labels, so a
-consumer signs it with the verifier it already has. This page is the contract a consumer
-can implement without importing the package; the worked example at the end reproduces
-with `sha256sum` alone.
+consumer signs it with the verifier it already has. This page is the contract a consumer can
+implement without importing the package; the worked example at the end reproduces with
+`sha256sum` alone.
 
 ## Labels, not isomorphism
 
@@ -19,15 +19,15 @@ Two edges are the same edge if and only if their **label** — `from`, `to`, `ki
 equal, compared as the encoder writes them: **after NFC** (rule 6 of
 `docs/connectome-canonical.md`). Ids are structural, derived by one function from the
 identity a host supplies (`docs/connectome.md`, the id scheme; `srv/server` for the server
-node, `srv/tool/a` for a tool), so the label is the whole identity of an edge and
-provenance says only which graph it came from. Two inputs are admitted only as the encoder
-would admit them: a graph whose ids coincide after NFC has no canonical bytes and so no
-diff — refused as `{:error, {:declared, {:uncanonical, {:duplicate_id_after_nfc, id}}}}`
-or the observed mirror — and a graph carrying an edge of the other side's provenance is
-refused as `{:error, {:declared, {:invalid, :provenance, :observed}}}` or the mirror, so on
-every admitted input an edge and a label are the same count. The diff is a set difference over labels and
-nothing more, and that is a decision, not an omission: a graph-isomorphism check is NP-hard
-in general and would be wrong here besides — it would call two differently named tools "the
+node, `srv/tool/a` for a tool), so the label is the whole identity of an edge and provenance
+says only which graph it came from. Two inputs are admitted only as the encoder would admit
+them: a graph whose ids coincide after NFC has no canonical bytes and so no diff — refused
+as `{:error, {:declared, {:uncanonical, {:duplicate_id_after_nfc, id}}}}` or the observed
+mirror — and a graph carrying an edge of the other side's provenance is refused as `{:error,
+{:declared, {:invalid, :provenance, :observed}}}` or the mirror, so on every admitted input
+an edge and a label are the same count. The diff is a set difference over labels and nothing
+more, and that is a decision, not an omission: a graph-isomorphism check is NP-hard in
+general and would be wrong here besides — it would call two differently named tools "the
 same" whenever their neighbourhoods matched. It is written down so nobody improves the diff
 into one later.
 
@@ -85,36 +85,36 @@ different figures, not one:
   `declared_and_observed ≤ observed_endpoint_declared ≤ observed_edges` always: each
   endpoint figure is a ceiling on the shared count, which is why it is a *bound*.
 
-(The first draft of this page called the dual "completeness"; a review lane implementing
-the definitions from the page found the roles swapped. Elsewhere in the package,
+(The first draft of this page called the dual "completeness"; a review lane implementing the
+definitions from the page found the roles swapped. Elsewhere in the package,
 `BeamMCP.Connectome.Declared.Bound` is "the completeness bound" of the *declared* build — an
 enumeration of what static analysis could not see — a different thing from this fraction.)
 
-The **window** is the consumer's: any map in the label grammar — string or atom keys
-(an atom is written as its name), nested maps, lists, integers, booleans, `null`; an empty
-map is allowed and written `{}` — carried into the record verbatim, and so is its size:
-the record is at least as large as the window, and the window is encoded twice — once at
-`run/3`, to refuse one with no canonical bytes early, and once at `encode/1` (measured: a
-1 MB window costs ~55 ms at each). Nothing in the package bounds it; a consumer that signs
-records bounds its own windows. The package never
-infers it; a diff without a window is refused by name (`{:error, {:missing, :window}}`),
-and a window with no canonical bytes — a float inside, a struct, a keyword list, two keys
-that coincide after NFC — as `{:error, {:uncanonical, {:label_value, "record", :window,
-value}}}`. The options themselves must be a keyword list carrying `window:` and nothing
-else (`{:error, {:invalid, :opts, given}}` for another shape, `{:error, {:invalid, :opts,
-[key, ...]}}` for a key the function does not take — a typo is not "no window"). Refusals
-are answered in a fixed order: the options, then the declared graph, then the observed
-graph, then the window — the first refusal found is the one returned. A graph a literal built wrong is refused before it is compared, as
+The **window** is the consumer's: any map in the label grammar — string or atom keys (an
+atom is written as its name), nested maps, lists, integers, booleans, `null`; an empty map
+is allowed and written `{}` — carried into the record verbatim, and so is its size: the
+record is at least as large as the window, and the window is encoded twice — once at
+`run/3`, to refuse one with no canonical bytes early, and once at `encode/1` (measured: a 1
+MB window costs ~55 ms at each). Nothing in the package bounds it; a consumer that signs
+records bounds its own windows. The package never infers it; a diff without a window is
+refused by name (`{:error, {:missing, :window}}`), and a window with no canonical bytes — a
+float inside, a struct, a keyword list, two keys that coincide after NFC — as `{:error,
+{:uncanonical, {:label_value, "record", :window, value}}}`. The options themselves must be a
+keyword list carrying `window:` and nothing else (`{:error, {:invalid, :opts, given}}` for
+another shape, `{:error, {:invalid, :opts, [key, ...]}}` for a key the function does not
+take — a typo is not "no window"). Refusals are answered in a fixed order: the options, then
+the declared graph, then the observed graph, then the window — the first refusal found is
+the one returned. A graph a literal built wrong is refused before it is compared, as
 `{:error, {:declared, reason}}` or `{:error, {:observed, reason}}` with the reason
 `Graph.new/1` would have given.
 
 ## The bytes
 
-The record is one object written by rule 4 of `docs/connectome-canonical.md` — the rules of a
-node's `"labels"` object, applied to the whole record (`Canonical.encode_value/1`): keys in
-UTF-16 code-unit order and unique after NFC, strings NFC, every atom a string under the name
-of its field, integers as integers, arrays in the order given, nested objects the same way;
-nothing else. Its keys, in the order the rule gives them:
+The record is one object written by rule 4 of `docs/connectome-canonical.md` — the rules of
+a node's `"labels"` object, applied to the whole record (`Canonical.encode_value/1`): keys
+in UTF-16 code-unit order and unique after NFC, strings NFC, every atom a string under the
+name of its field, integers as integers, arrays in the order given, nested objects the same
+way; nothing else. Its keys, in the order the rule gives them:
 
 - `"classes"` — an object with the four class names as keys, each an array of label objects
   `{"from","kind","to"}` (an empty class is `[]`); a `changed_sign` entry carries
@@ -126,12 +126,12 @@ nothing else. Its keys, in the order the rule gives them:
 - `"window"` — the consumer's map.
 
 Nothing else enters the record: no weight, no latency, no argument, no label, no name the
-graphs did not already carry — and every name they do carry is in it: a tool's, a
-module's, a registered process's name is identity and is published, as
-`docs/connectome-observed.md` says; a secret in a name is published here too. `hash/1`
-encodes and hashes; a consumer that wants both the bytes and the hash hashes the bytes it
-already holds rather than paying the encode twice. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1`
-is the same as lowercase hexadecimal, the form this page writes it in.
+graphs did not already carry — and every name they do carry is in it: a tool's, a module's,
+a registered process's name is identity and is published, as `docs/connectome-observed.md`
+says; a secret in a name is published here too. `hash/1` encodes and hashes; a consumer that
+wants both the bytes and the hash hashes the bytes it already holds rather than paying the
+encode twice. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1` is
+the same as lowercase hexadecimal, the form this page writes it in.
 
 ## Worked example
 
