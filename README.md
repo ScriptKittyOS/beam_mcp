@@ -85,7 +85,7 @@ to `beam_mcp`, and a host that wants its own name in `initialize` says so.
 
 ## One schema, one source
 
-A tool's schema lives on its `ToolSpec`. `tools/list` advertises **that** schema and
+A tool's schema lives on its `BeamMCP.ToolSpec`. `tools/list` advertises **that** schema and
 `tools/call` enforces **that** schema, so the contract a client is shown and the contract it is
 held to cannot drift apart. Argument keys are derived from the schema's `properties` and reach
 `dispatch` as **atoms** — a tool declaring `"place"` is dispatched `%{place: "Oslo"}`, not
@@ -93,7 +93,7 @@ held to cannot drift apart. Argument keys are derived from the schema's `propert
 domain term is the host's job and a generic layer that guesses has acquired someone else's
 domain.
 
-A `ToolSpec` that omits `input_schema` is a tool with no arguments: it advertises an open
+A `BeamMCP.ToolSpec` that omits `input_schema` is a tool with no arguments: it advertises an open
 empty object, so `tools/call` refuses nothing and dispatch is handed `%{}` whatever the client
 sent.
 

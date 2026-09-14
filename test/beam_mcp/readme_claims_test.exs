@@ -706,6 +706,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
     test "the collector's per-call cost is gated at 1.5 us, in the script the gate runs" do
       claims("measured and gated at 1.5 µs per")
+      claims("the owner's ceiling, set 2026-09-14")
       bench = File.read!(Path.join(__DIR__, "../../bench/overhead.exs"))
       assert bench =~ ~r/^threshold_us = 1\.5$/m
       assert bench =~ "NOT A PERFORMANCE PROMISE"

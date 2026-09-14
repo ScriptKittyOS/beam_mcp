@@ -21,7 +21,8 @@ defmodule BeamMCP.DocsCensusTest do
   # the name sits as plain code beside its linked neighbours. Where the alias is a suffix of
   # exactly one BeamMCP module it is reported, to be qualified; a suffix of none (another
   # package's module) is not this test's to check.
-  @short ~r/`((?:[A-Z][A-Za-z0-9]*\.)+)([a-z_][A-Za-z0-9_?!]*)\/(\d+)`/
+  # A bare module alias -- `ToolSpec` -- is the same defect with no function on it.
+  @short ~r/`((?:[A-Z][A-Za-z0-9]*\.)+)([a-z_][A-Za-z0-9_?!]*)\/(\d+)`|`((?:[A-Z][A-Za-z0-9]*\.)*[A-Z][A-Za-z0-9]*)`/
 
   defp tracked(patterns) do
     {out, 0} = System.cmd("git", ["ls-files", "--" | patterns], cd: @root)
@@ -81,14 +82,28 @@ defmodule BeamMCP.DocsCensusTest do
         do: {module, fun, arity, ""}
   end
 
+  # Each short alias is resolved to its module and reported; the function it names is also
+  # held to exist there, so a stale short alias is named twice -- once as unlinked, once as
+  # absent -- and never slips through by being unqualified.
   defp short_refs(text) do
-    for [alias_, fun, arity] <- Regex.scan(@short, text, capture: :all_but_first),
+    for match <- Regex.scan(@short, text, capture: :all_but_first),
+        {alias_, fun, arity} = short_parts(match),
         not String.starts_with?(alias_, "BeamMCP."),
         suffix = "." <> String.trim_trailing(alias_, "."),
-        [module] <- [Enum.filter(beam_mcp_modules(), &String.ends_with?(inspect(&1), suffix))] do
-      "#{alias_}#{fun}/#{arity} is a short alias of #{inspect(module)} -- ExDoc will not link it; qualify it"
+        [module] <- [Enum.filter(beam_mcp_modules(), &String.ends_with?(inspect(&1), suffix))],
+        shown =
+          String.trim_trailing(alias_, ".") <> if(fun == "", do: "", else: ".#{fun}/#{arity}"),
+        reason <-
+          [
+            "#{shown} is a short alias of #{inspect(module)} -- ExDoc will not link it; qualify it"
+          ] ++
+            missing({module, fun, arity, ""}) do
+      reason
     end
   end
+
+  defp short_parts([alias_, fun, arity]), do: {alias_, fun, arity}
+  defp short_parts([_, _, _, bare]), do: {bare <> ".", "", ""}
 
   defp beam_mcp_modules do
     Application.load(:beam_mcp)
