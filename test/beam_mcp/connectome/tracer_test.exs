@@ -9,7 +9,7 @@ defmodule BeamMCP.Connectome.TracerTest do
   """
   use ExUnit.Case, async: false
 
-  alias BeamMCP.Connectome.{Edge, Graph, Node, Observed, Tracer}
+  alias BeamMCP.Connectome.{Canonical, Edge, Graph, Node, Observed, Tracer}
   alias BeamMCP.Fixture.Declared.{Alpha, Beta}
   alias BeamMCP.Fixture.Traced
 
@@ -500,6 +500,86 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert :ok = Tracer.stop()
       assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
       assert :persistent_term.get({Tracer, :running}, nil) == nil
+    end
+
+    test "a running term of another shape is nobody's: stop/0 with no tracer erases it and answers :ok, and the next start proceeds",
+         %{collector: c} do
+      # The term is public and unowned. A lane forged it in six shapes and every one made
+      # stop/0 raise into its caller and left the term, so no later start could succeed.
+      ref = :atomics.new(1, [])
+
+      for forged <- [
+            @marker,
+            {ref, @marker, self()},
+            {ref, [@marker], self()},
+            {ref, [Beta]},
+            {ref, [Beta], self(), :extra},
+            {ref, [Beta | Beta], self()},
+            {:not_a_reference, [Beta], self()}
+          ] do
+        :persistent_term.put({Tracer, :running}, forged)
+        assert :ok = Tracer.stop()
+        assert :persistent_term.get({Tracer, :running}, nil) == nil
+
+        :persistent_term.put({Tracer, :running}, forged)
+        assert {:ok, _} = start(c, modules: [Beta])
+        assert {_, [Beta], _} = :persistent_term.get({Tracer, :running})
+        assert :ok = Tracer.stop()
+      end
+    end
+
+    test "a term forged while the tracer runs does not keep it alive: stop/0 stops it, and its own exit clears",
+         %{collector: c} do
+      # With a non-atomics flag in the term, stop/0 cleared the patterns and then raised on
+      # the flag, leaving the tracer alive; with a non-list module field it raised before
+      # anything was cleared.
+      for forged <- [{:not_a_reference, [Beta], self()}, {:atomics.new(1, []), @marker, self()}] do
+        {:ok, pid} = start(c, modules: [Beta])
+        :persistent_term.put({Tracer, :running}, forged)
+        assert :ok = Tracer.stop()
+        refute Process.alive?(pid)
+        assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+        assert :persistent_term.get({Tracer, :running}, nil) == nil
+      end
+    end
+
+    test "the companion clears its own patterns after a kill whatever shape the term in place has",
+         %{collector: c} do
+      # A forged non-list module field made `modules -- claimed` raise in the companion:
+      # it died with the patterns set, and neither start/1 nor stop/0 could take them away.
+      {:ok, pid} = start(c, modules: [Beta])
+      {_, _, companion} = :persistent_term.get({Tracer, :running})
+      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), @marker, self()})
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+      refute Process.alive?(companion)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+
+      assert {:ok, _} = start(c, modules: [Alpha])
+      assert {_, [Alpha], _} = :persistent_term.get({Tracer, :running})
+      :ok = Tracer.stop()
+    end
+
+    test "a registered name is identity: a secret in a name is published in the bytes, the message beside it is not",
+         %{collector: c} do
+      test = self()
+      name = :"#{@marker}-receiver"
+      receiver = spawn_link(fn -> receive do: (m -> send(test, {:got, m})) end)
+      Process.register(receiver, name)
+      Process.register(self(), :tracer_test_sender)
+      on_exit(fn -> Process.unregister(:tracer_test_sender) end)
+
+      {:ok, tracer} = start(c, modules: [], processes: [:tracer_test_sender])
+      send(name, {:secret, "the-message-#{@marker}"})
+      assert_receive {:got, {:secret, _}}
+      _ = :sys.get_state(tracer)
+      :ok = Tracer.stop()
+
+      {:ok, graph} = Observed.snapshot(c)
+      bytes = Canonical.encode(graph)
+      assert bytes =~ Atom.to_string(name)
+      refute bytes =~ "the-message-"
+      refute inspect(Observed.rows(c), printable_limit: :infinity) =~ "the-message-"
     end
 
     test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",

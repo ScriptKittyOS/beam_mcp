@@ -419,6 +419,85 @@ defmodule BeamMCP.Connectome.ObservedTest do
       assert_marker_absent(name)
     end
 
+    test "a host-built stacktrace cannot break the catch clause: odd frames are made plain, the event still fires, and the host's own error and stacktrace are re-raised untouched" do
+      # A lane raised through `:erlang.raise/3` with frames no compiler writes: a location
+      # that is not a keyword list, an improper argument list, a file and a line of the wrong
+      # type. The rewrite raised inside the catch clause -- `:start` with no `:exception`,
+      # no row, and the host's error replaced by ours.
+      id = {__MODULE__, :built, System.unique_integer()}
+
+      :ok =
+        :telemetry.attach_many(
+          id,
+          [[:beam_mcp, :dispatch, :stop], [:beam_mcp, :dispatch, :exception]],
+          &__MODULE__.forward/4,
+          self()
+        )
+
+      on_exit(fn -> :telemetry.detach(id) end)
+      {name, _} = start_collector()
+
+      built = fn args ->
+        [
+          {Enum, :x, 1, [args]},
+          {Enum, :y, [args | args], []},
+          {Enum, :z, 2, [file: @marker, line: @marker]},
+          {Enum, :w, 0, [file: ~c"a.ex", line: 7, error_info: %{cause: args}]},
+          {Enum, :v, 3, @marker}
+        ]
+      end
+
+      dispatch = fn _, args, _ -> :erlang.raise(:error, {:crafted, args}, built.(args)) end
+
+      {reason, raised} =
+        try do
+          call(server(dispatch), :echo, %{"k" => @marker})
+        catch
+          :error, reason -> {reason, __STACKTRACE__}
+        end
+
+      assert {:crafted, %{k: @marker} = args} = reason
+      assert raised == built.(args)
+
+      assert_receive {[:beam_mcp, :dispatch, :exception], _,
+                      %{kind: :error, reason: ^reason, stacktrace: frames}}
+
+      assert frames == [
+               {Enum, :x, 1, []},
+               {Enum, :y, 1, []},
+               {Enum, :z, 2, []},
+               {Enum, :w, 0, [file: ~c"a.ex", line: 7]},
+               {Enum, :v, 3, []}
+             ]
+
+      refute_received {[:beam_mcp, :dispatch, :stop], _, _}
+      assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
+      assert_marker_absent(name)
+    end
+
+    test "dispatch_opts never enter: a secret handed to every dispatch is in no row, byte or summary" do
+      test = self()
+
+      dispatch = fn _, _args, opts ->
+        send(test, {:opts, opts})
+        {:ok, %{}}
+      end
+
+      {name, _} = start_collector()
+
+      state =
+        Server.new(
+          dispatch: dispatch,
+          catalog: Catalog,
+          server_name: @server_name,
+          dispatch_opts: [secret: @marker]
+        )
+
+      assert {_, %{"result" => _}} = call(state, :echo, %{"k" => "plain"})
+      assert_receive {:opts, [secret: @marker]}
+      assert_marker_absent(name)
+    end
+
     test "the :exception stacktrace carries arities, never arguments: a function_clause or a BIF error would have put the call's arguments in its top frame" do
       # An adversarial read found the BEAM's own stacktrace carrying the argument list for
       # a function_clause and for a BIF badarg -- three of four common failure shapes --
