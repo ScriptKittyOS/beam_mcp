@@ -661,6 +661,113 @@ defmodule BeamMCP.ReadmeClaimsTest do
     end
   end
 
+  describe "the connectome README claims" do
+    # Each quotes its sentence and exercises the claim, on the same fixtures the Livebook's
+    # exports are built from -- so the README, the exports and the code are held together.
+    alias BeamMCP.Connectome.Observed
+    alias BeamMCP.Fixture.Livebook, as: Fixture
+
+    test "the package writes only :unknown into the sign slot, on both graphs" do
+      claims("the package writes only `:unknown`")
+      claims("It populates no sign")
+
+      %{"fx.declared.json" => declared, "fx.observed.json" => observed} = Fixture.exports()
+
+      for bytes <- [declared, observed], edge <- Jason.decode!(bytes)["edges"] do
+        assert edge["sign"] == "unknown"
+      end
+    end
+
+    test "the observed graph carries edge identity only, never a payload byte" do
+      claims("never a payload byte")
+      marker = "README-MARKER-#{System.unique_integer([:positive])}"
+      name = :"#{__MODULE__}.c#{System.unique_integer([:positive])}"
+      _ = start_supervised!({Observed, name: name})
+
+      state =
+        Server.new(
+          dispatch: fn _, _, _ -> {:ok, %{}} end,
+          catalog: Fixture.RunningCatalog,
+          server_name: "readme"
+        )
+
+      {_, %{"result" => _}} =
+        Server.handle_message(state, %{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "tools/call",
+          "params" => %{"name" => "echo", "arguments" => %{"k" => marker}}
+        })
+
+      {:ok, graph} = Observed.snapshot(name)
+      assert graph.edges != []
+      refute inspect(graph, limit: :infinity, printable_limit: :infinity) =~ marker
+    end
+
+    test "the collector's per-call cost is gated at 1.5 us, in the script the gate runs" do
+      claims("measured and gated at 1.5 µs per")
+      bench = File.read!(Path.join(__DIR__, "../../bench/overhead.exs"))
+      assert bench =~ ~r/^threshold_us = 1\.5$/m
+      assert bench =~ "NOT A PERFORMANCE PROMISE"
+    end
+
+    test "every edge of either graph lands in exactly one of four classes" do
+      claims("puts every edge of either graph in exactly")
+      claims("one of four classes")
+      diff = Jason.decode!(Fixture.exports()["fx.diff.json"])
+
+      assert Map.keys(diff["classes"]) |> Enum.sort() ==
+               ~w(changed_sign declared_and_observed declared_never_observed observed_but_undeclared)
+
+      %{"fx.declared.json" => d, "fx.observed.json" => o} = Fixture.exports()
+      label = &{&1["from"], &1["to"], &1["kind"]}
+
+      union =
+        Enum.uniq(
+          Enum.map(Jason.decode!(d)["edges"], label) ++ Enum.map(Jason.decode!(o)["edges"], label)
+        )
+
+      classified = diff["classes"] |> Map.values() |> List.flatten() |> Enum.map(label)
+      assert Enum.sort(classified) == Enum.sort(union)
+      assert length(classified) == length(Enum.uniq(classified))
+    end
+
+    test "the Livebook installs Kino and a JSON decoder and no beam_mcp" do
+      claims("it installs Kino")
+      claims("and a JSON decoder and no `beam_mcp`")
+      notebook = File.read!(Path.join(__DIR__, "../../livebooks/connectome.livemd"))
+      [_, setup | _] = String.split(notebook, "```elixir\n")
+      [setup, _] = String.split(setup, "```", parts: 2)
+      assert setup =~ ":kino" and setup =~ ":jason"
+      refute setup =~ "beam_mcp"
+    end
+
+    test "deliberately out: no line under lib/ names a receipt, an approval, a risk tier or egress" do
+      claims("risk tiers, approvals, receipts and egress")
+      claims("no line under `lib/` names a receipt, an approval, a risk tier or egress")
+
+      {out, code} =
+        System.cmd(
+          "git",
+          [
+            "grep",
+            "-n",
+            "-i",
+            "-w",
+            "-E",
+            "receipts?|approvals?|risk tiers?|egress",
+            "--",
+            "lib/"
+          ],
+          cd: Path.join(__DIR__, "../.."),
+          stderr_to_stdout: true
+        )
+
+      # git grep exits 1 when nothing matches, which is the result this test wants.
+      assert code == 1, "named under lib/:\n" <> out
+    end
+  end
+
   defp request_body(payload) do
     Jason.encode!(%{
       "jsonrpc" => "2.0",

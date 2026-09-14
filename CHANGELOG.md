@@ -82,6 +82,30 @@ All notable changes to this project are documented here. The format follows
 - **No MCP capability is claimed.** Neither protocol revision this package targets defines a
   topology or declared-reachability primitive, and none is invented. Nothing on the wire changes.
 
+### Added — the Livebook, and the instruments the release is measured with
+
+- **A Livebook renders the connectome from its JSON export alone.**
+  `livebooks/connectome.livemd` draws the declared graph, the observed graph with its sidecar
+  weights, and the diff coloured by class, and divides the coverage counts the way the diff
+  page says a consumer does. It installs Kino and a JSON decoder and no `beam_mcp`, so a reader
+  with only the export sees what a reader with the package sees. The four exports beside it are
+  held by a test, byte for byte, to what the package produces from its fixtures today;
+  `tools/livebook_eval.exs` evaluates the cells outside Livebook.
+- **Three gate steps, and a population that cannot be forgotten.** `bench` measures the
+  collector's per-call overhead against a ceiling of 1.5 µs per `tools/call` — the owner's
+  number, with its reasoning in `bench/overhead.exs`; a ceiling on an optional, off-by-default
+  feature, not a performance promise — and records the diff engine's cost on a 10 000-edge
+  fixture, for which no threshold is set. `properties` runs the property tests alone at a
+  thousand generations each (`PROPERTY_RUNS`, read by the test helper). `instruments` parses
+  every tracked shell and Python file. And the format step's population is the tracked set,
+  not a glob: the scripts under `tools/` sat outside the old one, and a broken tracked
+  instrument passed the whole gate green (measured before the change; named after it).
+- **The documentation is held to the code by a census.** Every `BeamMCP` module and function
+  the README, the pages, the notebook and the compiled `@doc`s name must exist at that arity,
+  a bare name resolved against its own module as ExDoc resolves it. Nine names that read as
+  one module's functions but were another's, or a hook's, are qualified. ExDoc groups the
+  modules by namespace.
+
 ### Changed — BREAKING, and it breaks a host contract rather than the wire
 
 - **`BeamMCP.ToolCatalog` is replaced by `BeamMCP.Catalog`, and `all/0` by `capabilities/0`.**
