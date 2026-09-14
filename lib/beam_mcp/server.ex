@@ -336,13 +336,30 @@ defmodule BeamMCP.Server do
     case Schema.validate(arguments, spec.input_schema) do
       :ok ->
         args = normalize_arguments(arguments, spec.input_schema)
-        state.dispatch.(spec.name, args, state.dispatch_opts)
+        dispatch(state, spec, args)
 
       {:error, reason} ->
         {:error,
          %{"tool" => Atom.to_string(spec.name), "reason" => "invalid arguments: #{reason}"}}
     end
   end
+
+  # The one site that emits `[:beam_mcp, :dispatch, :start | :stop | :exception]`. The
+  # metadata is the edge's identity -- the server's name and the tool's -- and nothing the
+  # call carried: no arguments, no result, no headers. `:exception` is `:telemetry.span/3`'s
+  # own shape, so its reason is whatever the host's dispatch raised. A validation failure
+  # never reaches here: it is not a dispatch, and it is not an edge.
+  defp dispatch(state, %ToolSpec{name: tool}, args) do
+    meta = %{server_name: state.server_name, tool: tool}
+
+    :telemetry.span([:beam_mcp, :dispatch], meta, fn ->
+      result = state.dispatch.(tool, args, state.dispatch_opts)
+      {result, Map.put(meta, :outcome, outcome(result))}
+    end)
+  end
+
+  defp outcome({:ok, _}), do: :ok
+  defp outcome(_), do: :error
 
   # Only reached with a map: Schema.validate/2 rejects anything else first.
   #
