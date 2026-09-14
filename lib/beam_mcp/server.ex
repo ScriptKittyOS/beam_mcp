@@ -388,10 +388,13 @@ defmodule BeamMCP.Server do
     end
   end
 
-  # A frame with an argument list becomes the same frame with the list's length.
+  # A frame with an argument list becomes the same frame with the list's length, and its
+  # location keeps file and line only: a host can put any term into a frame through
+  # `:erlang.error/3`'s error_info, and it would have travelled in the keywords.
   defp arities(stacktrace) do
     for {m, f, args_or_arity, loc} <- stacktrace do
-      {m, f, if(is_list(args_or_arity), do: length(args_or_arity), else: args_or_arity), loc}
+      {m, f, if(is_list(args_or_arity), do: length(args_or_arity), else: args_or_arity),
+       Keyword.take(loc, [:file, :line])}
     end
   end
 

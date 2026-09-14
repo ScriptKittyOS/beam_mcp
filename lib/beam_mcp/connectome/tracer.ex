@@ -60,15 +60,17 @@ defmodule BeamMCP.Connectome.Tracer do
   patterns and raises the same flag, for the same reason, then stops the tracer with a
   finite wait.
 
-  **Nothing left behind, on every path.** The companion process monitors the tracer and
-  clears the patterns on any exit -- a kill included, which skips `terminate/2`; the BEAM
+  **Nothing left behind, on every path but one.** The companion process monitors the tracer
+  and clears the patterns on any exit -- a kill included, which skips `terminate/2`; the BEAM
   removes a dead tracer's flags itself. A pattern left set with no tracer would cost every
   call to that module a breakpoint and would feed a host's own later `:call` tracer with
   arguments (measured); that is what the companion exists to prevent. The tracer watches
   the companion back and leaves `{:shutdown, :companion_gone}` if it dies, since it is the
   only enforcer of the deadline and of the clear-on-kill; a hot reload of this module
   purges the companion, an anonymous function of the old code, and ends a running trace
-  that way (measured). A new tracer waits for a previous
+  that way (measured). The one path that leaves patterns set: the companion killed, then
+  the tracer killed before it handles that death -- the next tracer to start clears them
+  (measured). A new tracer waits for a previous
   companion to finish before it starts (measured: without that, the old companion's late
   erase landed on the new tracer's running term 499 times in 500). Patterns are global and
   unowned in the BEAM: clearing the patterns on a module clears any that someone else set

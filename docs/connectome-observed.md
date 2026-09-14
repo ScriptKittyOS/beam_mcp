@@ -27,10 +27,11 @@ shape `:telemetry.span/3` gives them, from one private site in `BeamMCP.Server`
 writes.** A call the schema refuses is not a dispatch and emits nothing. `:exception` is
 `span/3`'s shape with one difference: the BEAM puts a call's argument list in the top frame
 of a `function_clause` or a BIF error's stacktrace, so the frames in the event carry the
-arity in that position and never the list — the host's own stacktrace is re-raised
-untouched. `reason` is the exception the host's dispatch raised, whatever the host put in it
-(a `KeyError` carries the map it was asked, for one); that is the host's, and the collector
-never reads it. The names are identity and do enter: `server_name`, the tool's name, and
+arity in that position and never the list, and a frame's location keeps file and line
+only — a host can put any term into a frame through `:erlang.error/3`'s `error_info`, and
+it does not travel; the host's own stacktrace is re-raised untouched. `reason` is the
+exception the host's dispatch raised, whatever the host put in it (a `KeyError` can carry
+the map it was asked, for one); that is the host's, and the collector never reads it. The names are identity and do enter: `server_name`, the tool's name, and
 through the tracer a module's name and a registered process's name go verbatim into the
 bytes a consumer signs — a secret in a name is published.
 
@@ -59,6 +60,10 @@ as dead authority. A running collector that has seen no calls is an empty graph.
 `latency/1` is a summary per edge — count, mean and maximum in microseconds — and never
 the samples. It is not part of any hash and not part of the canonical sidecar. The
 durations are the host's dispatch function's own timing, as the counts are its own calls.
+
+The table is public and `observe/5` is a host's to call. A row of another shape — an
+identity the builders would not derive, a count below one — is refused by `snapshot/1` and
+`latency/1` as `{:error, {:malformed_row, key}}`, never built into a graph.
 
 **The table dies with its process.** A restart under the host's supervisor starts from no
 rows; what a host loses is every observation since the last snapshot it kept. The declared
@@ -99,7 +104,11 @@ the patterns at the deadline and raising a flag the tracer reads before every wr
 clears on the tracer's exit for any reason, a kill included, so no pattern is left set with
 no tracer behind it: a leftover pattern would cost every call to that module a breakpoint
 and would feed a host's own later call tracer with arguments. The tracer watches the
-companion back and exits `{:shutdown, :companion_gone}` if it dies. Nothing is cleared
+companion back and exits `{:shutdown, :companion_gone}` if it dies. One window is open:
+the companion killed and then the tracer killed before it handles that death leaves the
+patterns set until the next tracer starts, which clears them. A `:send` trace message
+carries the sent term into the tracer's mailbox until it is handled, where anything that
+can read that process's queue can see it; nothing of it is written. Nothing is cleared
 that the tracer did not set — its patterns and the send flag on the processes it named;
 never every process's flags. Patterns are global in the BEAM; clearing a module's patterns
 clears any someone else set on it. The collector dying under the tracer is met as its DOWN

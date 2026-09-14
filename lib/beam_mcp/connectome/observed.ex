@@ -77,7 +77,8 @@ defmodule BeamMCP.Connectome.Observed do
   """
   @spec snapshot(atom()) :: {:ok, Graph.t()} | {:error, :not_started | term()}
   def snapshot(name) do
-    with {:ok, rows} <- fetch_rows(name) do
+    with {:ok, rows} <- fetch_rows(name),
+         :ok <- well_formed(rows) do
       nodes =
         rows
         |> Enum.flat_map(fn {{from, to, _kind}, _count, _sum, _max} -> [from, to] end)
@@ -103,23 +104,23 @@ defmodule BeamMCP.Connectome.Observed do
   The latency summary, per canonical edge key: the call count, the mean and the maximum in
   microseconds. A summary, never the samples. Not part of any hash.
   """
-  @spec latency(atom()) :: %{
-          Edge.key() => %{count: pos_integer(), mean_us: float(), max_us: float()}
-        }
+  @spec latency(atom()) ::
+          %{Edge.key() => %{count: pos_integer(), mean_us: float(), max_us: float()}}
+          | {:error, {:malformed_row, term()}}
   def latency(name) do
-    case fetch_rows(name) do
-      {:ok, rows} ->
-        Map.new(rows, fn {{from, to, kind}, count, sum, max} ->
-          {{Node.id(from), Node.id(to), kind, :observed},
-           %{
-             count: count,
-             mean_us: System.convert_time_unit(sum, :native, :nanosecond) / count / 1000,
-             max_us: System.convert_time_unit(max, :native, :nanosecond) / 1000
-           }}
-        end)
-
-      {:error, :not_started} ->
-        %{}
+    with {:ok, rows} <- fetch_rows(name),
+         :ok <- well_formed(rows) do
+      Map.new(rows, fn {{from, to, kind}, count, sum, max} ->
+        {{Node.id(from), Node.id(to), kind, :observed},
+         %{
+           count: count,
+           mean_us: System.convert_time_unit(sum, :native, :nanosecond) / count / 1000,
+           max_us: System.convert_time_unit(max, :native, :nanosecond) / 1000
+         }}
+      end)
+    else
+      {:error, :not_started} -> %{}
+      {:error, _} = refusal -> refusal
     end
   end
 
@@ -210,6 +211,28 @@ defmodule BeamMCP.Connectome.Observed do
       tid -> {:ok, :ets.tab2list(tid)}
     end
   end
+
+  # The table is public, and observe/5 is a host's to call. A row of another shape -- an
+  # identity the builder would not derive, a count below one -- is refused by its key,
+  # never built into a graph and never raised with its bytes in a message.
+  defp well_formed(rows) do
+    Enum.find_value(rows, :ok, fn
+      {{from, to, kind}, count, sum, max} = row
+      when is_integer(count) and count >= 1 and is_integer(sum) and is_integer(max) ->
+        if identity?(from) and identity?(to) and kind in [:invoke, :read, :message, :supervise],
+          do: nil,
+          else: {:error, {:malformed_row, elem(row, 0)}}
+
+      row ->
+        {:error, {:malformed_row, elem(row, 0)}}
+    end)
+  end
+
+  defp identity?({:server, s}) when is_binary(s), do: true
+  defp identity?({:tool, s, t}) when is_binary(s) and (is_atom(t) or is_binary(t)), do: true
+  defp identity?({:process, s, p}) when is_binary(s) and is_atom(p), do: true
+  defp identity?({:module, s, m}) when is_binary(s) and is_atom(m), do: true
+  defp identity?(_), do: false
 
   # The node behind an identity, by the identity's own shape: the kind and level a builder
   # would give it. The four shapes the collector and the tracer write.
