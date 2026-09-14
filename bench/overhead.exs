@@ -73,12 +73,34 @@ end
 a = median_us_per_call.()
 {:ok, collector} = Observed.start_link(name: :bench_overhead)
 b = median_us_per_call.()
+
+# The posture measured must be the one shipped: a collector that collected nothing -- a
+# handler that raised on its first event and was detached by :telemetry, say -- costs about
+# nothing and would pass this gate green over the thing it exists to measure (a review lane
+# showed exactly that by detaching the handler: -0.76 us/call, exit 0). So the snapshot is
+# read and every call must be in it before the figure means anything.
+{:ok, snapshot} = Observed.snapshot(:bench_overhead)
 GenServer.stop(collector)
+expected = rounds * n
+
+case snapshot.edges do
+  [%{weight: ^expected}] ->
+    :ok
+
+  edges ->
+    IO.puts(
+      "BENCH FAIL: the collector observed #{inspect(Enum.map(edges, & &1.weight))} of " <>
+        "#{expected} calls; the shipped posture was not measured"
+    )
+
+    System.halt(1)
+end
 
 overhead = b - a
+sign = if overhead >= 0, do: "+", else: ""
 
 IO.puts(
-  "collector overhead +#{Float.round(overhead, 3)} us/call " <>
+  "collector overhead #{sign}#{Float.round(overhead, 3)} us/call " <>
     "(baseline #{Float.round(a, 3)}, shipped #{Float.round(b, 3)}; median of #{rounds} rounds of #{n}) " <>
     "threshold #{threshold_us}"
 )
