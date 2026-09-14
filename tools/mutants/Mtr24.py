@@ -11,7 +11,7 @@ p = sys.argv[1]
 s = open(p).read()
 
 old = "        :erlang.trace_info(pid, :tracer) == {:tracer, tracer},"
-new = "        is_pid(pid),"
+new = "        is_pid(pid) or is_pid(tracer),"
 
 if s.count(old) != 1:
     sys.exit("Mtr24: anchor found %d times" % s.count(old))
