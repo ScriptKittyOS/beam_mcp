@@ -45,6 +45,18 @@ All notable changes to this project are documented here. The format follows
   render the same canonical order. What has no canonical bytes is refused by name rather than
   guessed at: a float, two ids or two label keys that coincide after normalisation, and a string
   that is not valid UTF-8; and, by `to_graphml/1` alone, a character XML 1.0 cannot carry.
+- **The observed connectome: a span on the dispatch path, a collector, a guarded tracer.**
+  `BeamMCP.Server` emits `[:beam_mcp, :dispatch, :start | :stop | :exception]` through
+  `:telemetry.span/3` around the host's dispatch function — metadata `server_name` and `tool`,
+  plus `outcome` on stop; no argument, result or header bytes — and `:telemetry` is a new
+  required dependency (Apache-2.0, no dependencies of its own). `BeamMCP.Connectome.Observed`
+  is a process the host adds to its own tree: it turns every attempt into one row keyed by
+  edge identity, bounded by distinct edges and never by calls, written from the caller's
+  process into a public table; `snapshot/1` is a graph with `provenance: :observed` and every
+  sign `:unknown` on the declared side's ids, and is a named refusal, `{:error, :not_started}`,
+  when nothing is watching. `BeamMCP.Connectome.Tracer` is off by default, one at a time,
+  stops itself at its limits, and writes module-to-module and name-to-name edges with the
+  `:arity` flag and without reading a message. `docs/connectome-observed.md` is the contract.
 - **The gate reads the branch's own commit messages** for attribution trailers, session links,
   board identifiers and consumer names — offline, over `origin/main..HEAD`; a pull request's body
   is read by a person before merge.
