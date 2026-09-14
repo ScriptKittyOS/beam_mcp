@@ -20,7 +20,7 @@ All notable changes to this project are documented here. The format follows
   from, to, kind, provenance, an optional weight, and a sign slot. **The package writes
   `:unknown` into that slot and nothing else** — it populates no sign, signs no finding, holds
   no key, decides no authority; that is the host's, and a census test over `lib/` holds it.
-  `Graph.new/1` validates every struct it is handed, by field, and corrects nothing.
+  `BeamMCP.Connectome.Graph.new/1` validates every struct it is handed, by field, and corrects nothing.
 - **The declared connectome.** `BeamMCP.Connectome.Declared.build/1` reads three sources and
   nothing that ran: the catalog's `capabilities/0`, the call edges of the modules in scope from
   their beams (OTP's `:xref`, so a module whose only use is at a macro's expansion site produces
@@ -141,7 +141,7 @@ All notable changes to this project are documented here. The format follows
 - **A malformed catalog is refused by `BeamMCP.Server.new/1`**, at startup, with a message naming
   what is wrong — an absent key, a non-list `:tools`, an entry that is not a `%ToolSpec{}`, a
   `capabilities/0` that does not return a map, or a module that does not export it.
-  `Transport.HTTP.init/1` checks only that the callback is exported, deliberately: under Plug's
+  The HTTP transport's `init` callback checks only that the hook is exported, deliberately: under Plug's
   default initialisation it runs at the host's **compile** time, where calling a catalog that
   reads config would fail for a correct host.
 

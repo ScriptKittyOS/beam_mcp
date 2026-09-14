@@ -56,8 +56,8 @@ defmodule BeamMCP.Catalog do
   through it: `tools/list` advertises what it returns, and `fetch/2` decides callability from
   the same call. Slice 002 fixed a real defect where advertising honoured an injected catalog
   and calling ignored it — two readers, two answers. One function is how that stays fixed, and
-  a mutant that gives the two paths different sources is scored in
-  `slices/008-catalog-generalization/`.
+  a mutant that gives the two paths different sources is scored in the repository's record
+  of the catalog generalisation (a slice archive; not in the package).
   """
   @spec tools(module()) :: [BeamMCP.ToolSpec.t()]
   def tools(catalog), do: catalog.capabilities().tools
@@ -79,8 +79,8 @@ defmodule BeamMCP.Catalog do
   advertise-versus-call disagreement this behaviour exists to prevent, reintroduced by the
   error handling meant to be defensive.
 
-  Measured on this tree rather than inherited from a prior note
-  (`slices/008-catalog-generalization/logs/probe-fetch-spec.txt`):
+  Measured on this tree rather than inherited from a prior note (the probe's transcript is
+  in the repository's record of the catalog generalisation, not in the package):
 
       host spec.name is a binary, not an atom       ArgumentError
       capabilities/0 returns a non-list map         BadMapError

@@ -6,7 +6,7 @@ defmodule BeamMCP.Connectome.Graph do
   A connectome: nodes, edges, and the version of the schema they follow. The vocabulary is in
   `docs/connectome.md`.
 
-  A graph is held in canonical order -- nodes by id, edges by `Edge.key/1` -- so that two
+  A graph is held in canonical order -- nodes by id, edges by `BeamMCP.Connectome.Edge.key/1` -- so that two
   graphs built from the same parts in any order are equal, and a later slice can encode one
   to bytes without choosing an order of its own. `new/1` refuses a duplicate node id, a
   duplicate edge key, and an edge whose endpoint is not a node in the graph.

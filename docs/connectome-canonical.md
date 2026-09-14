@@ -33,7 +33,7 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    two edges with the same tuple and an edge whose `from` or `to` names no node, so the
    canonical form never meets either; it neither merges nor drops. The sign is not part of
    the identity — one edge carries one sign. A graph struct built by literal, bypassing
-   `Graph.new/1`, is read against the same refusals before a byte is written
+   `BeamMCP.Connectome.Graph.new/1`, is read against the same refusals before a byte is written
    (`BeamMCP.Connectome.Graph.check/1`) and refused as `{:invalid_graph, reason}` under the
    graph's own name for the fault.
 4. **Every other object** — `"labels"` and anything nested in it — **sorts its keys by UTF-16

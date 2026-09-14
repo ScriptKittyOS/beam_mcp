@@ -19,7 +19,7 @@ defmodule BeamMCP.Connectome.Diff do
   isomorphism check; this paragraph is why.
 
   Two inputs are admitted only as the encoder would admit them. A graph whose ids coincide
-  after NFC has no canonical bytes and so no diff -- refused by name, as `Canonical.encode/1`
+  after NFC has no canonical bytes and so no diff -- refused by name, as `BeamMCP.Connectome.Canonical.encode/1`
   refuses it -- and a graph carrying the other side's provenance is refused too, so on every
   admitted input an edge and a label are the same count (a consumer lane found both: it
   normalised before comparing, as the rule says, and the code did not).
@@ -114,8 +114,8 @@ defmodule BeamMCP.Connectome.Diff do
 
   Refuses by name, in this order: options that are not a keyword list or carry a key this
   function does not take (`{:invalid, :opts, given_or_keys}`); the declared graph, then the
-  observed, each as `{:declared | :observed, reason}` -- `reason` being what `Graph.new/1`
-  refuses, then what `Canonical.encode/1` refuses (a graph with no canonical bytes has no
+  observed, each as `{:declared | :observed, reason}` -- `reason` being what `BeamMCP.Connectome.Graph.new/1`
+  refuses, then what `BeamMCP.Connectome.Canonical.encode/1` refuses (a graph with no canonical bytes has no
   diff: `{:uncanonical, {:duplicate_id_after_nfc, id}}` and the rest), then an edge of the
   other side's provenance (`{:invalid, :provenance, other}`); a missing window
   (`{:missing, :window}`); a window with no canonical bytes
@@ -200,7 +200,7 @@ defmodule BeamMCP.Connectome.Diff do
     }
   end
 
-  @doc "The canonical bytes of the record: `Canonical.encode_value/1` over `to_record/1`."
+  @doc "The canonical bytes of the record: `BeamMCP.Connectome.Canonical.encode_value/1` over `to_record/1`."
   @spec encode(t()) :: {:ok, binary()} | {:error, term()}
   def encode(%__MODULE__{} = diff), do: Canonical.encode_value(to_record(diff))
 

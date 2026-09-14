@@ -18,8 +18,8 @@ defmodule BeamMCP.Connectome.Tracer do
     to the callee's -- `:erlang.trace_pattern/3` with a `{caller}` action and the `:arity`
     flag, so a trace message carries `{m, f, arity}` and never an argument. The caller is
     the frame the BEAM keeps: a call in tail position has no frame of its own, so it is
-    attributed to the caller's caller (measured: `Alpha.run/1`'s tail call to `Beta` is
-    filed under whoever called `Alpha`). A call whose caller the BEAM cannot name at all is
+    attributed to the caller's caller (measured on a fixture: a module's tail call into a
+    second module is filed under whoever called the first). A call whose caller the BEAM cannot name at all is
     counted against the message limit and not written;
   - a send from a traced process to a *registered* process, as a `:message` edge by
     registered name -- the message term is never read, and a send to an unregistered
