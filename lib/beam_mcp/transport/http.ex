@@ -1141,8 +1141,11 @@ if Code.ensure_loaded?(Plug) do
       kind, reason -> {__MODULE__, :host_fault, kind, reason, __STACKTRACE__}
     end
 
+    # The frames with arities, never the caller's arguments: the BEAM puts a call's argument
+    # list in the top frame of a BIF or function_clause error, and this line shipped it into
+    # the host's log (measured, by a review lane). The same rewrite the telemetry event gets.
     defp host_fault(conn, kind, reason, stacktrace, id) do
-      Logger.error(Exception.format(kind, reason, stacktrace))
+      Logger.error(Exception.format(kind, reason, BeamMCP.Stacktrace.arities(stacktrace)))
       send_json(conn, 500, error(id, -32_603, "Internal error"))
     end
 

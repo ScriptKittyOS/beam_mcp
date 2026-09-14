@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 # SPDX-License-Identifier: Apache-2.0
 #
-# Run by tools/mutate.sh with TARGET=lib/beam_mcp/server.ex, which passes the
+# Run by tools/mutate.sh with TARGET=lib/beam_mcp/stacktrace.ex (the rewrite moved there
+# from server.ex in 014), which passes the
 # file to mutate as argv[1].
 #
 # Msv5 -- A FILE OF ANY LIST SHAPE IS KEPT: a host-built frame's file value travels whatever it holds.
