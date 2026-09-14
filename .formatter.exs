@@ -2,5 +2,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [
-  inputs: ["{mix,.formatter}.exs", "{lib,test}/**/*.{ex,exs}"]
+  inputs: ["{mix,.formatter}.exs", "{lib,test,bench}/**/*.{ex,exs}"]
 ]
