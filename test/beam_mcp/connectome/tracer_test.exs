@@ -514,7 +514,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       # Found by the safety lane: the flags were cleared by NAME at clear time, so a process
       # that took a named process's name after it died lost the host's own :send trace,
       # silently, on both exit paths.
-      host_tracer = spawn_link(fn -> receive do: (_ -> :ok) end)
+      host_tracer = spawn_link(fn -> Process.sleep(:infinity) end)
 
       for exit_path <- [:stop, :deadline] do
         holder1 = spawn(fn -> receive do: (_ -> :ok) end)
@@ -550,13 +550,17 @@ defmodule BeamMCP.Connectome.TracerTest do
         assert Enum.sort(flags) == [:receive, :send]
         assert {:tracer, ^host_tracer} = :erlang.trace_info(holder2, :tracer)
         :erlang.trace(holder2, false, [:all])
+        ref2 = Process.monitor(holder2)
         send(holder2, :die)
+        assert_receive {:DOWN, ^ref2, :process, ^holder2, _}
       end
     end
 
     test "a named process the host re-traced under its own tracer keeps that flag: only this tracer's flag is cleared",
          %{collector: c} do
-      host_tracer = spawn_link(fn -> receive do: (_ -> :ok) end)
+      # A host tracer that outlives every trace message it is sent: a one-shot receiver
+      # would exit on the first traced send and the BEAM would remove its flags itself.
+      host_tracer = spawn_link(fn -> Process.sleep(:infinity) end)
       Process.register(self(), :tracer_test_retraced)
       {:ok, pid} = start(c, modules: [], processes: [:tracer_test_retraced])
       assert {:tracer, ^pid} = :erlang.trace_info(self(), :tracer)

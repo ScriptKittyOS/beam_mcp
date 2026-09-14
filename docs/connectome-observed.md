@@ -98,15 +98,16 @@ is discarded, not written; the collector dying under it is the fourth,
 arrive, so the tracer runs at high priority and clears its patterns the moment handled plus
 queued reaches the limit — generation stops there. The queue's size is the node-wide call
 rate into the named modules times the tracer's scheduling latency, not `max_messages`
-(measured: 64 hot callers against a limit of 1 000 peaked on the order of a hundred
-thousand queued messages, run to run; with a limit too large to reach, 32 hot callers
+(measured: 64 hot callers against a limit of 1 000 peaked from some tens of thousands to
+a hundred-odd thousand queued messages, run to run; with a limit too large to reach, 32 hot callers
 queued some millions in a 100 ms window). The mailbox is kept off-heap, so a large queue
 is not copied at every collection while it drains. The
 early clear is best effort — the queue is read on the first and every 32nd message — while the hard bounds
 hold on every path but the one named below: at most `max_messages` handled, the patterns
 cleared at the limit and on every exit. A
 companion process enforces `max_duration_ms` from outside the tracer's mailbox — clearing
-the patterns at the deadline and raising a flag the tracer reads before every write — and
+the patterns at the deadline and raising a flag the tracer reads on every message it
+handles, so at most one row lands after it is raised — and
 clears on the tracer's exit for any reason, a kill included, so no pattern is left set with
 no tracer behind it: a leftover pattern would cost every call to that module a breakpoint
 and would feed a host's own later call tracer with arguments. The tracer watches the
@@ -116,13 +117,22 @@ patterns set until the next `start/1` or `stop/0`, either of which clears what t
 tracer's running term names. That term, `{BeamMCP.Connectome.Tracer, :running}`, is a
 public persistent term and is trusted only in its own shape — a three-tuple whose second
 element is a list of module atoms; a term of another shape put there by someone else
-names nothing, is erased by the next `start/1` or `stop/0`, and makes neither raise, and
-a flag in it that is no atomics reference is skipped, not raised on. A companion that
-outlives a kill clears only the modules no newer tracer has claimed. A `:send` trace message
+names nothing, is erased by the next `start/1` or `stop/0`, and makes neither raise; a
+term of the right shape put there by someone else names what it names, and the next
+`start/1` or `stop/0` clears those modules' patterns, a host's own included. A running
+tracer's `stop/0` and its companion read the tracer's own claim — flag, modules, the
+named processes — from the tracer's process dictionary, which nothing outside it can
+write: a forged term neither delays a stop nor passes for a newer tracer's claim. A
+`start/1` waits a bounded second for a previous companion still clearing after a kill;
+`stop/0` waits a bounded five seconds for the tracer to leave and is `:ok` either way. A
+companion that outlives a kill clears only the modules no tracer running at that moment
+claims. A `:send` trace message
 carries the sent term into the tracer's mailbox until it is handled, where anything that
 can read that process's queue can see it; nothing of it is written. Nothing is cleared
 that the tracer, or a stale running term, did not name — its patterns and the send flag
-on the processes it named; never every process's flags. Patterns are global in the BEAM;
+on the processes it named, resolved once at start and cleared only where this tracer's is
+the flag on them: a name reused during the run belongs to another process, and a process
+a host re-traced under its own tracer keeps that; never every process's flags. Patterns are global in the BEAM;
 clearing a module's patterns clears any someone else set on it. The collector dying under the tracer is met as its DOWN
 or as the first write into the table that is gone, whichever is first in the queue, and is
 `{:shutdown, :collector_gone}` either way. It never calls `:dbg`.
