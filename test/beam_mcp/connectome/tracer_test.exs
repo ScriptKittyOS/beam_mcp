@@ -203,10 +203,9 @@ defmodule BeamMCP.Connectome.TracerTest do
                      5_000
 
       {:ok, g} = Observed.snapshot(c)
-      assert [%Edge{weight: w}] = g.edges
-      # The page's number: the flag is read after the write, so exactly one row lands after
-      # it is raised -- the first queued message's, by mailbox order.
-      assert w == 1
+      # The flag is read before the write: nothing lands after it is raised, and the first
+      # queued message ends the tracer without a row.
+      assert g.edges == []
     end
 
     test "stop/0 ends the drain on the next message too, and is :ok", %{collector: c} do
@@ -224,10 +223,9 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
       assert_receive {:stopped, :ok}, 5_000
       {:ok, g} = Observed.snapshot(c)
-      assert [%Edge{weight: w}] = g.edges
-      # The page's number: the flag is read after the write, so exactly one row lands after
-      # it is raised -- the first queued message's, by mailbox order.
-      assert w == 1
+      # The flag is read before the write: nothing lands after it is raised, and the first
+      # queued message ends the tracer without a row.
+      assert g.edges == []
     end
 
     test "a kill after the deadline is cleared by the companion as well", %{collector: c} do
@@ -607,10 +605,9 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
       assert_receive {:stopped, :ok}, 5_000
       {:ok, g} = Observed.snapshot(c)
-      assert [%Edge{weight: w}] = g.edges
-      # The page's number: the flag is read after the write, so exactly one row lands after
-      # it is raised -- the first queued message's, by mailbox order.
-      assert w == 1
+      # The flag is read before the write: nothing lands after it is raised, and the first
+      # queued message ends the tracer without a row.
+      assert g.edges == []
       assert :persistent_term.get({Tracer, :running}, nil) == nil
     end
 
