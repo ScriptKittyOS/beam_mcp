@@ -251,6 +251,27 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert {:ok, %Graph{edges: []}} = Observed.snapshot(c)
     end
 
+    test "a send to a dead process counts against the limit like any other trace message", %{
+      collector: c
+    } do
+      # An adversarial read sent fifty messages to a dead pid against a limit of ten and the
+      # tracer stayed up: that trace shape is :send_to_non_existing_process, and it fell to
+      # the ignore clause, uncounted. The message term is still never read.
+      Process.register(self(), :tracer_test_sender4)
+      dead = spawn(fn -> :ok end)
+      ref = Process.monitor(dead)
+      assert_receive {:DOWN, ^ref, :process, ^dead, _}
+      {:ok, pid} = start(c, processes: [:tracer_test_sender4], max_messages: 10)
+      ref = Process.monitor(pid)
+      for _ <- 1..50, do: send(dead, @marker)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_messages, 10}}},
+                     2_000
+
+      Process.unregister(:tracer_test_sender4)
+      refute inspect(Observed.rows(c), limit: :infinity) =~ @marker
+    end
+
     test "a message the tracer does not understand is ignored, and a send addressed by {name, node} is dropped",
          %{
            collector: c
