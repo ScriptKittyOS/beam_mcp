@@ -4,14 +4,14 @@
 # Run by tools/mutate.sh with TARGET=lib/beam_mcp/connectome/tracer.ex, which passes the
 # file to mutate as argv[1].
 #
-# Mtr23 -- THE COMPANION CLEARS NOTHING WHEN THE TERM IS NOBODY'S: a forged term or none leaves its patterns set after a kill.
+# Mtr23 -- THE COMPANION CLEARS NOTHING WHEN NO TRACER RUNS: a kill leaves its patterns set.
 import sys
 
 p = sys.argv[1]
 s = open(p).read()
 
-old = "      _ ->\n        clear_patterns(modules)\n    end\n  end"
-new = "      _ ->\n        :ok\n    end\n  end"
+old = "      case Process.whereis(@name) do\n        nil ->\n          []"
+new = "      case Process.whereis(@name) do\n        nil ->\n          modules"
 
 if s.count(old) != 1:
     sys.exit("Mtr23: anchor found %d times" % s.count(old))

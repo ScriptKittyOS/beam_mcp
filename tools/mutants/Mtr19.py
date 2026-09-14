@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "      {_other, claimed, _} ->\n        clear_patterns(modules -- claimed)"
-new = "      {_other, claimed, _} ->\n        clear_patterns(modules ++ claimed -- claimed)"
+old = "    clear_patterns(modules -- claimed)\n\n    case running_term() do"
+new = "    clear_patterns(modules)\n\n    case running_term() do"
 
 if s.count(old) != 1:
     sys.exit("Mtr19: anchor found %d times" % s.count(old))

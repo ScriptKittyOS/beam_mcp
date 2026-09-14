@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# Run by tools/mutate.sh with TARGET=lib/beam_mcp/connectome/tracer.ex, which passes the
+# file to mutate as argv[1].
+#
+# Mtr25 -- stop/0 READS THE PUBLIC TERM, NOT THE TRACER'S CLAIM: under a forged term nothing is cleared first and the stop is queue-ordered.
+import sys
+
+p = sys.argv[1]
+s = open(p).read()
+
+old = "        case claim(pid) do\n          {flag, modules, _pids} ->\n            clear_patterns(modules)\n            :atomics.put(flag, 1, @stop)"
+new = "        case running_term() do\n          {flag, modules, _pids} when is_reference(flag) ->\n            clear_patterns(modules)\n            :atomics.put(flag, 1, @stop)"
+
+if s.count(old) != 1:
+    sys.exit("Mtr25: anchor found %d times" % s.count(old))
+
+open(p, "w").write(s.replace(old, new, 1))
