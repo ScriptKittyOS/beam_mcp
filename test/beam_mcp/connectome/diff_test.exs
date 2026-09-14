@@ -26,13 +26,20 @@ defmodule BeamMCP.Connectome.DiffTest do
   defp tool(n), do: Node.new!(kind: :tool, level: :server, identity: {:tool, @server, n})
   defp id(n), do: Node.id({:tool, @server, n})
 
+  # The sign slot is the host's: there is no setter, a host writes the struct field (010
+  # pins that a host's sign survives Graph.new/1).
   defp edge(from, to, prov, opts \\ []) do
-    Edge.new!(
-      Keyword.merge(
-        [from: id(from), to: id(to), kind: :invoke, provenance: prov],
-        opts
+    {sign, opts} = Keyword.pop(opts, :sign, :unknown)
+
+    edge =
+      Edge.new!(
+        Keyword.merge(
+          [from: id(from), to: id(to), kind: :invoke, provenance: prov],
+          opts
+        )
       )
-    )
+
+    %{edge | sign: sign}
   end
 
   defp graph(nodes, edges),
@@ -258,7 +265,8 @@ defmodule BeamMCP.Connectome.DiffTest do
         assert diff.coverage.declared_edges == length(declared.edges)
         assert diff.coverage.observed_edges == length(observed.edges)
 
-        assert diff.coverage.declared_and_observed + length(diff.classes.changed_sign) ==
+        # The count of labels in both is the two "in both" classes together.
+        assert diff.coverage.declared_and_observed ==
                  length(diff.classes.declared_and_observed) + length(diff.classes.changed_sign)
       end
     end
@@ -266,7 +274,10 @@ defmodule BeamMCP.Connectome.DiffTest do
 
   defp pair_gen do
     gen all(
-          names <- uniq_list_of(member_of([:a, :b, :c, :d, :e]), min_length: 1, max_length: 5),
+          # A subset of five names, drawn without a uniqueness generator (a five-term space
+          # makes stream_data give up on uniqueness at small sizes).
+          picks <- list_of(boolean(), length: 5),
+          names = [:a | for({n, true} <- Enum.zip([:b, :c, :d, :e, :f], picks), do: n)],
           d_pairs <-
             list_of({member_of(names), member_of(names), member_of([:allow, :deny, :unknown])},
               max_length: 8
