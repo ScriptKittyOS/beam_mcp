@@ -12,12 +12,17 @@
 # Exits 1 when the figure is over the threshold, 0 otherwise, and prints one line either way.
 #
 # THE THRESHOLD IS A CEILING ON AN OPTIONAL, OFF-BY-DEFAULT FEATURE, NOT A PERFORMANCE PROMISE.
-# It was set on 2026-09-14 against the measurements of that day (+0.55, +0.53, +0.71, +0.57,
+# It was set on 2026-09-14 against the measurements of that morning (+0.55, +0.53, +0.71, +0.57,
 # +0.71 us/call over a dispatch path of about 3.2 us, on 32 schedulers, OTP 28): roughly double
 # the worst of them, so a noisy runner does not fail for no defect, while a change that makes
 # the collector cost as much as the dispatch it watches -- the queue-per-event posture measured
-# +1.69 -- is refused by number. The decision is the owner's; a later slice that needs it
-# raised files a Question to the owner with the measurement attached. It is not an edit.
+# +1.69 -- is refused by number. THE WORST MEASURED SINCE is +0.878 us/call, by a review lane on
+# the same 32-scheduler machine later that day (2026-09-14; the last of six figures it reported
+# from this script and a scratch copy of it with the collector's snapshot printed), and
+# in the same session the BASELINE alone moved 1.4 us between two runs a minute apart (3.398 to
+# 4.803) -- variance in what the collector is measured against, not in the collector. The owner
+# read those numbers and kept 1.5 (2026-09-14). The decision is the owner's; a later slice that
+# needs it raised files a Question to the owner with the measurement attached. It is not an edit.
 threshold_us = 1.5
 
 n = String.to_integer(System.get_env("N", "100000"))
