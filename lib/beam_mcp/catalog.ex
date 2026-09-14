@@ -23,9 +23,10 @@ defmodule BeamMCP.Catalog do
   A key that is absent is a malformed catalog, not an empty one — the two are different claims
   and only one of them is checkable.
 
-  ## Why `capabilities/0` and not `all/0`
+  ## Why `capabilities/0` and not `BeamMCP.ToolCatalog.all/0`
 
-  This behaviour replaces `BeamMCP.ToolCatalog`, whose callback was `all/0` returning a list.
+  This behaviour replaces `BeamMCP.ToolCatalog`, whose callback was `BeamMCP.ToolCatalog.all/0`,
+  returning a list.
   Keeping the name while changing the return from a list to a map would compile against every
   existing host and fail at the first request with a `BadMapError` — a silent shape change,
   which is the defect class this repository keeps finding. Renaming makes the break arrive at
@@ -106,11 +107,11 @@ defmodule BeamMCP.Catalog do
   Checks that a module is a usable catalog, returning `:ok` or `{:error, reason}`.
 
   Calls `capabilities/0`, so it belongs where host code may safely run. `BeamMCP.Server.new/1`
-  calls it; the HTTP transport's `Plug` callback `init/1` deliberately does not, because Plug's
+  calls it; the HTTP transport's `Plug` `init` callback deliberately does not, because Plug's
   default initialisation is the host's **compile** time and a catalog reading config or ETS
   there would fail for a correct host. That transport checks the export and leaves the shape to
-  `new/1`. (`init/1` is not linked here: it is a hidden callback, and a doc reference to it is a
-  broken link rather than a useful one.)
+  `BeamMCP.Server.new/1`. (The transport's `init` callback is not linked here: it is a hidden
+  callback, and a doc reference to it is a broken link rather than a useful one.)
   """
   @spec validate(module()) :: :ok | {:error, String.t()}
   def validate(catalog) when is_atom(catalog) and not is_nil(catalog) do

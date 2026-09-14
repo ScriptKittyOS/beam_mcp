@@ -41,7 +41,7 @@ if Code.ensure_loaded?(Plug) do
 
     ## One optional option: `:authorize_body`
 
-    `authorize/1` runs **before** the body is read, which is what lets it refuse an
+    The `:authorize` hook runs **before** the body is read, which is what lets it refuse an
     unauthenticated caller without buffering megabytes on their behalf. The cost of that
     position is that it cannot see the body, so body-signature authentication — HMAC over the
     payload, an asymmetric signature — is not merely awkward through it but structurally
