@@ -652,6 +652,27 @@ defmodule BeamMCP.Connectome.TracerTest do
       :erlang.trace_pattern({Beta, :_, :_}, false, [:local])
     end
 
+    test "a squatter with no claim is no claim to the companion either: after a kill it clears everything its tracer set",
+         %{collector: c} do
+      {:ok, pid} = start(c, modules: [Beta])
+      {_, _, companion} = :persistent_term.get({Tracer, :running})
+      true = :erlang.suspend_process(companion)
+      ref = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+
+      squatter = spawn(fn -> receive do: (_ -> exit(:squatted)) end)
+      Process.register(squatter, Tracer)
+      true = :erlang.resume_process(companion)
+      Process.sleep(50)
+      refute Process.alive?(companion)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+      assert :ok = Tracer.stop()
+      refute Process.alive?(squatter)
+    end
+
     test "a running term of another shape is nobody's: stop/0 with no tracer erases it and answers :ok, and the next start proceeds",
          %{collector: c} do
       # The term is public and unowned. A lane forged it in six shapes and every one made
