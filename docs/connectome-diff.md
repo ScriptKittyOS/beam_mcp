@@ -60,8 +60,9 @@ consumer's to divide:
 | `observed_nodes` | nodes in the observed graph |
 | `nodes_in_both` | node ids in both |
 
-The figures `docs/connectome.md` names as the coverage bound are ratios of these, and they
-are different figures, not one:
+The coverage bound `docs/connectome.md` defines — "the measured fraction of one graph the
+other accounts for, stated with the window" — is made of these figures, and they are
+different figures, not one:
 
 - **declared edges observed** — `declared_and_observed / declared_edges`.
 - **observed edges declared** — `declared_and_observed / observed_edges`.
@@ -72,8 +73,9 @@ are different figures, not one:
   not a curated cell claims it) and the condition is membership of both ends in the curated
   set — here, the declaration. "Proofread cell" maps to "declared node"; "detected synapse"
   to "observed edge". An observed edge nobody declared still counts when it ran between
-  declared parts; an edge that ran wholly outside the declared parts counts against it,
-  and is visible to no other figure.
+  declared parts; an edge that ran wholly outside the declared parts counts against it —
+  and no other figure tells those two apart: both are `observed_but_undeclared`, and both
+  lower "observed edges declared" the same.
 - **endpoint coverage** — `declared_endpoint_covered / declared_edges`: the dual, with the
   roles swapped — how much of the declaration sits where the window reached at all. An
   observed node here is one that appeared as an endpoint of at least one observed edge in
