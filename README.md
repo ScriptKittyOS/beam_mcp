@@ -349,6 +349,72 @@ the two chosen revisions.
 **JSON-RPC batching is refused.** It was added in `2025-03-26` and removed in `2025-06-18`, so
 it is required by exactly one revision of five and by neither of ours.
 
+## The connectome
+
+The package exports a composed system's call graph — its wiring diagram — twice, and diffs the
+two. Every export is canonical JSON with a SHA-256 over it, so the same graph gives the same
+bytes whoever wrote it.
+
+- **Declared** — `BeamMCP.Connectome.Declared.build/1` reads what *can* happen: the catalog,
+  the call edges of the modules in scope from their beams (OTP's `:xref`), and a grouping of
+  modules by OTP application. Beside the graph it returns a completeness bound: every dynamic
+  dispatch site, callee outside the scope and unreadable entry, enumerated rather than guessed.
+- **Observed** — `BeamMCP.Connectome.Observed` reads what *did* happen: a `:telemetry` span on
+  the one dispatch site and a host-started ETS collector, plus an optional, off-by-default,
+  guarded tracer for module-level edges (`BeamMCP.Connectome.Tracer`). Edge identity only —
+  never a payload byte. The collector's per-call cost is measured and gated at 1.5 µs per
+  `tools/call`, a ceiling on an optional feature and not a performance promise.
+- **Canonical bytes** — `BeamMCP.Connectome.Canonical` writes RFC 8785-style key order, NFC
+  strings and one float rule, specified in [`docs/connectome-canonical.md`](docs/connectome-canonical.md)
+  completely enough that three blind re-derivations reproduced the hash.
+- **The diff** — `BeamMCP.Connectome.Diff.run/3` puts every edge of either graph in exactly
+  one of four classes — declared and observed, declared and never observed (dead authority),
+  observed but undeclared (a drift finding), changed sign — with eight coverage counts the
+  consumer divides. [`docs/connectome-diff.md`](docs/connectome-diff.md).
+
+**What it never does.** It populates no sign — `:allow`, `:deny` and `:hold` are the host's
+to write, and the package writes only `:unknown` — signs no finding, holds no key and decides
+no authority; a census test over `lib/` holds that. It claims no MCP capability the
+specification does not define: neither protocol revision has a topology primitive, so nothing
+on the wire changes and no capability is invented.
+
+[`livebooks/connectome.livemd`](https://github.com/ScriptKittyOS/beam_mcp/blob/main/livebooks/connectome.livemd) renders the declared graph, the
+observed graph with its weights and the diff, from the JSON export alone — it installs Kino
+and a JSON decoder and no `beam_mcp`, so a reader with only the export sees what a reader
+with the package sees. The vocabulary is in [`docs/connectome.md`](docs/connectome.md); the
+collector, the tracer and its stated threat model in
+[`docs/connectome-observed.md`](docs/connectome-observed.md).
+
+## What this package is, and is not
+
+**Shipping now.** The protocol core for `2026-07-28` and `2025-11-25`; the stdio and
+stateless Streamable HTTP transports; JSON Schema validation of tool arguments; the catalog
+contract — tools, resources and prompts declared by the host, tools dispatched through the
+host's function; and the connectome spine above — declared, observed, canonical bytes, diff —
+with the Livebook that renders it.
+
+**Decided and not built.** Settled by an owner decision, with no code behind it yet:
+reachability queries over the declared graph (k-hop under constraints, dominators, on OTP's
+`:digraph` and no new dependency); the `resources/*` and `prompts/*` wire surfaces for what
+the catalog already declares; `connectome://` resources exposing the graphs through MCP
+itself, a scheme of this package's own and not a claimed capability; a federation seam for
+merging graphs from several nodes; and effective connectivity, the observed graph weighted
+into the declared one.
+
+**Scheduled.** In that order, each at the minor position while the package is `0.x`:
+reachability with the wire surfaces, then the federation seam, then effective connectivity.
+`1.0.0` follows once the public API and the stated threat model have each survived a full
+minor release unchanged.
+
+**Deliberately out.** Tools, domain and policy; risk tiers, approvals, receipts and egress
+masking; authority — the verdict on an edge, the key that signs it, the decision that acts on
+it. These are absent by decision, not by immaturity: they live on the consumer's side of a
+boundary this project chose on its first day, and the package exists partly to keep them
+there. A small surface can look unfinished from the outside; this one is a commodity layer
+that says which it is. The list is derived, not typed: the thesis sentence at the top of this
+README, the census test that no line under `lib/` writes a sign other than `:unknown`, and a
+test that no line under `lib/` names a receipt, an approval, a risk tier or egress.
+
 ## Status
 
 Pre-1.0. The API may change. Known gaps are listed above and in
