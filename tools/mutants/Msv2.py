@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "    meta = %{server_name: state.server_name, tool: tool}"
-new = "    meta = %{server_name: state.server_name, tool: tool, args: args}"
+old = "    meta = %{server_name: state.server_name, tool: tool, telemetry_span_context: make_ref()}"
+new = "    meta = %{server_name: state.server_name, tool: tool, telemetry_span_context: make_ref(), args: args}"
 
 if s.count(old) != 1:
     sys.exit("Msv2: anchor found %d times" % s.count(old))
