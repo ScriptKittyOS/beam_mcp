@@ -395,14 +395,18 @@ defmodule BeamMCP.Server do
   # improper argument list, a file or a line of another type -- because this runs inside
   # the catch clause, where a raise of its own would replace the host's error and leave
   # the span open (measured, by a lane).
+  # A frame whose arity position is neither a list nor an integer is no frame the BEAM
+  # writes and is dropped, as a fun frame is: a lane put the arguments there and they
+  # travelled verbatim (measured).
   defp arities(stacktrace) do
-    for {m, f, args_or_arity, loc} <- stacktrace do
+    for {m, f, args_or_arity, loc} <- stacktrace,
+        is_list(args_or_arity) or is_integer(args_or_arity) do
       {m, f, arity(args_or_arity), location(loc, [])}
     end
   end
 
   defp arity(args) when is_list(args), do: count(args, 0)
-  defp arity(arity), do: arity
+  defp arity(arity) when is_integer(arity), do: arity
 
   defp count([_ | rest], n), do: count(rest, n + 1)
   defp count(_, n), do: n
