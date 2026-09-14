@@ -177,6 +177,25 @@ defmodule BeamMCP.Connectome.ObservedTest do
     end
   end
 
+  describe "a foreign row" do
+    # The table is public and observe/5 is a host's to call; a row of another shape is
+    # refused by name, never built into a graph and never raised with its bytes.
+    test "a malformed row written by a third party is refused by name by snapshot/1 and latency/1" do
+      {name, _} = start_collector()
+      call(server(ok_dispatch()), :echo)
+      bad = {{:tool, "s", {:payload, @marker}}, {:server, "s"}, :invoke}
+      true = :ets.insert(name, {bad, 1, 0, 0})
+      assert {:error, {:malformed_row, ^bad}} = Observed.snapshot(name)
+      assert {:error, {:malformed_row, ^bad}} = Observed.latency(name)
+
+      true = :ets.delete(name, bad)
+      zero = {{:server, "s"}, {:tool, "s", :echo}, :invoke}
+      true = :ets.insert(name, {zero, 0, 0, 0})
+      assert {:error, {:malformed_row, ^zero}} = Observed.snapshot(name)
+      assert {:error, {:malformed_row, ^zero}} = Observed.latency(name)
+    end
+  end
+
   describe "one call, one edge" do
     test "exercising one fixture tool call produces exactly one observed edge with weight >= 1" do
       {name, _} = start_collector()
@@ -365,6 +384,38 @@ defmodule BeamMCP.Connectome.ObservedTest do
       refute Map.has_key?(meta, :outcome)
       # The document says so: the reason is the host's, and travels as span/3 defines.
       assert Exception.message(meta.reason) =~ @marker
+      assert_marker_absent(name)
+    end
+
+    test "a throw and an exit from the dispatch are exceptions of their kind, with marker-free frames; a crafted error_info is dropped from the frames" do
+      id = {__MODULE__, :kinds, System.unique_integer()}
+
+      :ok =
+        :telemetry.attach(id, [:beam_mcp, :dispatch, :exception], &__MODULE__.forward/4, self())
+
+      on_exit(fn -> :telemetry.detach(id) end)
+      {name, _} = start_collector()
+
+      for {kind, dispatch} <- [
+            {:throw, fn _, args, _ -> throw({:payload, args}) end},
+            {:exit, fn _, args, _ -> exit({:payload, args}) end},
+            # A host can put a term in a frame's location keywords through error_info; the
+            # frames keep file and line and drop the rest.
+            {:error,
+             fn _, args, _ -> :erlang.error(:crafted, [args], error_info: %{cause: args}) end}
+          ] do
+        catch_of = fn -> call(server(dispatch), :echo, %{"k" => @marker}) end
+
+        case kind do
+          :throw -> catch_throw(catch_of.())
+          :exit -> catch_exit(catch_of.())
+          :error -> assert_raise ErlangError, catch_of
+        end
+
+        assert_receive {[:beam_mcp, :dispatch, :exception], _, %{kind: ^kind, stacktrace: frames}}
+        refute inspect(frames, limit: :infinity, printable_limit: :infinity) =~ @marker
+      end
+
       assert_marker_absent(name)
     end
 
