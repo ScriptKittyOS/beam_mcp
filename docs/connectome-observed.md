@@ -69,12 +69,28 @@ fails once against the missing table and is detached by telemetry, logged once.
 
 `BeamMCP.Connectome.Tracer` sees the edges telemetry cannot: a module calling a module, a
 process sending to a process. It is off until a host starts it, runs one at a time, and
-refuses to start without a running collector or with a limit that is not a positive
-integer — there is no unbounded mode. It stops itself at `max_messages` trace messages of
-any shape, a send to a dead process included, or at `max_duration_ms`, clearing every pattern and flag it set, and exits
-`{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out; the collector dying
-under it is the fourth, `{:shutdown, :collector_gone}`, which it watches for rather than
-failing on the next traced call. It never calls `:dbg`.
+refuses to start without a running collector, with a limit that is not a positive integer
+— there is no unbounded mode — with the wildcard or an unloadable module in `modules:`, or
+with a name in `processes:` that is not registered; a start that fails part-way clears
+what it set and answers `{:error, {:init_failed, reason}}`. Calls are traced on every
+process in the node, present and future.
+
+It stops itself at `max_messages` handled trace messages of any shape, a send to a dead
+process included, or at `max_duration_ms`, clearing every pattern and flag it set, and
+exits `{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out; the collector
+dying under it is the fourth, `{:shutdown, :collector_gone}`. **What the limits bound:**
+`max_messages` counts messages as they are handled while the BEAM queues them as they
+arrive, so the tracer runs at high priority and clears its patterns the moment handled plus
+queued reaches the limit — generation stops there. The queue's size is the node-wide call
+rate into the named modules times the tracer's scheduling latency, not `max_messages`
+(measured: 64 hot callers against a limit of 1 000 peaked at 140 000 queued messages; with
+a limit too large to reach, 32 hot callers queued 3 million in a 100 ms window). A
+companion process enforces `max_duration_ms` from outside the tracer's mailbox — clearing
+the patterns at the deadline and raising a flag the tracer reads before every write — and
+clears on the tracer's exit for any reason, a kill included, so no pattern is left set with
+no tracer behind it: a leftover pattern would cost every call to that module a breakpoint
+and would feed a host's own later call tracer with arguments. Patterns are global in the
+BEAM; clearing a module's patterns clears any someone else set on it. It never calls `:dbg`.
 
 What it writes, through the same collector: a call into a traced module as a
 module-level `:invoke` edge from the caller's module to the callee's, with the `:arity`
@@ -82,9 +98,12 @@ flag so no argument ever reaches it; a send from a traced registered process to 
 registered process as a `:message` edge by name, the message term never read, a send to an
 unregistered process dropped rather than written under a pid.
 
-Two bounds, measured: a call in tail position has no frame of its own, so the BEAM names
-the caller's caller; and names are resolved when a trace message is handled, so a process
-that exited or unregistered in between is dropped.
+Three bounds, measured: a call in tail position has no frame of its own, so the BEAM names
+the caller's caller; names are resolved when a trace message is handled, so a process that
+exited or unregistered in between is dropped; and OTP's own registered processes — the
+code server, a logger handler, telemetry's table owner — are names like any other, so a
+traced process's sends to them are edges too. The tracer never traces its own writes: the
+BEAM discards an event whose tracer is the process that generated it.
 
 ## What never enters
 
