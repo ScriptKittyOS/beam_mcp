@@ -55,18 +55,38 @@ consumer's to divide:
 | `observed_edges` | edges in the observed graph |
 | `declared_and_observed` | labels in both — the two "in both" classes together |
 | `declared_endpoint_covered` | declared edges whose `from` **and** `to` are both ids of observed nodes |
+| `observed_endpoint_declared` | observed edges whose `from` **and** `to` are both ids of declared nodes |
 | `declared_nodes` | nodes in the declared graph |
 | `observed_nodes` | nodes in the observed graph |
 | `nodes_in_both` | node ids in both |
 
-The three figures `docs/connectome.md` names as the coverage bound are ratios of these, and
-they are three different figures, not one: **declared edges observed** is
-`declared_and_observed / declared_edges`; **observed edges declared** is
-`declared_and_observed / observed_edges`; **completeness** — the connectomics figure,
-"synapses between fully proofread cells", transposed — is
-`declared_endpoint_covered / declared_edges`: the share of declared authority whose both
-ends the observation reached, whether or not the edge itself was seen. An edge counted
-under `declared_endpoint_covered` may still be dead authority.
+The figures `docs/connectome.md` names as the coverage bound are ratios of these, and they
+are different figures, not one:
+
+- **declared edges observed** — `declared_and_observed / declared_edges`.
+- **observed edges declared** — `declared_and_observed / observed_edges`.
+- **completeness** — `observed_endpoint_declared / observed_edges`. This is the
+  connectomics figure, "synaptic completeness: the fraction of synapses between fully
+  proofread cells", with its roles kept: the population is what the measurement found
+  (every observed edge, declared or not, as every detected synapse is counted whether or
+  not a curated cell claims it) and the condition is membership of both ends in the curated
+  set — here, the declaration. "Proofread cell" maps to "declared node"; "detected synapse"
+  to "observed edge". An observed edge nobody declared still counts when it ran between
+  declared parts; an edge that ran wholly outside the declared parts counts against it,
+  and is visible to no other figure.
+- **endpoint coverage** — `declared_endpoint_covered / declared_edges`: the dual, with the
+  roles swapped — how much of the declaration sits where the window reached at all. An
+  observed node here is one that appeared as an endpoint of at least one observed edge in
+  the window, nothing more; an edge counted under `declared_endpoint_covered` may still be
+  dead authority. A label in both graphs has both ends in both, so
+  `declared_and_observed ≤ declared_endpoint_covered ≤ declared_edges` and
+  `declared_and_observed ≤ observed_endpoint_declared ≤ observed_edges` always: each
+  endpoint figure is a ceiling on the shared count, which is why it is a *bound*.
+
+(The first draft of this page called the dual "completeness"; a review lane implementing
+the definitions from the page found the roles swapped. Elsewhere in the package,
+`BeamMCP.Connectome.Declared.Bound` is "the completeness bound" of the *declared* build — an
+enumeration of what static analysis could not see — a different thing from this fraction.)
 
 The **window** is the consumer's: any map in the label grammar — string or atom keys
 (an atom is written as its name), nested maps, lists, integers, booleans, `null`; an empty
@@ -92,12 +112,14 @@ nothing else. Its keys, in the order the rule gives them:
   `"declared_sign"` and `"observed_sign"` too. Each array is sorted by `from`, then `to`,
   then the kind's name, comparing UTF-16 code units, so equal inputs give equal bytes
   whatever order the graphs were built in.
-- `"coverage"` — the seven counts.
+- `"coverage"` — the eight counts.
 - `"schema_version"` — `1`.
 - `"window"` — the consumer's map.
 
-Nothing else enters the record: no weight, no latency, no argument, no name the graphs did
-not already carry. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1`
+Nothing else enters the record: no weight, no latency, no argument, no label, no name the
+graphs did not already carry — and every name they do carry is in it: a tool's, a
+module's, a registered process's name is identity and is published, as
+`docs/connectome-observed.md` says; a secret in a name is published here too. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1`
 is the same as lowercase hexadecimal, the form this page writes it in.
 
 ## Worked example
@@ -105,13 +127,13 @@ is the same as lowercase hexadecimal, the form this page writes it in.
 Server `srv`, tools `a`, `b`, `c` on both sides. Declared: `a→b`, `a→c`, `c→a` (sign
 `allow`), `b→a` (sign `allow`). Observed: `a→b`, `b→c`, `c→a` (sign `deny`), `b→a` (sign
 `unknown`). Window `{"ended_at": "2026-09-14T01:00:00Z", "started_at":
-"2026-09-14T00:00:00Z"}`. The bytes (702 of them, one line):
+"2026-09-14T00:00:00Z"}`. The bytes (733 of them, one line):
 
 ```
-{"classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"nodes_in_both":4,"observed_edges":4,"observed_nodes":4},"schema_version":1,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
+{"classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"nodes_in_both":4,"observed_edges":4,"observed_endpoint_declared":4,"observed_nodes":4},"schema_version":1,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
 ```
 
-SHA-256: `3cd6a14676d47e104121e90981cfca920dafccb21743dd370ea39cb06df3c298`. The four
+SHA-256: `806ff64ebeffb02a8869c37fa9ebe0e99776a58fa60c089f5453ac4ecb229568`. The four
 classes hold one label each but `declared_and_observed`, which holds two: `b→a` is there
 because its observed sign is `unknown`, not supplied.
 

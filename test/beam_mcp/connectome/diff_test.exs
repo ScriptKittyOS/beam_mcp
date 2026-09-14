@@ -166,6 +166,7 @@ defmodule BeamMCP.Connectome.DiffTest do
                observed_edges: 1,
                declared_and_observed: 1,
                declared_endpoint_covered: 1,
+               observed_endpoint_declared: 1,
                declared_nodes: 3,
                observed_nodes: 3,
                nodes_in_both: 3

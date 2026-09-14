@@ -61,7 +61,8 @@ All notable changes to this project are documented here. The format follows
   and a window the consumer supplies, and puts every edge of either in exactly one of four classes
   — declared-and-observed, declared-never-observed (dead authority), observed-but-undeclared (a
   drift finding), changed-sign (both signs supplied and different) — with a coverage bound as
-  counts the consumer divides. The diff is a set difference over edge labels (from, to, kind),
+  eight counts the consumer divides, among them completeness with the connectomics roles kept
+  (observed edges between declared parts, over what ran) and its dual, endpoint coverage. The diff is a set difference over edge labels (from, to, kind),
   never an isomorphism, and says why. Its record has canonical bytes through
   `BeamMCP.Connectome.Canonical.encode_value/1` — the label grammar of a node's labels object,
   applied to a record on its own, so a consumer's verifier reads it unchanged — and

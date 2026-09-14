@@ -40,12 +40,17 @@ defmodule BeamMCP.Connectome.Diff do
   A float has no canonical bytes, so the bound is integers the consumer divides:
   `declared_edges`, `observed_edges`, `declared_and_observed` (labels in both -- the two
   "in both" classes together), `declared_endpoint_covered` (declared edges whose `from`
-  and `to` are both observed node ids -- the connectomics completeness figure, "synapses
-  between fully proofread cells", transposed), `declared_nodes`, `observed_nodes`,
-  `nodes_in_both`. The three fractions `docs/connectome.md` names are ratios of these:
-  declared edges observed = `declared_and_observed / declared_edges`; observed edges
-  declared = `declared_and_observed / observed_edges`; completeness =
-  `declared_endpoint_covered / declared_edges`. The **window** is the consumer's input,
+  and `to` are both observed node ids), `observed_endpoint_declared` (observed edges whose
+  `from` and `to` are both declared node ids), `declared_nodes`, `observed_nodes`,
+  `nodes_in_both`. The fractions are ratios of these: declared edges observed =
+  `declared_and_observed / declared_edges`; observed edges declared =
+  `declared_and_observed / observed_edges`; **completeness** =
+  `observed_endpoint_declared / observed_edges` -- the connectomics figure, "synapses
+  between fully proofread cells", with its roles kept: what ran is the population, and
+  the declaration is the condition on both ends (a review lane found the first draft had
+  swapped them). `declared_endpoint_covered / declared_edges` is **endpoint coverage**,
+  the dual: how much of the declaration sits where the window reached at all -- a ceiling
+  on declared-edges-observed, never below it. The **window** is the consumer's input,
   carried verbatim and never inferred; a diff without one is refused by name.
 
   ## The bytes
@@ -87,6 +92,7 @@ defmodule BeamMCP.Connectome.Diff do
           observed_edges: non_neg_integer(),
           declared_and_observed: non_neg_integer(),
           declared_endpoint_covered: non_neg_integer(),
+          observed_endpoint_declared: non_neg_integer(),
           declared_nodes: non_neg_integer(),
           observed_nodes: non_neg_integer(),
           nodes_in_both: non_neg_integer()
@@ -154,6 +160,10 @@ defmodule BeamMCP.Connectome.Diff do
         declared_endpoint_covered:
           Enum.count(Map.keys(d), fn {from, to, _kind} ->
             MapSet.member?(observed_ids, from) and MapSet.member?(observed_ids, to)
+          end),
+        observed_endpoint_declared:
+          Enum.count(Map.keys(o), fn {from, to, _kind} ->
+            MapSet.member?(declared_ids, from) and MapSet.member?(declared_ids, to)
           end),
         declared_nodes: MapSet.size(declared_ids),
         observed_nodes: MapSet.size(observed_ids),
