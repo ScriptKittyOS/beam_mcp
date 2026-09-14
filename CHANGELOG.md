@@ -15,7 +15,7 @@ All notable changes to this project are documented here. The format follows
 
 - **The connectome vocabulary and data model.** `docs/connectome.md` defines the words: a
   connectome is the wiring diagram of a composed MCP system, built once from what is declared
-  and once from what ran. `BeamMCP.Connectome.Node`, `Edge` and `Graph` carry it: a node has
+  and once from what ran. `BeamMCP.Connectome.Node`, `BeamMCP.Connectome.Edge` and `BeamMCP.Connectome.Graph` carry it: a node has
   a structural id derived by one function from the identity the host supplies; an edge carries
   from, to, kind, provenance, an optional weight, and a sign slot. **The package writes
   `:unknown` into that slot and nothing else** — it populates no sign, signs no finding, holds
