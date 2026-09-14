@@ -25,6 +25,24 @@ step "compile"  mix compile --warnings-as-errors --force
 step "test"     mix test
 step "credo"    mix credo --strict
 
+# The property gate. The suite above runs every property at StreamData's default of 100
+# generations, which is what a developer's run should cost; this step runs the properties
+# alone at ten times that, so the release tree is searched harder than a working one. The
+# count reaches the generators through PROPERTY_RUNS, which test/test_helper.exs reads
+# (shown red before it did: a probe property counting its own generations passed under
+# PROPERTY_RUNS=1000 on the tree before the helper read it). The number of properties is
+# read from ExUnit's summary and printed, and a summary with none is a failure: a pass over
+# an empty population is the defect this gate's REUSE step was rewritten to remove.
+prop_runs=1000
+prop_out=$(PROPERTY_RUNS=$prop_runs mix test --only property 2>&1); prop_rc=$?
+prop_n=$(printf '%s\n' "$prop_out" | grep -oE '^[0-9]+ propert(y|ies)' | tail -1 | cut -d' ' -f1)
+if [ "$prop_rc" -eq 0 ] && [ -n "$prop_n" ] && [ "$prop_n" -gt 0 ]; then
+  note "properties" "pass ($prop_n properties at $prop_runs generations each)"
+else
+  note "properties" "FAIL (exit $prop_rc, ${prop_n:-0} properties found)"
+  printf '%s\n' "$prop_out" | sed 's/^/      /'; fail=1
+fi
+
 # `optional: true` is a resolution flag, not a compilation one: the HTTP transport compiles here,
 # where plug is present, and broke every stdio-only consumer until round 1. Asserted on the
 # artefact in a throwaway consumer project, because a compile that "succeeded" is not evidence.
