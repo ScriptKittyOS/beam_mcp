@@ -98,6 +98,20 @@ defmodule BeamMCP.Connectome.Tracer do
   ms}}`, `:normal` from `stop/0`, `{:shutdown, :collector_gone}` when the collector dies
   under it -- met as its DOWN or as the first write into the table that is gone, whichever
   comes first in the queue -- and `{:shutdown, :companion_gone}`. It never calls `:dbg`.
+
+  **The threat model, which is the boundary of every claim above.** In scope: accident and
+  failure on a node running only code the host put there -- crashes, kills, restarts and the
+  host's supervisor, a registered name reused by an unrelated process, a host tracing its
+  own processes, hot reload, starvation under load, the public API called wrongly or in the
+  wrong order, and a stale running term left by a previous crash of this module. Out of
+  scope: an adversary executing code inside the same node -- a process that registers
+  itself under this module's name, a forged persistent term, a crafted process dictionary.
+  Such an adversary can already read the collector's table directly, call the host's
+  dispatch function, replace a module with `:code.load_binary/3`, or trace every process
+  itself; this tracer is not a security boundary against it, and nothing in this package
+  makes it one. The shape guards on the running term and on the claim are robustness --
+  they keep `stop/0` and `start/1` total against a term of the wrong shape, which the
+  stale-term-after-crash case needs -- not a defence.
   """
   use GenServer
 

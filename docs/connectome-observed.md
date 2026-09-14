@@ -141,6 +141,21 @@ clearing a module's patterns clears any someone else set on it. The collector dy
 or as the first write into the table that is gone, whichever is first in the queue, and is
 `{:shutdown, :collector_gone}` either way. It never calls `:dbg`.
 
+**The threat model, which is the boundary of every claim in this section.** In scope:
+accident and failure on a node running only code the host put there — crashes, kills,
+restarts and the host's supervisor, a registered name reused by an unrelated process, a
+host tracing its own processes, hot reload, starvation under load, the public API called
+wrongly or in the wrong order, and a stale running term left by a previous crash of this
+module. Out of scope: an adversary executing code inside the same BEAM node — a process
+that registers itself under the tracer's name, a forged persistent term, a crafted process
+dictionary. Such an adversary can already read the collector's ETS table directly, call
+the host's dispatch function, replace a module with `:code.load_binary/3`, or trace every
+process itself. The tracer is not a security boundary against it, and nothing this package
+can do makes it one; a reader who takes it for one is in more danger than one who knows it
+is not. The shape guards on the running term and on the claim are robustness, not
+defence: they keep `stop/0` and `start/1` total against a term of the wrong shape, which
+the stale-term-after-crash case — in scope — needs.
+
 What it writes, through the same collector: a call into a traced module as a
 module-level `:invoke` edge from the caller's module to the callee's, with the `:arity`
 flag so no argument ever reaches it; a send from a traced registered process to a
