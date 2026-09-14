@@ -11,7 +11,7 @@ p = sys.argv[1]
 s = open(p).read()
 
 old = "    await_previous_companion()\n"
-new = ""
+new = "    _ = &await_previous_companion/0\n"
 
 if s.count(old) != 1:
     sys.exit("Mtr14: anchor found %d times" % s.count(old))
