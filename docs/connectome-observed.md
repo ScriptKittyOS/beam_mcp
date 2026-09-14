@@ -109,8 +109,8 @@ early clear is best effort — the queue is read on the first and every 32nd mes
 hold on every path but the one named below: at most `max_messages` handled, the patterns
 cleared at the limit and on every exit. A
 companion process enforces `max_duration_ms` from outside the tracer's mailbox — clearing
-the patterns at the deadline and raising a flag the tracer reads on every message it
-handles, so at most one row lands after it is raised — and
+raising a flag at the deadline and then clearing the patterns; the tracer reads the flag
+before every write, so nothing lands after it is raised — and
 clears on the tracer's exit for any reason, a kill included, so no pattern is left set with
 no tracer behind it: a leftover pattern would cost every call to that module a breakpoint
 and would feed a host's own later call tracer with arguments. The tracer watches the
