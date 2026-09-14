@@ -82,7 +82,9 @@ collect = fn collect, sock, acc ->
 end
 
 write_all = fn
-  _write, _sock, "" -> :ok
+  _write, _sock, "" ->
+    :ok
+
   write, sock, rest ->
     take = min(byte_size(rest), 65_536)
     chunk = binary_part(rest, 0, take)
@@ -114,6 +116,7 @@ one = fn shape ->
 
     send(me, {:written, r})
   end)
+
   {acc, reason} = collect.(collect, sock, "")
 
   stat =
