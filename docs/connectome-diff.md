@@ -98,8 +98,11 @@ records bounds its own windows. The package never
 infers it; a diff without a window is refused by name (`{:error, {:missing, :window}}`),
 and a window with no canonical bytes — a float inside, a struct, a keyword list, two keys
 that coincide after NFC — as `{:error, {:uncanonical, {:label_value, "record", :window,
-value}}}`. The options themselves must be a keyword list (`{:error, {:invalid, :opts,
-given}}` otherwise). A graph a literal built wrong is refused before it is compared, as
+value}}}`. The options themselves must be a keyword list carrying `window:` and nothing
+else (`{:error, {:invalid, :opts, given}}` for another shape, `{:error, {:invalid, :opts,
+[key, ...]}}` for a key the function does not take — a typo is not "no window"). Refusals
+are answered in a fixed order: the options, then the declared graph, then the observed
+graph, then the window — the first refusal found is the one returned. A graph a literal built wrong is refused before it is compared, as
 `{:error, {:declared, reason}}` or `{:error, {:observed, reason}}` with the reason
 `Graph.new/1` would have given.
 
