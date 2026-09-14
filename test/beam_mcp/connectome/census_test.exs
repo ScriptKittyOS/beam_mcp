@@ -134,7 +134,14 @@ defmodule BeamMCP.Connectome.CensusTest do
     "dot_q(sign),",
     "xml(sign),",
     "<key id=\"sign\" for=\"edge\" attr.name=\"sign\" attr.type=\"string\"/>",
-    "<data key=\"sign\">"
+    "<data key=\"sign\">",
+    # The diff engine (014) READS both sides' signs to class an edge as changed-sign, and
+    # writes none: a typespec on the changed-sign entry, and one read of a built edge's sign
+    # per graph, spelled once in diff.ex.
+    "declared_sign: Edge.sign()",
+    "observed_sign: Edge.sign()",
+    "%Edge{from: from, to: to, kind: kind, sign: sign}",
+    "{{from, to, kind}, sign}"
   ]
 
   defp permitted_sign_line?(line) do
