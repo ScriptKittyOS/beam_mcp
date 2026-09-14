@@ -405,6 +405,30 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :collector_gone}}, 5_000
     end
 
+    test "a new tracer waits for a previous companion that is slow to die, but not forever", %{
+      collector: c
+    } do
+      # A stale term naming a companion that never exits: the wait is bounded.
+      slow = spawn(fn -> receive do: (:die -> :ok) end)
+      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), [], slow})
+      {t, {:ok, _}} = :timer.tc(fn -> start(c, modules: [Beta]) end)
+      assert t >= 900_000 and t < 3_000_000
+      send(slow, :die)
+      :ok = Tracer.stop()
+    end
+
+    test "the companion's clear after a kill is only ever its own: a term already gone is left alone",
+         %{
+           collector: c
+         } do
+      {:ok, pid} = start(c, modules: [Beta])
+      :persistent_term.erase({Tracer, :running})
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert :persistent_term.get({Tracer, :running}, nil) == nil
+    end
+
     test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",
          %{
            collector: c
@@ -444,8 +468,9 @@ defmodule BeamMCP.Connectome.TracerTest do
     } do
       Process.register(self(), :tracer_test_sender6)
       {:ok, _} = start(c, processes: [:tracer_test_sender6])
-      # A call that goes through the code server, from this process.
-      Code.ensure_loaded(BeamMCP.Fixture.Declared.Gamma)
+      # A call that is a message to the code server from this process, whether or not the
+      # module is already loaded (under cover every module is).
+      _ = :code.get_path()
       :ok = Tracer.stop()
       Process.unregister(:tracer_test_sender6)
       {:ok, g} = Observed.snapshot(c)
@@ -494,6 +519,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       {:ok, _} = start(c, modules: [Beta])
       Traced.tail(1)
       Alpha.run(1)
+      _ = :sys.get_state(Tracer)
       :ok = Tracer.stop()
 
       {:ok, g} = Observed.snapshot(c)
@@ -535,6 +561,9 @@ defmodule BeamMCP.Connectome.TracerTest do
       send(:tracer_test_receiver, {:payload, @marker})
       assert_receive :got
       assert_receive :got
+      # stop/0 ends the tracer on the next message it handles and discards what is still
+      # queued; a system message is answered in mailbox order, so this waits for both.
+      _ = :sys.get_state(Tracer)
       :ok = Tracer.stop()
       send(receiver, :done)
       Process.unregister(:tracer_test_sender)
@@ -594,6 +623,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       send(pid, :something_else)
       send({:tracer_test_sender3, node()}, :to_myself_by_name)
       assert Tracer.running?()
+      _ = :sys.get_state(Tracer)
       :ok = Tracer.stop()
       Process.unregister(:tracer_test_sender3)
 
