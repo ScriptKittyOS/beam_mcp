@@ -13,7 +13,8 @@ defmodule BeamMCP.DocsCensusTest do
   use ExUnit.Case, async: true
 
   @root Path.expand("../..", __DIR__)
-  @ref ~r/`(BeamMCP(?:\.[A-Z][A-Za-z0-9]*)+)(?:\.([a-z_][A-Za-z0-9_?!]*)\/(\d+))?`/
+  # ExDoc's forms: `Mod`, `Mod.fun/N`, `c:Mod.callback/N`, `t:Mod.type/N`.
+  @ref ~r/`(c:|t:)?(BeamMCP(?:\.[A-Z][A-Za-z0-9]*)+)(?:\.([a-z_][A-Za-z0-9_?!]*)\/(\d+))?`/
 
   defp tracked(patterns) do
     {out, 0} = System.cmd("git", ["ls-files", "--" | patterns], cd: @root)
@@ -62,8 +63,9 @@ defmodule BeamMCP.DocsCensusTest do
   defp doc_text(_), do: nil
 
   defp refs(text) do
-    for [mod, fun, arity] <- Regex.scan(@ref, text, capture: :all_but_first) |> Enum.map(&pad3/1) do
-      {Module.concat([mod]), fun, arity}
+    for [kind, mod, fun, arity] <-
+          Regex.scan(@ref, text, capture: :all_but_first) |> Enum.map(&pad4/1) do
+      {Module.concat([mod]), fun, arity, kind}
     end
   end
 
@@ -71,30 +73,56 @@ defmodule BeamMCP.DocsCensusTest do
   @bare ~r/(?<![\w.])`([a-z_][A-Za-z0-9_?!]*)\/(\d+)`/
 
   defp bare_refs(module, text) do
-    for [fun, arity] <- Regex.scan(@bare, text, capture: :all_but_first), do: {module, fun, arity}
+    for [fun, arity] <- Regex.scan(@bare, text, capture: :all_but_first),
+        do: {module, fun, arity, ""}
   end
 
-  defp pad3([mod]), do: [mod, "", ""]
-  defp pad3([mod, fun, arity]), do: [mod, fun, arity]
+  defp pad4([kind, mod]), do: [kind, mod, "", ""]
+  defp pad4([kind, mod, fun, arity]), do: [kind, mod, fun, arity]
 
-  defp missing({module, "", ""}) do
+  defp missing({module, "", "", _kind}) do
     if Code.ensure_loaded?(module), do: [], else: ["#{inspect(module)} (module)"]
   end
 
-  defp missing({module, fun, arity}) do
+  # A function is exported or a macro; a callback (`c:`) is in behaviour_info; a type (`t:`)
+  # is in the module's typespecs. ExDoc links each form only to its own kind, so the census
+  # holds a reference to the kind its prefix claims -- a callback written without `c:` is a
+  # warning from ExDoc, which the gate's docs step already refuses.
+  defp missing({module, fun, arity, kind}) do
     name = String.to_atom(fun)
     arity = String.to_integer(arity)
+    shown = "#{kind}#{inspect(module)}.#{fun}/#{arity}"
 
     cond do
-      not Code.ensure_loaded?(module) -> ["#{inspect(module)}.#{fun}/#{arity} (module)"]
-      function_exported?(module, name, arity) -> []
-      macro_exported?(module, name, arity) -> []
-      # A callback of a behaviour is named as Module.callback/arity on the page.
-      {name, arity} in (module.behaviour_info(:callbacks) |> List.wrap()) -> []
-      true -> ["#{inspect(module)}.#{fun}/#{arity}"]
+      not Code.ensure_loaded?(module) -> ["#{shown} (module)"]
+      defined?(kind, module, name, arity) -> []
+      true -> [shown]
     end
-  rescue
-    UndefinedFunctionError -> ["#{inspect(module)}.#{fun}/#{arity}"]
+  end
+
+  # A bare name is the module's own function, macro or callback (a behaviour's docs name
+  # its callbacks bare); qualified, a callback needs `c:` and a type `t:`.
+  defp defined?("", module, name, arity) do
+    function_exported?(module, name, arity) or macro_exported?(module, name, arity) or
+      callback?(module, name, arity)
+  end
+
+  defp defined?("c:", module, name, arity), do: callback?(module, name, arity)
+  defp defined?("t:", module, name, arity), do: type?(module, name, arity)
+
+  defp callback?(module, name, arity) do
+    function_exported?(module, :behaviour_info, 1) and
+      {name, arity} in module.behaviour_info(:callbacks)
+  end
+
+  defp type?(module, name, arity) do
+    case Code.Typespec.fetch_types(module) do
+      {:ok, types} ->
+        Enum.any?(types, fn {_kind, {n, _, args}} -> n == name and length(args) == arity end)
+
+      :error ->
+        false
+    end
   end
 
   # A module the current release removed is named on purpose -- by the CHANGELOG entry that
@@ -126,7 +154,7 @@ defmodule BeamMCP.DocsCensusTest do
     assert length(references) > 100, "only #{length(references)} references found"
 
     found =
-      for {where, {module, _, _} = ref} <- references,
+      for {where, {module, _, _, _} = ref} <- references,
           module not in removed,
           reason <- missing(ref),
           do: "#{where}: #{reason}"

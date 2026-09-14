@@ -8,7 +8,7 @@ defmodule BeamMCP.Connectome.Declared do
 
   Three sources, each optional but the scope:
 
-  * **the catalog** -- `capabilities/0` of the module given as `catalog:`; one node per tool,
+  * **the catalog** -- `c:BeamMCP.Catalog.capabilities/0` of the module given as `catalog:`; one node per tool,
     resource and prompt, a `:invoke` edge from the server to each tool, and a `:invoke` edge
     from a tool to the module the host names for it in `tool_modules:`;
   * **the compiled code** -- call edges read from the beams of the modules in scope with OTP's
@@ -40,7 +40,7 @@ defmodule BeamMCP.Connectome.Declared do
 
   A module handed as *data* to a dispatcher outside the scope -- a behaviour callback module
   given to `GenServer.start_link/2`, a module in `Task.async/3`, a struct module in
-  `struct/2` -- is called from inside that library, not from the scope, so the call is neither
+  `Kernel.struct/2` -- is called from inside that library, not from the scope, so the call is neither
   an edge nor an entry in the bound: the bound enumerates dynamic dispatch *from* the scope,
   not dispatch *into* it from library code. Calls to what `:erlang.is_builtin/3` calls a
   built-in -- C-implemented functions in `erlang`, and also in `lists`, `ets`, `maps`, `re`,
@@ -50,7 +50,7 @@ defmodule BeamMCP.Connectome.Declared do
   among the external callees when `:lists.reverse/1` is called and not when `:lists.member/2`
   is; `ets` when `:ets.tab2list/1` is called and not when `:ets.lookup/2` is (measured: 25 of
   `ets`'s exports are Erlang-implemented). Two more, at the edges of the `MACRO-` rule: a
-  compile-time hook written as a plain function (`__before_compile__/1`, `__after_compile__/2`)
+  compile-time hook written as a plain function (a `__before_compile__` or `__after_compile__`)
   is attributed to that function and so reads as a runtime call; and a private macro leaves no
   `MACRO-` function and no call, so a helper used only from its body produces neither an edge
   nor an expansion call.
@@ -125,7 +125,7 @@ defmodule BeamMCP.Connectome.Declared do
   Returns `{:ok, %Result{}}`, or `{:error, reason}` by name.
 
   Two side effects, stated: each application in `apps:` is loaded (never started) before its
-  `.app` is read, and the loads preceding a refusal persist; and `capabilities/0` is called
+  `.app` is read, and the loads preceding a refusal persist; and `c:BeamMCP.Catalog.capabilities/0` is called
   twice on the catalog -- once by the package's contract check, once to read it.
   """
   @spec build(keyword()) :: {:ok, Result.t()} | {:error, term()}
