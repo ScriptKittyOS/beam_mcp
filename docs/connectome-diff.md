@@ -16,9 +16,16 @@ with `sha256sum` alone.
 ## Labels, not isomorphism
 
 Two edges are the same edge if and only if their **label** — `from`, `to`, `kind` — is
-equal. Ids are structural, derived by one function from the identity a host supplies
-(`docs/connectome.md`, the id scheme), so the label is the whole identity of an edge and
-provenance says only which graph it came from. The diff is a set difference over labels and
+equal, compared as the encoder writes them: **after NFC** (rule 6 of
+`docs/connectome-canonical.md`). Ids are structural, derived by one function from the
+identity a host supplies (`docs/connectome.md`, the id scheme; `srv/server` for the server
+node, `srv/tool/a` for a tool), so the label is the whole identity of an edge and
+provenance says only which graph it came from. Two inputs are admitted only as the encoder
+would admit them: a graph whose ids coincide after NFC has no canonical bytes and so no
+diff — refused as `{:error, {:declared, {:uncanonical, {:duplicate_id_after_nfc, id}}}}`
+or the observed mirror — and a graph carrying an edge of the other side's provenance is
+refused as `{:error, {:declared, {:invalid, :provenance, :observed}}}` or the mirror, so on
+every admitted input an edge and a label are the same count. The diff is a set difference over labels and
 nothing more, and that is a decision, not an omission: a graph-isomorphism check is NP-hard
 in general and would be wrong here besides — it would call two differently named tools "the
 same" whenever their neighbourhoods matched. It is written down so nobody improves the diff
@@ -61,12 +68,16 @@ they are three different figures, not one: **declared edges observed** is
 ends the observation reached, whether or not the edge itself was seen. An edge counted
 under `declared_endpoint_covered` may still be dead authority.
 
-The **window** is the consumer's: any map in the label grammar (a start and an end as
-strings, for one), carried into the record verbatim. The package never infers it; a diff
-without a window is refused by name (`{:error, {:missing, :window}}`), and a window with no
-canonical bytes with `{:error, {:uncanonical, _}}`. A graph a literal built wrong is refused
-before it is compared, as `{:error, {:declared, reason}}` or `{:error, {:observed, reason}}`
-with the reason `Graph.new/1` would have given.
+The **window** is the consumer's: any map in the label grammar — string or atom keys
+(an atom is written as its name), nested maps, lists, integers, booleans, `null`; an empty
+map is allowed and written `{}` — carried into the record verbatim. The package never
+infers it; a diff without a window is refused by name (`{:error, {:missing, :window}}`),
+and a window with no canonical bytes — a float inside, a struct, a keyword list, two keys
+that coincide after NFC — as `{:error, {:uncanonical, {:label_value, "record", :window,
+value}}}`. The options themselves must be a keyword list (`{:error, {:invalid, :opts,
+given}}` otherwise). A graph a literal built wrong is refused before it is compared, as
+`{:error, {:declared, reason}}` or `{:error, {:observed, reason}}` with the reason
+`Graph.new/1` would have given.
 
 ## The bytes
 
@@ -77,15 +88,17 @@ of its field, integers as integers, arrays in the order given, nested objects th
 nothing else. Its keys, in the order the rule gives them:
 
 - `"classes"` — an object with the four class names as keys, each an array of label objects
-  `{"from","kind","to"}`; a `changed_sign` entry carries `"declared_sign"` and
-  `"observed_sign"` too. Each array is sorted by `from`, then `to`, then `kind`, comparing
-  UTF-16 code units, so equal inputs give equal bytes whatever order the graphs were built in.
+  `{"from","kind","to"}` (an empty class is `[]`); a `changed_sign` entry carries
+  `"declared_sign"` and `"observed_sign"` too. Each array is sorted by `from`, then `to`,
+  then the kind's name, comparing UTF-16 code units, so equal inputs give equal bytes
+  whatever order the graphs were built in.
 - `"coverage"` — the seven counts.
 - `"schema_version"` — `1`.
 - `"window"` — the consumer's map.
 
 Nothing else enters the record: no weight, no latency, no argument, no name the graphs did
-not already carry. `Diff.hash/1` is SHA-256 over these bytes.
+not already carry. `Diff.hash/1` is SHA-256 over these bytes, the raw 32; `Diff.hash_hex/1`
+is the same as lowercase hexadecimal, the form this page writes it in.
 
 ## Worked example
 
