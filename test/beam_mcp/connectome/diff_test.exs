@@ -189,6 +189,9 @@ defmodule BeamMCP.Connectome.DiffTest do
       assert Diff.encode!(a) == Diff.encode!(b)
       assert Diff.hash!(a) == Diff.hash!(b)
       assert byte_size(Diff.hash!(a)) == 32
+      # The non-raising forms answer the same bytes and hash.
+      assert {:ok, Diff.encode!(a)} == Diff.encode(a)
+      assert {:ok, Diff.hash!(a)} == Diff.hash(a)
     end
 
     test "the bytes are the 012 encoder's over the record: the label grammar, key order by UTF-16, atoms under their field names" do
@@ -217,6 +220,8 @@ defmodule BeamMCP.Connectome.DiffTest do
     test "a window with no canonical bytes is refused by name" do
       {declared, observed} = crafted()
       assert {:error, {:uncanonical, _}} = Diff.run(declared, observed, window: %{ratio: 0.5})
+      # A window that is not a map at all is refused the same way.
+      assert {:error, {:uncanonical, _}} = Diff.run(declared, observed, window: "1h")
     end
 
     test "encode_value/1 writes any label-shaped value with the page's rules, and refuses the rest by name" do
