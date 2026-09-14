@@ -20,8 +20,60 @@ step() { # step <name> <command...>
 
 echo "== beam_mcp gate =="
 
-step "format"   mix format --check-formatted
+# THE FORMAT POPULATION IS THE TRACKED SET, NOT `.formatter.exs`'s GLOB. The glob once read
+# `{lib,test}/**/*.{ex,exs}`; five tracked Elixir scripts under tools/ sat outside it, a
+# syntax error appended to one of them passed the whole gate green (measured, 2026-09-08),
+# and slice 008 broke four of them without a red line anywhere. A glob is a hand list of
+# directories: bench/ had to be added to it by name, and the next directory would be
+# forgotten the same way. Here every tracked `.ex` and `.exs` is handed to the formatter
+# explicitly, from the same `git ls-files` the REUSE and publication steps read, and the
+# count is printed beside the verdict. The glob stays in `.formatter.exs` for a developer's
+# bare `mix format`, and lists the same directories today; disagreeing with it is this
+# step's job, not a defect in it.
+fmt_files=$(git ls-files -- '*.ex' '*.exs')
+fmt_n=$(printf '%s\n' "$fmt_files" | grep -c .)
+fmt_out=$(printf '%s\n' "$fmt_files" | xargs mix format --check-formatted 2>&1); fmt_rc=$?
+if [ "$fmt_rc" -eq 0 ] && [ "$fmt_n" -gt 0 ]; then
+  note "format" "pass ($fmt_n tracked .ex/.exs)"
+else
+  note "format" "FAIL (exit $fmt_rc, $fmt_n tracked .ex/.exs)"
+  printf '%s\n' "$fmt_out" | sed 's/^/      /'; fail=1
+fi
 step "compile"  mix compile --warnings-as-errors --force
+
+# The other instruments: every tracked shell script and every tracked Python file (the
+# mutants, the scoring harness's probes) must at least parse. `bash -n` and `ast.parse`
+# are not compilation -- a shell script that calls a command that no longer exists, or a
+# mutant whose anchor no longer matches, is not seen here; the mutation harness reports
+# the latter as NOT-APPLIED when it runs. The limit, stated: an Elixir script under
+# tools/ is parsed by the format step and run by nobody, so a call into a module the
+# package renamed is caught only when the script is next run by hand. Populations from
+# `git ls-files`, counts printed, an absent interpreter is a failure and not a pass.
+inst_fail=""; n_sh=0; n_py=0
+while read -r f; do
+  [ -n "$f" ] || continue
+  n_sh=$((n_sh + 1))
+  bash -n "$f" 2>/dev/null || inst_fail="${inst_fail}${f}  (bash -n)"$'\n'
+done <<< "$(git ls-files -- '*.sh')"
+py_files=$(git ls-files -- '*.py')
+if [ -n "$py_files" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    while read -r f; do
+      [ -n "$f" ] || continue
+      n_py=$((n_py + 1))
+      python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f" 2>/dev/null \
+        || inst_fail="${inst_fail}${f}  (python3 ast.parse)"$'\n'
+    done <<< "$py_files"
+  else
+    inst_fail="${inst_fail}python3 not found: $(printf '%s\n' "$py_files" | grep -c .) tracked .py files unparsed"$'\n'
+  fi
+fi
+if [ -z "$inst_fail" ]; then
+  note "instruments" "pass ($n_sh tracked .sh parse, $n_py tracked .py parse)"
+else
+  note "instruments" "FAIL ($n_sh tracked .sh, $n_py tracked .py)"
+  printf '%s' "$inst_fail" | sed 's/^/      /'; fail=1
+fi
 step "test"     mix test
 step "credo"    mix credo --strict
 
