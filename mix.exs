@@ -49,6 +49,11 @@ defmodule BeamMCP.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      # The dispatch path emits `[:beam_mcp, :dispatch, :start | :stop | :exception]` through
+      # this, the ecosystem's emission point. Required, not optional: an optional emission would
+      # branch the hot path on whether a module is loaded, and that second path is one nobody
+      # exercises. Apache-2.0; no dependencies of its own.
+      {:telemetry, "~> 1.0"},
       # Plug is the transport contract; Bandit is the server the host runs it on. Both are
       # optional: a host using only the stdio transport must not be made to pull an HTTP
       # server in, and `optional: true` keeps them out of that host's dependency tree.
