@@ -206,7 +206,12 @@ defmodule BeamMCP.Connectome.ObservedTest do
       new =
         Enum.find_value(1..100, fn _ ->
           Process.sleep(10)
-          if (p = Process.whereis(name)) && p != pid, do: p
+
+          case Process.whereis(name) do
+            nil -> nil
+            ^pid -> nil
+            p -> p
+          end
         end)
 
       assert is_pid(new)
