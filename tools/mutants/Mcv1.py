@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "  def encode_value(value), do: {:error, {:uncanonical, {:label_value, \"record\", :record, value}}}"
-new = "  def encode_value(value), do: {:ok, inspect(value)}"
+old = "  def encode_value(value, field), do: {:error, {:uncanonical, {:label_value, \"record\", field, value}}}"
+new = "  def encode_value(value, field), do: {:ok, inspect({field, value})}"
 
 if s.count(old) != 1:
     sys.exit("Mcv1: anchor found %d times" % s.count(old))

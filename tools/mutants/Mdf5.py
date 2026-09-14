@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "    Enum.sort_by(labels, &{utf16(&1.from), utf16(&1.to), Atom.to_string(&1.kind)})"
-new = "    Enum.sort_by(labels, &{utf16(&1.from), utf16(&1.to), Atom.to_string(&1.kind)}, :desc)"
+old = "    Enum.sort_by(labels, &{utf16(&1.from), utf16(&1.to), utf16(Atom.to_string(&1.kind))})"
+new = "    Enum.sort_by(labels, &{utf16(&1.from), utf16(&1.to), utf16(Atom.to_string(&1.kind))}, :desc)"
 
 if s.count(old) != 1:
     sys.exit("Mdf5: anchor found %d times" % s.count(old))
