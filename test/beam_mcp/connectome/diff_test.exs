@@ -247,7 +247,10 @@ defmodule BeamMCP.Connectome.DiffTest do
       bytes = Diff.encode!(diff)
       refute bytes =~ @marker
       refute inspect(diff, limit: :infinity, printable_limit: :infinity) =~ @marker
-      assert [_] = diff.classes.observed_but_undeclared
+      # The collector's graph holds the call's edge and whatever else the dispatch produced;
+      # all of it is undeclared here, and none of it carries the marker.
+      assert diff.classes.observed_but_undeclared != []
+      assert diff.classes.declared_and_observed == [] and diff.classes.changed_sign == []
     end
   end
 

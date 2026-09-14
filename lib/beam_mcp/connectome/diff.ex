@@ -60,7 +60,7 @@ defmodule BeamMCP.Connectome.Diff do
   @typedoc "An edge's identity in the diff: from, to, kind."
   @type label :: %{from: String.t(), to: String.t(), kind: Edge.kind()}
 
-  @typedoc "A changed-sign entry: the label with both signs."
+  @typedoc "The entry for a label whose two supplied signs differ: the label with both."
   @type changed :: %{
           from: String.t(),
           to: String.t(),
