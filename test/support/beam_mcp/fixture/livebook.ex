@@ -9,7 +9,7 @@ defmodule BeamMCP.Fixture.Livebook do
   # declared catalog does not (`probe`): the drift the diff exists to find. No sign is set on
   # either side, so the export shows three of the four classes; `changed_sign` needs a
   # consumer to have supplied a sign on both sides, which nothing here does.
-  alias BeamMCP.Connectome.{Canonical, Declared, Diff, Observed}
+  alias BeamMCP.Connectome.{Canonical, Declared, Diff, Graph, Observed}
   alias BeamMCP.Fixture.Declared, as: Fx
   alias BeamMCP.Server
 
@@ -96,6 +96,20 @@ defmodule BeamMCP.Fixture.Livebook do
 
     {:ok, graph} = Observed.snapshot(name)
     :ok = GenServer.stop(pid)
-    graph
+    only_fx(graph)
+  end
+
+  # The collector is node-wide: every dispatch on the node lands in its table, whatever the
+  # server, and the test suite runs other servers beside this one. The export is the
+  # collector's graph restricted to `fx` -- the ids carry the server, so the restriction is
+  # by id and not by guess.
+  defp only_fx(%Graph{} = graph) do
+    fx? = &String.starts_with?(&1, @server <> "/")
+
+    Graph.new!(
+      nodes: Enum.filter(graph.nodes, &fx?.(&1.id)),
+      edges: Enum.filter(graph.edges, &(fx?.(&1.from) and fx?.(&1.to))),
+      schema_version: graph.schema_version
+    )
   end
 end
