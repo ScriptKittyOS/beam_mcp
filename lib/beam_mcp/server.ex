@@ -390,13 +390,35 @@ defmodule BeamMCP.Server do
 
   # A frame with an argument list becomes the same frame with the list's length, and its
   # location keeps file and line only: a host can put any term into a frame through
-  # `:erlang.error/3`'s error_info, and it would have travelled in the keywords.
+  # `:erlang.error/3`'s error_info, and it would have travelled in the keywords. Total over
+  # whatever a host hands `:erlang.raise/3` -- a location that is no keyword list, an
+  # improper argument list, a file or a line of another type -- because this runs inside
+  # the catch clause, where a raise of its own would replace the host's error and leave
+  # the span open (measured, by a lane).
   defp arities(stacktrace) do
     for {m, f, args_or_arity, loc} <- stacktrace do
-      {m, f, if(is_list(args_or_arity), do: length(args_or_arity), else: args_or_arity),
-       Keyword.take(loc, [:file, :line])}
+      {m, f, arity(args_or_arity), location(loc, [])}
     end
   end
+
+  defp arity(args) when is_list(args), do: count(args, 0)
+  defp arity(arity), do: arity
+
+  defp count([_ | rest], n), do: count(rest, n + 1)
+  defp count(_, n), do: n
+
+  # What the compiler writes: a charlist for the file, an integer for the line.
+  defp location([{:file, file} | rest], acc) when is_list(file) do
+    if :io_lib.char_list(file),
+      do: location(rest, [{:file, file} | acc]),
+      else: location(rest, acc)
+  end
+
+  defp location([{:line, line} | rest], acc) when is_integer(line),
+    do: location(rest, [{:line, line} | acc])
+
+  defp location([_ | rest], acc), do: location(rest, acc)
+  defp location(_, acc), do: Enum.reverse(acc)
 
   defp outcome({:ok, _}), do: :ok
   defp outcome(_), do: :error

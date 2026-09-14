@@ -4,16 +4,16 @@
 # Run by tools/mutate.sh with TARGET=lib/beam_mcp/server.ex, which passes the
 # file to mutate as argv[1].
 #
-# Msv4 -- A FRAME'S LOCATION KEYWORDS GO OUT WHOLE: a host's error_info travels in the exception event.
+# Msv5 -- A FILE OF ANY LIST SHAPE IS KEPT: a host-built frame's file value travels whatever it holds.
 import sys
 
 p = sys.argv[1]
 s = open(p).read()
 
-old = "  defp location([_ | rest], acc), do: location(rest, acc)"
-new = "  defp location([kv | rest], acc), do: location(rest, [kv | acc])"
+old = "    if :io_lib.char_list(file),"
+new = "    if is_list(file),"
 
 if s.count(old) != 1:
-    sys.exit("Msv4: anchor found %d times" % s.count(old))
+    sys.exit("Msv5: anchor found %d times" % s.count(old))
 
 open(p, "w").write(s.replace(old, new, 1))

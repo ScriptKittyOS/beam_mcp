@@ -147,12 +147,13 @@ defmodule BeamMCP.Connectome.Tracer do
         stop_stale()
 
       pid ->
-        case :persistent_term.get(@running, nil) do
+        case running_term() do
           {flag, modules, _companion} ->
             clear(modules, [])
             :atomics.put(flag, 1, @stop)
 
-          nil ->
+          # Nobody's, or a forgery: the tracer's own exit clears what it set.
+          _ ->
             :ok
         end
 
@@ -163,8 +164,11 @@ defmodule BeamMCP.Connectome.Tracer do
   end
 
   # No tracer, but a term: the double-kill window left it. Clear what it names, erase it.
+  # A term of another shape is nobody's and names nothing to clear; it is erased so the
+  # next start is not refused by it (measured: a lane forged six shapes, each of which had
+  # raised out of here and stayed).
   defp stop_stale do
-    case :persistent_term.get(@running, nil) do
+    case running_term() do
       {_flag, modules, _companion} ->
         clear_patterns(modules)
         _ = :persistent_term.erase(@running)
@@ -172,8 +176,32 @@ defmodule BeamMCP.Connectome.Tracer do
 
       nil ->
         :ok
+
+      :malformed ->
+        _ = :persistent_term.erase(@running)
+        :ok
     end
   end
+
+  # The term is public and unowned, so only its own shape is trusted: the flag a
+  # reference, the modules a proper list of atoms -- what `:atomics.put/3` and
+  # `trace_pattern/3` would raise on otherwise. Anything else is `:malformed`.
+  defp running_term do
+    case :persistent_term.get(@running, nil) do
+      {flag, modules, _companion} = term when is_reference(flag) ->
+        if atoms?(modules), do: term, else: :malformed
+
+      nil ->
+        nil
+
+      _ ->
+        :malformed
+    end
+  end
+
+  defp atoms?([m | rest]) when is_atom(m), do: atoms?(rest)
+  defp atoms?([]), do: true
+  defp atoms?(_), do: false
 
   @doc "Whether a tracer runs."
   @spec running?() :: boolean()
@@ -408,8 +436,11 @@ defmodule BeamMCP.Connectome.Tracer do
   # Only its own: a companion that outlived the wait -- suspended from outside -- runs
   # after a new tracer claimed some of the same modules, and must not take those away
   # (measured). What the new tracer names is the new tracer's to clear.
+  # A term of another shape is no tracer's claim: the companion's own modules are cleared
+  # as if no term were there (measured: `modules -- claimed` had raised on a forged one and
+  # left the patterns set with nothing left to clear them).
   defp after_death(flag, modules) do
-    case :persistent_term.get(@running, nil) do
+    case running_term() do
       {^flag, _, _} ->
         clear_patterns(modules)
         :persistent_term.erase(@running)
@@ -417,7 +448,7 @@ defmodule BeamMCP.Connectome.Tracer do
       {_other, claimed, _} ->
         clear_patterns(modules -- claimed)
 
-      nil ->
+      _ ->
         clear_patterns(modules)
     end
   end
