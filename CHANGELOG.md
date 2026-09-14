@@ -57,6 +57,14 @@ All notable changes to this project are documented here. The format follows
   when nothing is watching. `BeamMCP.Connectome.Tracer` is off by default, one at a time,
   stops itself at its limits, and writes module-to-module and name-to-name edges with the
   `:arity` flag and without reading a message. `docs/connectome-observed.md` is the contract.
+- **`BeamMCP.Stacktrace.arities/1`** — the one rewrite that turns a stacktrace's argument lists
+  into arities and its locations into what the compiler writes, used by the `:exception` event
+  and by the HTTP transport's fault log, which had logged a dispatch's stacktrace untouched —
+  a caller's arguments in the host's log.
+- **`BeamMCP.Server.new/1` refuses every wrong or unknown option by name at construction** —
+  `server_name`, `dispatch`, `dispatch_opts`, `tools_ttl_ms`, `tools_cache_scope`, a typo —
+  the way it already refused a malformed catalog; before, a non-string `server_name` was held
+  and raised inside the connectome's id derivation at snapshot time.
 - **The gate reads the branch's own commit messages** for attribution trailers, session links,
   board identifiers and consumer names — offline, over `origin/main..HEAD`; a pull request's body
   is read by a person before merge.

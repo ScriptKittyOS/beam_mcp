@@ -32,7 +32,9 @@ only, and only as the compiler writes them — a charlist and an integer — a h
 any term into a frame through `:erlang.error/3`'s `error_info` or hand `:erlang.raise/3`
 frames of any shape, and none of it travels or breaks the rewrite — a frame whose arity
 position is neither a list nor an integer is dropped from the event, as a fun frame is;
-the host's own stacktrace is re-raised untouched. The file in a frame is the path the module was
+the host's own stacktrace is re-raised untouched. The rewrite has a name,
+`BeamMCP.Stacktrace.arities/1`, and one implementation: the HTTP transport's fault log
+writes the same frames, so a caller's arguments reach neither an event nor a host's log. The file in a frame is the path the module was
 compiled from, verbatim, as in any stacktrace; a handler that ships the event off the node
 ships that path. `reason` is the
 exception the host's dispatch raised, whatever the host put in it (a `KeyError` can carry
