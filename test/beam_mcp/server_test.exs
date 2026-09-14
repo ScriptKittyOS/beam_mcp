@@ -91,6 +91,10 @@ defmodule BeamMCP.ServerTest do
                Server.new(catalog: FakeCatalog, tools_ttl_ms: 0, tools_cache_scope: "public")
     end
 
+    test "the options must be a keyword list at all" do
+      assert_raise ArgumentError, ~r/keyword list/, fn -> Server.new(%{catalog: FakeCatalog}) end
+    end
+
     test "an option new/1 does not accept is refused by name too" do
       assert_raise ArgumentError, ~r/:server_nam\b/, fn ->
         Server.new(catalog: FakeCatalog, server_nam: "typo")
