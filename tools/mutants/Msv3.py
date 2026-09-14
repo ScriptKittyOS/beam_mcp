@@ -12,8 +12,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = "      {m, f, if(is_list(args_or_arity), do: length(args_or_arity), else: args_or_arity),\n       Keyword.take(loc, [:file, :line])}"
-new = "      {m, f, args_or_arity, Keyword.take(loc, [:file, :line])}"
+old = "  defp arity(args) when is_list(args), do: count(args, 0)"
+new = "  defp arity(args) when is_list(args), do: args"
 
 if s.count(old) != 1:
     sys.exit("Msv3: anchor found %d times" % s.count(old))
