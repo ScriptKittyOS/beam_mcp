@@ -44,15 +44,18 @@ defmodule BeamMCP.Connectome.Tracer do
   **The limits, and what they bound.** `max_messages` counts trace messages as the tracer
   *handles* them; the BEAM queues them as they arrive, and under load the tracer is
   scheduled less often than the processes it traces. Two things keep that queue small: the
-  tracer runs at high priority, and on every handled message it compares handled + queued
-  against the limit and, the moment the sum reaches it, clears its patterns -- generation
-  stops there, and the tracer exits on the next message it handles; what was queued behind
-  it is discarded. So the memory bound is
+  tracer runs at high priority, and on the first and every 32nd handled message it compares
+  handled + queued against the limit and, the moment the sum reaches it, clears its
+  patterns -- generation stops there, and the tracer exits on the next message it handles;
+  what was queued behind it is discarded. So the memory bound is
   the node-wide call rate into the named modules times the tracer's scheduling latency at
   high priority, not `max_messages` (measured: 64 hot callers against a limit of 1 000
-  peaked at 12.8 million queued messages before these two measures, and at 140 000 after;
-  with a limit too large to reach, 32 hot callers queued 3 million in a 100 ms window --
-  the window times the rate is the bound, and the limit is what keeps the window short). `max_duration_ms` is enforced by a companion process that clears the
+  peaked at 12.8 million queued messages before these two measures, and on the order of
+  a hundred thousand after, run to run; with a limit too large to reach, 32 hot callers
+  queued some millions in a 100 ms window -- the window times the rate is the bound, and
+  the limit is what keeps the window short). The mailbox is kept off-heap, so a large
+  queue is not copied at every collection while it drains (measured: on-heap, a drain
+  under continuous arrival fell to 191 µs per message). `max_duration_ms` is enforced by a companion process that clears the
   patterns and flags at the deadline from outside the tracer's mailbox, so tracing stops on
   time even when the tracer is starved, and raises a flag the tracer reads before every
   write, so the tracer exits `{:shutdown, {:limit, :max_duration_ms, ms}}` on the next
@@ -68,9 +71,11 @@ defmodule BeamMCP.Connectome.Tracer do
   the companion back and leaves `{:shutdown, :companion_gone}` if it dies, since it is the
   only enforcer of the deadline and of the clear-on-kill; a hot reload of this module
   purges the companion, an anonymous function of the old code, and ends a running trace
-  that way (measured). The one path that leaves patterns set: the companion killed, then
-  the tracer killed before it handles that death -- the next tracer to start clears them
-  (measured). A new tracer waits for a previous
+  that way (measured), and `:code.soft_purge/1` refuses while a trace runs, for the same
+  reason. The one path that leaves patterns set: the companion killed, then the tracer
+  killed before it handles that death -- the next `start/1`, whatever modules it names,
+  and `stop/0` both clear what the stale term names (measured). A new tracer waits for a
+  previous
   companion to finish before it starts (measured: without that, the old companion's late
   erase landed on the new tracer's running term 499 times in 500). Patterns are global and
   unowned in the BEAM: clearing the patterns on a module clears any that someone else set
@@ -139,7 +144,7 @@ defmodule BeamMCP.Connectome.Tracer do
   def stop do
     case Process.whereis(@name) do
       nil ->
-        :ok
+        stop_stale()
 
       pid ->
         case :persistent_term.get(@running, nil) do
@@ -157,6 +162,19 @@ defmodule BeamMCP.Connectome.Tracer do
     :exit, _ -> :ok
   end
 
+  # No tracer, but a term: the double-kill window left it. Clear what it names, erase it.
+  defp stop_stale do
+    case :persistent_term.get(@running, nil) do
+      {_flag, modules, _companion} ->
+        clear_patterns(modules)
+        _ = :persistent_term.erase(@running)
+        :ok
+
+      nil ->
+        :ok
+    end
+  end
+
   @doc "Whether a tracer runs."
   @spec running?() :: boolean()
   def running?, do: Process.whereis(@name) != nil
@@ -165,6 +183,7 @@ defmodule BeamMCP.Connectome.Tracer do
   def init(opts) do
     Process.flag(:trap_exit, true)
     Process.flag(:priority, :high)
+    Process.flag(:message_queue_data, :off_heap)
     modules = Keyword.fetch!(opts, :modules)
     processes = Keyword.fetch!(opts, :processes)
     max_duration_ms = Keyword.fetch!(opts, :max_duration_ms)
@@ -172,8 +191,12 @@ defmodule BeamMCP.Connectome.Tracer do
 
     # A previous tracer's companion may still be clearing after a kill or a failed start;
     # its erase would land on this tracer's term (measured: 499 of 500 starts after a kill).
-    # Wait for it to be gone before anything is put.
+    # Wait for it to be gone before anything is put. A term still there afterwards belongs
+    # to a dead tracer -- a live one would have refused this name -- and whatever it names
+    # is cleared here: the double-kill window leaves patterns, and the next start is what
+    # takes them away (measured: a start over other modules had left them, 200 of 200).
     await_previous_companion()
+    stop_stale()
 
     flag = :atomics.new(1, [])
 
@@ -382,12 +405,20 @@ defmodule BeamMCP.Connectome.Tracer do
     end)
   end
 
+  # Only its own: a companion that outlived the wait -- suspended from outside -- runs
+  # after a new tracer claimed some of the same modules, and must not take those away
+  # (measured). What the new tracer names is the new tracer's to clear.
   defp after_death(flag, modules) do
-    clear_patterns(modules)
-
     case :persistent_term.get(@running, nil) do
-      {^flag, _, _} -> :persistent_term.erase(@running)
-      _ -> :ok
+      {^flag, _, _} ->
+        clear_patterns(modules)
+        :persistent_term.erase(@running)
+
+      {_other, claimed, _} ->
+        clear_patterns(modules -- claimed)
+
+      nil ->
+        clear_patterns(modules)
     end
   end
 
