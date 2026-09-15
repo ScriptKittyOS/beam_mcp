@@ -28,10 +28,10 @@ All notable changes to this project are documented here. The format follows
   reference-style or an HTML `href`) from the README or CHANGELOG, every tracked page under
   `docs/`, and every ExDoc extra must be in what `mix hex.build` produces. The tarball grows
   by the six pages over 0.4.0's 21 entries (the modules other entries of this release add —
-  the reach module, the resources primitive's three — ship beside them; a running total is
-  not stated, nor a byte count: this file ships in the tarball, and any number written here
-  that depends on the release's final contents moves with them). No other entry is added or
-  removed by this change.
+  the reach module, the resources primitive's two, the cursor codec — ship beside them; a
+  running total is not stated, nor a byte count: this file ships in the tarball, and any
+  number written here that depends on the release's final contents moves with them). No
+  other entry is added or removed by this change.
 
 ### Added — the resources primitive, and one pagination codec
 
