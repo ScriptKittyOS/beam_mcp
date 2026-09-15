@@ -453,31 +453,45 @@ defmodule BeamMCP.ResourcesTest do
 
       # {id} is one segment: a slash inside it is not a match, so the uri is not listed.
       r = call(s, "resources/read", %{"uri" => "injected://only-here/by-id/4/2"})
-      assert r["error"]["code"] == -32_002
+      assert r["error"]["code"] == -32_602
 
       # And a segment, not nothing: a resource with an empty id is not a resource the
       # template names. Stated in the matcher's doc; pinned here.
       r = call(s, "resources/read", %{"uri" => "injected://only-here/by-id/"})
-      assert r["error"]["code"] == -32_002
+      assert r["error"]["code"] == -32_602
 
       # A literal character of the template is literal: the "." of ".txt" is not "any".
       r = call(s, "resources/read", %{"uri" => "injected://only-here/notes.txt"})["result"]
       assert [%{"text" => "notes.txt"}] = r["contents"]
       r = call(s, "resources/read", %{"uri" => "injected://only-here/notes-txt"})
-      assert r["error"]["code"] == -32_002
+      assert r["error"]["code"] == -32_602
     end
 
-    test "a uri neither listed nor matched is -32002 with the uri as data, before any host code" do
+    # The code is the revision's: 2026-07-28 says a resource that does not exist MUST be
+    # -32602 (Invalid params) with the uri as data, and that clients SHOULD still accept
+    # -32002, "as earlier protocol versions used this code" -- 2025-11-25 names -32002. The
+    # official conformance suite's sep-2164 scenario caught a first cut that answered -32002
+    # at both eras; the 016a baseline had predicted -32602 + data.uri.
+    test "a uri neither listed nor matched is not found, with the uri as data, before the reader runs: -32602 at 2026-07-28" do
       r = call(state(Injected), "resources/read", %{"uri" => "injected://elsewhere"})
-      assert r["error"]["code"] == -32_002
+      assert r["error"]["code"] == -32_602
       assert r["error"]["message"] =~ "Resource not found"
       assert r["error"]["data"] == %{"uri" => "injected://elsewhere"}
     end
 
-    test "a reader's error is -32002 carrying the reason as data" do
-      r = call(state(Injected), "resources/read", %{"uri" => "injected://only-here/z"})
+    test "the same refusal is -32002 at 2025-11-25, the code that revision names" do
+      r = call(state(Injected), "resources/read", %{"uri" => "injected://elsewhere"}, @legacy)
       assert r["error"]["code"] == -32_002
+      assert r["error"]["data"] == %{"uri" => "injected://elsewhere"}
+    end
+
+    test "a reader's error is the same not-found code, carrying the reason as data" do
+      r = call(state(Injected), "resources/read", %{"uri" => "injected://only-here/z"})
+      assert r["error"]["code"] == -32_602
       assert r["error"]["data"] == %{"uri" => "injected://only-here/z", "reason" => "z is gone"}
+
+      r = call(state(Injected), "resources/read", %{"uri" => "injected://only-here/z"}, @legacy)
+      assert r["error"]["code"] == -32_002
     end
 
     test "a malformed reader answer is -32603 naming the defect, never a crash or a reshaped payload" do
