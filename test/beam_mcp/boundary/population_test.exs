@@ -26,16 +26,20 @@ defmodule BeamMCP.Boundary.PopulationTest do
     assert config[:compilers] == nil
     # And no macro, no quote and no compiler call under lib/: code that runs at compile time
     # leaves no call in the beam, so the artefact censuses cannot see it; the text holds it here.
-    # Two allowances, by their exact lines: the package reads its own version from mix.exs, and
-    # the tracer's threat model names the loader it does not call.
+    # Three allowances, by their exact lines: the package reads its own version from mix.exs,
+    # the tracer's threat model names the loader it does not call, and the HTTP transport's one
+    # word sigil makes strings. Every other word sigil -- any delimiter, any lines, any escape,
+    # any modifier, or the macro called by name -- is refused: a lane found the escaped-closer
+    # form after three rounds of delimiter patterns, and the honest rule is none at all.
     compile_time =
       for {_, _, text} = hit <-
             Boundary.hits(
-              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.(load\w*|atomic_load|prepare_loading|finish_loading)\b|~[wW](\(.*?\)|\[.*?\]|\{.*?\}|<.*?>|\|.*?\||\/.*?\/|".*?"|'.*?')a\b|~[wW]("""|\x27\x27\x27)|~[wW](\((?![^)]*\))|\[(?![^\]]*\])|\{(?![^}]*\})|<(?![^>]*>)|\|(?![^|]*\|)|\/(?![^\/]*\/)|"(?![^"]*")|'(?![^']*'))|:["'](file|os|code|erl_\w+|elixir\w*|compile|init|prim_file|filelib|application)["']|\bCode\b(?!\.ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\b|\bMix\b|:(["'])[^"']*\\[xu]/
+              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.(load\w*|atomic_load|prepare_loading|finish_loading)\b|~[wW]\W|\bsigil_[wW]\b|:["'](file|os|code|erl_\w+|elixir\w*|compile|init|prim_file|filelib|application)["']|\bCode\b(?!\.ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\b|\bMix\b|:(["'])[^"']*\\[xu]/
             ),
           String.trim(text) not in [
             "@server_version Mix.Project.config()[:version]",
-            "dispatch function, replace a module with `:code.load_binary/3`, or trace every process"
+            "dispatch function, replace a module with `:code.load_binary/3`, or trace every process",
+            "@annotatable_types ~w(string integer boolean)"
           ],
           do: hit
 

@@ -71,11 +71,13 @@ Erlang evaluators and compilers (`Code` except `Code.ensure_*`, `:elixir`, `:eli
 (`load_*`, `atomic_load`, `prepare_loading`, `finish_loading`); the readers of the environment
 and the disk (`:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`, `Path.wildcard`,
 `:init.`, and twelve named readers on `System` and `Application`); a quoted
-atom carrying an escape, a word sigil that makes atoms (on one line, across lines, or as a
-heredoc), and the Erlang names above in quotes — an atom built by *interpolation* is the
-joined-strings edge below, read by nothing; and every `import`, `alias` or `require` that would bring any of these in under another name,
-across lines. Two allowances by exact line: the package's own version read from `mix.exs`, and
-the tracer's threat model naming the loader it does not call. Beside the census, the
+atom carrying an escape, any word sigil at all — one string sigil is allowed by its exact
+line; every other `~w`, whatever its delimiter, lines, escapes or modifier, and the macro
+called by name, is refused — and the Erlang names above in quotes; an atom built by
+*interpolation* is the joined-strings edge below, read by nothing; and every `import`, `alias` or `require` that would bring any of these in under another name,
+across lines. Three allowances by exact line: the package's own version read from `mix.exs`,
+the tracer's threat model naming the loader it does not call, and the HTTP transport's one
+word sigil, which makes strings. Beside the census, the
 compiler's `warnings_as_errors` (in `mix.exs`) refuses a needlessly quoted atom outright — a
 bar this package's build has and a stranger's might not. A reach under a name not in those
 classes, run in a module body, is held by nothing but a reviewer's eye — the reader that
