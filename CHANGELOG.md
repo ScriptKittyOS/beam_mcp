@@ -11,8 +11,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet. 0.4.0 is the newest release; the next is 0.5.0 — reachability queries over the
-declared graph and the wire surface for what the catalog declares.
+### Added — reachability, additive
+
+- **Reachability queries over a connectome graph.** `BeamMCP.Connectome.Reach` answers four
+  questions about a `BeamMCP.Connectome.Graph`, the declared one being the point: is there a
+  path from an entry to an effect (`reachable?/4`); is there one that crosses none of a set of
+  gate nodes (`reachable_without/5`), and when there is, a **witness** — a
+  `BeamMCP.Connectome.Reach.Path` whose edges are the input graph's own, in order, so a reader
+  checks it against the graph rather than trusting the package; does a gate dominate an
+  effect from the entry set (`dominates?/4`, the removal definition itself); and which nodes
+  every path to an effect must cross (`mandatory_pass/3`, Lengauer–Tarjan — OTP's
+  `:digraph_utils` has no dominator function, so it is written here and held to `dominates?/4`
+  by a property over every node of generated graphs). On OTP's `:digraph`, one private table
+  per query deleted on every exit; **no new dependency**. Edge kinds and a hop limit are
+  constraints; signs are not read. `max_edges:` is the one cap, refused by name; `all_paths/4`
+  is refused by name, always — enumerating paths is exponential and no cap makes it a
+  question this package answers. `docs/connectome-reach.md` is the contract, with the
+  measured cost on the gate's 10 000-edge fixture (a search ~11 ms, dominators ~30 ms),
+  recorded by every gate run (`bench/reach.exs`) and judged by nothing.
+- **`BeamMCP.Connectome.Edge.kinds/0`** — the edge vocabulary from one site.
+- **Nothing on the wire changes.** No method, field or capability is added.
+
+### Fixed — test suite only
+
+- The Livebook exports fixture ran its collector without a lock; two async test modules
+  exporting at once saw each other's `fx` calls and exported doubled weights, a one-in-many
+  flake first seen in a mutation pass and then reproduced deterministically with two tasks.
+  The collector run is serialised across the node (`:global.trans/4`, the requester being
+  the caller). Nothing shipped changes.
 
 ## [0.4.0] — 2026-09-14
 

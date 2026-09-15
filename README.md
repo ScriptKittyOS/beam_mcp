@@ -393,19 +393,22 @@ collector, the tracer and its stated threat model in
 **Shipping now.** The protocol core for `2026-07-28` and `2025-11-25`; the stdio and
 stateless Streamable HTTP transports; JSON Schema validation of tool arguments; the catalog
 contract — tools, resources and prompts declared by the host, tools dispatched through the
-host's function; and the connectome spine above — declared, observed, canonical bytes, diff —
-with the Livebook that renders it.
+host's function; the connectome spine above — declared, observed, canonical bytes, diff —
+with the Livebook that renders it; and reachability queries over a graph
+(`BeamMCP.Connectome.Reach`: can an entry reach an effect, can it do so without crossing a
+gate — with a witness path made of the graph's own edges — does a gate dominate an effect,
+and which nodes every path must cross; on OTP's `:digraph`, dominators by Lengauer–Tarjan,
+no new dependency; [`docs/connectome-reach.md`](docs/connectome-reach.md)).
 
 **Decided and not built.** Settled by an owner decision, with no code behind it yet:
-reachability queries over the declared graph (k-hop under constraints, dominators, on OTP's
-`:digraph` and no new dependency); the `resources/*` and `prompts/*` wire surfaces for what
+the `resources/*` and `prompts/*` wire surfaces for what
 the catalog already declares; `connectome://` resources exposing the graphs through MCP
 itself, a scheme of this package's own and not a claimed capability; a federation seam for
 merging graphs from several nodes; and effective connectivity, the observed graph weighted
 into the declared one.
 
 **Scheduled.** In that order, each at the minor position while the package is `0.x`:
-reachability with the wire surfaces, then the federation seam, then effective connectivity.
+the wire surfaces, then the federation seam, then effective connectivity.
 `1.0.0` follows once the public API and the stated threat model have each survived a full
 minor release unchanged.
 
