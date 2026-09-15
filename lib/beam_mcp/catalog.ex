@@ -177,7 +177,7 @@ defmodule BeamMCP.Catalog do
     literal = Regex.replace(@expression, template, "")
 
     Enum.find(expressions, &(not Regex.match?(@claimed, &1))) ||
-      if String.contains?(literal, ["{", "}"]), do: "a bare { or }"
+      if String.contains?(literal, ["{", "}"]), do: "a brace outside any expression"
   end
 
   @doc """
