@@ -74,9 +74,23 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
   defp resp(msg), do: state() |> Server.handle_message(msg) |> elem(1)
 
+  # A caller's "params" merge INTO the base params (the _meta must survive a tools/call's
+  # name and arguments); everything else replaces.
+  defp merge_params(base, extra) do
+    {params, rest} = Map.pop(extra, "params", %{})
+    base |> Map.merge(rest) |> Map.update!("params", &Map.merge(&1, params))
+  end
+
   defp meta(method, version, extra \\ %{}) do
-    Map.merge(
-      %{"jsonrpc" => "2.0", "id" => 1, "method" => method, "_meta" => %{@vkey => version}},
+    merge_params(
+      %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => method,
+        "params" => %{
+          "_meta" => %{@vkey => version, "io.modelcontextprotocol/clientCapabilities" => %{}}
+        }
+      },
       extra
     )
   end
@@ -784,7 +798,11 @@ defmodule BeamMCP.ReadmeClaimsTest do
       "jsonrpc" => "2.0",
       "id" => 1,
       "method" => "tools/call",
-      "params" => %{"name" => "echo", "arguments" => %{"pad" => payload}}
+      "params" => %{
+        "name" => "echo",
+        "arguments" => %{"pad" => payload},
+        "_meta" => %{@vkey => @modern, "io.modelcontextprotocol/clientCapabilities" => %{}}
+      }
     })
   end
 

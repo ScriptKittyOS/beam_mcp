@@ -115,6 +115,7 @@ if Code.ensure_loaded?(Plug) do
 
     @modern_version "2026-07-28"
     @version_meta_key "io.modelcontextprotocol/protocolVersion"
+    @capabilities_meta_key "io.modelcontextprotocol/clientCapabilities"
     @protocol_header "mcp-protocol-version"
 
     # 1 MiB of decoded body. Without a cap, a request body is an unbounded allocation an
@@ -688,7 +689,9 @@ if Code.ensure_loaded?(Plug) do
     defp check_headers(conn, message, opts) do
       id = message["id"]
 
-      with :ok <- check_protocol_version(conn, message, id),
+      with :ok <- check_meta_position(message, id),
+           :ok <- check_protocol_version(conn, message, id),
+           :ok <- check_meta_fields(message, id),
            :ok <- check_method_header(conn, message, id),
            :ok <- check_name_header(conn, message, id),
            :ok <- check_param_headers(conn, message, id, opts) do
@@ -1024,15 +1027,74 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    # `_meta` is any JSON value once the body is an object, so a non-map one must be refused
-    # rather than reached into.
+    # WHERE _meta LIVES: `params._meta` (`RequestParams`), the schema's one position. Until
+    # 0.5.0 this transport read the message's top level and, when nothing was there, STAMPED
+    # a top-level `_meta` from the header before dispatch -- which masked the position for
+    # every HTTP consumer (measured: the spec's shape, the old shape and no `_meta` at all each
+    # got a modern result over HTTP, while over stdio the spec's shape got a legacy-shaped one).
+    # Nothing is stamped now: the header is matched to `params._meta`, and a body that lacks
+    # what the schema requires is refused here with 400, before the core sees it.
+    #
+    # `params` and `_meta` are any JSON value once the body is an object, so a non-map one
+    # must be refused rather than reached into.
     defp body_protocol_version(message) do
-      case message["_meta"] do
-        %{} = meta -> meta[@version_meta_key]
-        nil -> nil
-        _other -> :invalid
+      case message["params"] do
+        %{"_meta" => %{} = meta} -> meta[@version_meta_key]
+        %{"_meta" => _other} -> :invalid
+        _ -> nil
       end
     end
+
+    # A top-level `_meta` is not a compatibility mode: present, the request is refused by
+    # name whether or not `params._meta` is there too. Two accepted shapes would be
+    # permanent, and the wrong one would quietly outlive the right one.
+    defp check_meta_position(%{"_meta" => _}, id) do
+      {:mismatch, 400,
+       error(
+         id,
+         -32_602,
+         "Invalid params: _meta belongs in params._meta (2026-07-28 RequestParams), not at " <>
+           "the top level of the request"
+       )}
+    end
+
+    defp check_meta_position(_message, _id), do: :ok
+
+    # SEP-2575: a request missing a required `_meta` field is -32602 with 400. Requests only
+    # -- `NotificationParams` makes a notification's `_meta` optional, and the revision leaves
+    # notification POSTs' header requirements undefined; a notification is neither required
+    # to carry one nor refused for it. A request that carries `params._meta` naming the
+    # legacy revision is refused by the header comparison before this, so what reaches here
+    # names 2026-07-28 or nothing.
+    defp check_meta_fields(%{"id" => _} = message, id) do
+      meta =
+        case message["params"] do
+          %{"_meta" => %{} = meta} -> meta
+          _ -> %{}
+        end
+
+      cond do
+        not Map.has_key?(meta, @version_meta_key) ->
+          invalid_meta(
+            id,
+            "params._meta with io.modelcontextprotocol/protocolVersion is required on every request"
+          )
+
+        not Map.has_key?(meta, @capabilities_meta_key) ->
+          invalid_meta(
+            id,
+            "params._meta lacks io.modelcontextprotocol/clientCapabilities, which 2026-07-28 requires on every request"
+          )
+
+        true ->
+          :ok
+      end
+    end
+
+    defp check_meta_fields(_notification, _id), do: :ok
+
+    defp invalid_meta(id, message),
+      do: {:mismatch, 400, error(id, -32_602, "Invalid params: " <> message)}
 
     defp compare_versions([], _body_version, id) do
       {:mismatch, 400,
@@ -1165,12 +1227,8 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp do_dispatch(conn, message, opts) do
-      # The header is authoritative and mandatory here, so a body that omits `_meta` is still
-      # a modern request. Supplying it keeps handle_message/2 unchanged: the core decides era
-      # from the message, and the transport guarantees the message says so.
-      meta = Map.put(message["_meta"] || %{}, @version_meta_key, @modern_version)
-      message = Map.put(message, "_meta", meta)
-
+      # Nothing is stamped: `check_headers/3` has held the body's `params._meta` to the header
+      # and to the schema, so the core reads the era from the message the client actually sent.
       case Server.handle_message(Server.new(opts.server_opts), message) do
         {_state, nil} ->
           send_resp(conn, 202, "")

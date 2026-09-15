@@ -417,8 +417,11 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       "jsonrpc" => "2.0",
       "id" => id,
       "method" => "tools/call",
-      "params" => %{"name" => "echo", "arguments" => %{}},
-      "_meta" => %{@vkey => @modern},
+      "params" => %{
+        "name" => "echo",
+        "arguments" => %{},
+        "_meta" => %{@vkey => @modern, "io.modelcontextprotocol/clientCapabilities" => %{}}
+      },
       "pad" => String.duplicate("x", pad)
     })
   end

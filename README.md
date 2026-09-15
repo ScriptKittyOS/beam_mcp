@@ -268,7 +268,7 @@ Stated as a list rather than left to be inferred, because a transport that adver
 and does not enforce it is worse than one that never advertised it.
 
 **Implemented.** One POST endpoint; `MCP-Protocol-Version` required and matched against the
-body's `_meta`; `Mcp-Method`, `Mcp-Name` and `Mcp-Param-{Name}` required where the revision
+body's `params._meta`; `Mcp-Method`, `Mcp-Name` and `Mcp-Param-{Name}` required where the revision
 requires them and validated against the corresponding body values; `=?base64?…?=` header values
 decoded before comparison; `Origin` validated against a host-supplied allow list; a body size
 bound; `405` on non-POST; `404` for an unimplemented method and `200` with a JSON-RPC error for
@@ -314,7 +314,7 @@ one legacy revision.
 | | `2026-07-28` (modern) | `2025-11-25` (legacy) |
 |---|---|---|
 | opens with | any request, or `server/discover` | `initialize`, or `_meta` naming it |
-| version travels in | `_meta` on every request | the `initialize` params, or `_meta` |
+| version travels in | `params._meta` on every request | the `initialize` params, or `params._meta` |
 | session | none; each request stands alone | tracked, not enforced — see below |
 | `ping` | removed from the revision, refused | answered |
 | result envelope | `resultType` and `_meta` `serverInfo` | neither; both are `2026-07-28` additions |
@@ -322,8 +322,10 @@ one legacy revision.
 `server/discover`, `tools/list`, `tools/call`, `shutdown`, `exit` at both eras; `initialize`
 and `notifications/initialized` at legacy only.
 
-**A revision, not a carrier, decides the semantics.** `_meta` decides only that a request is
-served statelessly. Which revision the `_meta` *names* then decides the method table and the
+**A revision, not a carrier, decides the semantics.** `params._meta` — the request's `_meta`
+lives inside `params`, the schema's one position; a `_meta` at the top level of the request is
+refused as invalid params, not read as a fallback — decides only that a request is served
+statelessly. Which revision it *names* then decides the method table and the
 result envelope, so a `ping` declaring `2025-11-25` through `_meta` is answered and its result
 carries no `resultType`. This matters because `-32022` tells a client to pick from `supported`
 — which lists `2025-11-25` — and retry the request, so a `_meta` naming the legacy revision is

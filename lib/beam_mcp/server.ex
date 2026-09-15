@@ -52,6 +52,7 @@ defmodule BeamMCP.Server do
   @supported_versions [@modern_version, @legacy_version]
 
   @version_meta_key "io.modelcontextprotocol/protocolVersion"
+  @capabilities_meta_key "io.modelcontextprotocol/clientCapabilities"
   @server_info_meta_key "io.modelcontextprotocol/serverInfo"
   @default_server_name "beam_mcp"
   # Read from the application spec rather than restated here. A hardcoded copy beside the one
@@ -142,6 +143,25 @@ defmodule BeamMCP.Server do
      error(nil, -32_600, "Batch requests are not supported at any supported protocol version")}
   end
 
+  # WHERE _meta LIVES. `JSONRPCRequest` has no `_meta`; the request's `_meta` is
+  # `params._meta` (`RequestParams`, required in 2026-07-28 with the protocol version and the
+  # client capabilities inside it). Until 0.5.0 this package read the message's TOP LEVEL --
+  # and its own tests sent it there -- so a spec-following stdio client's version went unread
+  # and it was answered legacy-shaped while the server advertised modern. The top-level
+  # position is not a compatibility mode: present, it is refused by name, whether or not
+  # `params._meta` is there too, because two accepted shapes would be permanent and the wrong
+  # one would quietly outlive the right one. This clause runs before every other so that no
+  # method -- server/discover included -- is answered off a `_meta` in the wrong place.
+  def handle_message(state, %{"jsonrpc" => "2.0", "_meta" => _} = message) do
+    {state,
+     error(
+       message["id"],
+       -32_602,
+       "Invalid params: _meta belongs in params._meta (2026-07-28 RequestParams), not at " <>
+         "the top level of the request"
+     )}
+  end
+
   # server/discover is mandatory in 2026-07-28, and on stdio it doubles as the era probe: a
   # client sends it before it knows what it is talking to. So the CORE answers it whether or
   # not the request carries modern _meta -- the stdio exception. (The HTTP transport requires
@@ -191,9 +211,14 @@ defmodule BeamMCP.Server do
   # so a _meta naming the legacy revision is a message this server asks clients to send.
   def handle_message(
         state,
-        %{"jsonrpc" => "2.0", "id" => id, "_meta" => %{@version_meta_key => version}} = message
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "params" => %{"_meta" => %{@version_meta_key => version} = meta}
+        } =
+          message
       ) do
-    bare = Map.drop(message, ["_meta"])
+    bare = %{message | "params" => Map.delete(message["params"], "_meta")}
 
     # A revision the server does not ADVERTISE is not served either, whatever the core could
     # do: the HTTP transport narrows the list to 2026-07-28 and refuses the rest by header
@@ -202,14 +227,28 @@ defmodule BeamMCP.Server do
       @modern_version ->
         # ping was removed in 2026-07-28. The legacy handler below must not be inherited by a
         # request that declared the modern revision.
-        if message["method"] == "ping" do
-          {state, error(id, -32_601, "Method not found: ping")}
-        else
-          {next, response} = handle_message(state, bare)
-          # `next`, not `state`: modernise/2 reads only server_name today, which nothing
-          # mutates, so this is currently indistinguishable -- and would stop being so the
-          # moment any handler changed a field modernise/2 reads.
-          {next, modernise(response, next)}
+        cond do
+          # RequestParams requires the client's capabilities beside the version: a modern
+          # request without them is invalid params, named. (The version's own absence never
+          # reaches here -- it is the clause head.)
+          not Map.has_key?(meta, @capabilities_meta_key) ->
+            {state,
+             error(
+               id,
+               -32_602,
+               "Invalid params: params._meta lacks io.modelcontextprotocol/clientCapabilities, " <>
+                 "which 2026-07-28 requires on every request"
+             )}
+
+          message["method"] == "ping" ->
+            {state, error(id, -32_601, "Method not found: ping")}
+
+          true ->
+            {next, response} = handle_message(state, bare)
+            # `next`, not `state`: modernise/2 reads only server_name today, which nothing
+            # mutates, so this is currently indistinguishable -- and would stop being so the
+            # moment any handler changed a field modernise/2 reads.
+            {next, modernise(response, next)}
         end
 
       @legacy_version ->
@@ -220,6 +259,19 @@ defmodule BeamMCP.Server do
       _other ->
         {state, unsupported_version(state, id, version)}
     end
+  end
+
+  # A params._meta that names no protocol version is not a legacy request; it is an invalid
+  # one. (A legacy request either carries no _meta at all -- the initialize opener -- or names
+  # 2025-11-25 in it.)
+  def handle_message(state, %{"jsonrpc" => "2.0", "params" => %{"_meta" => %{} = meta}} = message)
+      when not is_map_key(meta, @version_meta_key) do
+    {state,
+     error(
+       message["id"],
+       -32_602,
+       "Invalid params: params._meta lacks io.modelcontextprotocol/protocolVersion"
+     )}
   end
 
   def handle_message(state, %{"jsonrpc" => "2.0", "method" => "notifications/initialized"}) do

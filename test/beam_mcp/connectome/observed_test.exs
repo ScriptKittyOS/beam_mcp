@@ -671,7 +671,14 @@ defmodule BeamMCP.Connectome.ObservedTest do
         "jsonrpc" => "2.0",
         "id" => 1,
         "method" => "tools/call",
-        "params" => %{"name" => "echo", "arguments" => %{"k" => "v"}}
+        "params" => %{
+          "name" => "echo",
+          "arguments" => %{"k" => "v"},
+          "_meta" => %{
+            "io.modelcontextprotocol/protocolVersion" => "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities" => %{}
+          }
+        }
       }
 
       conn =
