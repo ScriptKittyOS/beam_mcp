@@ -15,8 +15,9 @@ defmodule BeamMCP.PackageTest do
   `contents.tar.gz` is listed. The stanza is what we meant; the tarball is what a consumer
   gets. Three populations, none a hand list:
 
-  1. every file reachable by a relative link from `README.md` and `CHANGELOG.md`, following
-     links page to page, must be in the tarball (any relative target, not only `.md`);
+  1. every file reachable by a relative link from `README.md` and `CHANGELOG.md` -- inline,
+     reference-style or an HTML `href` -- following links page to page, must be in the
+     tarball (any relative target, not only `.md`);
   2. every tracked page under `docs/` (`git ls-files`) must be in the tarball -- a page added
      next year is caught whether or not anyone has linked it yet;
   3. every ExDoc extra (`docs: [extras: ...]` in `mix.exs`) must be in the tarball -- what
@@ -29,9 +30,11 @@ defmodule BeamMCP.PackageTest do
 
   @root Path.expand("../..", __DIR__)
   @roots ["README.md", "CHANGELOG.md"]
-  # A relative link: `](target)` where the target is neither a scheme nor a fragment. The
-  # optional `#fragment` after the path is dropped.
-  @relative_link ~r/\]\((?!https?:\/\/|#)([^)#\s]+)(?:#[^)]*)?\)/
+  # A relative link, in each form Markdown and HTML give it: inline `](target)`, a
+  # reference definition `[name]: target` at the start of a line, and an HTML `href="target"`.
+  # A target that names a scheme (`https://`, `mailto:`) or is only a fragment is not relative;
+  # a `#fragment` after the path is dropped.
+  @relative_link ~r/(?:\]\(|^\[[^\]]+\]:[ \t]*|href=")(?![a-z][a-z0-9+.-]*:|#)([^)"#\s]+)(?:#[^)"\s]*)?/m
 
   setup_all do
     dir =
@@ -117,7 +120,7 @@ defmodule BeamMCP.PackageTest do
   # project's own dependencies once the project loads (`prune_code_paths`, default true), and
   # the Hex archive is not one, so the task is not loadable from inside the test VM (measured:
   # `Mix.NoTaskError`). The subprocess is the command a release runs; the environment is
-  # passed through and is harmless either way, since `hex.build` compiles nothing.
+  # pinned to `test` and is harmless either way, since `hex.build` compiles nothing.
   defp tarball_entries(dir) do
     out = Path.join(dir, "package.tar")
 
