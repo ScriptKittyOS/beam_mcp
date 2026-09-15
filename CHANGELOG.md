@@ -11,6 +11,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the pages ship in the package
+
+- **`docs/` is in the Hex tarball.** The six pages the README links — the connectome
+  vocabulary, the canonical bytes, the observed graph, the diff, reach, and the
+  will-not-implement contract — were published to hexdocs but absent from the package, so a
+  consumer holding the tarball and not the repository had a README whose links named files
+  that were not there. They are there now, at `docs/*.md` beside the README, and a test holds
+  it against the **built** tarball rather than the `files:` stanza: every page reachable by a
+  relative link from the README or CHANGELOG, every tracked page under `docs/`, and every
+  ExDoc extra must be in what `mix hex.build` produces. The tarball grows by the six pages
+  (measured: 116,736 to 146,432 bytes; 22 to 28 entries). Nothing else in the package moves.
+
 ### Added — reachability, additive
 
 - **Reachability queries over a connectome graph.** `BeamMCP.Connectome.Reach` answers four
