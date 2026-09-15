@@ -20,8 +20,9 @@ All notable changes to this project are documented here. The format follows
   that were not there. They are there now, at `docs/*.md` beside the README, and a test holds
   it against the **built** tarball rather than the `files:` stanza: every page reachable by a
   relative link from the README or CHANGELOG, every tracked page under `docs/`, and every
-  ExDoc extra must be in what `mix hex.build` produces. The tarball grows by the six pages
-  (measured: 116,736 to 146,432 bytes; 22 to 28 entries). Nothing else in the package moves.
+  ExDoc extra must be in what `mix hex.build` produces. The tarball grows by the six pages,
+  22 entries to 28 (a byte count is not stated: this file ships in the tarball, so any byte
+  count written here moves the number it cites). Nothing else in the package moves.
 
 ### Added — reachability, additive
 
