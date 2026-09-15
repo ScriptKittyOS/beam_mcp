@@ -354,7 +354,7 @@ defmodule BeamMCP.Connectome.DiffTest do
                ~s({"classes":{"changed_sign":[{"declared_sign":"allow","from":")
              )
 
-      assert bytes =~ ~s("schema_version":1)
+      assert bytes =~ ~s("schema_version":2)
       assert bytes =~ ~s("observed_endpoint_declared":4,"observed_nodes":4)
 
       assert bytes =~
@@ -439,13 +439,13 @@ defmodule BeamMCP.Connectome.DiffTest do
     test "of the twenty-five pairs, exactly the twelve with two supplied and different signs are changed-sign" do
       for d <- @signs, o <- @signs do
         declared =
-          graph([srv(), tool("a")], [
-            edge(Node.id({:server, @server}), id("a"), :declared, sign: d)
+          graph([srv(), tool("s"), tool("a")], [
+            edge("s", "a", :declared, sign: d)
           ])
 
         observed =
-          graph([srv(), tool("a")], [
-            edge(Node.id({:server, @server}), id("a"), :observed, sign: o)
+          graph([srv(), tool("s"), tool("a")], [
+            edge("s", "a", :observed, sign: o)
           ])
 
         {:ok, diff} = Diff.run(declared, observed, window: @window)
@@ -460,26 +460,26 @@ defmodule BeamMCP.Connectome.DiffTest do
 
     test ":ungoverned against :deny is changed-sign; :unset against :ungoverned is not" do
       declared =
-        graph([srv(), tool("a")], [
-          edge(Node.id({:server, @server}), id("a"), :declared, sign: :ungoverned)
+        graph([srv(), tool("s"), tool("a")], [
+          edge("s", "a", :declared, sign: :ungoverned)
         ])
 
       observed =
-        graph([srv(), tool("a")], [
-          edge(Node.id({:server, @server}), id("a"), :observed, sign: :deny)
+        graph([srv(), tool("s"), tool("a")], [
+          edge("s", "a", :observed, sign: :deny)
         ])
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
       assert [%{declared_sign: :ungoverned, observed_sign: :deny}] = diff.classes.changed_sign
 
       declared =
-        graph([srv(), tool("a")], [
-          edge(Node.id({:server, @server}), id("a"), :declared, sign: :unset)
+        graph([srv(), tool("s"), tool("a")], [
+          edge("s", "a", :declared, sign: :unset)
         ])
 
       observed =
-        graph([srv(), tool("a")], [
-          edge(Node.id({:server, @server}), id("a"), :observed, sign: :ungoverned)
+        graph([srv(), tool("s"), tool("a")], [
+          edge("s", "a", :observed, sign: :ungoverned)
         ])
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
@@ -489,10 +489,10 @@ defmodule BeamMCP.Connectome.DiffTest do
 
     test "the standalone case -- :unset on both sides -- never produces a finding" do
       declared =
-        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :declared)])
+        graph([srv(), tool("s"), tool("a")], [edge("s", "a", :declared)])
 
       observed =
-        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :observed)])
+        graph([srv(), tool("s"), tool("a")], [edge("s", "a", :observed)])
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
       assert diff.classes.changed_sign == [] and diff.classes.observed_but_undeclared == []
@@ -504,14 +504,14 @@ defmodule BeamMCP.Connectome.DiffTest do
     # the sign, :ungoverned would become a way to hide drift.
     test "an observed edge nobody declared lands in observed_but_undeclared whatever the declared graph's signs" do
       declared =
-        graph([srv(), tool("a"), tool("b")], [
-          edge(Node.id({:server, @server}), id("a"), :declared, sign: :ungoverned)
+        graph([srv(), tool("s"), tool("a"), tool("b")], [
+          edge("s", "a", :declared, sign: :ungoverned)
         ])
 
       observed =
-        graph([srv(), tool("a"), tool("b")], [
-          edge(Node.id({:server, @server}), id("a"), :observed, sign: :ungoverned),
-          edge(Node.id({:server, @server}), id("b"), :observed, sign: :ungoverned)
+        graph([srv(), tool("s"), tool("a"), tool("b")], [
+          edge("s", "a", :observed, sign: :ungoverned),
+          edge("s", "b", :observed, sign: :ungoverned)
         ])
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
@@ -521,14 +521,14 @@ defmodule BeamMCP.Connectome.DiffTest do
 
     test "a declared :ungoverned edge is recorded exactly as any other: observed, it is declared_and_observed; never observed, it is dead authority" do
       declared =
-        graph([srv(), tool("a"), tool("b")], [
-          edge(Node.id({:server, @server}), id("a"), :declared, sign: :ungoverned),
-          edge(Node.id({:server, @server}), id("b"), :declared, sign: :ungoverned)
+        graph([srv(), tool("s"), tool("a"), tool("b")], [
+          edge("s", "a", :declared, sign: :ungoverned),
+          edge("s", "b", :declared, sign: :ungoverned)
         ])
 
       observed =
-        graph([srv(), tool("a"), tool("b")], [
-          edge(Node.id({:server, @server}), id("a"), :observed)
+        graph([srv(), tool("s"), tool("a"), tool("b")], [
+          edge("s", "a", :observed)
         ])
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
@@ -540,10 +540,10 @@ defmodule BeamMCP.Connectome.DiffTest do
 
     test "the record's schema_version is 2: its own axis, bumped for its own semantics" do
       declared =
-        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :declared)])
+        graph([srv(), tool("s"), tool("a")], [edge("s", "a", :declared)])
 
       observed =
-        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :observed)])
+        graph([srv(), tool("s"), tool("a")], [edge("s", "a", :observed)])
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
       assert diff.schema_version == 2

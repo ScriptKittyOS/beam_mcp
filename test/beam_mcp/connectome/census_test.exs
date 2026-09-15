@@ -121,6 +121,9 @@ defmodule BeamMCP.Connectome.CensusTest do
     "@type sign :: :allow | :deny | :hold | :ungoverned | :unset",
     "sign: sign()",
     "@signs [:allow, :deny, :hold, :ungoverned, :unset]",
+    # The typedoc names the one value the package writes and what it means; prose, by its
+    # exact text.
+    "@typedoc \"A policy's verdict on the edge; the package itself writes only `:unset`, which means no sign has been supplied to it.\"",
     "{:sign, &(&1 in @signs)}",
     # The serializer carries the sign OUT to bytes and to the exports, under its field name
     # (docs/connectome-canonical.md, rule 5). Each of these is a read of a built edge's

@@ -23,7 +23,9 @@ defmodule BeamMCP.Connectome.Graph do
 
   alias BeamMCP.Connectome.{Edge, Node}
 
-  @schema_version 1
+  # 2 since 0.5.0: the sign vocabulary changed (`unknown` -> `unset`, `ungoverned` added), so
+  # bytes at 1 and bytes at 2 read their signs against different vocabularies.
+  @schema_version 2
   @keys [:nodes, :edges, :schema_version]
   @required [:nodes, :edges, :schema_version]
 

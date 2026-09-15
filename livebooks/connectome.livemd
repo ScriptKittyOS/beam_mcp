@@ -182,7 +182,7 @@ The catalog's tools hang off the server node by `invoke` edges; its resource and
 are nodes with no edge, because the declared builder writes no `read` edge -- a resource
 declared is not a resource read. The modules and the `invoke` edges between them are what
 `:xref` found in the host's beams. Signs are the
-host's to populate and the package never does, so every edge here reads `unknown` in the
+host's to populate and the package never does, so every edge here reads `unset` in the
 JSON and the diagram draws none.
 
 ```elixir

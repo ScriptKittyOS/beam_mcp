@@ -71,6 +71,35 @@ All notable changes to this project are documented here. The format follows
   `params._meta` naming the same version as the header. Found by the official conformance
   suite's `server-stateless` scenario and by reading the schema it cites.
 
+### Changed — BREAKING: the sign vocabulary — `:unknown` is `:unset`, `:ungoverned` is added, and `schema_version` is `2`
+
+- **The one sign the package writes is `:unset`, not `:unknown`.** It means exactly this: no
+  sign has been supplied to this package. It does not mean no policy exists, spoke or was
+  computed — a host whose authority plane denied an edge, where that verdict never reached
+  this package, gets `:unset` on that edge, and a graph glossing that as "no policy has
+  spoken" (the 0.4.0 wording) would be wrong about the world. The graph is what a consumer
+  signs, so the word had to be the narrow true one. `BeamMCP.Connectome.Edge.check/1` refuses
+  `:unknown` by name.
+- **`:ungoverned` is a fifth value, a consumer's:** a consumer looked and no gate applies to
+  this edge. The package never treats it as suppression — the diff records the edge and its
+  sign exactly as any other, and a census holds that no code line filters, hides or downgrades
+  an edge by its sign. The sign is orthogonal to drift: an observed edge nobody declared is
+  `observed_but_undeclared` whatever its sign.
+- **Changed-sign is two authorities disagreeing.** A label in both graphs is `changed_sign`
+  when both signs are supplied — neither `:unset` — and they differ; held over all
+  twenty-five pairs. `:ungoverned` against `:deny` is a finding; `:unset` against
+  `:ungoverned` is not; `:unset` on both sides never is.
+- **`schema_version` is `2`** on the graph's bytes (the vocabulary the sign field is read
+  against) and, on its own axis, `2` on the diff record (its semantics). Published 0.4.0
+  bytes at `1` stay exactly as they were and their hashes stay verifiable; the version tells
+  a verifier which vocabulary applies (`docs/connectome-canonical.md`, *Versions*).
+  `BeamMCP.Connectome.Graph.new/1` refuses any version but `2`.
+- **How to tell whether you are affected:** if any code of yours pattern-matches or compares
+  an edge's `sign` against `:unknown`, reads `"sign":"unknown"` out of the bytes, or builds a
+  `%BeamMCP.Connectome.Graph{}` with `schema_version: 1`, it breaks; replace `:unknown` with
+  `:unset` and the version with `2`. Bytes you have already hashed and stored are unaffected.
+  No other value, field or order moved.
+
 ### Changed — on the wire, in `server/discover` and in what a transport advertises
 
 - **`server/discover` returns the `2026-07-28` `DiscoverResult` in full.** The schema requires

@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 The declared connectome is built from the tree. The observed one is built from what ran:
 the dispatch path emits, a collector the host starts turns emissions into edges, and a
-snapshot is a graph with `provenance: :observed` and every sign `:unknown`. What follows
+snapshot is a graph with `provenance: :observed` and every sign `:unset`. What follows
 is the contract a consumer attaches to and the bounds of what it sees.
 
 ## The events
@@ -55,7 +55,7 @@ public table with write concurrency; the owner holds the table's lifetime and is
 the hot path. Per-call cost is a number in the release notes, not a claim here.
 
 `snapshot/1` is the graph: one node per server and tool seen, one edge per row with the
-count as its weight, every sign `:unknown`, built through the same constructors as the
+count as its weight, every sign `:unset`, built through the same constructors as the
 declared side, on the same ids — the two graphs join on ids and on edge keys. Observed
 nodes carry no labels: the collector saw a call, not a catalog entry, so a declared tool
 node and its observed counterpart differ in `labels` while sharing an id. When no collector runs under the

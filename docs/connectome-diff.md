@@ -38,11 +38,16 @@ into one later.
 | `declared_and_observed` | in both graphs, and the signs are not both supplied and different | — |
 | `declared_never_observed` | in the declared graph only | **dead authority** |
 | `observed_but_undeclared` | in the observed graph only | a **drift finding** |
-| `changed_sign` | in both, with a sign the consumer supplied on **both** sides — neither `unknown` — and the two differ | a **drift finding** |
+| `changed_sign` | in both, with a sign the consumer supplied on **both** sides — neither `unset` — and the two differ: two authorities disagree | a **drift finding** |
 
-A sign on one side only is not a change: the package never guesses what the missing one
-would have been, so `allow` against `unknown` is `declared_and_observed`. Every label of
-either input lands in exactly one class; the four classes partition the union of the labels.
+A sign on one side only is not a change: `unset` is abstention, not a verdict, and the package
+never guesses what the missing one would have been, so `allow` against `unset` is
+`declared_and_observed` — a sign was acquired, not changed. `ungoverned` is a supplied value,
+so `ungoverned` against `deny` *is* changed-sign, and `unset` against `ungoverned` is not. The
+standalone case, `unset` on both sides, never produces a finding. Every label of either input
+lands in exactly one class; the four classes partition the union of the labels — and the sign
+never moves a label between classes: an observed edge nobody declared is drift whatever its
+sign, and a declared `ungoverned` edge is recorded like any other.
 
 ## The coverage bound, as counts
 
@@ -137,7 +142,7 @@ the same as lowercase hexadecimal, the form this page writes it in.
 
 Server `srv`, tools `a`, `b`, `c` on both sides. Declared: `a→b`, `a→c`, `c→a` (sign
 `allow`), `b→a` (sign `allow`). Observed: `a→b`, `b→c`, `c→a` (sign `deny`), `b→a` (sign
-`unknown`). Window `{"ended_at": "2026-09-14T01:00:00Z", "started_at":
+`unset`). Window `{"ended_at": "2026-09-14T01:00:00Z", "started_at":
 "2026-09-14T00:00:00Z"}`. The bytes (733 of them, one line):
 
 ```
@@ -146,7 +151,7 @@ Server `srv`, tools `a`, `b`, `c` on both sides. Declared: `a→b`, `a→c`, `c�
 
 SHA-256: `ea77f7c9439ef05dad5a7c49c728e032e2329b41778ef2f168c2989342665c17`. The four
 classes hold one label each but `declared_and_observed`, which holds two: `b→a` is there
-because its observed sign is `unknown`, not supplied.
+because its observed sign is `unset`, not supplied.
 
 ## What the diff does not do
 
