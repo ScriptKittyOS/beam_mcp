@@ -94,7 +94,7 @@ defmodule BeamMCP.Boundary.NoSessionTest do
     # The header name in any delimiter, or a session-id variable; the one allowance is the
     # transport's own denial, "no `Mcp-Session-Id`", by that exact phrase -- a backticked name
     # inside a string is still a hit.
-    hits = BeamMCP.Boundary.hits(~r/(?<!no `)mcp-session-id|session_id|:mcp_session/i)
+    hits = BeamMCP.Boundary.hits(~r/(?<!no `)mcp-session-id|session_?id|:mcp_session/i)
     assert hits == [], "session identifiers under lib/:\n  " <> BeamMCP.Boundary.format(hits)
   end
 end
