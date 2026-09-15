@@ -91,9 +91,10 @@ defmodule BeamMCP.Boundary.NoSessionTest do
   end
 
   test "no code line under lib/ reads or writes a session identifier" do
-    # The quoted header name as code would write it, or a session-id variable; the moduledoc
-    # that names `Mcp-Session-Id` to deny it is prose and is not a hit.
-    hits = BeamMCP.Boundary.hits(~r/"mcp-session-id"|session_id|:mcp_session/i)
+    # The header name in any delimiter but backticks (a string, a sigil, a charlist), or a
+    # session-id variable; the moduledoc that names `Mcp-Session-Id` in backticks to deny it is
+    # prose and is not a hit.
+    hits = BeamMCP.Boundary.hits(~r/(?<!`)mcp-session-id(?!`)|session_id|:mcp_session/i)
     assert hits == [], "session identifiers under lib/:\n  " <> BeamMCP.Boundary.format(hits)
   end
 end
