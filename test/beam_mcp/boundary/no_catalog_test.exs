@@ -6,47 +6,64 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   # The catalog and the dispatch are the host's, injected: no module under lib/ implements
   # `BeamMCP.Catalog` -- by `@behaviour` or by exporting `capabilities/0`, which is all
   # `Catalog.validate/1` asks, by `def` or `defdelegate` -- and nothing under lib/ builds a
-  # `%BeamMCP.ToolSpec{}` value: not as a literal in any field order or across any lines, not as
-  # a `%{__struct__: ...}` map or a `Map.put(_, :__struct__, _)`, not through `struct/2`,
-  # `struct!/2` or `__struct__/1`, and not as `%__MODULE__{}` inside the struct's own module.
-  # Every shape is read from the AST, where a clause-head pattern and a `match?/2` are matches
-  # and everything else is a construction. The struct is defined there, matched there, and never
-  # constructed there. The catalog is called through one callee, `capabilities/0`, at a counted
-  # number of sites -- and every call through a variable module under lib/ is one of them.
+  # `%BeamMCP.ToolSpec{}` value, in any spelling: the census reads the COMPILED forms, where a
+  # struct pattern is the one place the module's atom may appear. The struct is defined there,
+  # matched there, and never constructed there. The catalog is called through one callee,
+  # `capabilities/0`, at three sites -- and, from the artefact, every call through a module known
+  # only at runtime is one of them.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
   @implements ~r/@behaviour\s+BeamMCP\.Catalog\b|@behaviour\s+Catalog\b|\bdef(p|delegate|macro)?\s+capabilities\b/
-  @tool_spec [[:ToolSpec], [:BeamMCP, :ToolSpec]]
-  # A call on a lowercase variable as a module: `catalog.capabilities()`, never `:ets.new(` or
-  # `Enum.map(` (a colon or a capital before the dot), never `f.(x)` (an anonymous function).
-  @variable_module_call ~r/(?<![:\w.@])[a-z_]\w*\.[a-z_]\w*\(/
 
   test "no module under lib/ implements BeamMCP.Catalog" do
     hits = Boundary.hits(@implements)
     assert hits == [], "a catalog under lib/:\n  " <> Boundary.format(hits)
     # And the behaviour is there to implement: the census is not reading an empty tree.
     assert Boundary.hits(~r/@callback capabilities\(\)/) != []
+    # From the artefact: no module compiled from lib/ exports capabilities/0.
+    exporters = for m <- Boundary.lib_modules(), function_exported?(m, :capabilities, 0), do: m
+    assert exporters == [], "modules under lib/ exporting capabilities/0: #{inspect(exporters)}"
   end
 
   test "no line under lib/ constructs a tool" do
-    built = Boundary.struct_constructions(@tool_spec)
+    # In the compiled forms the alias is resolved, a pattern's fields are `map_field_exact` and
+    # a literal's are `map_field_assoc`, and `struct/2`, `Map.put/3`, a pipe, a variable bound
+    # to the module and `%{m | __struct__: _}` all leave the atom somewhere that is not a
+    # pattern. Compiler-generated sites (module_info, the struct's own __struct__/0,1) are not
+    # read. So: at every real site, the atom is a pattern's `__struct__`.
+    real =
+      for {m, loc, ctx} <- Boundary.atom_sites(BeamMCP.ToolSpec),
+          not Boundary.generated?(loc),
+          do: {m, loc, ctx}
 
-    assert built == [],
-           "a ToolSpec constructed under lib/:\n  " <>
-             Enum.map_join(built, "\n  ", fn {p, l} -> "#{p}:#{l}" end)
+    not_patterns = for {_, _, ctx} = site <- real, ctx != {:pattern, :__struct__}, do: site
+
+    assert not_patterns == [],
+           "BeamMCP.ToolSpec used other than as a pattern under lib/:\n  " <>
+             Enum.map_join(not_patterns, "\n  ", &inspect/1)
 
     # The reader sees the struct where it is matched, or it is reading nothing.
-    assert Boundary.hits(~r/%(BeamMCP\.)?ToolSpec\{/) != []
+    assert length(real) >= 4
   end
 
   test "the catalog is called through one callee, capabilities/0, at three sites" do
-    sites = Boundary.hits(~r/\.capabilities\(\)/)
-    assert length(sites) == 3, "capabilities/0 call sites:\n  " <> Boundary.format(sites)
-    others = Boundary.hits(@variable_module_call) -- sites
+    # From the artefact: every call whose module is only known at runtime and whose function
+    # is named (`:"$M_EXPR"` with a real function; a `:"$F_EXPR"` is a function value -- the
+    # dispatch, the hooks) is `capabilities/0`, and there are three of them.
+    {_edges, unresolved} = Boundary.xref()
+    named = for {from, {:"$M_EXPR", f, a}} <- unresolved, f != :"$F_EXPR", do: {from, f, a}
 
-    assert others == [],
-           "a call through a variable module other than the catalog:\n  " <>
-             Boundary.format(others)
+    assert Enum.sort(named) == [
+             {{BeamMCP.Catalog, :tools, 1}, :capabilities, 0},
+             {{BeamMCP.Catalog, :validate_shape, 1}, :capabilities, 0},
+             {{BeamMCP.Connectome.Declared, :read_catalog, 2}, :capabilities, 0}
+           ],
+           "calls through a variable module:\n  " <> Enum.map_join(named, "\n  ", &inspect/1)
+
+    sites = Boundary.hits(~r/\.capabilities\(\)/)
+
+    assert length(sites) == 3,
+           "capabilities/0 call sites in the text:\n  " <> Boundary.format(sites)
   end
 end

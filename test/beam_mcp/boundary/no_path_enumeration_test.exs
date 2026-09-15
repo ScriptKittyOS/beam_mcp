@@ -11,9 +11,10 @@ defmodule BeamMCP.Boundary.NoPathEnumerationTest do
   alias BeamMCP.Boundary
 
   @refusal ~s|def all_paths(%Graph{}, _from, _to, _opts \\\\ []), do: {:error, {:refused, :all_paths}}|
-  # Any function whose name carries motif, isomorph or subgraph, and any whose name ends in
-  # `paths` (plural: the singular `path/4` builds one witness). `all_paths` is the refusal above.
-  @matcher ~r/\bdef(p|macro|macrop|delegate)?\s+(\w*(motif|isomorph|subgraph)\w*|(?!all_paths\b)\w*paths)\b/
+  # Any function whose name carries motif, isomorph, subgraph, path or walk -- except reach's
+  # own `path/4` (one witness) and `walk/5` (one dominator pass), by those exact names, and
+  # `all_paths`, which is the refusal above.
+  @matcher ~r/\bdef(p|macro|macrop|delegate)?\s+(?!(all_paths|path|walk)\b)\w*(motif|isomorph|subgraph|path|walk)\w*/
 
   test "the only definition of all_paths under lib/ is the refusal, and no motif matcher is defined" do
     defs = Boundary.hits(~r/\bdef(p|macro|macrop|delegate)?\s+all_paths\b/)
