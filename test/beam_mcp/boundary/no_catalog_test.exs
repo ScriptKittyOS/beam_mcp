@@ -5,19 +5,22 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   # boundary: holds no tools, no domain, no concrete catalog
   # The catalog and the dispatch are the host's, injected: no module under lib/ implements
   # `BeamMCP.Catalog` -- by `@behaviour` or by exporting `capabilities/0`, which is all
-  # `Catalog.validate/1` asks -- and nothing under lib/ builds a `%BeamMCP.ToolSpec{}` value: not
-  # as a literal in any field order or across any lines, not as a `%{__struct__: ...}` map, not
-  # through `struct/2`, `struct!/2` or `__struct__/1`. The literal is read from the AST, where a
-  # clause-head pattern and a `match?/2` are matches and everything else is a construction. The
-  # struct is defined there, matched there, and never constructed there. The catalog is called
-  # through one callee, `capabilities/0`, at a counted number of sites, so that a fourth has to
-  # be named on the page.
+  # `Catalog.validate/1` asks, by `def` or `defdelegate` -- and nothing under lib/ builds a
+  # `%BeamMCP.ToolSpec{}` value: not as a literal in any field order or across any lines, not as
+  # a `%{__struct__: ...}` map or a `Map.put(_, :__struct__, _)`, not through `struct/2`,
+  # `struct!/2` or `__struct__/1`, and not as `%__MODULE__{}` inside the struct's own module.
+  # Every shape is read from the AST, where a clause-head pattern and a `match?/2` are matches
+  # and everything else is a construction. The struct is defined there, matched there, and never
+  # constructed there. The catalog is called through one callee, `capabilities/0`, at a counted
+  # number of sites -- and every call through a variable module under lib/ is one of them.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
-  @implements ~r/@behaviour\s+BeamMCP\.Catalog\b|@behaviour\s+Catalog\b|\bdefp?\s+capabilities\b/
+  @implements ~r/@behaviour\s+BeamMCP\.Catalog\b|@behaviour\s+Catalog\b|\bdef(p|delegate|macro)?\s+capabilities\b/
   @tool_spec [[:ToolSpec], [:BeamMCP, :ToolSpec]]
-  @by_function ~r/\bstruct!?\(\s*(BeamMCP\.)?ToolSpec\b/
+  # A call on a lowercase variable as a module: `catalog.capabilities()`, never `:ets.new(` or
+  # `Enum.map(` (a colon or a capital before the dot), never `f.(x)` (an anonymous function).
+  @variable_module_call ~r/(?<![:\w.@])[a-z_]\w*\.[a-z_]\w*\(/
 
   test "no module under lib/ implements BeamMCP.Catalog" do
     hits = Boundary.hits(@implements)
@@ -27,8 +30,6 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   end
 
   test "no line under lib/ constructs a tool" do
-    hits = Boundary.hits(@by_function)
-    assert hits == [], "a tool built under lib/:\n  " <> Boundary.format(hits)
     built = Boundary.struct_constructions(@tool_spec)
 
     assert built == [],
@@ -42,6 +43,10 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   test "the catalog is called through one callee, capabilities/0, at three sites" do
     sites = Boundary.hits(~r/\.capabilities\(\)/)
     assert length(sites) == 3, "capabilities/0 call sites:\n  " <> Boundary.format(sites)
-    assert Boundary.hits(~r/\bcatalog\.\w+\(|\bmodule\.\w+\(/) -- sites == []
+    others = Boundary.hits(@variable_module_call) -- sites
+
+    assert others == [],
+           "a call through a variable module other than the catalog:\n  " <>
+             Boundary.format(others)
   end
 end
