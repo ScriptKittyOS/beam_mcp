@@ -67,9 +67,10 @@ beam and is outside every artefact census; the text holds that line instead, by 
 census's patterns are the list**; this paragraph names their classes, not their spellings. The
 classes: macro and guard definitions, `quote`, `unquote`, `unquote_splicing`; the Elixir and
 Erlang evaluators and compilers (`Code` except `Code.ensure_*`, `:elixir`, `:elixir_*`,
-`:compile`, `:erl_eval`, `:erl_parse`, `:erl_scan`, `EEx`, `Mix`); the `:code` loaders; the
-readers of the environment and the disk (`:os`, `File`, `:file`, `:prim_file`, `:filelib`,
-`Path.wildcard`, `:init`, and twelve named readers on `System` and `Application`); a quoted
+`:compile`, `:erl_eval`, `:erl_parse`, `:erl_scan`, `EEx`, `Mix`); the four `:code` loaders
+(`load_*`, `atomic_load`, `prepare_loading`, `finish_loading`); the readers of the environment
+and the disk (`:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`, `Path.wildcard`,
+`:init.`, and twelve named readers on `System` and `Application`); a quoted
 atom carrying an escape, a word sigil that makes atoms, and the Erlang names above in quotes;
 and every `import`, `alias` or `require` that would bring any of these in under another name,
 across lines. Two allowances by exact line: the package's own version read from `mix.exs`, and
