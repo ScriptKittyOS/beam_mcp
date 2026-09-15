@@ -73,7 +73,17 @@ defmodule BeamMCP.Fixture.Livebook do
 
   # Three calls to echo, one to write, one to the undeclared probe, through the one dispatch
   # site the span is on; the collector's table is the observed graph.
+  #
+  # SERIALISED ACROSS THE NODE. The collector is node-wide, so two exporters running at once
+  # -- two async test modules both calling exports/0 -- see each other's `fx` calls and export
+  # weights of 4 and 6 instead of 3 (measured: a one-in-many flake in a mutation pass, then
+  # reproduced deterministically with two tasks). The lock makes one exporter's calls the only
+  # `fx` calls on the node while its collector is attached.
   defp observe do
+    :global.trans({{__MODULE__, :fx}, self()}, &collect/0, [node()], :infinity)
+  end
+
+  defp collect do
     name = Module.concat(__MODULE__, :"c#{System.unique_integer([:positive])}")
     {:ok, pid} = Observed.start_link(name: name)
 
