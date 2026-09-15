@@ -13,22 +13,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Added — the pages ship in the package
 
-- **`docs/` is in the Hex tarball.** The six pages the README links — the connectome
-  vocabulary, the canonical bytes, the observed graph, the diff (these four in 0.4.0), reach
-  and the will-not-implement contract (new in this release) — were rendered on hexdocs but
-  absent from the package. Where that showed: hex.pm's package page renders the README with
-  each relative link resolved to the package preview (`repo.hex.pm/preview/beam_mcp/<version>/
-  <path>`), which serves the tarball's own files — so `mix.exs` and `lib/` opened and every
-  `docs/` link was a 404 (measured on 0.4.0); a consumer with the package on disk
-  (`deps/beam_mcp/` after `mix deps.get`) had the same dead paths. On hexdocs the links were
-  already rewritten to the rendered pages and are unchanged. Now the pages are in the tarball
-  at `docs/*.md`, so both the hex.pm render and the on-disk package resolve them, and a test
-  holds it against the **built** tarball rather than the `files:` stanza: every file reachable
-  by a relative link (inline, reference-style or an HTML `href`) from the README or CHANGELOG,
-  every tracked page under `docs/`, and every ExDoc extra must be in what `mix hex.build`
-  produces. The tarball grows by the six pages, 22 entries to 28 (a byte count is not stated:
-  this file ships in the tarball, so any byte count written here moves the number it cites).
-  No other entry is added or removed.
+- **`docs/` is in the Hex tarball.** The six pages the README links were absent from the
+  package: the connectome vocabulary, the canonical bytes, the observed graph and the diff,
+  which 0.4.0 rendered on hexdocs and did not ship; and reach and the will-not-implement
+  contract, new in this release. Where that showed: hex.pm's package page renders the README
+  with each relative link resolved to the package preview
+  (`repo.hex.pm/preview/beam_mcp/<version>/<path>`), which serves the tarball's own files (a
+  probe of `mix.exs` there answers 200) — so every `docs/` link on 0.4.0's page was a 404
+  (measured); a consumer with the package on disk (`deps/beam_mcp/` after `mix deps.get`)
+  had the same dead paths. On hexdocs the links were already rewritten to the rendered pages
+  and are unchanged. Now the pages are in the tarball at `docs/*.md`, so both the hex.pm
+  render and the on-disk package resolve them, and a test holds it against the **built**
+  tarball rather than the `files:` stanza: every file reachable by a relative link (inline,
+  reference-style or an HTML `href`) from the README or CHANGELOG, every tracked page under
+  `docs/`, and every ExDoc extra must be in what `mix hex.build` produces. The tarball grows
+  by the six pages (0.4.0 shipped 21 entries; this release ships 28, the seventh new entry
+  being the reach module credited below; a byte count is not stated, since this file ships in
+  the tarball and any byte count written here moves the number it cites). No other entry is
+  added or removed.
 
 ### Added — reachability, additive
 
