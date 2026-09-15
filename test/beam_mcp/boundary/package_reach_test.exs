@@ -13,7 +13,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
   alias BeamMCP.Boundary
 
   # The modules called from lib/ that are not themselves compiled from lib/. `:"$M_EXPR"` is a
-  # module known only at runtime -- the host's catalog, held to one callee elsewhere.
+  # module known only at runtime -- the host's catalog, held to two callees elsewhere.
   @modules [
     :"$M_EXPR",
     Access,

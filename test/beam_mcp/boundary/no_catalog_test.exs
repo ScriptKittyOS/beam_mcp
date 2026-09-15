@@ -8,9 +8,9 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   # `Catalog.validate/1` asks, by `def` or `defdelegate` -- and nothing under lib/ builds a
   # `%BeamMCP.ToolSpec{}` value, in any spelling: the census reads the COMPILED forms, where a
   # struct pattern is the one place the module's atom may appear. The struct is defined there,
-  # matched there, and never constructed there. The catalog is called through one callee,
-  # `capabilities/0`, at three sites -- and, from the artefact, every call through a module known
-  # only at runtime is one of them.
+  # matched there, and never constructed there. The catalog is called through two callees,
+  # `capabilities/0` at four sites and `read_resource/1` at one -- and, from the artefact, every
+  # call through a module known only at runtime is one of those five.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
