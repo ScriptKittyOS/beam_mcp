@@ -62,21 +62,20 @@ port = String.to_integer(System.get_env("PORT", "4321"))
 
 {:ok, _} =
   Bandit.start_link(
-    plug:
-      {
-        BeamMCP.Transport.HTTP,
-        # The suite's dns-rebinding scenario expects localhost origins accepted and others
-        # refused; the list is what a local harness legitimately allows.
-        catalog: BeamMCP.Conformance.Catalog,
-        dispatch: dispatch,
-        authorize: fn _conn -> :ok end,
-        allowed_origins: [
-          "http://localhost",
-          "http://127.0.0.1",
-          "http://localhost:#{port}",
-          "http://127.0.0.1:#{port}"
-        ]
-      },
+    plug: {
+      BeamMCP.Transport.HTTP,
+      # The suite's dns-rebinding scenario expects localhost origins accepted and others
+      # refused; the list is what a local harness legitimately allows.
+      catalog: BeamMCP.Conformance.Catalog,
+      dispatch: dispatch,
+      authorize: fn _conn -> :ok end,
+      allowed_origins: [
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:#{port}",
+        "http://127.0.0.1:#{port}"
+      ]
+    },
     port: port,
     ip: {127, 0, 0, 1}
   )
