@@ -32,6 +32,30 @@ All notable changes to this project are documented here. The format follows
 - **`BeamMCP.Connectome.Edge.kinds/0`** — the edge vocabulary from one site.
 - **Nothing on the wire changes.** No method, field or capability is added.
 
+### Changed — BREAKING: the request `_meta` is read where the schema puts it, `params._meta`
+
+- **A request's `_meta` lives in `params._meta`, and nowhere else.** `JSONRPCRequest` has no
+  `_meta` property; `RequestParams` requires one in `2026-07-28`, with
+  `io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities`
+  inside it. From `0.3.0` to `0.4.0` this package read the message's **top level** — and its
+  own tests sent it there — so a spec-following `2026-07-28` client over stdio had its version
+  go unread and was answered legacy-shaped while the server advertised modern; over HTTP the
+  transport stamped a top-level `_meta` from the header before dispatch, which masked the
+  position for every HTTP consumer (measured: the spec's shape, the old shape and no `_meta`
+  at all each got a modern result). Now: the core reads `params._meta`; a top-level `_meta` is
+  refused with `-32602`, present with or without `params._meta` — the old position is not a
+  compatibility mode, because two accepted shapes would be permanent; a `params._meta` without
+  `clientCapabilities` on a modern request is `-32602`; over HTTP the header is matched to
+  `params._meta`, nothing is stamped, and a request whose `params._meta` is missing or lacks a
+  required field is `-32602` with HTTP 400 (SEP-2575). A notification's `_meta` stays optional.
+  **How to tell whether you are affected:** if your client puts `"_meta"` beside `"method"` in
+  the request object, it now gets `-32602 Invalid params: _meta belongs in params._meta`; move
+  it inside `"params"` — `{"method": "tools/call", "params": {"name": ..., "arguments": ...,
+  "_meta": {...}}}` — and, for `2026-07-28`, include `clientCapabilities` in it. Over HTTP, a
+  client that sent no `_meta` and relied on the header now gets `-32602` with 400; send
+  `params._meta` naming the same version as the header. Found by the official conformance
+  suite's `server-stateless` scenario and by reading the schema it cites.
+
 ### Changed — on the wire, in `server/discover` and in what a transport advertises
 
 - **`server/discover` returns the `2026-07-28` `DiscoverResult` in full.** The schema requires

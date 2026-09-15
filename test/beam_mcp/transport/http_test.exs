@@ -98,9 +98,29 @@ defmodule BeamMCP.Transport.HTTPTest do
 
   defp body!(conn), do: Jason.decode!(conn.resp_body)
 
+  # A caller's "params" merge INTO the base params (the _meta must survive a tools/call's
+  # name and arguments); everything else replaces.
+  defp merge_params(base, extra) do
+    case Map.pop(extra, "params", %{}) do
+      {%{} = params, rest} ->
+        base |> Map.merge(rest) |> Map.update!("params", &Map.merge(&1, params))
+
+      # A test that sends a non-map params sends exactly that.
+      {other, rest} ->
+        base |> Map.merge(rest) |> Map.put("params", other)
+    end
+  end
+
   defp msg(method, extra \\ %{}) do
-    Map.merge(
-      %{"jsonrpc" => "2.0", "id" => 1, "method" => method, "_meta" => %{@vkey => @modern}},
+    merge_params(
+      %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => method,
+        "params" => %{
+          "_meta" => %{@vkey => @modern, "io.modelcontextprotocol/clientCapabilities" => %{}}
+        }
+      },
       extra
     )
   end
@@ -493,7 +513,13 @@ defmodule BeamMCP.Transport.HTTPTest do
       # FunctionClauseError in Access.get/3, outside the rescue, producing the bare empty 500
       # this module exists to avoid -- one JSON scalar away from the crash path a test covers.
       for meta <- ["x", 7, [1, 2], true] do
-        body = %{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list", "_meta" => meta}
+        body = %{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "tools/list",
+          "params" => %{"_meta" => meta}
+        }
+
         conn = post(body, [{@hdr, @modern}, {"mcp-method", "tools/list"}])
 
         assert conn.status == 400, "a _meta of #{inspect(meta)} should be refused, not crash"
@@ -614,7 +640,7 @@ defmodule BeamMCP.Transport.HTTPTest do
         post(%{
           "jsonrpc" => "2.0",
           "method" => "notifications/initialized",
-          "_meta" => %{@vkey => @modern}
+          "params" => %{"_meta" => %{@vkey => @modern}}
         })
 
       assert conn.status == 202
@@ -1083,7 +1109,11 @@ defmodule BeamMCP.Transport.HTTPTest do
 
   describe "the notification exemption is a relaxation, so it is pinned both ways" do
     test "a notification without Mcp-Method is served" do
-      notification = %{"jsonrpc" => "2.0", "method" => "exit", "_meta" => %{@vkey => @modern}}
+      notification = %{
+        "jsonrpc" => "2.0",
+        "method" => "exit",
+        "params" => %{"_meta" => %{@vkey => @modern}}
+      }
 
       assert post(notification, [{@hdr, @modern}]).status == 202
     end
@@ -1092,7 +1122,11 @@ defmodule BeamMCP.Transport.HTTPTest do
       # The revision leaves header requirements for notification POSTs undefined, which is a
       # reason not to REQUIRE the header -- not a reason to accept one that disagrees with the
       # body. An id-less request with a lying Mcp-Method was answered 202.
-      notification = %{"jsonrpc" => "2.0", "method" => "exit", "_meta" => %{@vkey => @modern}}
+      notification = %{
+        "jsonrpc" => "2.0",
+        "method" => "exit",
+        "params" => %{"_meta" => %{@vkey => @modern}}
+      }
 
       conn = post(notification, [{@hdr, @modern}, {"mcp-method", "tools/call"}])
 
@@ -1486,7 +1520,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     # Deliberately not what `Jason.encode!` produces: padded spaces, a newline, and `params`
     # written before `id`. Any decode/re-encode round trip normalises all three, so a hook
     # receiving this unchanged proves it was handed the client's bytes.
-    @odd_body ~s({"jsonrpc":"2.0" ,  "method":"tools/call",\n  "params":{"name":"echo","arguments":{}}, "id":7})
+    @odd_body ~s({"jsonrpc":"2.0" ,  "method":"tools/call",\n  "params":{"name":"echo","arguments":{}, "_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}, "id":7})
 
     test "the hook receives the request body byte-identically, not a re-encoding" do
       # THE POINT OF THIS TEST. A signature covers bytes. A hook handed
@@ -1659,7 +1693,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       notification = %{
         "jsonrpc" => "2.0",
         "method" => "notifications/initialized",
-        "_meta" => %{@vkey => @modern}
+        "params" => %{"_meta" => %{@vkey => @modern}}
       }
 
       conn = post(notification, [{@hdr, @modern}, {"mcp-method", "notifications/initialized"}])
@@ -1691,7 +1725,7 @@ defmodule BeamMCP.Transport.HTTPTest do
         "jsonrpc" => "2.0",
         "id" => 1,
         "method" => "tools/list",
-        "_meta" => %{@vkey => huge}
+        "params" => %{"_meta" => %{@vkey => huge}}
       }
 
       conn = post(body, [{@hdr, "1"}, {"mcp-method", "tools/list"}])

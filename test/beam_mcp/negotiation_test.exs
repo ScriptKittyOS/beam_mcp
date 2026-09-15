@@ -49,15 +49,24 @@ defmodule BeamMCP.NegotiationTest do
   # both era branches, so it is the input that covers them.
   defp send_for_state(msg), do: state() |> Server.handle_message(msg) |> elem(0)
 
+  # A caller's "params" merge INTO the base params (the _meta must survive a tools/call's
+  # name and arguments); everything else replaces.
+  defp merge_params(base, extra) do
+    {params, rest} = Map.pop(extra, "params", %{})
+    base |> Map.merge(rest) |> Map.update!("params", &Map.merge(&1, params))
+  end
+
   defp modern(method, extra \\ %{}) do
-    Map.merge(
+    merge_params(
       %{
         "jsonrpc" => "2.0",
         "id" => 1,
         "method" => method,
-        "_meta" => %{
-          "io.modelcontextprotocol/protocolVersion" => @modern,
-          "io.modelcontextprotocol/clientCapabilities" => %{}
+        "params" => %{
+          "_meta" => %{
+            "io.modelcontextprotocol/protocolVersion" => @modern,
+            "io.modelcontextprotocol/clientCapabilities" => %{}
+          }
         }
       },
       extra
@@ -68,12 +77,12 @@ defmodule BeamMCP.NegotiationTest do
   # advice on -32022 produces exactly this message: pick from `supported` and retry the
   # request. `supported` here is ["2026-07-28", "2025-11-25"].
   defp legacy_meta(method, extra \\ %{}) do
-    Map.merge(
+    merge_params(
       %{
         "jsonrpc" => "2.0",
         "id" => 1,
         "method" => method,
-        "_meta" => %{"io.modelcontextprotocol/protocolVersion" => @legacy}
+        "params" => %{"_meta" => %{"io.modelcontextprotocol/protocolVersion" => @legacy}}
       },
       extra
     )
@@ -132,7 +141,7 @@ defmodule BeamMCP.NegotiationTest do
         Server.handle_message(
           state,
           modern("tools/list", %{
-            "_meta" => %{"io.modelcontextprotocol/protocolVersion" => @legacy}
+            "params" => %{"_meta" => %{"io.modelcontextprotocol/protocolVersion" => @legacy}}
           })
         )
 
@@ -283,7 +292,7 @@ defmodule BeamMCP.NegotiationTest do
       msg =
         put_in(
           modern("tools/list"),
-          ["_meta", "io.modelcontextprotocol/protocolVersion"],
+          ["params", "_meta", "io.modelcontextprotocol/protocolVersion"],
           "1900-01-01"
         )
 
