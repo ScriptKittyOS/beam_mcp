@@ -1051,8 +1051,8 @@ defmodule BeamMCP.Transport.HTTPTest do
         post_dup(body, [{@hdr, @modern}, {@hdr, "1999-01-01"}, {"mcp-method", "tools/list"}])
 
       data = body!(conn)["error"]["data"]
-      assert data["requested"] == ["1999-01-01"]
-      refute @modern in data["requested"]
+      assert data["requested"] == "1999-01-01"
+      refute data["requested"] == @modern
     end
   end
 

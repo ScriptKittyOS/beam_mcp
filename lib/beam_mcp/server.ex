@@ -72,6 +72,7 @@ defmodule BeamMCP.Server do
           server_name: String.t(),
           shutdown?: boolean(),
           catalog: module(),
+          supported_versions: [String.t(), ...],
           tools_cache_scope: String.t(),
           tools_ttl_ms: non_neg_integer()
         }
@@ -86,6 +87,8 @@ defmodule BeamMCP.Server do
     dispatch: "a function of three arguments, or absent",
     dispatch_opts: "a keyword list",
     server_name: "a string",
+    supported_versions:
+      "a non-empty list of the revisions this package implements, in the order to advertise them",
     tools_ttl_ms: "a non-negative integer",
     tools_cache_scope: "a string"
   ]
@@ -94,6 +97,10 @@ defmodule BeamMCP.Server do
   defp valid?(:dispatch, value), do: is_nil(value) or is_function(value, 3)
   defp valid?(:dispatch_opts, value), do: Keyword.keyword?(value)
   defp valid?(:server_name, value), do: is_binary(value)
+
+  defp valid?(:supported_versions, value),
+    do: is_list(value) and value != [] and Enum.all?(value, &(&1 in @supported_versions))
+
   defp valid?(:tools_ttl_ms, value), do: is_integer(value) and value >= 0
   defp valid?(:tools_cache_scope, value), do: is_binary(value)
 
@@ -108,6 +115,11 @@ defmodule BeamMCP.Server do
       server_name: Keyword.get(opts, :server_name, @default_server_name),
       shutdown?: false,
       catalog: fetch_catalog!(opts),
+      # The revisions this server ADVERTISES -- in server/discover and in -32022's `supported`.
+      # The core implements both; a transport that serves one must say so (the HTTP transport
+      # refuses 2025-11-25 on every POST, so it passes [2026-07-28]): advertising a revision
+      # the transport will not serve is the opposite of honesty. Dual-era is a stdio fact.
+      supported_versions: Keyword.get(opts, :supported_versions, @supported_versions),
       # 2026-07-28 requires ttlMs and cacheScope on tools/list results. Neither is the
       # package's to invent: ttlMs is a freshness hint about a catalog the host owns, and
       # cacheScope is a disclosure decision -- "public" lets shared intermediaries cache a
@@ -131,22 +143,31 @@ defmodule BeamMCP.Server do
   end
 
   # server/discover is mandatory in 2026-07-28, and on stdio it doubles as the era probe: a
-  # client sends it before it knows what it is talking to. So it is answered whether or not
-  # the request carries modern _meta.
+  # client sends it before it knows what it is talking to. So the CORE answers it whether or
+  # not the request carries modern _meta -- the stdio exception. (The HTTP transport requires
+  # a version on every POST and refuses a headerless one before this is reached: not an HTTP
+  # exception.) The result is the schema's DiscoverResult: cacheScope, capabilities,
+  # resultType, supportedVersions and ttlMs are all required, and serverInfo left the body
+  # for the result's _meta in spec PR #3002. It was undecorated until 0.5.0 -- a probe
+  # shortcut, and a result a client could read as legacy. ttlMs 0 and cacheScope "private"
+  # because nothing here caches and the non-permissive default is the honest one.
   def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "server/discover"}) do
     {state,
-     result(id, %{
-       "protocolVersions" => @supported_versions,
+     id
+     |> result(%{
+       "supportedVersions" => state.supported_versions,
        "capabilities" => %{"tools" => %{"listChanged" => false}},
-       "serverInfo" => %{"name" => state.server_name, "version" => @server_version}
-     })}
+       "ttlMs" => 0,
+       "cacheScope" => "private"
+     })
+     |> modernise(state)}
   end
 
   # An initialize request selects legacy semantics, whatever else it carries.
   def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "initialize"} = message) do
     requested = get_in(message, ["params", "protocolVersion"]) || @legacy_version
 
-    if requested in @supported_versions do
+    if requested in state.supported_versions do
       response =
         result(id, %{
           "protocolVersion" => requested,
@@ -156,7 +177,7 @@ defmodule BeamMCP.Server do
 
       {%{state | initialized?: true}, response}
     else
-      {state, unsupported_version(id, requested)}
+      {state, unsupported_version(state, id, requested)}
     end
   end
 
@@ -174,7 +195,10 @@ defmodule BeamMCP.Server do
       ) do
     bare = Map.drop(message, ["_meta"])
 
-    case version do
+    # A revision the server does not ADVERTISE is not served either, whatever the core could
+    # do: the HTTP transport narrows the list to 2026-07-28 and refuses the rest by header
+    # before this is reached; a host that narrows it on stdio gets the same refusal here.
+    case if(version in state.supported_versions, do: version, else: :unadvertised) do
       @modern_version ->
         # ping was removed in 2026-07-28. The legacy handler below must not be inherited by a
         # request that declared the modern revision.
@@ -194,7 +218,7 @@ defmodule BeamMCP.Server do
         handle_message(state, bare)
 
       _other ->
-        {state, unsupported_version(id, version)}
+        {state, unsupported_version(state, id, version)}
     end
   end
 
@@ -479,14 +503,14 @@ defmodule BeamMCP.Server do
   defp to_json_value(value) when is_atom(value), do: Atom.to_string(value)
   defp to_json_value(value), do: value
 
-  defp unsupported_version(id, requested) do
+  defp unsupported_version(state, id, requested) do
     %{
       "jsonrpc" => "2.0",
       "id" => id,
       "error" => %{
         "code" => -32_022,
         "message" => "Unsupported protocol version",
-        "data" => %{"supported" => @supported_versions, "requested" => requested}
+        "data" => %{"supported" => state.supported_versions, "requested" => requested}
       }
     }
   end

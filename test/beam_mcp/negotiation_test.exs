@@ -84,8 +84,8 @@ defmodule BeamMCP.NegotiationTest do
       r = send_msg(%{"jsonrpc" => "2.0", "id" => 1, "method" => "server/discover"})
 
       refute r["error"], "server/discover is mandatory: servers MUST implement it"
-      assert r["result"]["protocolVersions"] == [@modern, @legacy]
-      assert r["result"]["serverInfo"]["name"]
+      assert r["result"]["supportedVersions"] == [@modern, @legacy]
+      assert r["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"]
       assert is_map(r["result"]["capabilities"])
     end
   end
