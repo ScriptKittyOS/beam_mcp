@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# The conformance step, CI-ONLY by decision: the local gate (tools/gate.sh, thirteen steps)
+# stays dependency-light so a contributor with Elixir and Erlang runs it green without a Node
+# toolchain or a Python interpreter, and stays the gate people actually run. This job carries
+# the second toolchain the number costs -- Node 22, pinned -- and the runner's python3, runs
+# tools/conformance.sh with the suite pinned by exact version, and fails on a regression
+# against conformance/baseline-<revision>.yml or a stale entry, by the suite's own exit code.
+#
+# IT FAILS LOUDLY, NEVER SKIPS: tools/conformance.sh exits 2 by name when node >= 22 or python3
+# is absent, and a step that passed because a toolchain was missing would be a green that
+# means nothing -- the same defect class as a check count that folds skipped checks into
+# passes. The number it publishes is the README's, reproducible locally by anyone with the
+# toolchain: `tools/conformance.sh`.
+
+name: conformance
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  conformance:
+    name: Conformance - the two rows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28"
+          elixir-version: "1.18"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: mix deps.get
+      - run: mix compile
+      - name: the suite, both revisions, against the baselines
+        run: |
+          set -uo pipefail
+          node --version
+          python3 --version
+          OUT="$RUNNER_TEMP/conformance" ./tools/conformance.sh
+      - name: the suite's results, kept with the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-results
+          path: ${{ runner.temp }}/conformance
+          if-no-files-found: error

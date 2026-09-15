@@ -384,6 +384,13 @@ in `conformance/README.md`: `server/discover` and the stateless rules, `tools/li
 serves `2026-07-28` only, and `2025-11-25` lives on stdio, which the suite cannot drive (it
 has no stdio server mode). `conformance/README.md` has the rest.
 
+**Reproduce it:** `tools/conformance.sh` — one command, for anyone with Node ≥ 22 and
+`python3`. **The trade, stated:** this package has two dependencies; producing this number
+costs a second toolchain, so the step runs in a CI job of its own (`conformance.yml`, Node 22
+pinned) and never in the local gate, which stays the thirteen steps a contributor with Elixir
+and Erlang runs green with nothing else installed. The CI job fails loudly when the toolchain
+is absent; it never skips.
+
 ## The connectome
 
 The package exports a composed system's call graph — its wiring diagram — twice, and diffs the
