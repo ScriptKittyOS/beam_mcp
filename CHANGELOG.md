@@ -95,16 +95,25 @@ All notable changes to this project are documented here. The format follows
 - **`docs/will-not-implement.md`**: eleven things this package will never do — populate a
   sign, hold a key, make a signature, decide authority, put a payload byte in the observed
   graph, claim a capability the specification does not define, issue or honour a session
-  identifier, carry OAuth, be a client, enumerate all paths, hold a tool or a catalog — each
+  identifier, carry OAuth, be a client, enumerate all paths or match motifs, hold a tool, a
+  domain or a catalog — each
   with its reason in a line and the test that enforces it, by path and by name. The tests are
   the proof; the page is the contract. The README's *Deliberately out* paragraph points at it.
-- **Six censuses under `test/beam_mcp/boundary/`** put a test behind the five entries that had
+- **Nine censuses under `test/beam_mcp/boundary/`** put a test behind the six entries that had
   rested on reading (no key material and no `:crypto` call but `hash/2`; no signing or MAC
   primitive and no `sign` function; the advertised capability keys a subset of each revision's
   `ServerCapabilities`; no `Mcp-Session-Id` emitted, honoured or read; no OAuth, no client
-  module, no outbound connection, `initialize` only ever received) and one behind the thesis
-  (no module under `lib/` implements `BeamMCP.Catalog`, none builds a tool). One reader over
-  `lib/**/*.ex`, the files the compiler reads. Each was shown red by a planted violation.
+  module, no outbound connection, `initialize` only ever received), one behind the thesis
+  (no module under `lib/` implements `BeamMCP.Catalog`, none builds a tool), one behind the
+  acts of authority in the spellings code uses (`risk_tier`, `approved`, `masked`), one behind
+  the reach refusals (`all_paths` defined once, as the refusal; no motif matcher), and one
+  behind the reader itself (nothing compiles into the application from outside `lib/`). One
+  reader over `lib/**/*.ex`, the files the compiler reads. Each was shown red by a planted
+  violation. `Plug.Crypto`, in the lock file through `plug`, is barred by name.
+- **A README pin repaired, test-only**: "the observed graph carries edge identity only, never
+  a payload byte" sent its marker to a tool with no schema, where argument normalisation
+  dropped it before dispatch — the assertion held nothing. It now uses the catalog whose tool
+  declares the key and requires the dispatch to have seen the marker first.
 - **The page and the tests are one population**: `test/beam_mcp/will_not_implement_test.exs`
   fails when the page cites a test that does not exist by path or by name, when a test marked
   `# boundary:` is not cited, and when a file under `test/beam_mcp/boundary/` carries no mark.

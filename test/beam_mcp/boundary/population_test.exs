@@ -22,4 +22,19 @@ defmodule BeamMCP.Boundary.PopulationTest do
 
     assert Boundary.lib_files() != []
   end
+
+  # The artefact, not only the source: a beam left in the build by a source that is gone
+  # (Mix does not prune Erlang artefacts) is still in the application's module list, and a
+  # census over lib/ would never see it.
+  test "every module the built application lists is a BeamMCP module" do
+    Application.load(:beam_mcp)
+    {:ok, modules} = :application.get_key(:beam_mcp, :modules)
+    assert modules != []
+
+    strays =
+      for m <- modules, not String.starts_with?(Atom.to_string(m), "Elixir.BeamMCP."), do: m
+
+    assert strays == [],
+           "modules in the built application from outside BeamMCP: #{inspect(strays)}"
+  end
 end
