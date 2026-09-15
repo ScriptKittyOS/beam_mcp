@@ -7,11 +7,13 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
   # function named `sign` is defined there. Signing canonical bytes is a separate package's
   # (`sign(bytes, opts)`, decided); the `sign` field an edge carries is the host's verdict slot,
   # a data field the package writes `:unknown` into -- a value, not an act -- so the pattern
-  # bars the act (a call, a `def sign`, a signer behaviour) and not the word.
+  # bars the act (a call, a `def sign`, a signer behaviour) and not the word. `Plug.Crypto`
+  # (`MessageVerifier.sign/2`, an HMAC) is in the lock file through `plug` and is barred by
+  # name too: a dependency's signer is still a signer.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
-  @signing ~r/:crypto\.(sign|mac|mac_init|hmac)|:public_key\.sign|Signature|\bdef\s+sign\b|\bdefp\s+sign\b|\bsign!\(|@behaviour\s+\S*Signer/
+  @signing ~r/:crypto\.(sign|mac|mac_init|hmac)|:public_key\.sign|Signature|\bdef\s+sign\b|\bdefp\s+sign\b|\bsign!\(|@behaviour\s+\S*Signer|Plug\.Crypto|MessageVerifier/
 
   test "no line under lib/ calls a signing or MAC primitive or defines a sign function" do
     hits = Boundary.hits(@signing)

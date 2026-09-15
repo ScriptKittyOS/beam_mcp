@@ -32,6 +32,18 @@ defmodule BeamMCP.Boundary do
         do: {path, n, text}
   end
 
+  @doc "Every path under lib/ whose non-comment lines, joined, match the regex -- for a shape that spans lines."
+  def file_hits(regex) do
+    for path <- lib_files(),
+        code =
+          File.read!(Path.join(@root, path))
+          |> String.split("\n")
+          |> Enum.reject(&Regex.match?(~r/^\s*#/, &1))
+          |> Enum.join("\n"),
+        Regex.match?(regex, code),
+        do: path
+  end
+
   def format(hits),
     do: Enum.map_join(hits, "\n  ", fn {p, n, t} -> "#{p}:#{n}: #{String.trim(t)}" end)
 end
