@@ -4,8 +4,9 @@
 defmodule BeamMCP.Boundary do
   @moduledoc false
   # The one reader the boundary censuses share: every CODE line of every `.ex` file under lib/
-  # -- comment lines dropped, doc strings kept (a doc that names a primitive is read too, so a
-  # census that must allow prose says so by pattern). The population is `Path.wildcard`, the
+  # -- comment lines dropped (a line beginning `#{` is an interpolation, not a comment, and is
+  # kept), doc strings kept (a doc that names a primitive is read too, so a census that must
+  # allow prose says so by pattern). The population is `Path.wildcard`, the
   # same files `mix compile` just read, so an untracked plant is seen (the gate's REUSE and
   # publication steps read `git ls-files` because they are about what is published; a census
   # over code is about what compiles).
@@ -27,7 +28,7 @@ defmodule BeamMCP.Boundary do
   def hits(regex) do
     for path <- lib_files(),
         {text, n} <- Enum.with_index(File.read!(Path.join(@root, path)) |> String.split("\n"), 1),
-        not Regex.match?(~r/^\s*#/, text),
+        not Regex.match?(~r/^\s*#(?!\{)/, text),
         Regex.match?(regex, text),
         do: {path, n, text}
   end
@@ -38,7 +39,7 @@ defmodule BeamMCP.Boundary do
         code =
           File.read!(Path.join(@root, path))
           |> String.split("\n")
-          |> Enum.reject(&Regex.match?(~r/^\s*#/, &1))
+          |> Enum.reject(&Regex.match?(~r/^\s*#(?!\{)/, &1))
           |> Enum.join("\n"),
         Regex.match?(regex, code),
         do: path
