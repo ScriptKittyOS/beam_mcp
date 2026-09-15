@@ -33,7 +33,7 @@ defmodule BeamMCP.Catalog do
   `resources/templates/list` advertise what they return, and `readable?/2` decides through
   the same readers whether a `resources/read` uri is served at all: a uri the catalog lists,
   or one a listed template matches, is passed to the catalog's `read_resource/1`; any other
-  is refused before host code runs. A catalog that lists a resource or a template must
+  is refused before the reader runs. A catalog that lists a resource or a template must
   export `read_resource/1` -- `validate/1` refuses one that does not, because advertising
   what cannot be read is the defect this behaviour exists to make impossible -- and must
   not name one `uri` or `uri_template` twice, because the lists are paged by key and a
@@ -137,7 +137,9 @@ defmodule BeamMCP.Catalog do
   template `templates/1` returns. RFC 6570 level 1 plus reserved expansion, and nothing more:
   `{var}` matches one non-empty segment (a run of one or more characters without `/` -- a
   resource with an empty id is not one the template names), `{+var}` matches one or more
-  characters across segments; every other character of the template is literal.
+  characters of any kind, across segments; every other character of the template is literal.
+  A template carrying any other expression is refused by `validate/1`, so nothing is matched
+  by a rule the package does not state.
   """
   @spec readable?(module(), String.t()) :: boolean()
   def readable?(catalog, uri) when is_binary(uri) do
@@ -145,18 +147,34 @@ defmodule BeamMCP.Catalog do
       Enum.any?(templates(catalog), &template_matches?(&1.uri_template, uri))
   end
 
+  # An expression the matcher claims: `{varname}` or `{+varname}`, varname as RFC 6570 spells
+  # it -- varchars (letters, digits, `_`, a percent-encoded octet) with single dots between
+  # them, so `{.e}` is the label operator and not a name. Every other `{...}` is refused by
+  # `validate/1` rather than matched by a rule nobody stated.
+  @expression ~r/\{[^}]*\}/
+  @varchar "(?:[A-Za-z0-9_]|%[0-9A-Fa-f]{2})"
+  @claimed ~r/\A\{\+?#{@varchar}(?:\.?#{@varchar})*\}\z/
+
   @doc false
   def template_matches?(template, uri) do
     pattern =
       template
-      |> String.split(~r/\{\+?[^}]+\}/, include_captures: true)
+      |> String.split(@expression, include_captures: true)
       |> Enum.map_join(fn
         "{+" <> _ -> ".+"
         "{" <> _ -> "[^/]+"
         literal -> Regex.escape(literal)
       end)
 
-    Regex.match?(~r/\A#{pattern}\z/, uri)
+    Regex.match?(~r/\A#{pattern}\z/s, uri)
+  end
+
+  @doc false
+  def unclaimed_expression(template) do
+    @expression
+    |> Regex.scan(template)
+    |> List.flatten()
+    |> Enum.find(&(not Regex.match?(@claimed, &1)))
   end
 
   @doc """
@@ -274,9 +292,27 @@ defmodule BeamMCP.Catalog do
          "#{inspect(catalog)}.capabilities/0's :resources names " <>
            "#{inspect(repeated_key(resources))} more than once; the lists are paged by key"}
 
+      unclaimed_template(resources) != nil ->
+        {template, expression} = unclaimed_template(resources)
+
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's :resources has a uri_template #{inspect(template)} " <>
+           "with the expression #{inspect(expression)}, which the matcher does not claim " <>
+           "(only {varname} and {+varname} are)"}
+
       true ->
         :ok
     end
+  end
+
+  defp unclaimed_template(entries) do
+    Enum.find_value(entries, fn
+      %BeamMCP.ResourceTemplateSpec{uri_template: t} ->
+        if e = unclaimed_expression(t), do: {t, e}
+
+      _ ->
+        nil
+    end)
   end
 
   # The first uri or uri_template that appears twice, or nil. The two are separate key spaces

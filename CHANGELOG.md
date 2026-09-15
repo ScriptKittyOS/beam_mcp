@@ -44,8 +44,8 @@ All notable changes to this project are documented here. The format follows
   either is listed. **One reader advertises and decides
   readability:** a `resources/read` uri is served only when the same list names it or a listed
   template matches it (RFC 6570 `{var}` one non-empty segment, `{+var}` across; no other
-  operator is claimed), else `-32002 Resource not found` with the uri as data before any host code
-  runs. A reader's `{:error, reason}` is `-32002` with the reason; a malformed reader answer is
+  operator is claimed, and a template carrying one is refused at startup), else `-32002
+  Resource not found` with the uri as data before the reader runs. A reader's `{:error, reason}` is `-32002` with the reason; a malformed reader answer is
   `-32603` naming the defect, never a crash. Blob contents are raw bytes at the reader and
   base64 on the wire; optional fields the specification leaves out are left out, not sent as
   `null`. Both eras serve the three; `2026-07-28` results carry `ttlMs`, `cacheScope` and

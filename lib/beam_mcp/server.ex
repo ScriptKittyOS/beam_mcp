@@ -382,8 +382,8 @@ defmodule BeamMCP.Server do
   end
 
   # A read is served only for a uri the same reader lists or a listed template matches; the
-  # refusal (-32002, the code the specification names) comes before any host code runs, so
-  # what is advertised and what is readable cannot drift. The read itself is the catalog's.
+  # refusal (-32002, the code the specification names) comes before the reader runs, so what
+  # is advertised and what is readable cannot drift. The read itself is the catalog's.
   def handle_message(
         state,
         %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/read", "params" => params}
@@ -453,7 +453,7 @@ defmodule BeamMCP.Server do
   end
 
   defp paginated(state, id, message, kind, key, items, key_fun, definition) do
-    case position(kind, get_in(message, ["params", "cursor"])) do
+    case position(kind, cursor_param(message)) do
       {:ok, position} ->
         {page, next} = Cursor.page(kind, items, key_fun, position, state.page_size)
 
@@ -468,17 +468,28 @@ defmodule BeamMCP.Server do
         {state, result(id, payload)}
 
       {:error, why} ->
-        {state, error(id, -32_602, "Invalid params: cursor " <> why)}
+        {state, error(id, -32_602, "Invalid params: " <> why)}
     end
   end
 
-  defp position(_kind, nil), do: {:ok, nil}
+  # The cursor, read by pattern: JSON-RPC lets params be an array, and a non-object params
+  # must be refused by name, never reached into (the class the HTTP transport recorded on
+  # its side: a non-map params raised in Access.get/3).
+  defp cursor_param(%{"params" => %{"cursor" => cursor}}), do: cursor
+  defp cursor_param(%{"params" => %{}}), do: nil
+  defp cursor_param(%{"params" => _other}), do: :not_an_object
+  defp cursor_param(_message), do: nil
 
+  defp position(_kind, nil), do: {:ok, nil}
+  defp position(_kind, :not_an_object), do: {:error, "params must be an object"}
+
+  # The wire's own bytes are never echoed: a foreign cursor's kind is whatever a client put
+  # there, of any length.
   defp position(kind, cursor) do
     case Cursor.decode(kind, cursor) do
       {:ok, key} -> {:ok, {:ok, key}}
-      {:error, :malformed} -> {:error, "is malformed"}
-      {:error, {:kind, other}} -> {:error, "belongs to the #{other} list, not #{kind}"}
+      {:error, :malformed} -> {:error, "cursor is malformed"}
+      {:error, {:kind, _other}} -> {:error, "cursor belongs to another list, not #{kind}"}
     end
   end
 
