@@ -16,7 +16,27 @@ defmodule BeamMCP.Boundary.NoInventedCapabilityTest do
 
   @schema_2026 ~w(completions experimental extensions logging prompts resources tools)
   @schema_2025 ~w(completions experimental logging prompts resources tasks tools)
-  @tools_subkeys ~w(listChanged)
+  # The sub-keys each schema defines under a capability; `:open` where the schema lets the
+  # server put anything there (`experimental`, `extensions`, and the empty `completions` and
+  # `logging` objects).
+  @subkeys_2026 %{
+    "tools" => ~w(listChanged),
+    "resources" => ~w(listChanged subscribe),
+    "prompts" => ~w(listChanged),
+    "completions" => :open,
+    "logging" => :open,
+    "experimental" => :open,
+    "extensions" => :open
+  }
+  @subkeys_2025 %{
+    "tools" => ~w(listChanged),
+    "resources" => ~w(listChanged subscribe),
+    "prompts" => ~w(listChanged),
+    "tasks" => ~w(cancel list requests),
+    "completions" => :open,
+    "logging" => :open,
+    "experimental" => :open
+  }
 
   defmodule Catalog do
     @behaviour BeamMCP.Catalog
@@ -39,7 +59,17 @@ defmodule BeamMCP.Boundary.NoInventedCapabilityTest do
     assert Map.keys(caps) -- @schema_2026 == [],
            "invented: #{inspect(Map.keys(caps) -- @schema_2026)}"
 
-    assert Map.keys(caps["tools"] || %{}) -- @tools_subkeys == []
+    assert invented_subkeys(caps, @subkeys_2026) == []
+  end
+
+  # Every sub-key under every advertised capability is one the schema defines for it.
+  defp invented_subkeys(caps, subkeys) do
+    for {key, value} <- caps,
+        is_map(value),
+        defined = Map.fetch!(subkeys, key),
+        defined != :open,
+        sub <- Map.keys(value) -- defined,
+        do: {key, sub}
   end
 
   test "the initialize result advertises only keys the 2025-11-25 schema defines" do
@@ -55,6 +85,8 @@ defmodule BeamMCP.Boundary.NoInventedCapabilityTest do
 
     assert Map.keys(caps) -- @schema_2025 == [],
            "invented: #{inspect(Map.keys(caps) -- @schema_2025)}"
+
+    assert invented_subkeys(caps, @subkeys_2025) == []
   end
 
   test "no line under lib/ names a topology or reachability capability on the wire" do

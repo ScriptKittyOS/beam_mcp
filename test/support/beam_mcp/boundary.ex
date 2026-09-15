@@ -47,69 +47,104 @@ defmodule BeamMCP.Boundary do
   @doc """
   `{path, line}` for every construction of a struct named by one of `aliases` (e.g. `[[:ToolSpec],
   [:BeamMCP, :ToolSpec]]`) under lib/, read from the AST rather than the text: a `%Mod{}` literal
-  outside a pattern position, a `%{__struct__: Mod}` map, or a `Mod.__struct__/0,1` call. Pattern
-  positions -- a clause head, the left of `=`, `<-` and `->`, the first argument of `Kernel.match?/2` --
-  are matches, not constructions, and are not reported.
+  outside a pattern position, a `%{__struct__: Mod}` map, a `Mod.__struct__/0,1` call, a
+  `struct/1,2` or `struct!/1,2` call on the module, or a `Map.put(_, :__struct__, Mod)`. Inside
+  the module's own `defmodule`, `__MODULE__` names it and counts the same. Pattern positions --
+  a clause head, the left of `=`, `<-` and `->`, the first argument of `Kernel.match?/2` -- are
+  matches, not constructions; a `@type`, `@typep`, `@opaque`, `@spec` or `@callback` is a
+  declaration and is not walked.
   """
   def struct_constructions(aliases) do
     for path <- lib_files(),
         {:ok, ast} = Code.string_to_quoted(File.read!(Path.join(@root, path))),
-        line <- constructions(ast, aliases, false) |> Enum.sort() |> Enum.uniq(),
+        line <- ast |> constructions(aliases, false, false) |> Enum.sort() |> Enum.uniq(),
         do: {path, line}
   end
 
-  defp constructions({op, _, [head, body]}, aliases, _pattern?)
+  # self? -- inside a `defmodule` whose name is one of the aliases, so `__MODULE__` is it.
+  defp constructions({:defmodule, _, [{:__aliases__, _, mod}, body]}, aliases, pattern?, _self?) do
+    constructions(body, aliases, pattern?, mod in aliases)
+  end
+
+  defp constructions({:@, _, [{attr, _, _}]}, _aliases, _pattern?, _self?)
+       when attr in [:type, :typep, :opaque, :spec, :callback, :macrocallback] do
+    []
+  end
+
+  defp constructions({op, _, [head, body]}, aliases, _pattern?, self?)
        when op in [:def, :defp, :defmacro, :defmacrop] do
-    constructions(head, aliases, true) ++ constructions(body, aliases, false)
+    constructions(head, aliases, true, self?) ++ constructions(body, aliases, false, self?)
   end
 
-  defp constructions({op, _, [lhs, rhs]}, aliases, _pattern?) when op in [:=, :<-, :match?] do
-    constructions(lhs, aliases, true) ++ constructions(rhs, aliases, false)
-  end
-
-  defp constructions({:->, _, [args, body]}, aliases, _pattern?) do
-    constructions(args, aliases, true) ++ constructions(body, aliases, false)
-  end
-
-  defp constructions({:%, meta, [{:__aliases__, _, mod}, map]} = node, aliases, pattern?) do
-    hit = if mod in aliases and not pattern?, do: [meta[:line]], else: []
-    hit ++ constructions(map, aliases, pattern?) ++ constructions_in_rest(node)
-  end
-
-  defp constructions({:%{}, meta, fields} = node, aliases, pattern?) when is_list(fields) do
-    hit =
-      case Keyword.get(fields, :__struct__) do
-        {:__aliases__, _, mod} -> if mod in aliases and not pattern?, do: [meta[:line]], else: []
-        _ -> []
-      end
-
-    hit ++
-      Enum.flat_map(fields, &constructions(&1, aliases, pattern?)) ++ constructions_in_rest(node)
+  defp constructions({op, _, [lhs, rhs]}, aliases, _pattern?, self?)
+       when op in [:=, :<-, :match?] do
+    constructions(lhs, aliases, true, self?) ++ constructions(rhs, aliases, false, self?)
   end
 
   defp constructions(
-         {{:., _, [{:__aliases__, _, mod}, :__struct__]}, meta, args},
+         {{:., _, [{:__aliases__, _, [:Kernel]}, :match?]}, _, [lhs, rhs]},
          aliases,
-         pattern?
+         _p,
+         self?
        ) do
-    hit = if mod in aliases and not pattern?, do: [meta[:line]], else: []
-    hit ++ constructions(args, aliases, pattern?)
+    constructions(lhs, aliases, true, self?) ++ constructions(rhs, aliases, false, self?)
   end
 
-  defp constructions({_, _, args} = node, aliases, pattern?) when is_list(args) do
-    Enum.flat_map(args, &constructions(&1, aliases, pattern?)) ++ constructions_in_rest(node)
+  defp constructions({:->, _, [args, body]}, aliases, _pattern?, self?) do
+    constructions(args, aliases, true, self?) ++ constructions(body, aliases, false, self?)
   end
 
-  defp constructions({a, b}, aliases, pattern?),
-    do: constructions(a, aliases, pattern?) ++ constructions(b, aliases, pattern?)
+  defp constructions({:%, meta, [target, map]}, aliases, pattern?, self?) do
+    hit(target, meta, aliases, pattern?, self?) ++ constructions(map, aliases, pattern?, self?)
+  end
 
-  defp constructions(list, aliases, pattern?) when is_list(list),
-    do: Enum.flat_map(list, &constructions(&1, aliases, pattern?))
+  defp constructions({:%{}, meta, fields}, aliases, pattern?, self?) when is_list(fields) do
+    hit =
+      case Keyword.get(fields, :__struct__) do
+        nil -> []
+        target -> hit(target, meta, aliases, pattern?, self?)
+      end
 
-  defp constructions(_, _, _), do: []
+    hit ++ Enum.flat_map(fields, &constructions(&1, aliases, pattern?, self?))
+  end
 
-  # Nothing to walk beside the args a node already exposed.
-  defp constructions_in_rest(_node), do: []
+  defp constructions({{:., _, [target, :__struct__]}, meta, args}, aliases, pattern?, self?) do
+    hit(target, meta, aliases, pattern?, self?) ++ constructions(args, aliases, pattern?, self?)
+  end
+
+  defp constructions({op, meta, [target | rest]}, aliases, pattern?, self?)
+       when op in [:struct, :struct!] do
+    hit(target, meta, aliases, pattern?, self?) ++ constructions(rest, aliases, pattern?, self?)
+  end
+
+  defp constructions(
+         {{:., _, [{:__aliases__, _, [:Map]}, :put]}, meta, [m, :__struct__, target]},
+         aliases,
+         pattern?,
+         self?
+       ) do
+    hit(target, meta, aliases, pattern?, self?) ++ constructions(m, aliases, pattern?, self?)
+  end
+
+  defp constructions({_, _, args}, aliases, pattern?, self?) when is_list(args) do
+    Enum.flat_map(args, &constructions(&1, aliases, pattern?, self?))
+  end
+
+  defp constructions({a, b}, aliases, pattern?, self?),
+    do: constructions(a, aliases, pattern?, self?) ++ constructions(b, aliases, pattern?, self?)
+
+  defp constructions(list, aliases, pattern?, self?) when is_list(list),
+    do: Enum.flat_map(list, &constructions(&1, aliases, pattern?, self?))
+
+  defp constructions(_, _, _, _), do: []
+
+  defp hit(_target, _meta, _aliases, true, _self?), do: []
+
+  defp hit({:__aliases__, _, mod}, meta, aliases, false, _self?),
+    do: if(mod in aliases, do: [meta[:line]], else: [])
+
+  defp hit({:__MODULE__, _, _}, meta, _aliases, false, true), do: [meta[:line]]
+  defp hit(_, _, _, _, _), do: []
 
   def format(hits),
     do: Enum.map_join(hits, "\n  ", fn {p, n, t} -> "#{p}:#{n}: #{String.trim(t)}" end)
