@@ -66,12 +66,13 @@ What runs at *compile time* — a module body, an attribute's expression — lea
 beam and is outside every artefact census; the text holds that line instead, and only by the
 names it lists, read two ways: each name where it is written (`defmacro`, `defguard`, `quote`,
 `unquote`, `unquote_splicing`; `:elixir`, `:elixir_*`, `:compile`, `:erl_eval`, `:erl_parse`,
-`:erl_scan`, `:code.load_*` and `:code.atomic_load` as a call or a capture; the bare words `Code` — except
+`:erl_scan`, `:code.load_*`, `:code.atomic_load`, `:code.prepare_loading` and `:code.finish_loading` as a call or a capture; the bare words `Code` — except
 `Code.ensure_*` — `EEx` and `Mix`, and `Elixir.Code`, `Elixir.EEx`, `Elixir.Mix` quoted or
 not; `:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`, `Path.wildcard`, `:init.`,
 `System`'s and `Application`'s readers, in the plain and the `:"Elixir.…"` spelling, either
-quote; and any quoted atom, either quote, carrying a `\x` or `\u` escape, which is how a
-listed atom would be hidden), and
+quote; any quoted atom, either quote, carrying a `\x` or `\u` escape, and any word sigil
+that makes atoms (`~w(…)a`) — two ways a listed atom could be hidden; a third, an atom built by
+interpolation, is the joined-strings edge below), and
 every `import`, `alias` or `require` that would bring `Code`, `EEx`, `Mix`, `File`, `System`,
 `Elixir.Path`, `Application` or an Erlang evaluator, loader or reader in under another name, however
 spelled and across however many lines — at any position under `lib/`, with two allowances by

@@ -31,7 +31,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     compile_time =
       for {_, _, text} = hit <-
             Boundary.hits(
-              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.(load\w*|atomic_load)\b|\bCode\b(?!\.ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\b|\bMix\b|:(["'])[^"']*\\[xu]/
+              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.(load\w*|atomic_load|prepare_loading|finish_loading)\b|~[wW]([^\w\s])[^\1]*\1a\b|~[wW]\([^)]*\)a\b|~[wW]\[[^\]]*\]a\b|~[wW]\{[^}]*\}a\b|\bCode\b(?!\.ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\b|\bMix\b|:(["'])[^"']*\\[xu]/
             ),
           String.trim(text) not in [
             "@server_version Mix.Project.config()[:version]",
