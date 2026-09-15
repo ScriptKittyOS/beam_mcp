@@ -45,18 +45,59 @@ defmodule BeamMCP.Boundary do
   end
 
   @doc """
-  The modules compiled from lib/ -- the built application's module list, kept to those whose
-  compile-time source is under lib/ (the test build compiles test/support into the same app).
+  The modules compiled from lib/: every beam in the build's ebin whose compile-time source is
+  under lib/ (the test build compiles test/support into the same directory). The ebin, not the
+  `.app` file: Mix regenerates the `.app` on the directory's mtime at one-second granularity, so
+  a module compiled in the same second as the previous `.app` is absent from it -- measured by a
+  review lane, a green on a planted violation.
   """
   def lib_modules do
-    Application.load(:beam_mcp)
-    {:ok, modules} = :application.get_key(:beam_mcp, :modules)
-
-    for m <- modules,
+    for path <- Path.wildcard(Path.join(Mix.Project.compile_path(), "*.beam")),
+        m = path |> Path.basename(".beam") |> String.to_atom(),
+        {:module, ^m} = Code.ensure_loaded(m),
         source = m.module_info(:compile)[:source],
         String.starts_with?(to_string(source), Path.join(@root, "lib")),
         do: m
   end
+
+  @doc "Every module the built application's `.app` file lists."
+  def app_modules do
+    Application.load(:beam_mcp)
+    {:ok, modules} = :application.get_key(:beam_mcp, :modules)
+    modules
+  end
+
+  @doc "Every beam in the build's ebin, as a module name."
+  def ebin_modules do
+    for path <- Path.wildcard(Path.join(Mix.Project.compile_path(), "*.beam")),
+        do: path |> Path.basename(".beam") |> String.to_atom()
+  end
+
+  @doc """
+  Every atom in the compiled forms of the lib/ modules that names a loadable module -- a call
+  target, a `-file`/`-compile` attribute, or a module handed somewhere as data (a child spec's
+  `{m, f, a}`, a handler's module). What the package can reach by naming, not only by calling.
+  """
+  def module_atoms do
+    lib = lib_modules()
+
+    for m <- lib,
+        {:ok, {_, [{:abstract_code, {:raw_abstract_v1, forms}}]}} =
+          :beam_lib.chunks(:code.which(m), [:abstract_code]),
+        atom <- atoms(forms, []),
+        atom not in lib,
+        match?({:module, _}, Code.ensure_loaded(atom)),
+        uniq: true,
+        do: atom
+  end
+
+  defp atoms({:atom, _, a}, acc), do: [a | acc]
+
+  defp atoms(tuple, acc) when is_tuple(tuple),
+    do: Enum.reduce(Tuple.to_list(tuple), acc, &atoms(&1, &2))
+
+  defp atoms(list, acc) when is_list(list), do: Enum.reduce(list, acc, &atoms(&1, &2))
+  defp atoms(_, acc), do: acc
 
   @doc """
   `{edges, unresolved}` from `:xref` over the compiled lib/ modules, BIFs included: every call
@@ -111,14 +152,16 @@ defmodule BeamMCP.Boundary do
 
   defp sites(_, _, _, acc), do: acc
 
-  defp field_sites({:map_field_exact, _, {:atom, _, key}, value}, atom, :map, acc),
-    do: sites(value, atom, {:pattern, key}, acc)
+  # A key is a site too (`%{BeamMCP.ToolSpec => true}` puts the atom in a map with no
+  # `__struct__` at all -- a review lane's plant); it is read as a value.
+  defp field_sites({:map_field_exact, _, {:atom, _, key} = k, value}, atom, :map, acc),
+    do: sites(value, atom, {:pattern, key}, sites(k, atom, :value, acc))
 
-  defp field_sites({:map_field_assoc, _, {:atom, _, key}, value}, atom, :map, acc),
-    do: sites(value, atom, {:construction, key}, acc)
+  defp field_sites({:map_field_assoc, _, {:atom, _, key} = k, value}, atom, :map, acc),
+    do: sites(value, atom, {:construction, key}, sites(k, atom, :value, acc))
 
-  defp field_sites({_, _, {:atom, _, key}, value}, atom, :update, acc),
-    do: sites(value, atom, {:update, key}, acc)
+  defp field_sites({_, _, {:atom, _, key} = k, value}, atom, :update, acc),
+    do: sites(value, atom, {:update, key}, sites(k, atom, :value, acc))
 
   defp field_sites({_, _, key, value}, atom, _kind, acc),
     do: sites(value, atom, :value, sites(key, atom, :value, acc))

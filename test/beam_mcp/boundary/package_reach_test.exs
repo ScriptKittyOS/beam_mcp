@@ -63,9 +63,14 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :xref
   ]
 
+  # The eight atoms that name a loadable module and occur in the compiled forms as data, not as
+  # a call target: file and compile attributes, the tracer's flag names, the compiler's own.
+  @named_not_called [:array, :compile, :elixir, :error_logger, :file, :init, :json, :trace]
+
   # The functions called on the modules through which code, names, secrets, the operating
-  # system or another node could be reached. Operators on :erlang are not listed; nothing is
-  # evaluated, loaded, applied, spawned to a node or read from the environment through them.
+  # system, the file system, another process or another node could be reached. Operators on
+  # :erlang are not listed; nothing is evaluated, loaded, applied, spawned to a node, read from
+  # the environment or the disk, or decoded into atoms through them.
   @functions %{
     :erlang => [
       atom_to_binary: 1,
@@ -111,7 +116,44 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :persistent_term => [erase: 1, get: 2, put: 2],
     Application => [load: 1, spec: 2],
     :application => [get_application: 1],
-    :crypto => [hash: 2]
+    :crypto => [hash: 2],
+    :ets => [
+      info: 2,
+      lookup_element: 3,
+      new: 2,
+      select_replace: 2,
+      tab2list: 1,
+      update_counter: 4,
+      whereis: 1
+    ],
+    :xref => [add_module: 2, q: 2, set_default: 2, start: 1, stop: 1],
+    :io_lib => [char_list: 1],
+    :logger => [error: 2],
+    :digraph => [
+      add_edge: 3,
+      add_vertex: 2,
+      delete: 1,
+      get_short_path: 3,
+      in_neighbours: 2,
+      new: 1,
+      out_neighbours: 2
+    ],
+    :atomics => [get: 2, new: 2, put: 3],
+    :telemetry => [attach_many: 4, detach: 1, execute: 3],
+    Jason => [decode: 1, encode!: 1, encode!: 2],
+    Logger => [__do_log__: 4, __should_log__: 2],
+    Process => [info: 2, put: 2, whereis: 1],
+    GenServer => [format_report: 1, start: 3, start_link: 3, stop: 3],
+    Supervisor => [child_spec: 2],
+    Plug.Conn => [
+      get_req_header: 2,
+      put_resp_content_type: 2,
+      put_resp_header: 3,
+      read_body: 2,
+      send_resp: 3
+    ],
+    Plug.Exception => [status: 1],
+    IO => [binread: 2, binwrite: 2]
   }
 
   # The one atom the package makes from a binary: the argument keys a tool declared in its
@@ -133,12 +175,26 @@ defmodule BeamMCP.Boundary.PackageReachTest do
 
   test "on the modules that could reach code, names, secrets, the OS or another node, the functions called are exactly the listed ones",
        %{edges: edges} do
-    for {module, listed} <- @functions do
-      called = for {_, {^module, f, a}} <- edges, operator?(f) == false, uniq: true, do: {f, a}
+    diffs =
+      for {module, listed} <- @functions,
+          called =
+            for({_, {^module, f, a}} <- edges, operator?(f) == false, uniq: true, do: {f, a}),
+          Enum.sort(called) != Enum.sort(listed),
+          do:
+            "#{inspect(module)}: not on the list: #{inspect(Enum.sort(called -- listed))}; listed, not called: #{inspect(Enum.sort(listed -- called))}"
 
-      assert Enum.sort(called) == Enum.sort(listed),
-             "#{inspect(module)}: not on the list: #{inspect(Enum.sort(called -- listed))}; listed, not called: #{inspect(Enum.sort(listed -- called))}"
-    end
+    assert diffs == [], Enum.join(diffs, "\n")
+  end
+
+  test "every atom in the compiled forms that names a module is a called module or one of the eight named as data",
+       %{lib: lib, edges: edges} do
+    called = for {_, {m, _, _}} <- edges, m not in lib, uniq: true, do: m
+    named = Boundary.module_atoms()
+    strays = named -- (called ++ @named_not_called)
+    unused = @named_not_called -- named
+
+    assert strays == [] and unused == [],
+           "modules named but neither called nor on the data list: #{inspect(Enum.sort(strays))}; listed as data, not named: #{inspect(unused)}"
   end
 
   test "the one atom made from a binary is made in Server.declared_atoms/1", %{edges: edges} do
