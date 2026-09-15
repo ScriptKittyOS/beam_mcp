@@ -195,7 +195,9 @@ defmodule BeamMCP.Connectome.DiffTest do
                observed_endpoint_declared: 1,
                declared_nodes: 3,
                observed_nodes: 3,
-               nodes_in_both: 3
+               nodes_in_both: 3,
+               declared_sign_only: 0,
+               observed_sign_only: 0
              }
 
       bytes = Diff.encode!(diff)
