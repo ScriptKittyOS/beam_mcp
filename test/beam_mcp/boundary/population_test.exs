@@ -29,7 +29,9 @@ defmodule BeamMCP.Boundary.PopulationTest do
     # One allowance, by its exact line: the package reads its own version from mix.exs.
     compile_time =
       for {_, _, text} = hit <-
-            Boundary.hits(~r/\bdefmacrop?\b|\bquote\b|:elixir\.|\bCode\.(?!ensure_)|\bMix\./),
+            Boundary.hits(
+              ~r/\bdefmacrop?\b|\bquote\b|:elixir\.|:compile\.|:erl_(eval|parse|scan)\.|:code\.load\w*\(|\bCode\.(?!ensure_)|\bMix\./
+            ),
           String.trim(text) != "@server_version Mix.Project.config()[:version]",
           do: hit
 
@@ -68,7 +70,12 @@ defmodule BeamMCP.Boundary.PopulationTest do
 
   test "the dependencies the lock file holds are exactly the listed ones" do
     lock = Boundary.root() |> Path.join("mix.lock") |> File.read!()
-    names = Regex.scan(~r/^  "([a-z_]+)":/m, lock) |> Enum.map(fn [_, n] -> n end)
+    # Every entry, digits included: `oauth2`, `x509`, `argon2_elixir` are the shape of what
+    # entries 2, 3 and 8 exist to keep out, and a lane showed `[a-z_]+` blind to them.
+    names = Regex.scan(~r/^  "([a-z0-9_]+)":/m, lock) |> Enum.map(fn [_, n] -> n end)
+
+    assert length(names) == length(Regex.scan(~r/^  "/m, lock)),
+           "a lock entry the pattern did not read"
 
     assert Enum.sort(names) ==
              ~w(bandit bunt credo earmark_parser ex_doc file_system hpax jason makeup makeup_elixir makeup_erlang mime nimble_parsec plug plug_crypto stream_data telemetry thousand_island websock)
