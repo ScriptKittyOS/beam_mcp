@@ -64,6 +64,8 @@ consumer's to divide:
 | `declared_nodes` | nodes in the declared graph |
 | `observed_nodes` | nodes in the observed graph |
 | `nodes_in_both` | node ids in both |
+| `declared_sign_only` | labels in both with a sign supplied on the declared side and `unset` on the observed — signed at configuration time, unsigned in the run (the odder direction, so it is its own count) |
+| `observed_sign_only` | labels in both with a sign supplied on the observed side and `unset` on the declared — an authority spoke during the run about an edge nobody had signed at configuration time |
 
 The coverage bound `docs/connectome.md` defines — "the measured fraction of one graph the
 other accounts for, stated with the window" — is made of these figures, and they are
@@ -126,7 +128,7 @@ way; nothing else. Its keys, in the order the rule gives them:
   `"declared_sign"` and `"observed_sign"` too. Each array is sorted by `from`, then `to`,
   then the kind's name, comparing UTF-16 code units, so equal inputs give equal bytes
   whatever order the graphs were built in.
-- `"coverage"` — the eight counts.
+- `"coverage"` — the ten counts (eight since 0.4.0; the two one-sided sign counts since 0.5.0).
 - `"schema_version"` — `2` (the record's own axis, bumped in 0.5.0 when changed-sign excluded `unset` by name and two counts were added; `1` records carry the earlier semantics).
 - `"window"` — the consumer's map.
 
@@ -143,13 +145,13 @@ the same as lowercase hexadecimal, the form this page writes it in.
 Server `srv`, tools `a`, `b`, `c` on both sides. Declared: `a→b`, `a→c`, `c→a` (sign
 `allow`), `b→a` (sign `allow`). Observed: `a→b`, `b→c`, `c→a` (sign `deny`), `b→a` (sign
 `unset`). Window `{"ended_at": "2026-09-14T01:00:00Z", "started_at":
-"2026-09-14T00:00:00Z"}`. The bytes (733 of them, one line):
+"2026-09-14T00:00:00Z"}`. The bytes (779 of them, one line):
 
 ```
-{"classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"nodes_in_both":4,"observed_edges":4,"observed_endpoint_declared":4,"observed_nodes":4},"schema_version":2,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
+{"classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"declared_sign_only":1,"nodes_in_both":4,"observed_edges":4,"observed_endpoint_declared":4,"observed_nodes":4,"observed_sign_only":0},"schema_version":2,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
 ```
 
-SHA-256: `ea77f7c9439ef05dad5a7c49c728e032e2329b41778ef2f168c2989342665c17`. The four
+SHA-256: `422a3e16785e590d57b8c67ae075fe86473a3d04b2af3c9e5637d54da6e402cb`. The four
 classes hold one label each but `declared_and_observed`, which holds two: `b→a` is there
 because its observed sign is `unset`, not supplied.
 

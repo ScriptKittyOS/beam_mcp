@@ -412,7 +412,7 @@ bytes whoever wrote it.
   completely enough that three blind re-derivations reproduced the hash.
 - **The diff** — `BeamMCP.Connectome.Diff.run/3` puts every edge of either graph in exactly
   one of four classes — declared and observed, declared and never observed (dead authority),
-  observed but undeclared (a drift finding), changed sign — with eight coverage counts the
+  observed but undeclared (a drift finding), changed sign — with ten coverage counts the
   consumer divides. [`docs/connectome-diff.md`](docs/connectome-diff.md).
 
 **What it never does.** It populates no sign — `:allow`, `:deny` and `:hold` are the host's

@@ -20,6 +20,7 @@ defmodule BeamMCP.Connectome.DiffTest do
   @server "srv"
   @version Graph.schema_version()
   @window %{"started_at" => "2026-09-14T00:00:00Z", "ended_at" => "2026-09-14T01:00:00Z"}
+  @signs [:allow, :deny, :hold, :ungoverned, :unset]
   @marker "PAYLOAD-MARKER-d1ff"
 
   defp srv, do: Node.new!(kind: :server, level: :server, identity: {:server, @server})
@@ -251,6 +252,10 @@ defmodule BeamMCP.Connectome.DiffTest do
       # nodes: all 4 (a, b, c are all observed nodes).
       # ... and observed edges whose both endpoints are declared nodes: all 4 (a, b, c are
       # all declared nodes) -- the completeness figure with the connectomics roles kept.
+      # The two one-sided sign counts (016d): of the three labels in both, b->a carries a
+      # sign on the declared side (allow) and none on the observed (unset) -- 1 declared
+      # only; c->a carries one on each (allow, deny: changed-sign, not one-sided); a->b none
+      # on either. Nothing is signed on the observed side only -- 0.
       assert diff.coverage == %{
                declared_edges: 4,
                observed_edges: 4,
@@ -259,8 +264,54 @@ defmodule BeamMCP.Connectome.DiffTest do
                observed_endpoint_declared: 4,
                declared_nodes: 4,
                observed_nodes: 4,
-               nodes_in_both: 4
+               nodes_in_both: 4,
+               declared_sign_only: 1,
+               observed_sign_only: 0
              }
+    end
+
+    # 016d: a sign present on one side only is directional information, and the two
+    # directions are different facts -- a sign on the observed side but not the declared means
+    # an authority spoke during the run about an edge nobody had signed at configuration time;
+    # the reverse is the odder of the two, and a consumer sees each alone, never summed.
+    test "the two one-sided sign counts are directional, count :ungoverned as a sign, and count nothing that is changed-sign or unsigned on both sides" do
+      pair = fn d, o ->
+        declared = graph([srv(), tool("s"), tool("a")], [edge("s", "a", :declared, sign: d)])
+        observed = graph([srv(), tool("s"), tool("a")], [edge("s", "a", :observed, sign: o)])
+        {:ok, diff} = Diff.run(declared, observed, window: @window)
+        {diff.coverage.declared_sign_only, diff.coverage.observed_sign_only}
+      end
+
+      assert pair.(:allow, :unset) == {1, 0}
+      assert pair.(:unset, :deny) == {0, 1}
+      assert pair.(:ungoverned, :unset) == {1, 0}
+      assert pair.(:unset, :ungoverned) == {0, 1}
+      assert pair.(:unset, :unset) == {0, 0}
+      assert pair.(:allow, :deny) == {0, 0}
+      assert pair.(:allow, :allow) == {0, 0}
+
+      # Over every pair: one-sided exactly when one side is :unset and the other is not, and
+      # never both counts at once.
+      for d <- @signs, o <- @signs do
+        {dso, oso} = pair.(d, o)
+
+        assert dso == if(d != :unset and o == :unset, do: 1, else: 0),
+               "declared #{d}, observed #{o}"
+
+        assert oso == if(o != :unset and d == :unset, do: 1, else: 0),
+               "declared #{d}, observed #{o}"
+      end
+    end
+
+    test "a label on one side only is not a one-sided sign: the counts read labels in both graphs" do
+      declared =
+        graph([srv(), tool("s"), tool("a"), tool("b")], [edge("s", "a", :declared, sign: :allow)])
+
+      observed =
+        graph([srv(), tool("s"), tool("a"), tool("b")], [edge("s", "b", :observed, sign: :deny)])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert {diff.coverage.declared_sign_only, diff.coverage.observed_sign_only} == {0, 0}
     end
 
     test "completeness keeps the connectomics roles: what ran is the population, the declaration is the condition" do
@@ -434,7 +485,6 @@ defmodule BeamMCP.Connectome.DiffTest do
     # The table, exhaustively: a label in both graphs is changed-sign when both signs are
     # supplied -- neither :unset -- and they differ. :unset is abstention, not a verdict, and
     # never participates; :ungoverned IS a supplied value, so it disagrees with :deny.
-    @signs [:allow, :deny, :hold, :ungoverned, :unset]
 
     test "of the twenty-five pairs, exactly the twelve with two supplied and different signs are changed-sign" do
       for d <- @signs, o <- @signs do
