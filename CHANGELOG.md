@@ -14,15 +14,21 @@ All notable changes to this project are documented here. The format follows
 ### Added — the pages ship in the package
 
 - **`docs/` is in the Hex tarball.** The six pages the README links — the connectome
-  vocabulary, the canonical bytes, the observed graph, the diff, reach, and the
-  will-not-implement contract — were published to hexdocs but absent from the package, so a
-  consumer holding the tarball and not the repository had a README whose links named files
-  that were not there. They are there now, at `docs/*.md` beside the README, and a test holds
-  it against the **built** tarball rather than the `files:` stanza: every page reachable by a
-  relative link from the README or CHANGELOG, every tracked page under `docs/`, and every
-  ExDoc extra must be in what `mix hex.build` produces. The tarball grows by the six pages,
-  22 entries to 28 (a byte count is not stated: this file ships in the tarball, so any byte
-  count written here moves the number it cites). Nothing else in the package moves.
+  vocabulary, the canonical bytes, the observed graph, the diff (these four in 0.4.0), reach
+  and the will-not-implement contract (new in this release) — were rendered on hexdocs but
+  absent from the package. Where that showed: hex.pm's package page renders the README with
+  each relative link resolved to the package preview (`repo.hex.pm/preview/beam_mcp/<version>/
+  <path>`), which serves the tarball's own files — so `mix.exs` and `lib/` opened and every
+  `docs/` link was a 404 (measured on 0.4.0); a consumer with the package on disk
+  (`deps/beam_mcp/` after `mix deps.get`) had the same dead paths. On hexdocs the links were
+  already rewritten to the rendered pages and are unchanged. Now the pages are in the tarball
+  at `docs/*.md`, so both the hex.pm render and the on-disk package resolve them, and a test
+  holds it against the **built** tarball rather than the `files:` stanza: every file reachable
+  by a relative link (inline, reference-style or an HTML `href`) from the README or CHANGELOG,
+  every tracked page under `docs/`, and every ExDoc extra must be in what `mix hex.build`
+  produces. The tarball grows by the six pages, 22 entries to 28 (a byte count is not stated:
+  this file ships in the tarball, so any byte count written here moves the number it cites).
+  No other entry is added or removed.
 
 ### Added — reachability, additive
 
