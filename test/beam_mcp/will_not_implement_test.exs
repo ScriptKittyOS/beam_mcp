@@ -7,8 +7,9 @@ defmodule BeamMCP.WillNotImplementTest do
   # carries a `# boundary: <entry>` marker is cited on the page, and every file under
   # test/beam_mcp/boundary/ carries the marker. Neither may drift from the other.
   #
-  # A citation on the page is a path in backticks followed, on the same line, by one or more
-  # test names in straight double quotes: `test/x_test.exs` "a name" "another".
+  # A citation on the page is a test file's path in backticks followed, on the same line, by one
+  # or more test names in straight double quotes: `test/x_test.exs` "a name" "another". A path
+  # under test/ that is not a test file (the support reader) is prose, not a citation.
   use ExUnit.Case, async: true
 
   @root Path.expand("../..", __DIR__)
@@ -25,13 +26,13 @@ defmodule BeamMCP.WillNotImplementTest do
   # [{path, [name]}] in page order; a name belongs to the last path on its line.
   defp citations(text) do
     for line <- String.split(text, "\n"),
-        Regex.match?(~r/`test\/[^`]+`/, line),
+        Regex.match?(~r/`test\/[^`]+_test\.exs`/, line),
         {path, names} <- cite_line(line),
         do: {path, names}
   end
 
   defp cite_line(line) do
-    ~r/`(test\/[^`]+)`|"([^"]+)"/
+    ~r/`(test\/[^`]+_test\.exs)`|"([^"]+)"/
     |> Regex.scan(line)
     |> Enum.reduce([], fn
       [_, path], acc when path != "" -> [{path, []} | acc]

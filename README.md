@@ -459,7 +459,10 @@ boundary this project chose on its first day, and the package exists partly to k
 there. A small surface can look unfinished from the outside; this one is a commodity layer
 that says which it is. The list is derived, not typed: the thesis sentence at the top of this
 README, the census test that no line under `lib/` writes a sign other than `:unknown`, and a
-test that no line under `lib/` names a receipt, an approval, a risk tier or egress.
+test that no line under `lib/` names a receipt, an approval, a risk tier or egress. The full
+boundary — eleven entries, each with the test that enforces it by path and by name — is
+[`docs/will-not-implement.md`](docs/will-not-implement.md), held to the tests in both
+directions by a census of its own; a request to cross it is answered by pointing there.
 
 ## Status
 

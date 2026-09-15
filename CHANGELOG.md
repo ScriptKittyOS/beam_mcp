@@ -90,6 +90,27 @@ All notable changes to this project are documented here. The format follows
 - **`-32022`'s `data.requested` is a string over HTTP**, the version the client asked for
   (the first value refused when several were sent), as the schema says; it was a list.
 
+### Added — the boundary, written down and held to the tests
+
+- **`docs/will-not-implement.md`**: eleven things this package will never do — populate a
+  sign, hold a key, make a signature, decide authority, put a payload byte in the observed
+  graph, claim a capability the specification does not define, issue or honour a session
+  identifier, carry OAuth, be a client, enumerate all paths, hold a tool or a catalog — each
+  with its reason in a line and the test that enforces it, by path and by name. The tests are
+  the proof; the page is the contract. The README's *Deliberately out* paragraph points at it.
+- **Six censuses under `test/beam_mcp/boundary/`** put a test behind the five entries that had
+  rested on reading (no key material and no `:crypto` call but `hash/2`; no signing or MAC
+  primitive and no `sign` function; the advertised capability keys a subset of each revision's
+  `ServerCapabilities`; no `Mcp-Session-Id` emitted, honoured or read; no OAuth, no client
+  module, no outbound connection, `initialize` only ever received) and one behind the thesis
+  (no module under `lib/` implements `BeamMCP.Catalog`, none builds a tool). One reader over
+  `lib/**/*.ex`, the files the compiler reads. Each was shown red by a planted violation.
+- **The page and the tests are one population**: `test/beam_mcp/will_not_implement_test.exs`
+  fails when the page cites a test that does not exist by path or by name, when a test marked
+  `# boundary:` is not cited, and when a file under `test/beam_mcp/boundary/` carries no mark.
+- **Nothing on the wire changes.** No method, field or capability is added; the capability
+  census pins that none is.
+
 ### Fixed — test suite only
 
 - The Livebook exports fixture ran its collector without a lock; two async test modules
