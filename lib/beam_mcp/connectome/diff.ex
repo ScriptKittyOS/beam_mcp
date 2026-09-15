@@ -45,7 +45,12 @@ defmodule BeamMCP.Connectome.Diff do
   "in both" classes together), `declared_endpoint_covered` (declared edges whose `from`
   and `to` are both observed node ids), `observed_endpoint_declared` (observed edges whose
   `from` and `to` are both declared node ids), `declared_nodes`, `observed_nodes`,
-  `nodes_in_both`. The fractions are ratios of these: declared edges observed =
+  `nodes_in_both`, and two one-sided sign counts (016d) -- `declared_sign_only` (labels in
+  both with a sign supplied on the declared side and `:unset` on the observed) and
+  `observed_sign_only` (the reverse: an authority spoke during the run about an edge nobody
+  had signed at configuration time), one per direction because the two directions are
+  different facts, and counts rather than a class because a sign on one side only is not a
+  change. The fractions are ratios of these: declared edges observed =
   `declared_and_observed / declared_edges`; observed edges declared =
   `declared_and_observed / observed_edges`; **completeness** =
   `observed_endpoint_declared / observed_edges` -- the connectomics figure, "synapses
@@ -100,7 +105,9 @@ defmodule BeamMCP.Connectome.Diff do
           observed_endpoint_declared: non_neg_integer(),
           declared_nodes: non_neg_integer(),
           observed_nodes: non_neg_integer(),
-          nodes_in_both: non_neg_integer()
+          nodes_in_both: non_neg_integer(),
+          declared_sign_only: non_neg_integer(),
+          observed_sign_only: non_neg_integer()
         }
 
   @type t :: %__MODULE__{
@@ -180,7 +187,11 @@ defmodule BeamMCP.Connectome.Diff do
           end),
         declared_nodes: MapSet.size(declared_ids),
         observed_nodes: MapSet.size(observed_ids),
-        nodes_in_both: MapSet.size(MapSet.intersection(declared_ids, observed_ids))
+        nodes_in_both: MapSet.size(MapSet.intersection(declared_ids, observed_ids)),
+        # A sign on one side only is not a change (016d): it is counted, per direction, so a
+        # consumer sees each alone. :unset means no sign was supplied on that side.
+        declared_sign_only: Enum.count(in_both, &(d[&1] != :unset and o[&1] == :unset)),
+        observed_sign_only: Enum.count(in_both, &(o[&1] != :unset and d[&1] == :unset))
       }
 
       {:ok,

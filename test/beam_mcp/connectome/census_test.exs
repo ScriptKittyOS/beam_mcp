@@ -148,7 +148,11 @@ defmodule BeamMCP.Connectome.CensusTest do
     # The one comparison of two signs, spelled once: changed-sign is two authorities
     # disagreeing, so :unset -- no sign supplied to this package -- never participates
     # (016d). Reading, not writing; and not a filter (the test below).
-    "declared != :unset and observed != :unset and declared != observed"
+    "declared != :unset and observed != :unset and declared != observed",
+    # The two one-sided sign counts (016d): a read of both sides' signs per label, counted,
+    # never filtered -- the record keeps every label whatever its signs.
+    "declared_sign_only: Enum.count(in_both, &(d[&1] != :unset and o[&1] == :unset)),",
+    "observed_sign_only: Enum.count(in_both, &(o[&1] != :unset and d[&1] == :unset))"
   ]
 
   # 016d, the constraint that makes :ungoverned safe: the package never treats a sign as
@@ -158,10 +162,14 @@ defmodule BeamMCP.Connectome.CensusTest do
   @filtering ~r/Enum\.(filter|reject|split_with|drop_while|take_while|find|any\?|all\?|count|group_by)|\bwhen\b.*\bsign\b|\bcase\b.*\bsign\b|\bif\b.*\bsign\b/
 
   test "no code line under lib/ filters, hides or downgrades an edge on the basis of its sign" do
+    # Every read of a sign is one of the permitted forms above, spelled once; a permitted form
+    # that counts is not a filter (the record keeps the label). What is refused here is a
+    # sign read beside a filter, guard or branch that is NOT a permitted form.
     offenders =
       for file <- tracked(),
           {line, n} <- code_lines(file),
           Regex.match?(@sign_token, line),
+          not permitted_sign_line?(line),
           Regex.match?(@filtering, line),
           do: "#{file}:#{n}: #{String.trim(line)}"
 
