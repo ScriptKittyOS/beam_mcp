@@ -86,9 +86,17 @@ defmodule BeamMCP.Boundary do
           :beam_lib.chunks(:code.which(m), [:abstract_code]),
         atom <- atoms(forms, []),
         atom not in lib,
-        match?({:module, _}, Code.ensure_loaded(atom)),
+        module_name?(atom),
         uniq: true,
         do: atom
+  end
+
+  # An `Elixir.`-prefixed atom is a module name by construction, loadable here or not (a lane
+  # named `Finch` in a child spec with no Finch installed); an Erlang-style atom is a module
+  # name only if this VM can load it.
+  defp module_name?(atom) do
+    String.starts_with?(Atom.to_string(atom), "Elixir.") or
+      match?({:module, _}, Code.ensure_loaded(atom))
   end
 
   defp atoms({:atom, _, a}, acc), do: [a | acc]
