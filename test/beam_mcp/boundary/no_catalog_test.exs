@@ -32,10 +32,8 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
     # to the module and `%{m | __struct__: _}` all leave the atom somewhere that is not a
     # pattern. Compiler-generated sites (module_info, the struct's own __struct__/0,1) are not
     # read. So: at every real site, the atom is a pattern's `__struct__`.
-    real =
-      for {m, loc, ctx} <- Boundary.atom_sites(BeamMCP.ToolSpec),
-          not Boundary.generated?(loc),
-          do: {m, loc, ctx}
+    sites = Boundary.atom_sites(BeamMCP.ToolSpec)
+    real = for {m, loc, ctx} <- sites, not Boundary.generated?(loc), do: {m, loc, ctx}
 
     not_patterns = for {_, _, ctx} = site <- real, ctx != {:pattern, :__struct__}, do: site
 
@@ -45,6 +43,19 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
 
     # The reader sees the struct where it is matched, or it is reading nothing.
     assert length(real) >= 4
+
+    # The generated sites are not skipped: they are pinned. The compiler writes the struct's
+    # own __struct__/0,1 (two constructions, six values) and Catalog's callback info (three
+    # values), and nothing else -- an `unquote` of a hand-built AST carrying `generated: true`
+    # (a lane's plant) is a fourth generated construction, and fails here.
+    generated = for {m, loc, ctx} <- sites, Boundary.generated?(loc), do: {m, ctx}
+
+    assert Enum.frequencies(generated) == %{
+             {BeamMCP.Catalog, :value} => 3,
+             {BeamMCP.ToolSpec, :value} => 6,
+             {BeamMCP.ToolSpec, {:construction, :__struct__}} => 2
+           },
+           "generated sites of BeamMCP.ToolSpec: #{inspect(Enum.frequencies(generated))}"
   end
 
   # The names the package reaches by dot syntax, from the compiled forms. A field access and a

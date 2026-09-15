@@ -30,7 +30,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     compile_time =
       for {_, _, text} = hit <-
             Boundary.hits(
-              ~r/\bdefmacrop?\b|\bquote\b|:elixir\.|:compile\.|:erl_(eval|parse|scan)\.|:code\.load\w*\(|\bCode\.(?!ensure_)|\bMix\./
+              ~r/\bdefmacrop?\b|\bu?n?quote\b|:elixir\.|:elixir_\w+\.|:compile\.|:erl_(eval|parse|scan)\.|:code\.load\w*\(|\bCode\.(?!ensure_)|Elixir\.Code\b|\balias\s+Code\b|\bEEx\.|\bMix\./
             ),
           String.trim(text) != "@server_version Mix.Project.config()[:version]",
           do: hit
@@ -44,7 +44,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     # compile time and could bake a secret into the beam.
     reads =
       Boundary.hits(
-        ~r/:os\.|\bFile\.|:file\.|System\.(get_env|fetch_env!?)\b|Application\.(get_env|fetch_env!?|compile_env!?)\b/
+        ~r/:os\.|\bFile\.|:file\.|:prim_file\.|:erl_prim_loader\.|:filelib\.|\bPath\.wildcard|:init\.|System\.(get_env|fetch_env!?|user_home!?|argv|tmp_dir!?|cmd|shell)\b|Application\.(get_env|fetch_env!?|compile_env!?|get_all_env)\b|:application\.get_env/
       )
 
     assert reads == [], "environment or disk reads under lib/:\n  " <> Boundary.format(reads)
@@ -66,6 +66,12 @@ defmodule BeamMCP.Boundary.PopulationTest do
 
     assert strays == [],
            "modules in the built application from outside BeamMCP: #{inspect(strays)}"
+  end
+
+  test "the dependencies mix.exs declares are exactly the listed ones" do
+    # A `path:` dependency never reaches the lock; the declaration is pinned beside it.
+    assert Mix.Project.config()[:deps] |> Enum.map(&elem(&1, 0)) ==
+             [:jason, :telemetry, :plug, :bandit, :credo, :ex_doc, :stream_data]
   end
 
   test "the dependencies the lock file holds are exactly the listed ones" do
