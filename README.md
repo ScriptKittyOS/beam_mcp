@@ -35,11 +35,12 @@ Injection without a specification is a claim with nothing behind it, so both are
 
 `capabilities/0` returns a map with three required keys. `tools` holds `BeamMCP.ToolSpec`
 structs; `resources` holds `BeamMCP.ResourceSpec` and `BeamMCP.ResourceTemplateSpec` structs
-— one list, two kinds — and a catalog that lists a resource also exports `read_resource/1`;
+— one list, two kinds, no `uri` or `uri_template` twice — and a catalog that lists either
+also exports `read_resource/1`;
 `prompts` may be empty and nothing reads it yet.
 **An absent key is a malformed catalog, not an empty one**, and `BeamMCP.Server.new/1`
 refuses it at startup rather than at the first request — as it refuses a `resources` entry
-that is neither struct, and a listed resource with no reader.
+that is neither struct, a repeated key, and a listed resource or template with no reader.
 
 ```elixir
 defmodule MyApp.Catalog do
@@ -79,8 +80,8 @@ end
 **Resources are advertised and read from one reader.** `resources/list` and
 `resources/templates/list` serve what `capabilities/0` names, sorted by `uri` and
 `uriTemplate`; `resources/read` accepts a uri only when that same list names it or a listed
-template matches it (RFC 6570 `{var}` for one segment, `{+var}` across segments — nothing
-more is claimed) and refuses any other with `-32002` before host code runs, so what is
+template matches it (RFC 6570 `{var}` for one non-empty segment, `{+var}` across segments —
+nothing more is claimed) and refuses any other with `-32002` before host code runs, so what is
 advertised and what is readable cannot drift. The read is the catalog's `read_resource/1`:
 `{:ok, contents}` with `text` as a string or `blob` as raw bytes (base64 on the wire), or
 `{:error, reason}`, carried to the client as `-32002` with the reason as data. Both lists are

@@ -39,11 +39,12 @@ All notable changes to this project are documented here. The format follows
   revisions is gone — `subscriptions/listen` replaced it — and is not served; the capability
   is advertised with `subscribe: false` and `listChanged: false`). A catalog names resources
   and templates as `BeamMCP.ResourceSpec` and `BeamMCP.ResourceTemplateSpec` structs in its
-  existing `resources` list — one list, two structs, so `capabilities/0` gains no key — and
-  reads them through a new callback, `read_resource/1`. **One reader advertises and decides
+  existing `resources` list — one list, two structs, no key twice, so `capabilities/0` gains
+  no key — and reads them through a new callback, `read_resource/1`, required the moment
+  either is listed. **One reader advertises and decides
   readability:** a `resources/read` uri is served only when the same list names it or a listed
-  template matches it (RFC 6570 `{var}` within a segment, `{+var}` across; no other operator
-  is claimed), else `-32002 Resource not found` with the uri as data before any host code
+  template matches it (RFC 6570 `{var}` one non-empty segment, `{+var}` across; no other
+  operator is claimed), else `-32002 Resource not found` with the uri as data before any host code
   runs. A reader's `{:error, reason}` is `-32002` with the reason; a malformed reader answer is
   `-32603` naming the defect, never a crash. Blob contents are raw bytes at the reader and
   base64 on the wire; optional fields the specification leaves out are left out, not sent as
