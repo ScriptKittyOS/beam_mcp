@@ -105,6 +105,83 @@ defmodule BeamMCP.Transport.HTTPTest do
     )
   end
 
+  describe "over HTTP, _meta lives in params and its required fields are required (SEP-2575)" do
+    @spec_meta %{@vkey => @modern, "io.modelcontextprotocol/clientCapabilities" => %{}}
+
+    test "a request with params._meta is served as modern, and the transport stamps nothing" do
+      conn =
+        post(%{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "tools/list",
+          "params" => %{"_meta" => @spec_meta}
+        })
+
+      assert conn.status == 200
+      assert body!(conn)["result"]["resultType"] == "complete"
+    end
+
+    test "no _meta anywhere is -32602 with 400: the transport no longer stamps one from the header" do
+      conn = post(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_602
+      assert body!(conn)["error"]["message"] =~ "params._meta"
+    end
+
+    test "a top-level _meta is -32602 with 400, not a compatibility mode" do
+      conn =
+        post(%{"jsonrpc" => "2.0", "id" => 3, "method" => "tools/list", "_meta" => @spec_meta})
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_602
+    end
+
+    test "params._meta missing protocolVersion or clientCapabilities is -32602 with 400, naming the field" do
+      for {drop, field} <- [
+            {@vkey, "protocolVersion"},
+            {"io.modelcontextprotocol/clientCapabilities", "clientCapabilities"}
+          ] do
+        body = %{
+          "jsonrpc" => "2.0",
+          "id" => 4,
+          "method" => "tools/list",
+          "params" => %{"_meta" => Map.delete(@spec_meta, drop)}
+        }
+
+        conn = post(body)
+        assert conn.status == 400, "missing #{field}"
+        assert body!(conn)["error"]["code"] == -32_602
+        assert body!(conn)["error"]["message"] =~ field
+      end
+    end
+
+    test "the header is matched to params._meta: a disagreement is -32020 with 400" do
+      meta = Map.put(@spec_meta, @vkey, "v999.0.0")
+
+      conn =
+        post(%{
+          "jsonrpc" => "2.0",
+          "id" => 5,
+          "method" => "server/discover",
+          "params" => %{"_meta" => meta}
+        })
+
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] == -32_020
+    end
+
+    test "a headerless, bare server/discover is refused over HTTP: the era probe is a stdio exception" do
+      conn = post(%{"jsonrpc" => "2.0", "id" => 6, "method" => "server/discover"}, [])
+      assert conn.status == 400
+      assert body!(conn)["error"]["code"] in [-32_020, -32_602]
+    end
+
+    test "a notification's _meta is optional, as NotificationParams says" do
+      conn = post(%{"jsonrpc" => "2.0", "method" => "exit"}, [{@hdr, @modern}])
+      assert conn.status == 202
+    end
+  end
+
   describe "the two options the package refuses to default" do
     test "init/1 raises without :authorize, naming what the host must decide" do
       assert_raise ArgumentError, ~r/requires an :authorize option, and it has no default/, fn ->
