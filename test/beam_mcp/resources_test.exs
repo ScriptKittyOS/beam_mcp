@@ -229,7 +229,10 @@ defmodule BeamMCP.ResourcesTest do
           Macro.Env.location(__ENV__)
         )
 
-        assert {:error, message} = Catalog.validate(mod), bad
+        # `assert match?` rather than a match: a failing match does not print the label.
+        result = Catalog.validate(mod)
+        assert match?({:error, _}, result), "#{bad} validated: #{inspect(result)}"
+        {:error, message} = result
         assert message =~ "uri_template", bad
         assert message =~ bad, bad
       end
