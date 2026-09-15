@@ -64,14 +64,17 @@ read, a file read or an atom decoded from the wire fails here until it is named:
 `test/beam_mcp/boundary/package_reach_test.exs` "the modules the package calls are exactly the listed ones" "on the modules that could reach code, names, secrets, the OS or another node, the functions called are exactly the listed ones" "the one atom made from a binary is made in Server.declared_atoms/1" "every atom in the compiled forms that names a module is a called module or one of the eight named as data".
 What runs at *compile time* — a module body, an attribute's expression — leaves no call in the
 beam and is outside every artefact census; the text holds that line instead, and only by the
-names it lists: no macro *defined*, no `quote` or `unquote`, no evaluator or loader called
-(`:elixir`, `:elixir_*`, `:compile`, `:erl_eval`, `Code` written out or aliased, `:code.load_*`
-as a call, `EEx`, `Mix`), and no read of the environment or the disk (`:os`, `File`, `:file`,
-`:prim_file`, `:filelib`, `Path.wildcard`, `:init`, `System`'s and `Application`'s readers)
-at any position under `lib/`, with one allowance by its exact line (the package reads its own
-version from `mix.exs`). A read or an evaluator under a name not on that list, run in a module
-body, is the one thing on this page held by nothing but a reviewer's eye — the reader that
-would see a module body by what it does is a compiler tracer, and it is not built. Macros
+names it lists, read two ways: each name where it is written (`defmacro`, `defguard`, `quote`,
+`unquote`, `unquote_splicing`; `:elixir`, `:elixir_*`, `:compile`, `:erl_eval`, `:erl_parse`,
+`:erl_scan`, `:code.load_*` with or without parentheses; `Code.` except `Code.ensure_*`,
+`Elixir.Code`, `EEx.`, `Mix.`; `:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`,
+`Path.wildcard`, `:init.`, `System`'s and `Application`'s readers), and every `import`,
+`alias` or `require` that would bring `Code`, `EEx`, `Mix` or an Erlang evaluator, loader or
+reader in under another name, however spelled and across however many lines — at any position
+under `lib/`, with one allowance by its exact line (the package reads its own version from
+`mix.exs`). A read or an evaluator under a name not on those lists, run in a module body, is
+the one thing on this page held by nothing but a reviewer's eye — the reader that would see a
+module body by what it does is a compiler tracer, and it is not built. Macros
 *invoked* from Elixir and the dependencies — `use GenServer`, `defstruct`, `Logger.error` —
 expand under `lib/` as anywhere and are the dependency list's, held by their names only; the
 one Elixir macro that reads the disk at expansion, `EEx.function_from_file`, is barred by its
