@@ -28,6 +28,10 @@ defmodule BeamMCP.Connectome.Edge do
   @keys [:from, :to, :kind, :provenance, :weight]
   @required [:from, :to, :kind, :provenance]
 
+  @doc "The edge kinds the vocabulary defines, in `docs/connectome.md`'s order."
+  @spec kinds() :: [kind()]
+  def kinds, do: @kinds
+
   @enforce_keys [:from, :to, :kind, :provenance]
   defstruct [:from, :to, :kind, :provenance, :weight, sign: :unknown]
 
