@@ -63,27 +63,27 @@ library, an evaluator, a socket, a shell, a spawn to another node, a key store, 
 read, a file read or an atom decoded from the wire fails here until it is named:
 `test/beam_mcp/boundary/package_reach_test.exs` "the modules the package calls are exactly the listed ones" "on the modules that could reach code, names, secrets, the OS or another node, the functions called are exactly the listed ones" "the one atom made from a binary is made in Server.declared_atoms/1" "every atom in the compiled forms that names a module is a called module or one of the eight named as data".
 What runs at *compile time* — a module body, an attribute's expression — leaves no call in the
-beam and is outside every artefact census; the text holds that line instead, and only by the
-names it lists, read two ways: each name where it is written (`defmacro`, `defguard`, `quote`,
-`unquote`, `unquote_splicing`; `:elixir`, `:elixir_*`, `:compile`, `:erl_eval`, `:erl_parse`,
-`:erl_scan`, `:code.load_*`, `:code.atomic_load`, `:code.prepare_loading` and `:code.finish_loading` as a call or a capture; the bare words `Code` — except
-`Code.ensure_*` — `EEx` and `Mix`, and `Elixir.Code`, `Elixir.EEx`, `Elixir.Mix` quoted or
-not; `:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`, `Path.wildcard`, `:init.`,
-`System`'s and `Application`'s readers, in the plain and the `:"Elixir.…"` spelling, either
-quote; any quoted atom, either quote, carrying a `\x` or `\u` escape, and any word sigil
-that makes atoms (`~w(…)a`) — two ways a listed atom could be hidden; a third, an atom built by
-interpolation, is the joined-strings edge below), and
-every `import`, `alias` or `require` that would bring `Code`, `EEx`, `Mix`, `File`, `System`,
-`Elixir.Path`, `Application` or an Erlang evaluator, loader or reader in under another name, however
-spelled and across however many lines — at any position under `lib/`, with two allowances by
-their exact lines (the package reads its own version from `mix.exs`; the tracer's threat model
-names the loader it does not call). A read, an evaluator, or any other reach under a name not
-on those lists, run in a module body, is held by nothing but a reviewer's eye — the reader
-that would see a module body by what it does is a compiler tracer, and it is not built. Macros
+beam and is outside every artefact census; the text holds that line instead, by name. **The
+census's patterns are the list**; this paragraph names their classes, not their spellings. The
+classes: macro and guard definitions, `quote`, `unquote`, `unquote_splicing`; the Elixir and
+Erlang evaluators and compilers (`Code` except `Code.ensure_*`, `:elixir`, `:elixir_*`,
+`:compile`, `:erl_eval`, `:erl_parse`, `:erl_scan`, `EEx`, `Mix`); the `:code` loaders; the
+readers of the environment and the disk (`:os`, `File`, `:file`, `:prim_file`, `:filelib`,
+`Path.wildcard`, `:init`, and twelve named readers on `System` and `Application`); a quoted
+atom carrying an escape, a word sigil that makes atoms, and the Erlang names above in quotes;
+and every `import`, `alias` or `require` that would bring any of these in under another name,
+across lines. Two allowances by exact line: the package's own version read from `mix.exs`, and
+the tracer's threat model naming the loader it does not call. Beside the census, the
+compiler's `warnings_as_errors` (in `mix.exs`) refuses a needlessly quoted atom outright — a
+bar this package's build has and a stranger's might not. A reach under a name not in those
+classes, run in a module body, is held by nothing but a reviewer's eye — the reader that
+would see a module body by what it does is a compiler tracer, and it is not built. Macros
 *invoked* from Elixir and the dependencies — `use GenServer`, `defstruct`, `Logger.error` —
 expand under `lib/` as anywhere and are the dependency list's, held by their names only; the
 one Elixir macro that reads the disk at expansion, `EEx.function_from_file`, is barred by its
-name. The dependency set is pinned beside it by name, as declared and as locked (a `path:` dependency never reaches the lock; a source or checksum is not read):
+name.
+
+The dependency set is pinned beside it by name, as declared and as locked (a `path:` dependency never reaches the lock; a source or checksum is not read):
 `test/beam_mcp/boundary/population_test.exs` "the dependencies mix.exs declares are exactly the listed ones" "the dependencies the lock file holds are exactly the listed ones".
 The text census for the same acts stays beside it, for the line it names:
 `test/beam_mcp/boundary/no_dynamic_evaluation_test.exs` "no line under lib/ evaluates code or builds a name at runtime, beyond the argument-key atoms".
@@ -127,7 +127,8 @@ reads text, and text has edges worth stating:
   `"mcp-" <> "session-id"`, a header name that is data and not code — is outside every census on
   this page and is not pinned; a reviewer reads for it, as for the compile-time reach above:
   those two are what a reviewer's eye holds here. The text reader drops a line beginning `#`
-  as a comment, except a `#{…}` interpolation, which is code and is read. Two things under
+  as a comment unless it carries a `#{` — an interpolation inside a string is code and is read.
+  Two things under
   `lib/` are called without a written name by design and are the host's code: its catalog module
   (`capabilities/0`, one callee, three sites, and the only named calls through a runtime module)
   and the functions it hands in as options (the dispatch, the `:authorize` hooks).
