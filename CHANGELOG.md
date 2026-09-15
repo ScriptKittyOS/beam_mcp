@@ -32,6 +32,25 @@ All notable changes to this project are documented here. The format follows
 - **`BeamMCP.Connectome.Edge.kinds/0`** — the edge vocabulary from one site.
 - **Nothing on the wire changes.** No method, field or capability is added.
 
+### Changed — on the wire, in `server/discover` and in what a transport advertises
+
+- **`server/discover` returns the `2026-07-28` `DiscoverResult` in full.** The schema requires
+  `cacheScope`, `capabilities`, `resultType`, `supportedVersions` and `ttlMs`; the result was
+  undecorated — a probe shortcut carried since `0.3.0`, called a known gap in the README — and
+  a client reading it had grounds to classify the server as legacy. Now: `supportedVersions`
+  (the field was named `protocolVersions`), `resultType: "complete"`, `ttlMs: 0` and
+  `cacheScope: "private"` (nothing is cached; the non-permissive default), and the server's
+  identity in `_meta["io.modelcontextprotocol/serverInfo"]` rather than a `serverInfo` body
+  field, which spec PR #3002 removed. Found by the official conformance suite's
+  `server-stateless` scenario, run against the package for the first time.
+- **A transport advertises only the revisions it serves.** `BeamMCP.Server.new/1` takes
+  `supported_versions:`; the HTTP transport, which refuses every revision but `2026-07-28` on
+  every POST, passes exactly that, so its `server/discover` says `["2026-07-28"]` and its
+  `-32022` error lists the same — it had listed `2025-11-25` while refusing it. A revision not
+  advertised is not served either. Dual-era is a stdio fact; stdio advertises both, as before.
+- **`-32022`'s `data.requested` is a string over HTTP**, the version the client asked for
+  (the first value refused when several were sent), as the schema says; it was a list.
+
 ### Fixed — test suite only
 
 - The Livebook exports fixture ran its collector without a lock; two async test modules

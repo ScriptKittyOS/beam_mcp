@@ -331,11 +331,15 @@ a message this server asks clients to send.
 
 **Two exceptions, and they are exceptions to the row above.** `server/discover` and
 `initialize` are matched *before* the revision switch, so neither is affected by what a `_meta`
-declares and **neither result is decorated** — a `server/discover` result carries no
-`resultType` even under `2026-07-28`, where the specification requires one on every result.
-`server/discover` is matched first on purpose: on stdio it is the era probe, sent by a client
-that does not yet know what it is talking to. The missing `resultType` on it is a known gap,
-not a design choice.
+declares. `server/discover` is matched first on purpose: **on stdio it is the era probe**, sent
+by a client that does not yet know what it is talking to, and it is answered bare. Its result
+is the `2026-07-28` `DiscoverResult` in full — `supportedVersions`, `capabilities`,
+`resultType`, `ttlMs`, `cacheScope`, and the server's identity in `_meta` — because a client
+reading a bare result has grounds to classify the server as legacy. `initialize` is the
+legacy opener and its result is legacy-shaped. **Over HTTP there is no era probe:** every
+POST must carry `mcp-protocol-version`, a headerless `server/discover` is refused like any
+other request, and the transport advertises only the revision it serves — `supportedVersions`
+is `["2026-07-28"]` there. Dual-era is a stdio fact.
 
 **The session is tracked, not enforced.** Nothing in this package refuses a request because
 `initialize` has not been seen: every method it implements is served bare, `tools/call`

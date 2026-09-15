@@ -235,7 +235,12 @@ if Code.ensure_loaded?(Plug) do
         authorize: authorize,
         authorize_body: authorize_body,
         allowed_origins: origins,
-        server_opts: Keyword.drop(opts, @plug_opts)
+        # This transport serves the 2026-07-28 stateless model and refuses every other
+        # revision on every POST, so the core it builds advertises exactly that -- in
+        # server/discover's supportedVersions and in -32022's supported. Dual-era is a
+        # stdio fact.
+        server_opts:
+          opts |> Keyword.drop(@plug_opts) |> Keyword.put(:supported_versions, [@modern_version])
       }
     end
 
@@ -1055,10 +1060,12 @@ if Code.ensure_loaded?(Plug) do
                "message" => "Unsupported protocol version",
                "data" => %{
                  "supported" => [@modern_version],
-                 # The values actually refused, not `List.first/1` of everything sent: with two
-                 # headers the old payload could report a `requested` version that is in its own
-                 # `supported` list, which reads as a server contradicting itself.
-                 "requested" => unsupported
+                 # The schema says `requested` is a string: the version the client asked for.
+                 # It is the first value actually REFUSED -- not `List.first/1` of everything
+                 # sent: with two headers that could name a version in `supported`, a server
+                 # contradicting itself. A request with several unsupported values is refused
+                 # naming the first; the others are the same refusal.
+                 "requested" => hd(unsupported)
                }
              }
            }}

@@ -255,15 +255,20 @@ defmodule BeamMCP.ReadmeClaimsTest do
   end
 
   describe "the two exceptions the README names" do
-    test "server/discover and initialize are matched before the switch and are undecorated" do
-      claims("**neither result is decorated**")
+    test "server/discover is the stdio era probe, answered bare, with the full DiscoverResult; initialize is legacy-shaped" do
+      claims("**on stdio it is the era probe**")
+      claims("is the `2026-07-28` `DiscoverResult` in full")
 
       discover = resp(meta("server/discover", @modern))["result"]
-      assert discover["protocolVersions"], "server/discover is answered whatever _meta says"
+      assert discover["supportedVersions"], "server/discover is answered whatever _meta says"
+      bare = resp(%{"jsonrpc" => "2.0", "id" => 9, "method" => "server/discover"})["result"]
+      assert bare["supportedVersions"] == discover["supportedVersions"]
 
-      refute discover["resultType"],
-             "the README says a server/discover result carries no resultType even under " <>
-               "2026-07-28, and calls that a known gap rather than a design choice"
+      for key <- ~w(supportedVersions capabilities resultType ttlMs cacheScope) do
+        assert Map.has_key?(discover, key), "DiscoverResult requires #{key}"
+      end
+
+      assert discover["_meta"]["io.modelcontextprotocol/serverInfo"]["name"]
 
       init =
         resp(meta("initialize", @modern, %{"params" => %{"protocolVersion" => @legacy}}))[
