@@ -32,6 +32,19 @@ All notable changes to this project are documented here. The format follows
 - **`BeamMCP.Connectome.Edge.kinds/0`** — the edge vocabulary from one site.
 - **Nothing on the wire changes.** No method, field or capability is added.
 
+### Added — the conformance harness, and a number a stranger can reproduce
+
+- **`tools/conformance.sh` runs the official MCP conformance suite** (`@modelcontextprotocol/
+  conformance` 0.2.0-alpha.11, pinned by exact version) against the HTTP transport with the
+  harness catalog in `conformance/server.exs`, for each revision's frozen requirement set, and
+  prints **two rows per revision** from the suite's own `checks.json`: suite totals (scored
+  scenarios passed / scored — the failures not hidden) and claimed-surface totals (over the
+  scenarios whose methods and tool names this package claims). Expected failures are baselined
+  per revision with a reason word each; the suite exits 1 on a regression and on a stale
+  entry. Measured 2026-09-15: `2026-07-28` 7 / 37 and 5 / 6; `2025-11-25` over HTTP 0 / 30 by
+  design (HTTP serves `2026-07-28` only; `2025-11-25` lives on stdio, which the suite cannot
+  drive). The README carries the rows with their provenance. Needs Node ≥ 22.
+
 ### Changed — BREAKING: the request `_meta` is read where the schema puts it, `params._meta`
 
 - **A request's `_meta` lives in `params._meta`, and nowhere else.** `JSONRPCRequest` has no

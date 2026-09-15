@@ -685,6 +685,31 @@ defmodule BeamMCP.ReadmeClaimsTest do
     end
   end
 
+  describe "the conformance README claims" do
+    test "the two rows are the ones the README states, the suite version is the script's pin, and every baseline entry carries a reason word" do
+      claims("| `2026-07-28` | **7 / 37** | **5 / 6**")
+      claims("| `2025-11-25` over HTTP | **0 / 30** | 0 / 5 |")
+      claims("both ship together or neither does")
+      claims("the HTTP transport\nserves `2026-07-28` only, and `2025-11-25` lives on stdio")
+
+      root = Path.join(__DIR__, "../..")
+      script = File.read!(Path.join(root, "tools/conformance.sh"))
+      [_, pinned] = Regex.run(~r/SUITE="@modelcontextprotocol\/conformance@([^"]+)"/, script)
+      claims("`@modelcontextprotocol/conformance`\n**#{pinned}**")
+
+      words = ~w(deliberately-out decided-not-built not-implemented harness design)
+
+      for rev <- ~w(2026-07-28 2025-11-25) do
+        for line <-
+              File.read!(Path.join(root, "conformance/baseline-#{rev}.yml")) |> String.split("\n"),
+            String.starts_with?(line, "  - ") do
+          assert Enum.any?(words, &String.contains?(line, "# " <> &1)),
+                 "#{rev}: no reason word on: #{line}"
+        end
+      end
+    end
+  end
+
   describe "the connectome README claims" do
     # Each quotes its sentence and exercises the claim, on the same fixtures the Livebook's
     # exports are built from -- so the README, the exports and the code are held together.
