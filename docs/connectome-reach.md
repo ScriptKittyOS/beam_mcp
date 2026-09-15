@@ -37,7 +37,8 @@ server is always crossed".
 
 `reachable_without/5` returns `%BeamMCP.Connectome.Reach.Path{nodes: [...], edges: [...]}`:
 `nodes` from `from` to `to` in order, `edges` one input edge per step — the first edge in the
-graph's canonical order between the two nodes whose kind the query admitted — so
+graph's edge order (canonical, for a graph `BeamMCP.Connectome.Graph.new/1` built) between the
+two nodes whose kind the query admitted — so
 `length(edges) == length(nodes) - 1`, every edge is `in graph.edges`, each consecutive pair of
 nodes is that edge's `from` and `to`, and no gate is among the nodes. A property test holds
 all four over generated graphs. The witness is a **shortest** gate-free path in hops among
@@ -45,15 +46,26 @@ the admitted kinds; when several are shortest, the one breadth-first search find
 The witness is a path in the **input** graph at the level the graph was built at — a module
 graph's witness names modules, never a collapsed group.
 
-## Constraints
+## Constraints — each scoped to the questions it bears on
 
-- `kinds:` — the edge kinds the search may follow, a non-empty subset of the vocabulary's
-  four (`docs/connectome.md`); default all four. An edge of another kind is not there.
-- `max_hops:` — a positive integer or `:infinity` (default). A shortest path longer than it
-  is not a path for the question asked: `reachable?/4` answers `false`, `reachable_without/5`
-  answers `{:ok, false}`. `max_hops: 1` is adjacency.
-- `entries:` — the entry set for `dominates?/4` and `mandatory_pass/3`; a non-empty list of
-  node ids the graph holds.
+- `kinds:` (every query) — the edge kinds the search may follow, a non-empty subset of the
+  vocabulary's four (`docs/connectome.md`); default all four. An edge of another kind is not
+  there.
+- `max_hops:` (`reachable?/4` and `reachable_without/5` only) — a positive integer or
+  `:infinity` (default). A shortest path longer than it is not a path for the question asked:
+  `reachable?/4` answers `false`, `reachable_without/5` answers `{:ok, false}`. `max_hops: 1`
+  is adjacency.
+- `entries:` (`dominates?/4` and `mandatory_pass/3` only) — the entry set; a non-empty list
+  of node ids the graph holds. Without it, the server nodes; a graph with none is refused
+  (`{:invalid, :entries, []}`), never answered "unreachable".
+- `max_edges:` (every query) — see below.
+
+**An option that cannot bear on the question asked is refused by name**
+(`{:error, {:unknown_option, key}}`), not read. A review found that with `max_hops:` read by
+`dominates?/4` the module could hand back a gate-free witness round a node and, in the same
+breath, call that node a dominator, and the two dominance implementations disagreed.
+Bounded-length dominance is a different question from the one Lengauer–Tarjan answers, and
+it is not offered.
 
 **Signs are not consulted.** An edge's `sign` is the host's (`docs/connectome.md`); the
 package writes `:unknown` and reads none of them here. "Avoid these nodes" is the whole of
@@ -69,9 +81,13 @@ other on every node of generated graphs:
 - `dominates?/4` is the definition itself: `target` is reachable from the root with `gate`
   present, and unreachable with `gate` and its edges removed. Two searches.
 - `mandatory_pass/3` is Lengauer–Tarjan (1979), the simple variant with path compression,
-  over the part of the graph the root reaches, returning the chain of immediate dominators
-  above `target` with the root and `target` left out. OTP's `:digraph_utils` has no dominator
-  function (measured on OTP 28), so it is written in the package and held to `dominates?/4`.
+  over the part of the graph the root reaches — one build; the algorithm's own depth-first
+  numbering is what says the target is unreachable — returning the chain of immediate
+  dominators above `target` with the root and `target` left out. OTP's `:digraph_utils` has
+  no dominator function (measured on OTP 28), so it is written in the package and held to
+  `dominates?/4` — by the property, and by two independent oracles a review lane wrote from
+  this page's definition (all simple paths intersected; node removal), which agreed with
+  both functions on every target and gate of 1 200 random graphs.
 
 When `target` is unreachable from the entry set both answer `{:error, {:unreachable, target}}`:
 dominance is undefined there, and `true` would make an unreachable effect look guarded.
@@ -86,9 +102,9 @@ returns, on every exit. On top of that:
 | function | work | bound |
 | -- | -- | -- |
 | `reachable?/4` | one breadth-first search | O(V + E) |
-| `reachable_without/5` | one breadth-first search, then the edges of the path resolved against the graph's edge list | O(V + E + hops · E) |
+| `reachable_without/5` | one breadth-first search, then the admitted edges indexed once by `{from, to}` and the path's edges read from the index | O(V + E) |
 | `dominates?/4` | two builds, two searches | O(V + E) |
-| `mandatory_pass/3` | one build, a depth-first numbering, Lengauer–Tarjan | O(E log V) |
+| `mandatory_pass/3` | one build, a depth-first numbering, Lengauer–Tarjan | O(E log V) in the paper's array model; O(E log² V) here, the state being immutable maps |
 
 Measured on the gate's 10 000-edge fixture (501 nodes, ~9 970 edges after de-duplication,
 32 schedulers, OTP 28; medians of five after a warm-up, `bench/reach.exs`, recorded by every
@@ -106,10 +122,14 @@ is the owner's, against these numbers.
   package should answer — a cap on that would be raised until it meant nothing. Motif
   isomorphism is not offered for the same reason. That is the boundary: what is cheap on the
   BEAM — searches and dominators — is here; what is not is refused rather than attempted.
-- An unknown option (`{:unknown_option, key}`), an option of the wrong shape
-  (`{:invalid, key, value}`), an edge kind outside the vocabulary, and a node id — as `from`,
-  `to`, a gate, an entry or a target — the graph does not hold (`{:unknown_node, id}`) are each
-  refused by name, before anything is built.
+- An unknown option, or one the question cannot use (`{:unknown_option, key}`), an option of
+  the wrong shape (`{:invalid, key, value}`), an edge kind outside the vocabulary, an empty
+  entry set, and a node id — as `from`, `to`, a gate, an entry or a target — the graph does
+  not hold (`{:unknown_node, id}`) are each refused by name, before anything is built.
+- A graph `BeamMCP.Connectome.Graph.check/1` would refuse — a literal `%Graph{}` with a
+  dangling edge, a struct of the wrong shape — is refused as `{:error, {:invalid_graph,
+  reason}}` with that function's reason, never answered: `:digraph` would drop the dangling
+  edge without a word and the answer would describe a graph nobody handed in.
 
 ## Worked example
 
