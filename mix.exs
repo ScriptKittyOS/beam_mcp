@@ -30,7 +30,8 @@ defmodule BeamMCP.MixProject do
           "docs/connectome.md",
           "docs/connectome-canonical.md",
           "docs/connectome-observed.md",
-          "docs/connectome-diff.md"
+          "docs/connectome-diff.md",
+          "docs/connectome-reach.md"
         ],
         # Grouped by namespace, not by a list of names: a module added under either prefix
         # lands in its group without an edit here. The core modules are the ungrouped rest.

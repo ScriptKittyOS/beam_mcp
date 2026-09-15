@@ -74,6 +74,42 @@ defmodule BeamMCP.Connectome.ReachTest do
     end
   end
 
+  describe "two shapes Lengauer-Tarjan gets wrong when broken (shrunk by the oracle property)" do
+    # Found by the oracle at 20 000 generations against two mutants the suite's 100 did not
+    # reach; pinned here so the kill is deterministic. Each names the node the broken
+    # algorithm wrongly puts in the set and the path that goes round it.
+    test "step 4 (implicit to explicit dominators): f is not a dominator of x, srv->c->b->x goes round it" do
+      g =
+        graph([:a, :b, :c, :f, :x], [
+          {:srv, :a},
+          {:srv, :c},
+          {:a, :f},
+          {:b, :x},
+          {:c, :b},
+          {:c, :f},
+          {:f, :x}
+        ])
+
+      assert {:ok, MapSet.new([id(:srv)])} == Reach.mandatory_pass(g, id(:x))
+      assert {:ok, false} = Reach.dominates?(g, id(:f), id(:x))
+    end
+
+    test "path compression: e is not a dominator of x, srv->d->b->a->x goes round it" do
+      g =
+        graph([:a, :b, :d, :e, :x], [
+          {:srv, :d},
+          {:srv, :e},
+          {:a, :x},
+          {:b, :a},
+          {:d, :b},
+          {:e, :a}
+        ])
+
+      assert {:ok, MapSet.new([id(:srv), id(:a)])} == Reach.mandatory_pass(g, id(:x))
+      assert {:ok, false} = Reach.dominates?(g, id(:e), id(:x))
+    end
+  end
+
   describe "the witness path is a path in the input graph" do
     property "each consecutive pair is an input edge, from entry to target, crossing no gate" do
       check all({g, gates} <- graph_gen()) do
@@ -121,6 +157,29 @@ defmodule BeamMCP.Connectome.ReachTest do
       assert {:ok, true} = Reach.reachable?(g, id(:srv), id(:x), kinds: [:invoke, :read])
     end
 
+    test "a witness under a kind constraint carries edges of the admitted kinds only" do
+      g =
+        graph([:a, :x], [
+          {:srv, :a, :invoke},
+          {:srv, :a, :read},
+          {:a, :x, :read},
+          {:a, :x, :invoke}
+        ])
+
+      assert {:ok, %Path{edges: edges}} =
+               Reach.reachable_without(g, id(:srv), id(:x), [], kinds: [:read])
+
+      assert Enum.map(edges, & &1.kind) == [:read, :read]
+    end
+
+    test "a node reaches itself in zero hops, with or without a cycle" do
+      g = graph([:a, :x], [{:srv, :a}])
+      assert {:ok, true} = Reach.reachable?(g, id(:x), id(:x))
+
+      assert {:ok, %Path{nodes: [_], edges: []}} =
+               Reach.reachable_without(g, id(:x), id(:x), [id(:a)])
+    end
+
     test "max_hops bounds the witness" do
       g = graph([:a, :b, :x], [{:srv, :a}, {:a, :b}, {:b, :x}])
       assert {:ok, true} = Reach.reachable?(g, id(:srv), id(:x), max_hops: 3)
@@ -138,6 +197,8 @@ defmodule BeamMCP.Connectome.ReachTest do
     test "a graph over the edge cap is refused, and the refusal names the cap" do
       g = gate_fixture()
       assert {:error, {:cap, :max_edges, 3}} = Reach.reachable?(g, id(:srv), id(:x), max_edges: 3)
+      # The cap is inclusive: a graph of exactly max_edges edges is not over it.
+      assert {:ok, true} = Reach.reachable?(g, id(:srv), id(:x), max_edges: length(g.edges))
       assert {:error, {:cap, :max_edges, 3}} = Reach.mandatory_pass(g, id(:x), max_edges: 3)
     end
 
