@@ -10,18 +10,37 @@ defmodule BeamMCP.Catalog do
   both — a tool advertised by `tools/list` and refused by `tools/call` is the defect this
   behaviour exists to make impossible.
 
-  ## The shape carries keys this package does not yet serve
+  ## The shape
 
-      %{tools: [BeamMCP.ToolSpec.t()], resources: [], prompts: []}
+      %{
+        tools: [BeamMCP.ToolSpec.t()],
+        resources: [BeamMCP.ResourceSpec.t() | BeamMCP.ResourceTemplateSpec.t()],
+        prompts: []
+      }
 
-  `resources` and `prompts` are **required and may be empty**. The server reads neither; the
-  declared-connectome builder reads a `:uri`/`"uri"` or `:name`/`"name"` from each entry to
-  name a node and enumerates the rest as unreadable, which is a reader, not a contract. They
-  are here so that serving them later adds a reader rather than changing this contract a second
-  time, and every host that has already written `capabilities/0` keeps working when they do.
+  Every key is **required and may be empty**. `resources` holds both resources and resource
+  templates -- one list, two structs -- so that serving templates added a reader rather than
+  a key, and every host that had written `capabilities/0` with an empty list kept working.
+  `prompts` is not yet read by the server; the declared-connectome builder reads a `:name`
+  from each entry to name a node and enumerates the rest as unreadable.
 
   A key that is absent is a malformed catalog, not an empty one — the two are different claims
   and only one of them is checkable.
+
+  ## Resources: advertise and read from one reader, as tools do
+
+  `resources/1` and `templates/1` are the single readers. `resources/list` and
+  `resources/templates/list` advertise what they return, and `readable?/2` decides from the
+  same call whether a `resources/read` uri is served at all: a uri the catalog lists, or one a
+  listed template matches, is passed to the catalog's `read_resource/1`; any other is
+  refused before host code runs. A catalog that lists a resource must export
+  `read_resource/1` -- `validate/1` refuses one that does not, because advertising what
+  cannot be read is the defect this behaviour exists to make impossible.
+
+  `read_resource/1` answers `{:ok, contents}` -- a list of `%{uri: String.t(), text:
+  String.t()}` or `%{uri: String.t(), blob: binary()}` maps, each with an optional
+  `mime_type:`; the server base64-encodes a blob -- or `{:error, reason}`, which reaches
+  the client as `-32002` carrying the reason as data.
 
   ## Why `capabilities/0` and not `BeamMCP.ToolCatalog.all/0`
 
@@ -34,18 +53,43 @@ defmodule BeamMCP.Catalog do
   """
 
   @typedoc """
-  What a host offers. Every key is required; `resources` and `prompts` are typed as generic
-  lists because the server does not read them and no code enforces a shape -- the connectome
-  builder reads a name from each entry and enumerates the rest, which is a reader, not a
-  contract.
+  What a host offers. Every key is required. `prompts` is typed as a generic list because the
+  server does not read it yet and no code enforces a shape -- the connectome builder reads a
+  name from each entry and enumerates the rest, which is a reader, not a contract.
   """
   @type t :: %{
           required(:tools) => [BeamMCP.ToolSpec.t()],
-          required(:resources) => list(),
+          required(:resources) => [BeamMCP.ResourceSpec.t() | BeamMCP.ResourceTemplateSpec.t()],
           required(:prompts) => list()
         }
 
+  @typedoc """
+  One item of a resource's contents, as the catalog's reader returns it: text as a string, or
+  a blob as raw bytes (the server encodes it), with the uri it belongs to and an optional
+  MIME type.
+  """
+  @type contents ::
+          %{
+            required(:uri) => String.t(),
+            required(:text) => String.t(),
+            optional(:mime_type) => String.t()
+          }
+          | %{
+              required(:uri) => String.t(),
+              required(:blob) => binary(),
+              optional(:mime_type) => String.t()
+            }
+
   @callback capabilities() :: t()
+
+  @doc """
+  Reads a resource the catalog lists, or one a listed template matches. Required when
+  `capabilities/0` names any resource; `validate/1` refuses a catalog that lists one without
+  it.
+  """
+  @callback read_resource(uri :: String.t()) :: {:ok, [contents()]} | {:error, term()}
+
+  @optional_callbacks read_resource: 1
 
   @required_keys [:tools, :resources, :prompts]
 
@@ -61,6 +105,56 @@ defmodule BeamMCP.Catalog do
   """
   @spec tools(module()) :: [BeamMCP.ToolSpec.t()]
   def tools(catalog), do: catalog.capabilities().tools
+
+  @doc """
+  The resources a catalog offers -- the `BeamMCP.ResourceSpec` entries of its `resources`
+  list, sorted by `uri`. The single reader for `resources/list` and for readability.
+  """
+  @spec resources(module()) :: [BeamMCP.ResourceSpec.t()]
+  def resources(catalog) do
+    entries = for %BeamMCP.ResourceSpec{} = r <- entries(catalog), do: r
+    Enum.sort_by(entries, & &1.uri)
+  end
+
+  @doc """
+  The resource templates a catalog offers -- the `BeamMCP.ResourceTemplateSpec` entries of its
+  `resources` list, sorted by `uri_template`. The single reader for
+  `resources/templates/list` and for readability.
+  """
+  @spec templates(module()) :: [BeamMCP.ResourceTemplateSpec.t()]
+  def templates(catalog) do
+    entries = for %BeamMCP.ResourceTemplateSpec{} = t <- entries(catalog), do: t
+    Enum.sort_by(entries, & &1.uri_template)
+  end
+
+  # The one call behind both resource readers.
+  defp entries(catalog), do: catalog.capabilities().resources
+
+  @doc """
+  Whether a `resources/read` uri is served at all: listed by `resources/1`, or matched by a
+  template `templates/1` returns. RFC 6570 level 1 plus reserved expansion, and nothing more:
+  `{var}` matches one segment (any run of characters without `/`), `{+var}` matches across
+  segments; every other character of the template is literal.
+  """
+  @spec readable?(module(), String.t()) :: boolean()
+  def readable?(catalog, uri) when is_binary(uri) do
+    Enum.any?(resources(catalog), &(&1.uri == uri)) or
+      Enum.any?(templates(catalog), &template_matches?(&1.uri_template, uri))
+  end
+
+  @doc false
+  def template_matches?(template, uri) do
+    pattern =
+      template
+      |> String.split(~r/\{\+?[^}]+\}/, include_captures: true)
+      |> Enum.map_join(fn
+        "{+" <> _ -> ".+"
+        "{" <> _ -> "[^/]+"
+        literal -> Regex.escape(literal)
+      end)
+
+    Regex.match?(~r/\A#{pattern}\z/, uri)
+  end
 
   @doc """
   Finds the spec a tool name refers to, or `:error`.
@@ -151,8 +245,25 @@ defmodule BeamMCP.Catalog do
       not Enum.all?(caps.tools, &match?(%BeamMCP.ToolSpec{}, &1)) ->
         {:error, "#{inspect(catalog)}.capabilities/0's :tools must all be %BeamMCP.ToolSpec{}"}
 
+      not is_list(caps.resources) ->
+        {:error, "#{inspect(catalog)}.capabilities/0's :resources must be a list"}
+
+      not Enum.all?(caps.resources, &resource_entry?/1) ->
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's :resources must all be %BeamMCP.ResourceSpec{} " <>
+           "or %BeamMCP.ResourceTemplateSpec{}"}
+
+      caps.resources != [] and not function_exported?(catalog, :read_resource, 1) ->
+        {:error,
+         "#{inspect(catalog)} lists a resource and does not export read_resource/1, " <>
+           "so what it advertises could not be read"}
+
       true ->
         :ok
     end
   end
+
+  defp resource_entry?(%BeamMCP.ResourceSpec{}), do: true
+  defp resource_entry?(%BeamMCP.ResourceTemplateSpec{}), do: true
+  defp resource_entry?(_), do: false
 end

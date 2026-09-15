@@ -107,7 +107,12 @@ defmodule BeamMCP.NegotiationTest do
     test "the MUST fields, resultType among them, and serverInfo in _meta, not the body" do
       r = send_msg(%{"jsonrpc" => "2.0", "id" => 1, "method" => "server/discover"})["result"]
       assert r["supportedVersions"] == [@modern, @legacy]
-      assert r["capabilities"] == %{"tools" => %{"listChanged" => false}}
+
+      assert r["capabilities"] == %{
+               "tools" => %{"listChanged" => false},
+               "resources" => %{"listChanged" => false, "subscribe" => false}
+             }
+
       assert r["resultType"] == "complete"
       assert r["ttlMs"] == 0
       assert r["cacheScope"] == "private"

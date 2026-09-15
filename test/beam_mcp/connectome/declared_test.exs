@@ -123,7 +123,13 @@ defmodule BeamMCP.Connectome.DeclaredTest do
 
     test "a catalog entry no reader can name is enumerated, and has no node" do
       {:ok, %{graph: g, bound: bound}} = build()
-      assert bound.unreadable_catalog_entries == [{:resources, :opaque}]
+
+      # A resource template has no uri, so this builder cannot name it: enumerated, no node.
+      assert bound.unreadable_catalog_entries == [
+               {:prompts, :opaque},
+               {:resources, %BeamMCP.ResourceTemplateSpec{uri_template: "r://t/{x}", name: "t"}}
+             ]
+
       assert length(Enum.filter(g.nodes, &(&1.kind == :resource))) == 1
     end
 

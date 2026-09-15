@@ -38,7 +38,7 @@ defmodule BeamMCP.CursorTest do
 
     test "a cursor from another list is refused by kind" do
       cursor = Cursor.encode(:tools, "t")
-      assert {:error, {:kind, :tools}} = Cursor.decode(:resources, cursor)
+      assert {:error, {:kind, "tools"}} = Cursor.decode(:resources, cursor)
     end
 
     test "a cursor that is not base64, not JSON, not version 1 or not the shape is malformed" do
