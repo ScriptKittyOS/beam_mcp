@@ -16,8 +16,8 @@ defmodule BeamMCP.Boundary.NoPathEnumerationTest do
   test "the only definition of all_paths under lib/ is the refusal, and no motif matcher is defined" do
     defs = Boundary.hits(~r/\bdefp?\s+all_paths\b/)
 
-    assert [{_, _, line}] = defs,
-           "all_paths defined other than once:\n  " <> Boundary.format(defs)
+    assert length(defs) == 1, "all_paths defined other than once:\n  " <> Boundary.format(defs)
+    [{_, _, line}] = defs
 
     assert String.trim(line) == @refusal, "all_paths is not the refusal: #{String.trim(line)}"
     hits = Boundary.hits(@matcher)
