@@ -108,7 +108,7 @@ left out — and deletes it when the query returns, on every exit. On top of tha
 
 Measured on the gate's 10 000-edge fixture (501 nodes, ~9 970 edges after de-duplication,
 32 schedulers, OTP 28; medians of five after a warm-up, `bench/reach.exs`, recorded by every
-gate run and judged by nothing): a search ~14–16 ms, of which the graph check and the
+gate run and judged by nothing): a search ~14–21 ms across this machine's runs, of which the graph check and the
 `:digraph` build are most; `dominates?/4` ~24 ms; `mandatory_pass/3` ~22 ms. (Before the
 review added the graph check and removed a second build from `mandatory_pass/3`: ~11, ~21 and
 ~30.) No threshold is set for graph cost — that is the owner's, against these numbers.
