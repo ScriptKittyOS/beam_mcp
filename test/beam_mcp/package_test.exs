@@ -15,8 +15,8 @@ defmodule BeamMCP.PackageTest do
   `contents.tar.gz` is listed. The stanza is what we meant; the tarball is what a consumer
   gets. Three populations, none a hand list:
 
-  1. every `.md` reachable by a relative link from `README.md` and `CHANGELOG.md`, following
-     links page to page, must be in the tarball;
+  1. every file reachable by a relative link from `README.md` and `CHANGELOG.md`, following
+     links page to page, must be in the tarball (any relative target, not only `.md`);
   2. every tracked page under `docs/` (`git ls-files`) must be in the tarball -- a page added
      next year is caught whether or not anyone has linked it yet;
   3. every ExDoc extra (`docs: [extras: ...]` in `mix.exs`) must be in the tarball -- what
@@ -113,10 +113,11 @@ defmodule BeamMCP.PackageTest do
 
   # The built artefact: `mix hex.build` into `dir`, the outer plain tar opened, and the
   # entries of `contents.tar.gz` listed. Nothing is published; the tarball is deleted with
-  # the directory. A subprocess, not `Mix.Task.run/2`: `mix test` prunes the code path to the
-  # project's own dependencies, and the Hex archive is not one, so the task is not loadable
-  # from inside the test VM (measured: `Mix.NoTaskError`). The subprocess is the command a
-  # release runs, in this environment so the build is the one already made.
+  # the directory. A subprocess, not `Mix.Task.run/2`: Mix prunes the code path to the
+  # project's own dependencies once the project loads (`prune_code_paths`, default true), and
+  # the Hex archive is not one, so the task is not loadable from inside the test VM (measured:
+  # `Mix.NoTaskError`). The subprocess is the command a release runs; the environment is
+  # passed through and is harmless either way, since `hex.build` compiles nothing.
   defp tarball_entries(dir) do
     out = Path.join(dir, "package.tar")
 
