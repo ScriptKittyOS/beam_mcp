@@ -382,8 +382,9 @@ defmodule BeamMCP.Server do
   end
 
   # A read is served only for a uri the same reader lists or a listed template matches; the
-  # refusal (-32002, the code the specification names) comes before the reader runs, so what
-  # is advertised and what is readable cannot drift. The read itself is the catalog's.
+  # refusal comes before the reader runs, so what is advertised and what is readable cannot
+  # drift. The handler answers -32002, 2025-11-25's not-found code; the modern path renames
+  # it to -32602, 2026-07-28's (see modernise/2). The read itself is the catalog's.
   def handle_message(
         state,
         %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/read", "params" => params}
@@ -803,6 +804,15 @@ defmodule BeamMCP.Server do
 
   # 2026-07-28 requires resultType on every result, and servers SHOULD identify themselves in
   # each result's _meta. Applied only on the modern path: a legacy result carries neither.
+  #
+  # The same path renames one error: a resource that does not exist is -32002 under
+  # 2025-11-25 and MUST be -32602 under 2026-07-28 ("clients SHOULD also accept -32002 as a
+  # resource not found error, as earlier protocol versions used this code"). The handler
+  # answers the legacy code; the era that requires the other one is the era this function
+  # already serves, so the rename lives here and nowhere else.
+  defp modernise(%{"error" => %{"code" => -32_002} = e} = response, _state),
+    do: %{response | "error" => %{e | "code" => -32_602}}
+
   defp modernise(%{"result" => payload} = response, state) when is_map(payload) do
     %{
       response

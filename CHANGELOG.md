@@ -45,14 +45,20 @@ All notable changes to this project are documented here. The format follows
   readability:** a `resources/read` uri is served only when the same list names it or a listed
   template matches it (RFC 6570 `{var}` one non-empty segment, `{+var}` across; no other
   expression is claimed, and a template carrying one, or a bare brace, is refused at
-  startup), else `-32002 Resource not found` with the uri as data before the reader runs.
-  A `params` that is not an object, on either list, is `-32602` by name. A
-  reader's `{:error, reason}` is `-32002` with the reason; a malformed reader answer is
-  `-32603` naming the defect, never a crash. Blob contents are raw bytes at the reader and
+  startup), else `Resource not found` with the uri as data before the reader runs — `-32602`
+  under `2026-07-28`, which requires it, and `-32002` under `2025-11-25`, which named that
+  code (the modern revision says clients SHOULD still accept it). A `params` that is not an
+  object, on either list, is `-32602` by name. A reader's `{:error, reason}` is the same
+  not-found code with the reason; a malformed reader answer is `-32603` naming the defect,
+  never a crash. Blob contents are raw bytes at the reader and
   base64 on the wire; optional fields the specification leaves out are left out, not sent as
   `null`. Both eras serve the three; `2026-07-28` results carry `ttlMs`, `cacheScope` and
   `resultType` as `tools/list` does, from the new `resources_ttl_ms:` and
-  `resources_cache_scope:` options with the same non-permissive defaults.
+  `resources_cache_scope:` options with the same non-permissive defaults. The official
+  conformance suite's five resource scenarios (`resources-list`, `resources-read-text`,
+  `resources-read-binary`, `resources-templates-read`, `sep-2164-resource-not-found`) pass
+  against the harness catalog's three diagnostic resources and leave the baseline; the
+  `2026-07-28` suite row is 12 / 37 (7 / 37 when the conformance entry below was written).
 - **`BeamMCP.Cursor`, the pagination codec every paginated list shares.** Opaque (a client
   passes it back unchanged), stable (one position, one byte string), URL-safe, typed by its
   list (a cursor from another list is refused by name as invalid params), and **keyed on the

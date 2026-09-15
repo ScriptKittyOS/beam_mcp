@@ -82,10 +82,12 @@ end
 `uriTemplate`; `resources/read` accepts a uri only when that same list names it or a listed
 template matches it (RFC 6570 `{var}` for one non-empty segment, `{+var}` across segments —
 nothing more is claimed, and a template with any other expression, or a bare brace, is
-refused at startup) and refuses any other with `-32002` before the reader runs, so what is
-advertised and what is readable cannot drift. The read is the catalog's `read_resource/1`:
-`{:ok, contents}` with `text` as a string or `blob` as raw bytes (base64 on the wire), or
-`{:error, reason}`, carried to the client as `-32002` with the reason as data. Both lists are
+refused at startup) and refuses any other as not found before the reader runs — `-32602`
+with the uri as data under `2026-07-28`, `-32002` under `2025-11-25`, the code each revision
+names for it — so what is advertised and what is readable cannot drift. The read is the
+catalog's `read_resource/1`: `{:ok, contents}` with `text` as a string or `blob` as raw bytes
+(base64 on the wire), or `{:error, reason}`, carried to the client as the same not-found code
+with the reason as data. Both lists are
 paginated by one opaque cursor (`BeamMCP.Cursor`, keyed on the item rather than an offset, so
 a list that changes between pages never skips an item that was there before); the page size
 is `BeamMCP.Server.new/1`'s `page_size:` (default 50), and a cursor from another list is
@@ -397,7 +399,7 @@ typed; both ship together or neither does.
 
 | revision | suite totals (scored server scenarios) | claimed-surface totals | measured |
 | -- | -- | -- | -- |
-| `2026-07-28` | **7 / 37** | **5 / 6** — `server-stateless`: 21 of 30 checks pass, 5 are skipped (no subscription capability, by decision), 4 need diagnostic tools this harness does not invent | 2026-09-15, `tools/conformance.sh` |
+| `2026-07-28` | **12 / 37** | **5 / 6** — `server-stateless`: 21 of 30 checks pass, 5 are skipped (no subscription capability, by decision), 4 need diagnostic tools this harness does not invent | 2026-09-15, `tools/conformance.sh` |
 | `2025-11-25` over HTTP | **0 / 30** | 0 / 5 | 2026-09-15, `tools/conformance.sh` |
 
 **Suite totals do not hide the failures.** The thirty `2026-07-28` failures are surfaces this
