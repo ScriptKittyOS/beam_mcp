@@ -25,8 +25,9 @@ defmodule BeamMCP.Connectome.Reach do
 
   ## How, and what it costs
 
-  Every query builds a private `:digraph` from the graph -- O(V + E), deleted when the query
-  returns, whatever happens -- with the edges filtered to `kinds:` and the gate nodes left out.
+  Every query checks the graph (`BeamMCP.Connectome.Graph.check/1`) and builds a private
+  `:digraph` from it -- O(V + E), deleted when the query returns, whatever happens -- with the
+  edges filtered to `kinds:` and the gate nodes left out.
   `reachable?/4` and `reachable_without/5` are one `:digraph.get_short_path/3` -- breadth-first,
   O(V + E) -- so the witness is a *shortest* path among those that cross no gate.
   `dominates?/4` is the definition itself: `target` is reachable from the entries with `gate`

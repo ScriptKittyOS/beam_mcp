@@ -95,9 +95,9 @@ dominance is undefined there, and `true` would make an unreachable effect look g
 
 ## What it costs
 
-Every query builds a private `:digraph` from the graph — O(V + E) in the graph's size, the
-edges filtered to `kinds:` and the removed nodes left out — and deletes it when the query
-returns, on every exit. On top of that:
+Every query checks the graph (`BeamMCP.Connectome.Graph.check/1`, O(V + E)) and builds a
+private `:digraph` from it — O(V + E), the edges filtered to `kinds:` and the removed nodes
+left out — and deletes it when the query returns, on every exit. On top of that:
 
 | function | work | bound |
 | -- | -- | -- |
@@ -108,9 +108,10 @@ returns, on every exit. On top of that:
 
 Measured on the gate's 10 000-edge fixture (501 nodes, ~9 970 edges after de-duplication,
 32 schedulers, OTP 28; medians of five after a warm-up, `bench/reach.exs`, recorded by every
-gate run and judged by nothing): a search ~11 ms, of which the `:digraph` build is most;
-`dominates?/4` ~21 ms; `mandatory_pass/3` ~30 ms. No threshold is set for graph cost — that
-is the owner's, against these numbers.
+gate run and judged by nothing): a search ~14–16 ms, of which the graph check and the
+`:digraph` build are most; `dominates?/4` ~24 ms; `mandatory_pass/3` ~22 ms. (Before the
+review added the graph check and removed a second build from `mandatory_pass/3`: ~11, ~21 and
+~30.) No threshold is set for graph cost — that is the owner's, against these numbers.
 
 ## Refused, by name
 
@@ -125,7 +126,11 @@ is the owner's, against these numbers.
 - An unknown option, or one the question cannot use (`{:unknown_option, key}`), an option of
   the wrong shape (`{:invalid, key, value}`), an edge kind outside the vocabulary, an empty
   entry set, and a node id — as `from`, `to`, a gate, an entry or a target — the graph does
-  not hold (`{:unknown_node, id}`) are each refused by name, before anything is built.
+  not hold (`{:unknown_node, id}`) are each refused by name, before anything is built. The
+  order, when more than one applies: the options first (an entry id the graph does not hold
+  is an option fault, found here), then the edge cap, then the graph check, then the ids
+  given as arguments — so a graph over the cap is refused as over the cap whatever else is
+  wrong with the call, and the O(V + E) check never runs on a graph the cap refuses.
 - A graph `BeamMCP.Connectome.Graph.check/1` would refuse — a literal `%Graph{}` with a
   dangling edge, a struct of the wrong shape — is refused as `{:error, {:invalid_graph,
   reason}}` with that function's reason, never answered: `:digraph` would drop the dangling
