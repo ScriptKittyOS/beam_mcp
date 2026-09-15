@@ -733,16 +733,24 @@ defmodule BeamMCP.ReadmeClaimsTest do
       end
     end
 
+    # The catalog's `echo` declares `k`: a tool with no schema has undeclared keys dropped
+    # before dispatch, so a marker sent to it never reaches the span and the assertion below
+    # holds nothing. The dispatch is made to report what it saw, and the marker must have
+    # arrived there before its absence from the graph means anything.
     test "the observed graph carries edge identity only, never a payload byte" do
       claims("never a payload byte")
       marker = "README-MARKER-#{System.unique_integer([:positive])}"
       name = :"#{__MODULE__}.c#{System.unique_integer([:positive])}"
       _ = start_supervised!({Observed, name: name})
+      test = self()
 
       state =
         Server.new(
-          dispatch: fn _, _, _ -> {:ok, %{}} end,
-          catalog: Fixture.RunningCatalog,
+          dispatch: fn _, args, _ ->
+            send(test, {:dispatched, args})
+            {:ok, %{}}
+          end,
+          catalog: BeamMCP.Fixture.ObservedCatalog,
           server_name: "readme"
         )
 
@@ -753,6 +761,9 @@ defmodule BeamMCP.ReadmeClaimsTest do
           "method" => "tools/call",
           "params" => %{"name" => "echo", "arguments" => %{"k" => marker}}
         })
+
+      assert_receive {:dispatched, args}
+      assert inspect(args) =~ marker
 
       {:ok, graph} = Observed.snapshot(name)
       assert graph.edges != []
