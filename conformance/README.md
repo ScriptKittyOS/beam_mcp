@@ -23,8 +23,9 @@ per revision, derived from the suite's own `checks.json` and never typed:
 **The rule the rows use** is the suite's own under `--expected-failures`: a scenario passes
 when none of its checks is `FAILURE` or `WARNING`; `SKIPPED` and `INFO` do not fail it. The
 suite's plain console summary ticks a WARNING-only scenario; the baseline verdict — the one
-that can exit 1 — does not, so a hand count of the console's ticks reads three higher
-(10 / 37 today) than the rows. The rows follow the verdict.
+that can exit 1 — does not, so a hand count of the console's scored ticks reads two higher
+(14 / 37 on 2026-09-15, the day the five resource scenarios passed) than the rows. The rows
+follow the verdict.
 
 `baseline-<revision>.yml` lists every expected failure with a reason word in the comment beside
 it — `deliberately-out`, `decided-not-built`, `not-implemented`, `harness` (the suite needs a
