@@ -5,7 +5,8 @@ defmodule BeamMCP.ResourceSpec do
   @moduledoc """
   A resource a catalog offers: what `resources/list` advertises and `resources/read` may read.
 
-  The fields are the `Resource` object of the specification, in this package's spelling:
+  The fields are the `Resource` object of the specification except `_meta`, in this package's
+  spelling:
   `uri` and `name` are required; the rest are optional and, when `nil`, are left off the
   wire rather than sent as `null`. `annotations` and `icons` are passed through as the host
   gives them (maps and lists the specification defines; the package does not read them).

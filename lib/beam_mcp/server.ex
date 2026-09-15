@@ -397,6 +397,12 @@ defmodule BeamMCP.Server do
     end
   end
 
+  # The schema requires params on the request; a resources/read with none is invalid params,
+  # not an unknown method.
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/read"}) do
+    {state, error(id, -32_602, "Invalid params: resources/read requires a string uri")}
+  end
+
   def handle_message(
         state,
         %{

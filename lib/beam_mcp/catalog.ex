@@ -30,12 +30,14 @@ defmodule BeamMCP.Catalog do
   ## Resources: advertise and read from one reader, as tools do
 
   `resources/1` and `templates/1` are the single readers. `resources/list` and
-  `resources/templates/list` advertise what they return, and `readable?/2` decides from the
-  same call whether a `resources/read` uri is served at all: a uri the catalog lists, or one a
-  listed template matches, is passed to the catalog's `read_resource/1`; any other is
-  refused before host code runs. A catalog that lists a resource must export
-  `read_resource/1` -- `validate/1` refuses one that does not, because advertising what
-  cannot be read is the defect this behaviour exists to make impossible.
+  `resources/templates/list` advertise what they return, and `readable?/2` decides through
+  the same readers whether a `resources/read` uri is served at all: a uri the catalog lists,
+  or one a listed template matches, is passed to the catalog's `read_resource/1`; any other
+  is refused before host code runs. A catalog that lists a resource or a template must
+  export `read_resource/1` -- `validate/1` refuses one that does not, because advertising
+  what cannot be read is the defect this behaviour exists to make impossible -- and must
+  not name one `uri` or `uri_template` twice, because the lists are paged by key and a
+  repeated key is a page boundary that drops an entry (`validate/1` refuses that too).
 
   `read_resource/1` answers `{:ok, contents}` -- a list of `%{uri: String.t(), text:
   String.t()}` or `%{uri: String.t(), blob: binary()}` maps, each with an optional
@@ -84,8 +86,8 @@ defmodule BeamMCP.Catalog do
 
   @doc """
   Reads a resource the catalog lists, or one a listed template matches. Required when
-  `capabilities/0` names any resource; `validate/1` refuses a catalog that lists one without
-  it.
+  `capabilities/0` names any resource or template; `validate/1` refuses a catalog that lists
+  either without it.
   """
   @callback read_resource(uri :: String.t()) :: {:ok, [contents()]} | {:error, term()}
 
@@ -133,8 +135,9 @@ defmodule BeamMCP.Catalog do
   @doc """
   Whether a `resources/read` uri is served at all: listed by `resources/1`, or matched by a
   template `templates/1` returns. RFC 6570 level 1 plus reserved expansion, and nothing more:
-  `{var}` matches one segment (any run of characters without `/`), `{+var}` matches across
-  segments; every other character of the template is literal.
+  `{var}` matches one non-empty segment (a run of one or more characters without `/` -- a
+  resource with an empty id is not one the template names), `{+var}` matches one or more
+  characters across segments; every other character of the template is literal.
   """
   @spec readable?(module(), String.t()) :: boolean()
   def readable?(catalog, uri) when is_binary(uri) do
@@ -248,19 +251,45 @@ defmodule BeamMCP.Catalog do
       not is_list(caps.resources) ->
         {:error, "#{inspect(catalog)}.capabilities/0's :resources must be a list"}
 
-      not Enum.all?(caps.resources, &resource_entry?/1) ->
+      true ->
+        validate_resources(catalog, caps.resources)
+    end
+  end
+
+  # The resources list: two structs only; a reader once anything is listed; no key twice.
+  defp validate_resources(catalog, resources) do
+    cond do
+      not Enum.all?(resources, &resource_entry?/1) ->
         {:error,
          "#{inspect(catalog)}.capabilities/0's :resources must all be %BeamMCP.ResourceSpec{} " <>
            "or %BeamMCP.ResourceTemplateSpec{}"}
 
-      caps.resources != [] and not function_exported?(catalog, :read_resource, 1) ->
+      resources != [] and not function_exported?(catalog, :read_resource, 1) ->
         {:error,
-         "#{inspect(catalog)} lists a resource and does not export read_resource/1, " <>
-           "so what it advertises could not be read"}
+         "#{inspect(catalog)} lists a resource or a template and does not export " <>
+           "read_resource/1, so what it advertises could not be read"}
+
+      repeated_key(resources) != nil ->
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's :resources names " <>
+           "#{inspect(repeated_key(resources))} more than once; the lists are paged by key"}
 
       true ->
         :ok
     end
+  end
+
+  # The first uri or uri_template that appears twice, or nil. The two are separate key spaces
+  # (a resource and a template are two lists on the wire), so a uri equal to a template string
+  # is not a repeat.
+  defp repeated_key(entries) do
+    entries
+    |> Enum.map(fn
+      %BeamMCP.ResourceSpec{uri: uri} -> {:uri, uri}
+      %BeamMCP.ResourceTemplateSpec{uri_template: t} -> {:uri_template, t}
+    end)
+    |> Enum.frequencies()
+    |> Enum.find_value(fn {{_, key}, n} -> if n > 1, do: key end)
   end
 
   defp resource_entry?(%BeamMCP.ResourceSpec{}), do: true
