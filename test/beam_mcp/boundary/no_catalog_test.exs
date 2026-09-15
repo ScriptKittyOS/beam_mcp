@@ -6,18 +6,17 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   # The catalog and the dispatch are the host's, injected: no module under lib/ implements
   # `BeamMCP.Catalog` -- by `@behaviour` or by exporting `capabilities/0`, which is all
   # `Catalog.validate/1` asks -- and nothing under lib/ builds a `%BeamMCP.ToolSpec{}` value: not
-  # as a literal on one line or across several, not by `struct/2` or `struct!/2`. The struct is
-  # defined there, matched there, and never constructed there. The one example under lib/ is
-  # the prose of an ArgumentError, allowed by its shape (a doc line with no field named).
+  # as a literal in any field order or across any lines, not as a `%{__struct__: ...}` map, not
+  # through `struct/2`, `struct!/2` or `__struct__/1`. The literal is read from the AST, where a
+  # clause-head pattern and a `match?/2` are matches and everything else is a construction. The
+  # struct is defined there, matched there, and never constructed there. The catalog is called
+  # through one callee, `capabilities/0`, at a counted number of sites, so that a fourth has to
+  # be named on the page.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
   @implements ~r/@behaviour\s+BeamMCP\.Catalog\b|@behaviour\s+Catalog\b|\bdefp?\s+capabilities\b/
-  # A tool the package built would carry a literal name (an atom or a string); a pattern in a
-  # clause head binds a variable there, and an example in prose has no fields. The literal is
-  # read across lines (the README writes `name:` on the line after the opener), and `struct/2`
-  # and `struct!/2` on the module are constructions whatever they carry.
-  @literal ~r/%(BeamMCP\.)?ToolSpec\{[^}]*\bname:\s*(:\w+|")/s
+  @tool_spec [[:ToolSpec], [:BeamMCP, :ToolSpec]]
   @by_function ~r/\bstruct!?\(\s*(BeamMCP\.)?ToolSpec\b/
 
   test "no module under lib/ implements BeamMCP.Catalog" do
@@ -30,7 +29,19 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   test "no line under lib/ constructs a tool" do
     hits = Boundary.hits(@by_function)
     assert hits == [], "a tool built under lib/:\n  " <> Boundary.format(hits)
-    files = Boundary.file_hits(@literal)
-    assert files == [], "a tool literal under lib/:\n  " <> Enum.join(files, "\n  ")
+    built = Boundary.struct_constructions(@tool_spec)
+
+    assert built == [],
+           "a ToolSpec constructed under lib/:\n  " <>
+             Enum.map_join(built, "\n  ", fn {p, l} -> "#{p}:#{l}" end)
+
+    # The reader sees the struct where it is matched, or it is reading nothing.
+    assert Boundary.hits(~r/%(BeamMCP\.)?ToolSpec\{/) != []
+  end
+
+  test "the catalog is called through one callee, capabilities/0, at three sites" do
+    sites = Boundary.hits(~r/\.capabilities\(\)/)
+    assert length(sites) == 3, "capabilities/0 call sites:\n  " <> Boundary.format(sites)
+    assert Boundary.hits(~r/\bcatalog\.\w+\(|\bmodule\.\w+\(/) -- sites == []
   end
 end

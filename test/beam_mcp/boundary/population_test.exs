@@ -20,6 +20,9 @@ defmodule BeamMCP.Boundary.PopulationTest do
     assert config[:elixirc_paths] == ["lib", "test/support"],
            "test env: lib and the test support only"
 
+    # The other environments' clause, from the source: the test env cannot evaluate it.
+    assert File.read!(Path.join(root, "mix.exs")) =~ ~s|defp elixirc_paths(_), do: ["lib"]|
+
     assert Boundary.lib_files() != []
   end
 
