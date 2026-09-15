@@ -5,7 +5,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
   @moduledoc """
   The observed collector: telemetry from the dispatch path into a bounded ETS set, keyed by
   the canonical edge key, and out again as a Graph whose provenance is `:observed` and whose
-  every sign is `:unknown`.
+  every sign is `:unset`.
 
   Edge identity only. The marker tests are the ones that matter: a string a host put in an
   argument, a resource URI, an error or an exception must be absent from every row, from the
@@ -301,7 +301,7 @@ defmodule BeamMCP.Connectome.ObservedTest do
       assert e.weight >= 1
       assert e.kind == :invoke
       assert e.provenance == :observed
-      assert e.sign == :unknown
+      assert e.sign == :unset
       # The ids are the ones the declared builder would derive for the same server and tool,
       # so the two graphs join.
       assert e.from == Node.id({:server, @server_name})

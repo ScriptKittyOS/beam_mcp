@@ -888,7 +888,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       from = Node.id({:module, @server, Traced})
       to = Node.id({:module, @server, Beta})
 
-      assert [%Edge{from: ^from, to: ^to, kind: :invoke, provenance: :observed, sign: :unknown}] =
+      assert [%Edge{from: ^from, to: ^to, kind: :invoke, provenance: :observed, sign: :unset}] =
                g.edges
 
       assert Enum.all?(g.nodes, &(&1.kind == :module and &1.level == :module))

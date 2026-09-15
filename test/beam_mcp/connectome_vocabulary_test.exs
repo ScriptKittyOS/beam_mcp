@@ -39,7 +39,7 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
   # where it lives; this file only checks that the sentence exists.
   #
   # "Has a row", not "appears in backticks anywhere": the first version checked the latter, and
-  # deleting the `:unknown` row survived, because `:unknown` is also mentioned in the invariant
+  # deleting the `:unset` row survived, because `:unset` is also mentioned in the invariant
   # paragraph. A mention is not a definition, and an anchor that a mention satisfies cannot move
   # when the definition goes (CONVENTIONS.md, the contained anchor). Measured, not assumed:
   # deleting that row was a mutation this file survived until the anchor changed.
@@ -51,7 +51,7 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
   @families [
     {"Node kinds", [:server, :tool, :resource, :prompt, :process, :module]},
     {"Edge kinds", [:invoke, :read, :message, :supervise]},
-    {"Sign", [:allow, :deny, :hold, :unknown]},
+    {"Sign", [:allow, :deny, :hold, :ungoverned, :unset]},
     {"Level", [:mfa, :module, :boundary, :server]},
     {"Provenance", [:declared, :observed]},
     {"Identity", [:application, :boundary_module]}

@@ -148,7 +148,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
     test "the declared form carries no weight, and every edge carries its sign under its name" do
       {:ok, bytes} = Canonical.encode(golden_graph())
       refute bytes =~ "weight"
-      assert bytes =~ ~s("sign":"unknown")
+      assert bytes =~ ~s("sign":"unset")
       decoded = Jason.decode!(bytes)
 
       assert Enum.all?(

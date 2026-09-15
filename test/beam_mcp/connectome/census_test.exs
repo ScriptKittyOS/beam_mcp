@@ -6,9 +6,9 @@ defmodule BeamMCP.Connectome.CensusTest do
   Two census checks over the package's own source, both derived from `git ls-files`, never
   from a hand list. They pin two invariants the connectome must keep from here on.
 
-  **The sign slot.** Nothing in `lib/` writes a sign other than `:unknown`. Read as code, not
+  **The sign slot.** Nothing in `lib/` writes a sign other than `:unset`. Read as code, not
   as prose: every occurrence of the token `sign` in a code line under `lib/` must be one of
-  the struct default (`sign: :unknown`), a typespec, the field's own definition, or the
+  the struct default (`sign: :unset`), a typespec, the field's own definition, or the
   membership check `Edge.check/1` performs for `Graph.new/1`; and the
   atoms `:allow`, `:deny`, `:hold` may appear in a code line only inside the `@type sign`
   union that names them. Comment lines and documentation heredocs are excluded from the
@@ -41,9 +41,9 @@ defmodule BeamMCP.Connectome.CensusTest do
   # The token `sign` as a word, or one of the three non-default sign atoms as a whole atom.
   # Whole tokens, not substrings: `:allowed_origins` is not `:allow`, and `assign` is not
   # `sign` -- the first draft matched both and reported the HTTP transport.
-  @sign_token ~r/\bsign\b|(?<![\w?!]):(allow|deny|hold)(?![\w?!])/
+  @sign_token ~r/\bsign\b|(?<![\w?!]):(allow|deny|hold|ungoverned|unset)(?![\w?!])/
 
-  test "no code line under lib/ writes or names a sign other than :unknown" do
+  test "no code line under lib/ writes or names a sign other than :unset" do
     offenders =
       for file <- tracked(),
           {line, n} <- code_lines(file),
@@ -108,19 +108,19 @@ defmodule BeamMCP.Connectome.CensusTest do
   end
 
   # A line is permitted when, with every permitted form removed from it, no sign token
-  # remains. The permitted forms: the struct default `sign: :unknown`; the typespec union
-  # naming the four values; the struct field's type `sign: sign()`; the typedoc's name.
-  # The first form is the struct default in its defstruct spelling only -- `, sign: :unknown]`
-  # -- because the bare `sign: :unknown` let `%{e | sign: :unknown}` through: a launder that
+  # remains. The permitted forms: the struct default `sign: :unset`; the typespec union
+  # naming the five values; the struct field's type `sign: sign()`; the typedoc's name.
+  # The first form is the struct default in its defstruct spelling only -- `, sign: :unset]`
+  # -- because the bare `sign: :unset` let `%{e | sign: :unset}` through: a launder that
   # corrects a host's sign to the default is spelled with exactly the permitted text. Review
   # found it; the narrower form makes that line visible. The last two are the domain check
   # `Edge.check/1` runs for `Graph.new/1`: the membership list, spelled once, and the predicate
   # that reads it -- reading, which the refusal tests hold from the other side.
   @permitted_forms [
-    ", sign: :unknown]",
-    "@type sign :: :allow | :deny | :hold | :unknown",
+    ", sign: :unset]",
+    "@type sign :: :allow | :deny | :hold | :ungoverned | :unset",
     "sign: sign()",
-    "@signs [:allow, :deny, :hold, :unknown]",
+    "@signs [:allow, :deny, :hold, :ungoverned, :unset]",
     "{:sign, &(&1 in @signs)}",
     # The serializer carries the sign OUT to bytes and to the exports, under its field name
     # (docs/connectome-canonical.md, rule 5). Each of these is a read of a built edge's
@@ -141,8 +141,30 @@ defmodule BeamMCP.Connectome.CensusTest do
     "declared_sign: Edge.sign()",
     "observed_sign: Edge.sign()",
     "%Edge{from: from, to: to, kind: kind, sign: sign}",
-    "{{nfc(from), nfc(to), kind}, sign}"
+    "{{nfc(from), nfc(to), kind}, sign}",
+    # The one comparison of two signs, spelled once: changed-sign is two authorities
+    # disagreeing, so :unset -- no sign supplied to this package -- never participates
+    # (016d). Reading, not writing; and not a filter (the test below).
+    "declared != :unset and observed != :unset and declared != observed"
   ]
+
+  # 016d, the constraint that makes :ungoverned safe: the package never treats a sign as
+  # suppression. No code line under lib/ pairs a sign with a filter, a rejection, a guard or
+  # a case on its value -- every read of a sign above carries it out to bytes or compares two
+  # of them, and none decides whether an edge is recorded.
+  @filtering ~r/Enum\.(filter|reject|split_with|drop_while|take_while|find|any\?|all\?|count|group_by)|\bwhen\b.*\bsign\b|\bcase\b.*\bsign\b|\bif\b.*\bsign\b/
+
+  test "no code line under lib/ filters, hides or downgrades an edge on the basis of its sign" do
+    offenders =
+      for file <- tracked(),
+          {line, n} <- code_lines(file),
+          Regex.match?(@sign_token, line),
+          Regex.match?(@filtering, line),
+          do: "#{file}:#{n}: #{String.trim(line)}"
+
+    assert offenders == [],
+           "a sign read beside a filter, guard or branch:\n" <> Enum.join(offenders, "\n")
+  end
 
   defp permitted_sign_line?(line) do
     stripped = Enum.reduce(@permitted_forms, line, &String.replace(&2, &1, ""))

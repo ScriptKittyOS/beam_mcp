@@ -58,7 +58,7 @@ defmodule BeamMCP.Connectome.DeclaredTest do
 
       assert Enum.all?(
                g.edges,
-               &(&1.provenance == :declared and &1.sign == :unknown and &1.weight == nil)
+               &(&1.provenance == :declared and &1.sign == :unset and &1.weight == nil)
              )
     end
 
@@ -264,7 +264,7 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       one = Node.id({:boundary, @server, :application, :one})
       two = Node.id({:boundary, @server, :boundary_module, Fx.Beta})
       assert keys(g.edges) == [{one, two, :invoke, :declared}]
-      assert Enum.all?(g.edges, &(&1.weight == nil and &1.sign == :unknown))
+      assert Enum.all?(g.edges, &(&1.weight == nil and &1.sign == :unset))
     end
 
     test "a call into or out of an ungrouped module is enumerated, never an edge and never dropped" do

@@ -126,7 +126,7 @@ defmodule BeamMCP.Connectome.GraphTest do
   end
 
   describe "the sign slot, observed from outside" do
-    test "every edge the package builds carries :unknown, whatever the input order" do
+    test "every edge the package builds carries :unset, whatever the input order" do
       {nodes, edges} = fixture()
 
       {:ok, g} =
@@ -136,11 +136,11 @@ defmodule BeamMCP.Connectome.GraphTest do
           schema_version: @version
         )
 
-      assert Enum.all?(g.edges, &(&1.sign == :unknown))
+      assert Enum.all?(g.edges, &(&1.sign == :unset))
     end
 
     test "a sign a host wrote on its own copy survives Graph.new/1 untouched -- the package launders nothing" do
-      # Written here, outside lib/, which is the only place a sign other than :unknown may be
+      # Written here, outside lib/, which is the only place a sign other than :unset may be
       # written. Erasing a host's :deny would itself be an authority act.
       {nodes, edges} = fixture()
       [first | rest] = edges
@@ -169,7 +169,7 @@ defmodule BeamMCP.Connectome.GraphTest do
     # hashes whatever this function accepted, so a malformed struct would become a hash over
     # garbage. Field domains are checked and refused by name; nothing is normalised, coerced,
     # defaulted or rewritten. Validation is reading; laundering is writing.
-    test "an edge with a sign outside the vocabulary is refused, not corrected to :unknown" do
+    test "an edge with a sign outside the vocabulary is refused, not corrected to :unset" do
       {nodes, edges} = fixture()
       [first | rest] = edges
 
@@ -240,7 +240,7 @@ defmodule BeamMCP.Connectome.GraphTest do
       %Graph{} = g = Graph.new!(nodes: nodes, edges: edges, schema_version: @version)
       assert Graph.check(g) == :ok
 
-      assert Graph.check(%Graph{g | schema_version: 2}) ==
+      assert Graph.check(%Graph{g | schema_version: 3}) ==
                {:error, {:invalid, :schema_version, 2}}
 
       assert Graph.check(%Graph{g | nodes: :none}) == {:error, {:invalid, :nodes, :none}}
