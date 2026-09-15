@@ -5,9 +5,10 @@ defmodule BeamMCP.Boundary do
   @moduledoc false
   # The one reader the boundary censuses share: every CODE line of every `.ex` file under lib/
   # -- comment lines dropped (a `#` line that carries a `#{` anywhere is an interpolation inside
-  # a string, not a comment, and is kept), doc strings kept (a doc that names a primitive is read too, so a census that must
-  # allow prose says so by pattern). The population is `Path.wildcard`, the
-  # same files `mix compile` just read, so an untracked plant is seen (the gate's REUSE and
+  # a string, not a comment, and is kept), doc strings kept (a doc that names a primitive is read
+  # too, so a census that must allow prose says so by pattern). The population is
+  # `Path.wildcard`, the same files `mix compile` just read, so an untracked plant is seen (the
+  # gate's REUSE and
   # publication steps read `git ls-files` because they are about what is published; a census
   # over code is about what compiles).
 
