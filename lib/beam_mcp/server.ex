@@ -505,7 +505,8 @@ defmodule BeamMCP.Server do
   end
 
   # The reader's answer to the wire. Only the shape is the package's: a list of contents
-  # items is encoded; an error is -32002 with the reason; anything else is a defect named.
+  # items is encoded; an error is the not-found code (-32002 here, renamed to -32602 on the
+  # modern path) with the reason; anything else is a defect named.
   defp answer_read(state, id, _uri, {:ok, contents}) when is_list(contents) do
     case Enum.reduce_while(contents, {:ok, []}, &encode_contents/2) do
       {:ok, encoded} ->

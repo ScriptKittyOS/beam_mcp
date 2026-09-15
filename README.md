@@ -402,13 +402,14 @@ typed; both ship together or neither does.
 | `2026-07-28` | **12 / 37** | **5 / 6** — `server-stateless`: 21 of 30 checks pass, 5 are skipped (no subscription capability, by decision), 4 need diagnostic tools this harness does not invent | 2026-09-15, `tools/conformance.sh` |
 | `2025-11-25` over HTTP | **0 / 30** | 0 / 5 | 2026-09-15, `tools/conformance.sh` |
 
-**Suite totals do not hide the failures.** The thirty `2026-07-28` failures are surfaces this
-package holds out by decision — resources, prompts, completion, content types beyond text —
-and scenarios that need diagnostic tools this harness does not invent, each named with its
-reason word in `conformance/baseline-2026-07-28.yml`; the suite exits 1 on a regression *or*
-on a baselined scenario that starts passing. A scenario passes when none of its checks is
-`FAILURE` or `WARNING` — the suite's rule under `--expected-failures`, which ticks three fewer
-than its plain console summary. **Claimed-surface totals** count only the six scenarios named
+**Suite totals do not hide the failures.** The twenty-five `2026-07-28` failures are surfaces
+this package holds out by decision — prompts, completion, subscriptions, content types beyond
+text — and scenarios that need diagnostic tools this harness does not invent, each named with
+its reason word in `conformance/baseline-2026-07-28.yml`; the suite exits 1 on a regression
+*or* on a baselined scenario that starts passing (the five resource scenarios left the file
+the day they passed). A scenario passes when none of its checks is `FAILURE` or `WARNING` —
+the suite's rule under `--expected-failures`, which ticks two fewer than its plain console
+summary. **Claimed-surface totals** count only the six scenarios named
 in `conformance/README.md`: `server/discover` and the stateless rules, `tools/list`,
 `tools/call` with text content and tool errors, the origin rules, concurrent POSTs.
 **The `2025-11-25` row is the design meeting the suite, not a failure:** the HTTP transport
