@@ -90,6 +90,63 @@ defmodule BeamMCP.NegotiationTest do
     end
   end
 
+  describe "server/discover carries the DiscoverResult the 2026-07-28 schema requires" do
+    # The schema (2026-07-28, $defs.DiscoverResult) requires cacheScope, capabilities,
+    # resultType, supportedVersions and ttlMs, and PR #3002 moved serverInfo out of the body
+    # into _meta (a SHOULD). The undecorated discover was a probe shortcut; a client reading
+    # it had grounds to classify the server as legacy.
+    test "the MUST fields, resultType among them, and serverInfo in _meta, not the body" do
+      r = send_msg(%{"jsonrpc" => "2.0", "id" => 1, "method" => "server/discover"})["result"]
+      assert r["supportedVersions"] == [@modern, @legacy]
+      assert r["capabilities"] == %{"tools" => %{"listChanged" => false}}
+      assert r["resultType"] == "complete"
+      assert r["ttlMs"] == 0
+      assert r["cacheScope"] == "private"
+
+      assert %{"name" => name, "version" => version} =
+               r["_meta"]["io.modelcontextprotocol/serverInfo"]
+
+      assert is_binary(name) and is_binary(version)
+      refute Map.has_key?(r, "serverInfo"), "serverInfo left the body in spec PR #3002"
+      refute Map.has_key?(r, "protocolVersions"), "the field is supportedVersions"
+    end
+
+    test "supported_versions: narrows what discover advertises and what -32022 lists, and is refused by name when malformed" do
+      state =
+        Server.new(
+          catalog: Catalog,
+          dispatch: fn _n, a, _o -> {:ok, a} end,
+          supported_versions: [@modern]
+        )
+
+      {_, r} =
+        Server.handle_message(state, %{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "server/discover"
+        })
+
+      assert r["result"]["supportedVersions"] == [@modern]
+
+      {_, e} =
+        Server.handle_message(
+          state,
+          modern("tools/list", %{
+            "_meta" => %{"io.modelcontextprotocol/protocolVersion" => @legacy}
+          })
+        )
+
+      assert e["error"]["code"] == -32_022
+      assert e["error"]["data"] == %{"supported" => [@modern], "requested" => @legacy}
+
+      for bad <- [[], ["1900-01-01"], [@modern, "x"], @modern] do
+        assert_raise ArgumentError, ~r/supported_versions/, fn ->
+          Server.new(catalog: Catalog, supported_versions: bad)
+        end
+      end
+    end
+  end
+
   describe "the era discriminator" do
     test "a request carrying modern _meta is served as modern, not as legacy" do
       r = send_msg(modern("tools/list"))
