@@ -9,6 +9,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Nothing yet. 0.4.0 is the newest release; the next is 0.5.0 — reachability queries over the
+declared graph and the wire surface for what the catalog declares.
+
 ## [0.4.0] — 2026-09-14
 
 ### Added — the connectome, additive
