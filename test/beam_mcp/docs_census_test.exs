@@ -159,15 +159,16 @@ defmodule BeamMCP.DocsCensusTest do
     end
   end
 
-  # A module the current release removed is named on purpose -- by the CHANGELOG entry that
-  # records the break and by the moduledoc of what replaced it. The set is derived from the
-  # CHANGELOG's own sentence for a break, "`Old` is replaced by", in the top section only,
-  # so it holds exactly the modules this release says it removed and nothing anyone listed.
+  # A module a release removed is named on purpose -- by the CHANGELOG entry that records the
+  # break and by the moduledoc of what replaced it -- and stays named after that release
+  # ships. The set is derived from the CHANGELOG's own sentence for a break, "`Old` is
+  # replaced by", over the whole file, so it holds exactly the modules a release said it
+  # removed and nothing anyone listed. (It read the top section only until 0.4.0 shipped and
+  # an empty [Unreleased] section emptied the set: the removal is a fact about the history,
+  # not about the current section.)
   defp removed do
-    {_, changelog} = Enum.find(prose_population(), &(elem(&1, 0) == "CHANGELOG.md"))
-
     ~r/`(BeamMCP(?:\.[A-Z][A-Za-z0-9]*)+)` is replaced by/
-    |> Regex.scan(changelog, capture: :all_but_first)
+    |> Regex.scan(File.read!(Path.join(@root, "CHANGELOG.md")), capture: :all_but_first)
     |> List.flatten()
     |> Enum.map(&Module.concat([&1]))
   end
