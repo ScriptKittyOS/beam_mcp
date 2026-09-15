@@ -31,10 +31,11 @@ defmodule BeamMCP.PackageTest do
   @root Path.expand("../..", __DIR__)
   @roots ["README.md", "CHANGELOG.md"]
   # A relative link, in each form Markdown and HTML give it: inline `](target)`, a
-  # reference definition `[name]: target` at the start of a line, and an HTML `href="target"`.
-  # A target that names a scheme (`https://`, `mailto:`) or is only a fragment is not relative;
-  # a `#fragment` after the path is dropped.
-  @relative_link ~r/(?:\]\(|^\[[^\]]+\]:[ \t]*|href=")(?![a-z][a-z0-9+.-]*:|#)([^)"#\s]+)(?:#[^)"\s]*)?/m
+  # reference definition `[name]: target` at the start of a line (up to three spaces in, as
+  # Markdown allows), and an HTML `href` in either quote. A target that names a scheme
+  # (`https://`, `MAILTO:`, any case) or a host (`//cdn/x`), or is only a fragment, is not
+  # relative; a `#fragment` after the path is dropped.
+  @relative_link ~r/(?:\]\(|^ {0,3}\[[^\]]+\]:[ \t]*|href=["'])(?![a-z][a-z0-9+.-]*:|\/\/|#)([^)"'#\s]+)(?:#[^)"'\s]*)?/mi
 
   setup_all do
     dir =
