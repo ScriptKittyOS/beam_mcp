@@ -31,7 +31,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     compile_time =
       for {_, _, text} = hit <-
             Boundary.hits(
-              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.load\w*\b|\bCode\b(?!\.ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\b|\bMix\b|:"[^"]*\\[xu]/
+              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.(load\w*|atomic_load)\b|\bCode\b(?!\.ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\b|\bMix\b|:(["'])[^"']*\\[xu]/
             ),
           String.trim(text) not in [
             "@server_version Mix.Project.config()[:version]",
@@ -60,7 +60,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     # compile time and could bake a secret into the beam.
     reads =
       Boundary.hits(
-        ~r/:os\.|\bFile\.|:file\.|:prim_file\.|:erl_prim_loader\.|:filelib\.|\bPath\.wildcard|:init\.|System\.(get_env|fetch_env!?|user_home!?|argv|tmp_dir!?|cmd|shell|find_executable)\b|Application\.(get_env|fetch_env!?|compile_env!?|get_all_env)\b|:application\.get_(all_)?env|:"Elixir\.(File|System|Path|Application|Code|EEx|Mix)"/
+        ~r/:os\.|\bFile\.|:file\.|:prim_file\.|:erl_prim_loader\.|:filelib\.|\bPath\.wildcard|:init\.|System\.(get_env|fetch_env!?|user_home!?|argv|tmp_dir!?|cmd|shell|find_executable)\b|Application\.(get_env|fetch_env!?|compile_env!?|get_all_env)\b|:application\.get_(all_)?env|:["']Elixir\.(File|System|Path|Application|Code|EEx|Mix)["']/
       )
 
     assert reads == [], "environment or disk reads under lib/:\n  " <> Boundary.format(reads)
