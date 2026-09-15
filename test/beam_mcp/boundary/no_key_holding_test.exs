@@ -6,11 +6,13 @@ defmodule BeamMCP.Boundary.NoKeyHoldingTest do
   # The package holds no key: no line under lib/ generates, loads, decodes or stores key
   # material. The one cryptographic call it makes is `:crypto.hash/2`, a digest over bytes
   # with no key in it; every other `:crypto.` and every `:public_key.` call is refused by this
-  # census, as is any name that reads as key material.
+  # census, as is any name that reads as key material -- including `Plug.Crypto`, the key
+  # derivation and signing library `plug` brings into the lock file, which is not `:crypto` by
+  # name.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
-  @key_material ~r/generate_key|private_key|secret_key|pem_decode|pem_entry_decode|der_decode|:public_key\.|strong_rand_bytes|JOSE|jose|jwk/
+  @key_material ~r/generate_key|private_key|secret_key|pem_decode|pem_entry_decode|der_decode|:public_key\.|strong_rand_bytes|JOSE|jose|jwk|Plug\.Crypto|KeyGenerator/
   @crypto_call ~r/:crypto\.(?!hash\()/
 
   test "no line under lib/ names key material or calls a crypto function other than :crypto.hash/2" do
