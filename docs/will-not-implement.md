@@ -66,15 +66,18 @@ What runs at *compile time* — a module body, an attribute's expression — lea
 beam and is outside every artefact census; the text holds that line instead, and only by the
 names it lists, read two ways: each name where it is written (`defmacro`, `defguard`, `quote`,
 `unquote`, `unquote_splicing`; `:elixir`, `:elixir_*`, `:compile`, `:erl_eval`, `:erl_parse`,
-`:erl_scan`, `:code.load_*` with or without parentheses; `Code.` except `Code.ensure_*`,
-`Elixir.Code`, `EEx.`, `Mix.`; `:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`,
-`Path.wildcard`, `:init.`, `System`'s and `Application`'s readers), and every `import`,
-`alias` or `require` that would bring `Code`, `EEx`, `Mix` or an Erlang evaluator, loader or
-reader in under another name, however spelled and across however many lines — at any position
-under `lib/`, with one allowance by its exact line (the package reads its own version from
-`mix.exs`). A read or an evaluator under a name not on those lists, run in a module body, is
-the one thing on this page held by nothing but a reviewer's eye — the reader that would see a
-module body by what it does is a compiler tracer, and it is not built. Macros
+`:erl_scan`, `:code.load_*` as a call or a capture; the bare words `Code` — except
+`Code.ensure_*` — `EEx` and `Mix`, and `Elixir.Code`, `Elixir.EEx`, `Elixir.Mix` quoted or
+not; `:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`, `Path.wildcard`, `:init.`,
+`System`'s and `Application`'s readers, in the plain and the `:"Elixir.…"` spelling; and any
+quoted atom carrying a `\x` or `\u` escape, which is how a listed atom would be hidden), and
+every `import`, `alias` or `require` that would bring `Code`, `EEx`, `Mix`, `File`, `System`,
+`Path`, `Application` or an Erlang evaluator, loader or reader in under another name, however
+spelled and across however many lines — at any position under `lib/`, with two allowances by
+their exact lines (the package reads its own version from `mix.exs`; the tracer's threat model
+names the loader it does not call). A read, an evaluator, or any other reach under a name not
+on those lists, run in a module body, is held by nothing but a reviewer's eye — the reader
+that would see a module body by what it does is a compiler tracer, and it is not built. Macros
 *invoked* from Elixir and the dependencies — `use GenServer`, `defstruct`, `Logger.error` —
 expand under `lib/` as anywhere and are the dependency list's, held by their names only; the
 one Elixir macro that reads the disk at expansion, `EEx.function_from_file`, is barred by its
@@ -120,8 +123,9 @@ reads text, and text has edges worth stating:
   whatever they are spelled; what runs at compile time is held by the text (the reader
   paragraph). What has no call in it — a barred *word* spelled as two strings joined,
   `"mcp-" <> "session-id"`, a header name that is data and not code — is outside every census on
-  this page and is not pinned; a reviewer reads for it. The text reader has one edge of its own:
-  a line beginning `#` inside a multi-line string is dropped as a comment. Two things under
+  this page and is not pinned; a reviewer reads for it, as for the compile-time reach above:
+  those two are what a reviewer's eye holds here. The text reader drops a line beginning `#`
+  as a comment, except a `#{…}` interpolation, which is code and is read. Two things under
   `lib/` are called without a written name by design and are the host's code: its catalog module
   (`capabilities/0`, one callee, three sites, and the only named calls through a runtime module)
   and the functions it hands in as options (the dispatch, the `:authorize` hooks).

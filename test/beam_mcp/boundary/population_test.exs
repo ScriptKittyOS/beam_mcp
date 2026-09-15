@@ -26,13 +26,17 @@ defmodule BeamMCP.Boundary.PopulationTest do
     assert config[:compilers] == nil
     # And no macro, no quote and no compiler call under lib/: code that runs at compile time
     # leaves no call in the beam, so the artefact censuses cannot see it; the text holds it here.
-    # One allowance, by its exact line: the package reads its own version from mix.exs.
+    # Two allowances, by their exact lines: the package reads its own version from mix.exs, and
+    # the tracer's threat model names the loader it does not call.
     compile_time =
       for {_, _, text} = hit <-
             Boundary.hits(
-              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.load\w*\b(?!\/\d)|\bCode\.(?!ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\.|\bMix\./
+              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.load\w*\b|\bCode\b(?!\.ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\b|\bMix\b|:"[^"]*\\[xu]/
             ),
-          String.trim(text) != "@server_version Mix.Project.config()[:version]",
+          String.trim(text) not in [
+            "@server_version Mix.Project.config()[:version]",
+            "dispatch function, replace a module with `:code.load_binary/3`, or trace every process"
+          ],
           do: hit
 
     assert compile_time == [],
@@ -44,7 +48,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     # split over three lines, and `:erl_eval` by `alias :erl_eval, as: EE`).
     renamed =
       Boundary.file_hits(
-        ~r/\b(import|alias|require)\b[\s(]*((Elixir\.)?(\{[^}]*)?\b(Code|EEx|Mix)\b|:(erl_\w+|elixir\w*|compile|code|os|file|prim_file|filelib|init)\b)/
+        ~r/\b(import|alias|require)\b[\s(]*((Elixir\.)?(\{[^}]*)?\b(Code|EEx|Mix|File|System|Path|Application)\b|:(erl_\w+|elixir\w*|compile|code|os|file|prim_file|filelib|init|application)\b)/
       )
 
     assert renamed == [],
@@ -56,7 +60,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     # compile time and could bake a secret into the beam.
     reads =
       Boundary.hits(
-        ~r/:os\.|\bFile\.|:file\.|:prim_file\.|:erl_prim_loader\.|:filelib\.|\bPath\.wildcard|:init\.|System\.(get_env|fetch_env!?|user_home!?|argv|tmp_dir!?|cmd|shell|find_executable)\b|Application\.(get_env|fetch_env!?|compile_env!?|get_all_env)\b|:application\.get_env/
+        ~r/:os\.|\bFile\.|:file\.|:prim_file\.|:erl_prim_loader\.|:filelib\.|\bPath\.wildcard|:init\.|System\.(get_env|fetch_env!?|user_home!?|argv|tmp_dir!?|cmd|shell|find_executable)\b|Application\.(get_env|fetch_env!?|compile_env!?|get_all_env)\b|:application\.get_(all_)?env|:"Elixir\.(File|System|Path|Application|Code|EEx|Mix)"/
       )
 
     assert reads == [], "environment or disk reads under lib/:\n  " <> Boundary.format(reads)
