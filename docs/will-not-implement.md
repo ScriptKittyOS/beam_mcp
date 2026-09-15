@@ -71,8 +71,9 @@ Erlang evaluators and compilers (`Code` except `Code.ensure_*`, `:elixir`, `:eli
 (`load_*`, `atomic_load`, `prepare_loading`, `finish_loading`); the readers of the environment
 and the disk (`:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`, `Path.wildcard`,
 `:init.`, and twelve named readers on `System` and `Application`); a quoted
-atom carrying an escape, a word sigil that makes atoms, and the Erlang names above in quotes;
-and every `import`, `alias` or `require` that would bring any of these in under another name,
+atom carrying an escape, a word sigil that makes atoms (on one line, across lines, or as a
+heredoc), and the Erlang names above in quotes — an atom built by *interpolation* is the
+joined-strings edge below, read by nothing; and every `import`, `alias` or `require` that would bring any of these in under another name,
 across lines. Two allowances by exact line: the package's own version read from `mix.exs`, and
 the tracer's threat model naming the loader it does not call. Beside the census, the
 compiler's `warnings_as_errors` (in `mix.exs`) refuses a needlessly quoted atom outright — a
