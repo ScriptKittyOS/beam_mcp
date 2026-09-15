@@ -11,8 +11,10 @@ defmodule BeamMCP.ResourceTemplateSpec do
   wire when `nil`.
   The package matches a uri against a template at RFC 6570 level 1 plus reserved expansion:
   `{var}` matches one non-empty segment (no `/`), `{+var}` matches across segments; no other
-  operator is claimed, and a template carrying one is refused by `BeamMCP.Catalog.validate/1`. It lives in the catalog's `resources:` list beside `BeamMCP.ResourceSpec`
-  entries -- one list, two structs -- so the catalog contract gains no key.
+  operator is claimed, and a template carrying one -- or a bare brace -- is refused by
+  `BeamMCP.Catalog.validate/1`. It lives in the catalog's `resources:` list beside
+  `BeamMCP.ResourceSpec` entries -- one list, two structs -- so the catalog contract gains no
+  key.
   """
 
   @enforce_keys [:uri_template, :name]

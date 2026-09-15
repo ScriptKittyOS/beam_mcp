@@ -169,12 +169,15 @@ defmodule BeamMCP.Catalog do
     Regex.match?(~r/\A#{pattern}\z/s, uri)
   end
 
+  # The first `{...}` the matcher does not claim, or a bare brace outside any expression (not
+  # an expression, and not a literal a client can expand: RFC 6570 forbids it), or nil.
   @doc false
   def unclaimed_expression(template) do
-    @expression
-    |> Regex.scan(template)
-    |> List.flatten()
-    |> Enum.find(&(not Regex.match?(@claimed, &1)))
+    expressions = @expression |> Regex.scan(template) |> List.flatten()
+    literal = Regex.replace(@expression, template, "")
+
+    Enum.find(expressions, &(not Regex.match?(@claimed, &1))) ||
+      if String.contains?(literal, ["{", "}"]), do: "a bare { or }"
   end
 
   @doc """
@@ -297,7 +300,7 @@ defmodule BeamMCP.Catalog do
 
         {:error,
          "#{inspect(catalog)}.capabilities/0's :resources has a uri_template #{inspect(template)} " <>
-           "with the expression #{inspect(expression)}, which the matcher does not claim " <>
+           "with #{inspect(expression)}, which the matcher does not claim " <>
            "(only {varname} and {+varname} are)"}
 
       true ->
