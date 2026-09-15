@@ -72,7 +72,7 @@ not; `:os.`, `File.`, `:file.`, `:prim_file.`, `:filelib.`, `Path.wildcard`, `:i
 `System`'s and `Application`'s readers, in the plain and the `:"Elixir.…"` spelling; and any
 quoted atom carrying a `\x` or `\u` escape, which is how a listed atom would be hidden), and
 every `import`, `alias` or `require` that would bring `Code`, `EEx`, `Mix`, `File`, `System`,
-`Path`, `Application` or an Erlang evaluator, loader or reader in under another name, however
+`Elixir.Path`, `Application` or an Erlang evaluator, loader or reader in under another name, however
 spelled and across however many lines — at any position under `lib/`, with two allowances by
 their exact lines (the package reads its own version from `mix.exs`; the tracer's threat model
 names the loader it does not call). A read, an evaluator, or any other reach under a name not
