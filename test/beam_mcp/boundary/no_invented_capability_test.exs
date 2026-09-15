@@ -9,7 +9,9 @@ defmodule BeamMCP.Boundary.NoInventedCapabilityTest do
   # cannot fetch them: `schema/2026-07-28/schema.json` and `schema/2025-11-25/schema.json` in
   # modelcontextprotocol/modelcontextprotocol, `$defs.ServerCapabilities.properties`, read
   # 2026-09-15 (2025-11-25 defines `tasks`; 2026-07-28 drops it and adds `extensions`). The
-  # advertised map is one literal in `BeamMCP.Server`, so one catalog holds for every catalog.
+  # advertised map is a literal in `BeamMCP.Server` (one per era), so one catalog holds for every
+  # catalog. Only `tools` is advertised today; the other sub-key sets are held against the
+  # revision the day a capability is added.
   # An invented key -- a topology or reachability capability, say -- fails here.
   use ExUnit.Case, async: true
   alias BeamMCP.Server

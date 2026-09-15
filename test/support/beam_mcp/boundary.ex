@@ -123,6 +123,34 @@ defmodule BeamMCP.Boundary do
   defp field_sites({_, _, key, value}, atom, _kind, acc),
     do: sites(value, atom, :value, sites(key, atom, :value, acc))
 
+  @doc """
+  Every name reached by dot syntax under lib/ (`x.name`), from the compiled forms: a field access
+  and a call without parentheses through a runtime module compile to the same branch --
+  `elixir_erl_pass:no_parens_remote(X, name)` -- so the artefact cannot tell them apart, but it
+  can list every name, and a census can pin the list.
+  """
+  def dotted_names do
+    for m <- lib_modules(),
+        {:ok, {_, [{:abstract_code, {:raw_abstract_v1, forms}}]}} =
+          :beam_lib.chunks(:code.which(m), [:abstract_code]),
+        name <- dotted(forms, []),
+        uniq: true,
+        do: name
+  end
+
+  defp dotted(
+         {:call, _, {:remote, _, {:atom, _, :elixir_erl_pass}, {:atom, _, :no_parens_remote}},
+          [_, {:atom, _, name}]},
+         acc
+       ),
+       do: [name | acc]
+
+  defp dotted(tuple, acc) when is_tuple(tuple),
+    do: Enum.reduce(Tuple.to_list(tuple), acc, &dotted(&1, &2))
+
+  defp dotted(list, acc) when is_list(list), do: Enum.reduce(list, acc, &dotted(&1, &2))
+  defp dotted(_, acc), do: acc
+
   def generated?(0), do: true
   def generated?(location) when is_list(location), do: Keyword.get(location, :generated, false)
   def generated?(_), do: false

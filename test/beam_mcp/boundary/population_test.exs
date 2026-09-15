@@ -22,6 +22,12 @@ defmodule BeamMCP.Boundary.PopulationTest do
 
     # The other environments' clause, from the source: the test env cannot evaluate it.
     assert File.read!(Path.join(root, "mix.exs")) =~ ~s|defp elixirc_paths(_), do: ["lib"]|
+    # Mix's own compilers and no other: nothing else generates code into the application.
+    assert config[:compilers] == nil
+    # And no macro under lib/: the only generated code -- which the readers do not read -- is
+    # the compiler's own.
+    macros = Boundary.hits(~r/\bdefmacrop?\b/)
+    assert macros == [], "macros under lib/:\n  " <> Boundary.format(macros)
 
     assert Boundary.lib_files() != []
   end

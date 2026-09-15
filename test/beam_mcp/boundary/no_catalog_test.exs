@@ -47,10 +47,23 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
     assert length(real) >= 4
   end
 
+  # The names the package reaches by dot syntax, from the compiled forms. A field access and a
+  # call without parentheses through a runtime module (`m.capabilities`, a deprecated form)
+  # compile to the same branch, so the artefact cannot tell them apart -- but every name is
+  # listed, and the list is the package's own fields. `capabilities` is not among them.
+  @dotted ~w(__struct__ allowed_origins allowlisted ancestor authorize authorize_body bucket
+    catalog classes collector command_class companion coverage description dfnum dispatch
+    dispatch_opts edges entries external from id idom input_schema kind kinds label labels level
+    macro max_duration_ms method mode module_ids modules name no_beam no_debug_info nodes parent
+    pids provenance schema_version semi server server_name server_opts shutdown? sign sources
+    supported_versions to tools tools_cache_scope tools_ttl_ms ungrouped ungrouped_calls
+    unreadable unresolved weight window)a
+
   test "the catalog is called through one callee, capabilities/0, at three sites" do
     # From the artefact: every call whose module is only known at runtime and whose function
-    # is named (`:"$M_EXPR"` with a real function; a `:"$F_EXPR"` is a function value -- the
-    # dispatch, the hooks) is `capabilities/0`, and there are three of them.
+    # is named (`:"$M_EXPR"` with a real function) is `capabilities/0`, and there are three of
+    # them. A `:"$F_EXPR"` is a call through a function value -- the host's dispatch and hooks,
+    # and the package's own closures -- and is not a module call.
     {_edges, unresolved} = Boundary.xref()
     named = for {from, {:"$M_EXPR", f, a}} <- unresolved, f != :"$F_EXPR", do: {from, f, a}
 
@@ -65,5 +78,12 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
 
     assert length(sites) == 3,
            "capabilities/0 call sites in the text:\n  " <> Boundary.format(sites)
+  end
+
+  test "every name the package reaches by dot syntax is one of its own fields" do
+    names = Boundary.dotted_names()
+
+    assert Enum.sort(names) == Enum.sort(@dotted),
+           "dotted names not on the list: #{inspect(Enum.sort(names -- @dotted))}; listed, unused: #{inspect(Enum.sort(@dotted -- names))}"
   end
 end
