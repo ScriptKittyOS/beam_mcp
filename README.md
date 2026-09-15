@@ -408,8 +408,8 @@ text — and scenarios that need diagnostic tools this harness does not invent, 
 its reason word in `conformance/baseline-2026-07-28.yml`; the suite exits 1 on a regression
 *or* on a baselined scenario that starts passing (the five resource scenarios left the file
 the day they passed). A scenario passes when none of its checks is `FAILURE` or `WARNING` —
-the suite's rule under `--expected-failures`, which ticks two fewer than its plain console
-summary. **Claimed-surface totals** count only the six scenarios named
+the suite's rule under `--expected-failures`, which ticks two fewer scored scenarios than
+its plain console summary. **Claimed-surface totals** count only the six scenarios named
 in `conformance/README.md`: `server/discover` and the stateless rules, `tools/list`,
 `tools/call` with text content and tool errors, the origin rules, concurrent POSTs.
 **The `2025-11-25` row is the design meeting the suite, not a failure:** the HTTP transport
