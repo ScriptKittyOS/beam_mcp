@@ -106,9 +106,9 @@ observed edge it is what a consumer wrote against the run. **The package never t
 sign as suppression** — `:ungoverned` included: the diff records the edge exactly as it records
 any other (a sign appears in the diff record only in a changed-sign entry; every sign is in the
 graph's own bytes), and whether to suppress a finding is a consumer's decision, made in a
-system that can say who decided and when — which this record, carrying no author and no time,
-is not. A sign is also orthogonal to drift: an observed edge
-nobody declared is drift whatever its sign.
+system that can say who decided and when — which this record, carrying no author and no time
+of decision (its window is the observation's, the consumer's input), is not. A sign is also
+orthogonal to drift: an observed edge nobody declared is drift whatever its sign.
 
 ## Level
 
