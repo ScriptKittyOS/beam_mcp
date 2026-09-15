@@ -162,12 +162,28 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert body!(conn)["error"]["code"] == -32_020
     end
 
-    test "an unsupported version gets -32022 listing what is supported" do
+    test "an unsupported version gets -32022 listing what is supported, requested echoed as the string the schema says" do
       body = %{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list"}
       conn = post(body, [{@hdr, "1900-01-01"}, {"mcp-method", "tools/list"}])
       assert conn.status == 400
       assert body!(conn)["error"]["code"] == -32_022
-      assert body!(conn)["error"]["data"]["supported"] == [@modern]
+
+      assert body!(conn)["error"]["data"] == %{
+               "supported" => [@modern],
+               "requested" => "1900-01-01"
+             }
+    end
+
+    test "over HTTP, server/discover advertises only the revision HTTP serves" do
+      # Dual-era is a stdio fact. A transport that refuses 2025-11-25 on every POST must not
+      # list it: advertising a revision the transport will not serve is the opposite of
+      # gate honesty.
+      conn = post(msg("server/discover"))
+      assert conn.status == 200
+      r = body!(conn)["result"]
+      assert r["supportedVersions"] == [@modern]
+      assert r["resultType"] == "complete" and r["ttlMs"] == 0 and r["cacheScope"] == "private"
+      refute Map.has_key?(r, "protocolVersions")
     end
 
     test "tools/call cannot reach dispatch without the header" do
