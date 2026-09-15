@@ -52,6 +52,9 @@ reads text, and text has edges worth stating:
   another name would not be seen by the census; it would be seen by the dependency list, which is
   two packages (`jason`, `telemetry`) plus the optional `plug` and `bandit`, and by the gate's
   optional-deps step.
+- A census sees a call by its written name. A call made dynamically — `apply/3` on a module name
+  built at runtime — would not be seen. No line under `lib/` does that; the one call through a
+  variable module is to the host's catalog (`module.capabilities()`), which is the host's code.
 - Entry 7's wire half is asserted over the HTTP transport, the only transport with headers. Over
   stdio there is no header to carry a session identifier; the source half covers both.
 - Entry 9's "sends no `initialize`" is a statement about this package's source. A host that wraps
