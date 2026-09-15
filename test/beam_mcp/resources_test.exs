@@ -147,6 +147,63 @@ defmodule BeamMCP.ResourcesTest do
     test "validate/1 accepts an empty resources list without a reader" do
       assert :ok = Catalog.validate(Empty)
     end
+
+    # Found by a review lane: two entries with one uri passed validate/1, and a walk at
+    # page_size 1 dropped the second while page_size 50 showed both -- what a client saw
+    # depended on the page size, in a static list, which is the gap the codec exists to
+    # prevent. The codec's premise is a canonical key; the catalog is where it is enforced.
+    test "validate/1 refuses a repeated uri or uri_template, by name" do
+      defmodule Twice do
+        def capabilities,
+          do: %{
+            tools: [],
+            resources: [
+              %ResourceSpec{uri: "d://a", name: "one"},
+              %ResourceSpec{uri: "d://b", name: "b"},
+              %ResourceSpec{uri: "d://a", name: "two"}
+            ],
+            prompts: []
+          }
+
+        def read_resource(uri), do: {:ok, [%{uri: uri, text: ""}]}
+      end
+
+      assert {:error, message} = Catalog.validate(Twice)
+      assert message =~ "d://a"
+      assert message =~ "more than once"
+
+      defmodule TwiceTemplate do
+        def capabilities,
+          do: %{
+            tools: [],
+            resources: [
+              %ResourceTemplateSpec{uri_template: "d://{x}", name: "one"},
+              %ResourceTemplateSpec{uri_template: "d://{x}", name: "two"}
+            ],
+            prompts: []
+          }
+
+        def read_resource(uri), do: {:ok, [%{uri: uri, text: ""}]}
+      end
+
+      assert {:error, message} = Catalog.validate(TwiceTemplate)
+      assert message =~ "d://{x}"
+    end
+
+    test "validate/1 refuses a catalog that lists only a template and cannot read one" do
+      defmodule TemplateOnly do
+        def capabilities,
+          do: %{
+            tools: [],
+            resources: [%ResourceTemplateSpec{uri_template: "t://{x}", name: "t"}],
+            prompts: []
+          }
+      end
+
+      assert {:error, message} = Catalog.validate(TemplateOnly)
+      assert message =~ "read_resource/1"
+      assert message =~ "template"
+    end
   end
 
   describe "the capability" do
@@ -310,6 +367,11 @@ defmodule BeamMCP.ResourcesTest do
       r = call(s, "resources/read", %{"uri" => "injected://only-here/by-id/4/2"})
       assert r["error"]["code"] == -32_002
 
+      # And a segment, not nothing: a resource with an empty id is not a resource the
+      # template names. Stated in the matcher's doc; pinned here.
+      r = call(s, "resources/read", %{"uri" => "injected://only-here/by-id/"})
+      assert r["error"]["code"] == -32_002
+
       # A literal character of the template is literal: the "." of ".txt" is not "any".
       r = call(s, "resources/read", %{"uri" => "injected://only-here/notes.txt"})["result"]
       assert [%{"text" => "notes.txt"}] = r["contents"]
@@ -337,10 +399,15 @@ defmodule BeamMCP.ResourcesTest do
       assert r["error"]["message"] =~ "uri"
     end
 
-    test "a missing or non-string uri is invalid params" do
+    test "a missing or non-string uri is invalid params, and so is a request with no params at all" do
       s = state(Injected)
       assert call(s, "resources/read", %{})["error"]["code"] == -32_602
       assert call(s, "resources/read", %{"uri" => 1})["error"]["code"] == -32_602
+
+      {_, r} =
+        Server.handle_message(s, %{"jsonrpc" => "2.0", "id" => 9, "method" => "resources/read"})
+
+      assert r["error"]["code"] == -32_602
     end
 
     test "under 2025-11-25 the contents come without the modern envelope" do
