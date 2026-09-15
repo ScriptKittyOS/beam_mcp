@@ -89,8 +89,15 @@ All notable changes to this project are documented here. The format follows
   when both signs are supplied — neither `:unset` — and they differ; held over all
   twenty-five pairs. `:ungoverned` against `:deny` is a finding; `:unset` against
   `:ungoverned` is not; `:unset` on both sides never is.
+- **Two coverage counts added, `declared_sign_only` and `observed_sign_only`** — labels in
+  both graphs with a sign supplied on one side and `:unset` on the other, one count per
+  direction because the two directions are different facts (a sign on the observed side
+  only means an authority spoke during the run about an edge nobody signed at configuration
+  time; the reverse is the odder, and a consumer sees it alone rather than summed). The
+  one-sided cases stay out of the classes; they are counts.
 - **`schema_version` is `2`** on the graph's bytes (the vocabulary the sign field is read
-  against) and, on its own axis, `2` on the diff record (its semantics). Published 0.4.0
+  against) and, on its own axis, `2` on the diff record (its semantics: changed-sign by name,
+  two counts added). Published 0.4.0
   bytes at `1` stay exactly as they were and their hashes stay verifiable; the version tells
   a verifier which vocabulary applies (`docs/connectome-canonical.md`, *Versions*).
   `BeamMCP.Connectome.Graph.new/1` refuses any version but `2`.
