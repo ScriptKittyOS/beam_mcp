@@ -51,14 +51,16 @@ defmodule BeamMCP.Cursor do
   Decodes a cursor for the list `kind`.
 
   `{:error, :malformed}` for anything that is not this codec's bytes at this version with a
-  string key; `{:error, {:kind, other}}` for a well-formed cursor made for another list.
+  string key; `{:error, {:kind, other}}` for a well-formed cursor made for another list,
+  `other` being that list's name as the bytes carry it -- a string, never an atom made from
+  the wire.
   """
-  @spec decode(kind(), term()) :: {:ok, key()} | {:error, :malformed | {:kind, atom()}}
+  @spec decode(kind(), term()) :: {:ok, key()} | {:error, :malformed | {:kind, String.t()}}
   def decode(kind, cursor) when is_atom(kind) and is_binary(cursor) do
     with {:ok, json} <- Base.url_decode64(cursor, padding: false),
          {:ok, %{"v" => @version, "k" => k, "a" => key}} when is_binary(k) and is_binary(key) <-
            Jason.decode(json) do
-      if k == Atom.to_string(kind), do: {:ok, key}, else: {:error, {:kind, String.to_atom(k)}}
+      if k == Atom.to_string(kind), do: {:ok, key}, else: {:error, {:kind, k}}
     else
       _ -> {:error, :malformed}
     end
@@ -80,24 +82,15 @@ defmodule BeamMCP.Cursor do
   def page(kind, items, key_fun, position, size)
       when is_atom(kind) and is_list(items) and is_function(key_fun, 1) and is_integer(size) and
              size > 0 do
-    after_key =
-      case position do
-        {:ok, key} -> key
-        nil -> nil
-      end
-
-    remaining =
-      case after_key do
-        nil -> items
-        key -> Enum.drop_while(items, &(key_fun.(&1) <= key))
-      end
-
-    {page, rest} = Enum.split(remaining, size)
-
-    case {page, rest} do
-      {[], _} -> {[], nil}
-      {_, []} -> {page, nil}
-      {_, _} -> {page, encode(kind, key_fun.(List.last(page)))}
-    end
+    {page, rest} = items |> after_position(key_fun, position) |> Enum.split(size)
+    {page, next_cursor(kind, page, rest, key_fun)}
   end
+
+  defp after_position(items, _key_fun, nil), do: items
+
+  defp after_position(items, key_fun, {:ok, key}),
+    do: Enum.drop_while(items, &(key_fun.(&1) <= key))
+
+  defp next_cursor(_kind, _page, [], _key_fun), do: nil
+  defp next_cursor(kind, page, _rest, key_fun), do: encode(kind, key_fun.(List.last(page)))
 end

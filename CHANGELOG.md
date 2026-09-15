@@ -32,6 +32,40 @@ All notable changes to this project are documented here. The format follows
   the tarball and any byte count written here moves the number it cites). No other entry is
   added or removed.
 
+### Added — the resources primitive, and one pagination codec
+
+- **`resources/list`, `resources/templates/list` and `resources/read`**, the three request
+  methods the `2026-07-28` schema defines for resources (its `resources/subscribe` of earlier
+  revisions is gone — `subscriptions/listen` replaced it — and is not served; the capability
+  is advertised with `subscribe: false` and `listChanged: false`). A catalog names resources
+  and templates as `BeamMCP.ResourceSpec` and `BeamMCP.ResourceTemplateSpec` structs in its
+  existing `resources` list — one list, two structs, so `capabilities/0` gains no key — and
+  reads them through a new callback, `read_resource/1`. **One reader advertises and decides
+  readability:** a `resources/read` uri is served only when the same list names it or a listed
+  template matches it (RFC 6570 `{var}` within a segment, `{+var}` across; no other operator
+  is claimed), else `-32002 Resource not found` with the uri as data before any host code
+  runs. A reader's `{:error, reason}` is `-32002` with the reason; a malformed reader answer is
+  `-32603` naming the defect, never a crash. Blob contents are raw bytes at the reader and
+  base64 on the wire; optional fields the specification leaves out are left out, not sent as
+  `null`. Both eras serve the three; `2026-07-28` results carry `ttlMs`, `cacheScope` and
+  `resultType` as `tools/list` does, from the new `resources_ttl_ms:` and
+  `resources_cache_scope:` options with the same non-permissive defaults.
+- **`BeamMCP.Cursor`, the pagination codec every paginated list shares.** Opaque (a client
+  passes it back unchanged), stable (one position, one byte string), URL-safe, typed by its
+  list (a cursor from another list is refused by name as invalid params), and **keyed on the
+  item's canonical key rather than an offset**, so a list that changes between two pages
+  never skips an item that was there before and is there still; `nextCursor` is present
+  exactly when more remains. The page size is `BeamMCP.Server.new/1`'s `page_size:` (default
+  50).
+  Both resource lists use it; `tools/list` does not yet.
+- **How to tell whether you are affected:** if your catalog's `resources` list carried
+  anything other than the two structs — a map with a `"uri"`, say, which the declared
+  connectome read as a node name — `BeamMCP.Server.new/1` now refuses the catalog at startup,
+  naming the key; rewrite each entry as a `%BeamMCP.ResourceSpec{uri:, name:}` and export
+  `read_resource/1`. A catalog with an empty `resources` list is unaffected. The declared
+  connectome names a `%BeamMCP.ResourceSpec{}` node as it named the map; a template has no
+  `uri` and is enumerated as an unreadable entry, not a node.
+
 ### Added — reachability, additive
 
 - **Reachability queries over a connectome graph.** `BeamMCP.Connectome.Reach` answers four

@@ -33,10 +33,13 @@ Injection without a specification is a claim with nothing behind it, so both are
 
 **`BeamMCP.Catalog`** — the host names what it offers.
 
-`capabilities/0` returns a map with three required keys. `resources` and `prompts` may be empty
-and nothing reads them yet; they are required so that serving them later adds a reader rather
-than changing this contract a second time. **An absent key is a malformed catalog, not an empty
-one**, and `BeamMCP.Server.new/1` refuses it at startup rather than at the first request.
+`capabilities/0` returns a map with three required keys. `tools` holds `BeamMCP.ToolSpec`
+structs; `resources` holds `BeamMCP.ResourceSpec` and `BeamMCP.ResourceTemplateSpec` structs
+— one list, two kinds — and a catalog that lists a resource also exports `read_resource/1`;
+`prompts` may be empty and nothing reads it yet.
+**An absent key is a malformed catalog, not an empty one**, and `BeamMCP.Server.new/1`
+refuses it at startup rather than at the first request — as it refuses a `resources` entry
+that is neither struct, and a listed resource with no reader.
 
 ```elixir
 defmodule MyApp.Catalog do
@@ -45,7 +48,10 @@ defmodule MyApp.Catalog do
   @impl true
   def capabilities do
     %{
-      resources: [],
+      resources: [
+        %BeamMCP.ResourceSpec{uri: "weather://places", name: "places", mime_type: "text/plain"},
+        %BeamMCP.ResourceTemplateSpec{uri_template: "weather://place/{name}", name: "place"}
+      ],
       prompts: [],
       tools: [
       %BeamMCP.ToolSpec{
@@ -63,8 +69,28 @@ defmodule MyApp.Catalog do
         ]
     }
   end
+
+  @impl true
+  def read_resource("weather://places"), do: {:ok, [%{uri: "weather://places", text: "Oslo\nLima"}]}
+  def read_resource("weather://place/" <> name), do: {:ok, [%{uri: "weather://place/#{name}", text: "12°C"}]}
 end
 ```
+
+**Resources are advertised and read from one reader.** `resources/list` and
+`resources/templates/list` serve what `capabilities/0` names, sorted by `uri` and
+`uriTemplate`; `resources/read` accepts a uri only when that same list names it or a listed
+template matches it (RFC 6570 `{var}` for one segment, `{+var}` across segments — nothing
+more is claimed) and refuses any other with `-32002` before host code runs, so what is
+advertised and what is readable cannot drift. The read is the catalog's `read_resource/1`:
+`{:ok, contents}` with `text` as a string or `blob` as raw bytes (base64 on the wire), or
+`{:error, reason}`, carried to the client as `-32002` with the reason as data. Both lists are
+paginated by one opaque cursor (`BeamMCP.Cursor`, keyed on the item rather than an offset, so
+a list that changes between pages never skips an item that was there before); the page size
+is `BeamMCP.Server.new/1`'s `page_size:` (default 50), and a cursor from another list is
+refused by name. `ttlMs` and `cacheScope` on the three results are `resources_ttl_ms:` and
+`resources_cache_scope:`, defaulting to `0` and `"private"` for the reasons the tools pair
+does. The server sends no notifications: `resources` is advertised with `listChanged: false`
+and `subscribe: false`.
 
 **The dispatch callback** — the host does the work.
 
@@ -319,8 +345,9 @@ one legacy revision.
 | `ping` | removed from the revision, refused | answered |
 | result envelope | `resultType` and `_meta` `serverInfo` | neither; both are `2026-07-28` additions |
 
-`server/discover`, `tools/list`, `tools/call`, `shutdown`, `exit` at both eras; `initialize`
-and `notifications/initialized` at legacy only.
+`server/discover`, `tools/list`, `resources/list`, `resources/templates/list`, `resources/read`,
+`tools/call`, `shutdown`, `exit` at both eras; `initialize` and `notifications/initialized` at
+legacy only.
 
 **A revision, not a carrier, decides the semantics.** `params._meta` — the request's `_meta`
 lives inside `params`, the schema's one position; a `_meta` at the top level of the request is

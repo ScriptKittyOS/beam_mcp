@@ -41,6 +41,9 @@ defmodule BeamMCP.Server do
   shown and what it is held to cannot drift apart.
   """
 
+  alias BeamMCP.Cursor
+  alias BeamMCP.ResourceSpec
+  alias BeamMCP.ResourceTemplateSpec
   alias BeamMCP.ToolSpec
 
   # Two revisions, two eras. 2026-07-28 removed the initialize handshake and protocol-level
@@ -55,6 +58,17 @@ defmodule BeamMCP.Server do
   @capabilities_meta_key "io.modelcontextprotocol/clientCapabilities"
   @server_info_meta_key "io.modelcontextprotocol/serverInfo"
   @default_server_name "beam_mcp"
+  # What the server advertises, in server/discover and in the initialize result: one literal,
+  # so the two eras cannot disagree, and every key of it is served by a clause below --
+  # advertising a capability the server does not serve is the defect class this package
+  # names on the transport side, and the capability census holds the keys to the schema's.
+  # `resources` is always present, as `tools` is: the three resource methods are always
+  # served, and an empty catalog answers an empty list. Neither `listChanged` nor `subscribe`
+  # is offered: the server sends no notifications.
+  @capabilities %{
+    "tools" => %{"listChanged" => false},
+    "resources" => %{"listChanged" => false, "subscribe" => false}
+  }
   # Read from the application spec rather than restated here. A hardcoded copy beside the one
   # in mix.exs is a transcription defect waiting for the first release that updates one of them.
   @server_version Mix.Project.config()[:version]
@@ -75,7 +89,10 @@ defmodule BeamMCP.Server do
           catalog: module(),
           supported_versions: [String.t(), ...],
           tools_cache_scope: String.t(),
-          tools_ttl_ms: non_neg_integer()
+          tools_ttl_ms: non_neg_integer(),
+          resources_cache_scope: String.t(),
+          resources_ttl_ms: non_neg_integer(),
+          page_size: pos_integer()
         }
 
   # Every option `new/1` accepts, with the shape it must have. Read as a table so that a
@@ -91,8 +108,13 @@ defmodule BeamMCP.Server do
     supported_versions:
       "a non-empty list of the revisions this package implements, in the order to advertise them",
     tools_ttl_ms: "a non-negative integer",
-    tools_cache_scope: "a string"
+    tools_cache_scope: "a string",
+    resources_ttl_ms: "a non-negative integer",
+    resources_cache_scope: "a string",
+    page_size: "a positive integer"
   ]
+
+  @default_page_size 50
 
   defp valid?(:catalog, value), do: is_atom(value)
   defp valid?(:dispatch, value), do: is_nil(value) or is_function(value, 3)
@@ -104,6 +126,9 @@ defmodule BeamMCP.Server do
 
   defp valid?(:tools_ttl_ms, value), do: is_integer(value) and value >= 0
   defp valid?(:tools_cache_scope, value), do: is_binary(value)
+  defp valid?(:resources_ttl_ms, value), do: is_integer(value) and value >= 0
+  defp valid?(:resources_cache_scope, value), do: is_binary(value)
+  defp valid?(:page_size, value), do: is_integer(value) and value > 0
 
   @spec new(keyword()) :: state()
   def new(opts \\ []) do
@@ -128,7 +153,14 @@ defmodule BeamMCP.Server do
       # is the NON-permissive one, because a package that picks the permissive default on a
       # host's behalf has made a disclosure decision it cannot keep.
       tools_ttl_ms: Keyword.get(opts, :tools_ttl_ms, 0),
-      tools_cache_scope: Keyword.get(opts, :tools_cache_scope, "private")
+      tools_cache_scope: Keyword.get(opts, :tools_cache_scope, "private"),
+      # The same pair for the three resource results, with the same reasons and the same
+      # non-permissive defaults.
+      resources_ttl_ms: Keyword.get(opts, :resources_ttl_ms, 0),
+      resources_cache_scope: Keyword.get(opts, :resources_cache_scope, "private"),
+      # The page size of every paginated list (`BeamMCP.Cursor`). The specification leaves
+      # it to the server; a client walks `nextCursor` whatever it is.
+      page_size: Keyword.get(opts, :page_size, @default_page_size)
     }
   end
 
@@ -184,7 +216,7 @@ defmodule BeamMCP.Server do
      id
      |> result(%{
        "supportedVersions" => state.supported_versions,
-       "capabilities" => %{"tools" => %{"listChanged" => false}},
+       "capabilities" => @capabilities,
        "ttlMs" => 0,
        "cacheScope" => "private"
      })
@@ -199,7 +231,7 @@ defmodule BeamMCP.Server do
       response =
         result(id, %{
           "protocolVersion" => requested,
-          "capabilities" => %{"tools" => %{"listChanged" => false}},
+          "capabilities" => @capabilities,
           "serverInfo" => %{"name" => state.server_name, "version" => @server_version}
         })
 
@@ -317,6 +349,54 @@ defmodule BeamMCP.Server do
      })}
   end
 
+  # The two lists: one reader each (`Catalog.resources/1`, `Catalog.templates/1`), sorted on
+  # the key the cursor names, paged by the shared codec. A cursor from the other list, or from
+  # anywhere else, is invalid params by name -- never a silently wrong page.
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/list"} = m) do
+    paginated(
+      state,
+      id,
+      m,
+      :resources,
+      "resources",
+      Catalog.resources(state.catalog),
+      & &1.uri,
+      &resource_definition/1
+    )
+  end
+
+  def handle_message(
+        state,
+        %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/templates/list"} = m
+      ) do
+    paginated(
+      state,
+      id,
+      m,
+      :resource_templates,
+      "resourceTemplates",
+      Catalog.templates(state.catalog),
+      & &1.uri_template,
+      &template_definition/1
+    )
+  end
+
+  # A read is served only for a uri the same reader lists or a listed template matches; the
+  # refusal (-32002, the code the specification names) comes before any host code runs, so
+  # what is advertised and what is readable cannot drift. The read itself is the catalog's.
+  def handle_message(
+        state,
+        %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/read", "params" => params}
+      ) do
+    case params do
+      %{"uri" => uri} when is_binary(uri) ->
+        {state, read_resource(state, id, uri)}
+
+      _ ->
+        {state, error(id, -32_602, "Invalid params: resources/read requires a string uri")}
+    end
+  end
+
   def handle_message(
         state,
         %{
@@ -365,6 +445,123 @@ defmodule BeamMCP.Server do
   def handle_message(state, _message) do
     {state, nil}
   end
+
+  defp paginated(state, id, message, kind, key, items, key_fun, definition) do
+    case position(kind, get_in(message, ["params", "cursor"])) do
+      {:ok, position} ->
+        {page, next} = Cursor.page(kind, items, key_fun, position, state.page_size)
+
+        payload =
+          %{
+            key => Enum.map(page, definition),
+            "ttlMs" => state.resources_ttl_ms,
+            "cacheScope" => state.resources_cache_scope
+          }
+          |> put_present("nextCursor", next)
+
+        {state, result(id, payload)}
+
+      {:error, why} ->
+        {state, error(id, -32_602, "Invalid params: cursor " <> why)}
+    end
+  end
+
+  defp position(_kind, nil), do: {:ok, nil}
+
+  defp position(kind, cursor) do
+    case Cursor.decode(kind, cursor) do
+      {:ok, key} -> {:ok, {:ok, key}}
+      {:error, :malformed} -> {:error, "is malformed"}
+      {:error, {:kind, other}} -> {:error, "belongs to the #{other} list, not #{kind}"}
+    end
+  end
+
+  defp read_resource(state, id, uri) do
+    catalog = state.catalog
+
+    if Catalog.readable?(catalog, uri) do
+      answer_read(state, id, uri, catalog.read_resource(uri))
+    else
+      error(id, -32_002, "Resource not found: #{uri}", %{"uri" => uri})
+    end
+  end
+
+  # The reader's answer to the wire. Only the shape is the package's: a list of contents
+  # items is encoded; an error is -32002 with the reason; anything else is a defect named.
+  defp answer_read(state, id, _uri, {:ok, contents}) when is_list(contents) do
+    case Enum.reduce_while(contents, {:ok, []}, &encode_contents/2) do
+      {:ok, encoded} ->
+        result(id, %{
+          "contents" => Enum.reverse(encoded),
+          "ttlMs" => state.resources_ttl_ms,
+          "cacheScope" => state.resources_cache_scope
+        })
+
+      {:error, defect} ->
+        error(id, -32_603, "Internal error: #{inspect(state.catalog)}.read_resource/1 " <> defect)
+    end
+  end
+
+  defp answer_read(_state, id, uri, {:error, reason}) do
+    error(id, -32_002, "Resource not found: #{uri}", %{
+      "uri" => uri,
+      "reason" => to_json_value(reason)
+    })
+  end
+
+  defp answer_read(state, id, _uri, other) do
+    error(
+      id,
+      -32_603,
+      "Internal error: #{inspect(state.catalog)}.read_resource/1 answered #{inspect(other)}, " <>
+        "not {:ok, contents} or {:error, reason}"
+    )
+  end
+
+  # One contents item as the reader gives it, to the wire's shape: `text` as is, `blob` as
+  # base64; a uri required; both or neither of text/blob a defect named, never reshaped.
+  defp encode_contents(%{uri: uri} = item, {:ok, acc}) when is_binary(uri) do
+    case {Map.get(item, :text), Map.get(item, :blob)} do
+      {text, nil} when is_binary(text) ->
+        {:cont, {:ok, [contents_item(uri, item, "text", text) | acc]}}
+
+      {nil, blob} when is_binary(blob) ->
+        {:cont, {:ok, [contents_item(uri, item, "blob", Base.encode64(blob)) | acc]}}
+
+      _ ->
+        {:halt, {:error, "returned an item with neither or both of :text and :blob for #{uri}"}}
+    end
+  end
+
+  defp encode_contents(item, _acc),
+    do: {:halt, {:error, "returned an item without a string :uri: #{inspect(item)}"}}
+
+  defp contents_item(uri, item, key, value) do
+    %{"uri" => uri, key => value} |> put_present("mimeType", Map.get(item, :mime_type))
+  end
+
+  defp resource_definition(%ResourceSpec{} = r) do
+    %{"uri" => r.uri, "name" => r.name}
+    |> put_present("title", r.title)
+    |> put_present("description", r.description)
+    |> put_present("mimeType", r.mime_type)
+    |> put_present("size", r.size)
+    |> put_present("annotations", r.annotations)
+    |> put_present("icons", r.icons)
+  end
+
+  defp template_definition(%ResourceTemplateSpec{} = t) do
+    %{"uriTemplate" => t.uri_template, "name" => t.name}
+    |> put_present("title", t.title)
+    |> put_present("description", t.description)
+    |> put_present("mimeType", t.mime_type)
+    |> put_present("annotations", t.annotations)
+    |> put_present("icons", t.icons)
+  end
+
+  # An optional field the specification leaves out is left out, never sent as null.
+  defp put_present(map, _key, nil), do: map
+  defp put_present(map, key, value), do: Map.put(map, key, value)
 
   defp tool_definition(%ToolSpec{} = tool) do
     %{
@@ -610,5 +807,13 @@ defmodule BeamMCP.Server do
 
   defp error(id, code, message) do
     %{"jsonrpc" => "2.0", "id" => id, "error" => %{"code" => code, "message" => message}}
+  end
+
+  defp error(id, code, message, data) do
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "error" => %{"code" => code, "message" => message, "data" => data}
+    }
   end
 end

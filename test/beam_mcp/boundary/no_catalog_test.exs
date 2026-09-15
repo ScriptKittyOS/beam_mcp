@@ -68,27 +68,39 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
     macro max_duration_ms method mode module_ids modules name no_beam no_debug_info nodes parent
     pids provenance schema_version semi server server_name server_opts shutdown? sign sources
     supported_versions to tools tools_cache_scope tools_ttl_ms ungrouped ungrouped_calls
-    unreadable unresolved weight window)a
+    unreadable unresolved weight window
+    annotations icons mime_type page_size resources resources_cache_scope resources_ttl_ms
+    size title uri uri_template)a
 
-  test "the catalog is called through one callee, capabilities/0, at three sites" do
+  test "the catalog is called through two callees: capabilities/0 at four sites, read_resource/1 at one" do
     # From the artefact: every call whose module is only known at runtime and whose function
-    # is named (`:"$M_EXPR"` with a real function) is `capabilities/0`, and there are three of
-    # them. A `:"$F_EXPR"` is a call through a function value -- the host's dispatch and hooks,
-    # and the package's own closures -- and is not a module call.
+    # is named (`:"$M_EXPR"` with a real function) is one of the catalog's two callbacks --
+    # `capabilities/0` (the tools reader, the one reader behind both resource readers, the
+    # validator, the connectome builder) and `read_resource/1` (the one read site, reached
+    # only after `readable?/2` has said yes from `capabilities/0`). A `:"$F_EXPR"` is a call
+    # through a function value -- the host's dispatch and hooks, and the package's own
+    # closures -- and is not a module call.
     {_edges, unresolved} = Boundary.xref()
     named = for {from, {:"$M_EXPR", f, a}} <- unresolved, f != :"$F_EXPR", do: {from, f, a}
 
     assert Enum.sort(named) == [
+             {{BeamMCP.Catalog, :entries, 1}, :capabilities, 0},
              {{BeamMCP.Catalog, :tools, 1}, :capabilities, 0},
              {{BeamMCP.Catalog, :validate_shape, 1}, :capabilities, 0},
-             {{BeamMCP.Connectome.Declared, :read_catalog, 2}, :capabilities, 0}
+             {{BeamMCP.Connectome.Declared, :read_catalog, 2}, :capabilities, 0},
+             {{BeamMCP.Server, :read_resource, 3}, :read_resource, 1}
            ],
            "calls through a variable module:\n  " <> Enum.map_join(named, "\n  ", &inspect/1)
 
     sites = Boundary.hits(~r/\.capabilities\(\)/)
 
-    assert length(sites) == 3,
+    assert length(sites) == 4,
            "capabilities/0 call sites in the text:\n  " <> Boundary.format(sites)
+
+    reads = Boundary.hits(~r/\.read_resource\(/)
+
+    assert length(reads) == 1,
+           "read_resource/1 call sites in the text:\n  " <> Boundary.format(reads)
   end
 
   test "every name the package reaches by dot syntax is on its pinned list" do
