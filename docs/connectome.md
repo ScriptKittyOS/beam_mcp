@@ -35,7 +35,9 @@ is claimed.
   host opts in, a guarded tracer. It records edge identity only — never arguments, results or
   headers. It says what *did* happen, over a stated window.
 - A **drift finding** is an edge the observed connectome has and the declared connectome does not,
-  or an edge both have with signs that differ. Drift is a record; what to do about it is the host's.
+  or an edge both have with a sign supplied on both sides and the two different (`unset` on
+  either side is not a sign supplied: [`docs/connectome-diff.md`](connectome-diff.md)). Drift
+  is a record; what to do about it is the host's.
 - **Dead authority** is an edge the declared connectome has and the observed one never showed in the
   window. It is evidence the host can use to narrow what it declares; it is not a fault.
 - A **coverage bound** is the measured fraction of one graph the other accounts for, stated with
@@ -71,11 +73,18 @@ A tool dispatch is an `:invoke` edge whose source is the server node. There is n
 | `:allow` | the host's policy permits this edge |
 | `:deny` | the host's policy forbids it |
 | `:hold` | the host's policy holds it for a decision it does not make alone — an advisory, never an approval |
-| `:ungoverned` | a consumer looked and no gate applies to this edge — an affirmative statement, a supplied value like the three above; never a reason for the package to leave the edge out of anything |
+| `:ungoverned` | a consumer looked and no gate — no rule of its policy, not a gate node of the reach page — applies to this edge: an affirmative statement, a supplied value like the three above; never a reason for the package to leave the edge out of anything |
 | `:unset` | no sign has been supplied to this package; **the only value the package itself ever writes** |
 
 The sign is a *slot*. The package carries it so that a rendered graph can show a policy's verdict
-beside each edge; the host fills it. Nothing in the package computes one.
+beside each edge; a **consumer** fills it — the host that embeds this package, or any party
+holding a graph it produced; the pages use the two words for the same role. Nothing in the
+package computes one. There is no setter: a consumer writes the struct field
+(`%{edge | sign: :deny}`) and hands the graph to `BeamMCP.Connectome.Graph.new/1`, which checks
+the value against the vocabulary and refuses, never corrects, anything else. **The bytes carry
+no field saying which consumer wrote a sign, or when**: an edge is `from`, `to`, `kind`,
+`provenance`, `sign` and nothing more, so a sign's author and its time are the consumer's own
+record to keep, outside this package.
 
 `:unset` says exactly one thing: that nothing was handed here. It does not say that no policy
 exists, that none spoke, or that none was computed — a host whose authority plane denied an
@@ -92,9 +101,11 @@ misuse. A sign means the same thing on a declared edge and on an observed one; t
 (`provenance`, `sign`) carries the whole fact, and no third value is added to say which side it
 came from: on a declared edge a sign is what a consumer wrote against the configuration; on an
 observed edge it is what a consumer wrote against the run. **The package never treats any
-sign as suppression** — `:ungoverned` included: the diff records the edge and its sign exactly
-as it records any other, and whether to suppress a finding is a consumer's decision, made in a
-system that can say who decided and when. A sign is also orthogonal to drift: an observed edge
+sign as suppression** — `:ungoverned` included: the diff records the edge exactly as it records
+any other (a sign appears in the diff record only in a changed-sign entry; every sign is in the
+graph's own bytes), and whether to suppress a finding is a consumer's decision, made in a
+system that can say who decided and when — which this record, carrying no author and no time,
+is not. A sign is also orthogonal to drift: an observed edge
 nobody declared is drift whatever its sign.
 
 ## Level
