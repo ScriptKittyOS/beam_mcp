@@ -147,6 +147,86 @@ defmodule BeamMCP.NegotiationTest do
     end
   end
 
+  describe "where _meta lives: params._meta, the schema's one position" do
+    # JSONRPCRequest has no _meta; RequestParams requires one with protocolVersion and
+    # clientCapabilities (2026-07-28). The package read the message's top level until 0.5.0
+    # and its own tests sent it there -- so a spec-following stdio client got a
+    # legacy-shaped result while the server advertised modern.
+    @spec_meta %{
+      "io.modelcontextprotocol/protocolVersion" => @modern,
+      "io.modelcontextprotocol/clientCapabilities" => %{}
+    }
+
+    test "a request carrying params._meta is served as modern" do
+      r =
+        send_msg(%{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "tools/list",
+          "params" => %{"_meta" => @spec_meta}
+        })
+
+      assert r["result"]["resultType"] == "complete"
+      assert r["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"]
+    end
+
+    test "a top-level _meta is refused by name, whether or not params._meta is there too" do
+      for extra <- [%{}, %{"params" => %{"_meta" => @spec_meta}}] do
+        msg =
+          Map.merge(
+            %{"jsonrpc" => "2.0", "id" => 7, "method" => "tools/list", "_meta" => @spec_meta},
+            extra
+          )
+
+        r = send_msg(msg)
+        assert r["error"]["code"] == -32_602
+        assert r["error"]["message"] =~ "params._meta"
+        assert r["id"] == 7
+      end
+    end
+
+    test "params._meta lacking a required field is refused by name" do
+      for {drop, field} <- [
+            {"io.modelcontextprotocol/protocolVersion", "protocolVersion"},
+            {"io.modelcontextprotocol/clientCapabilities", "clientCapabilities"}
+          ] do
+        meta = Map.delete(@spec_meta, drop)
+
+        r =
+          send_msg(%{
+            "jsonrpc" => "2.0",
+            "id" => 8,
+            "method" => "tools/list",
+            "params" => %{"_meta" => meta}
+          })
+
+        assert r["error"]["code"] == -32_602, "missing #{field}"
+        assert r["error"]["message"] =~ field
+      end
+    end
+
+    test "on stdio a bare server/discover is still the era probe, and its result is full" do
+      r = send_msg(%{"jsonrpc" => "2.0", "id" => 9, "method" => "server/discover"})
+      assert r["result"]["supportedVersions"] == [@modern, @legacy]
+      assert r["result"]["resultType"] == "complete"
+    end
+
+    test "a legacy request declared through params._meta is served as legacy" do
+      meta = %{"io.modelcontextprotocol/protocolVersion" => @legacy}
+
+      r =
+        send_msg(%{
+          "jsonrpc" => "2.0",
+          "id" => 10,
+          "method" => "ping",
+          "params" => %{"_meta" => meta}
+        })
+
+      assert r["result"] == %{}
+      refute r["result"]["resultType"]
+    end
+  end
+
   describe "the era discriminator" do
     test "a request carrying modern _meta is served as modern, not as legacy" do
       r = send_msg(modern("tools/list"))
