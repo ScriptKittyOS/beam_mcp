@@ -196,9 +196,36 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert body!(conn)["error"]["code"] in [-32_020, -32_602]
     end
 
-    test "a notification's _meta is optional, as NotificationParams says" do
+    test "a notification's _meta is optional, as NotificationParams says, and a version-less one is served" do
       conn = post(%{"jsonrpc" => "2.0", "method" => "exit"}, [{@hdr, @modern}])
       assert conn.status == 202
+
+      conn =
+        post(
+          %{
+            "jsonrpc" => "2.0",
+            "method" => "notifications/cancelled",
+            "params" => %{"requestId" => 1, "_meta" => %{"example.com/trace" => "t1"}}
+          },
+          [{@hdr, @modern}]
+        )
+
+      assert conn.status == 202
+    end
+
+    test "a params._meta that is not an object is -32602 with 400: a body-shape fault, not a header mismatch" do
+      for bad <- ["nope", 7, [1], true] do
+        conn =
+          post(%{
+            "jsonrpc" => "2.0",
+            "id" => 12,
+            "method" => "tools/list",
+            "params" => %{"_meta" => bad}
+          })
+
+        assert conn.status == 400, inspect(bad)
+        assert body!(conn)["error"]["code"] == -32_602
+      end
     end
   end
 

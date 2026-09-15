@@ -214,6 +214,45 @@ defmodule BeamMCP.NegotiationTest do
       end
     end
 
+    test "a notification is never answered: a version-less params._meta on one, or a top-level _meta, gets no reply and the notification is served" do
+      # JSON-RPC 2.0 forbids a reply to a notification; NotificationParams makes its _meta
+      # optional with no required keys. A review lane found both shapes answered with an
+      # error carrying id null.
+      state = state()
+
+      {_, nil} =
+        Server.handle_message(state, %{
+          "jsonrpc" => "2.0",
+          "method" => "notifications/cancelled",
+          "params" => %{"requestId" => 1, "_meta" => %{"example.com/trace" => "t1"}}
+        })
+
+      {next, nil} =
+        Server.handle_message(state, %{
+          "jsonrpc" => "2.0",
+          "method" => "shutdown",
+          "_meta" => @spec_meta
+        })
+
+      assert next.shutdown?,
+             "the notification was served, its misplaced _meta ignored -- there is nothing to answer"
+    end
+
+    test "a params._meta that is not an object is invalid params, not a legacy request" do
+      for bad <- ["nope", 7, [1], true] do
+        r =
+          send_msg(%{
+            "jsonrpc" => "2.0",
+            "id" => 11,
+            "method" => "tools/list",
+            "params" => %{"_meta" => bad}
+          })
+
+        assert r["error"]["code"] == -32_602, inspect(bad)
+        assert r["error"]["message"] =~ "params._meta"
+      end
+    end
+
     test "on stdio a bare server/discover is still the era probe, and its result is full" do
       r = send_msg(%{"jsonrpc" => "2.0", "id" => 9, "method" => "server/discover"})
       assert r["result"]["supportedVersions"] == [@modern, @legacy]
