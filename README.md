@@ -357,6 +357,31 @@ the two chosen revisions.
 **JSON-RPC batching is refused.** It was added in `2025-03-26` and removed in `2025-06-18`, so
 it is required by exactly one revision of five and by neither of ours.
 
+## Conformance, as two rows
+
+Measured against the official MCP conformance suite, `@modelcontextprotocol/conformance`
+**0.2.0-alpha.11** (pinned by exact version in `tools/conformance.sh`; the npm `latest` line has
+no `2026-07-28` scenarios), with each revision's frozen requirement set (`--requirements`),
+against this package's HTTP transport on Bandit with the harness catalog in
+`conformance/server.exs`. Both rows come from the suite's own `checks.json` and are never
+typed; both ship together or neither does.
+
+| revision | suite totals (scored server scenarios) | claimed-surface totals | measured |
+| -- | -- | -- | -- |
+| `2026-07-28` | **7 / 37** | **5 / 6** — `server-stateless` at 26 of 30 checks; the four left need diagnostic tools this harness does not invent | 2026-09-15, `tools/conformance.sh` |
+| `2025-11-25` over HTTP | **0 / 30** | 0 / 5 | 2026-09-15, `tools/conformance.sh` |
+
+**Suite totals do not hide the failures.** The `2026-07-28` failures are surfaces this package
+holds out by decision — resources, prompts, completion, the tasks extension, content types
+beyond text — each named with its reason word in `conformance/baseline-2026-07-28.yml`, and the
+suite exits 1 on a regression *or* on a baselined scenario that starts passing.
+**Claimed-surface totals** count only the scenarios whose methods and tool names this package
+says it implements: `server/discover` and the stateless rules, `tools/list`, `tools/call` with
+text content and tool errors, the HTTP header and origin rules.
+**The `2025-11-25` row is the design meeting the suite, not a failure:** the HTTP transport
+serves `2026-07-28` only, and `2025-11-25` lives on stdio, which the suite cannot drive (it
+has no stdio server mode). `conformance/README.md` has the rest.
+
 ## The connectome
 
 The package exports a composed system's call graph — its wiring diagram — twice, and diffs the
