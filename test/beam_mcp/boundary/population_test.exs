@@ -30,7 +30,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     compile_time =
       for {_, _, text} = hit <-
             Boundary.hits(
-              ~r/\bdefmacrop?\b|\bu?n?quote\b|:elixir\.|:elixir_\w+\.|:compile\.|:erl_(eval|parse|scan)\.|:code\.load\w*\(|\bCode\.(?!ensure_)|Elixir\.Code\b|\balias\s*\(?\s*(Elixir\.)?(\{[^}]*)?\bCode\b|\bEEx\.|\bMix\./
+              ~r/\bdefmacrop?\b|\bdefguardp?\b|\bu?n?quote(_splicing)?\b|:elixir\w*\b|:compile\b|:erl_(eval|parse|scan)\b|:code\.load\w*\b(?!\/\d)|\bCode\.(?!ensure_)|Elixir\.(Code|EEx|Mix)\b|\bEEx\.|\bMix\./
             ),
           String.trim(text) != "@server_version Mix.Project.config()[:version]",
           do: hit
@@ -38,13 +38,25 @@ defmodule BeamMCP.Boundary.PopulationTest do
     assert compile_time == [],
            "compile-time code under lib/:\n  " <> Boundary.format(compile_time)
 
+    # And no directive that would bring one of those modules in under another name -- an
+    # import, an alias or a require of Code, EEx, Mix or an Erlang evaluator, however it is
+    # spelled and across however many lines (a lane brought Code in by `import`, by an alias
+    # split over three lines, and `:erl_eval` by `alias :erl_eval, as: EE`).
+    renamed =
+      Boundary.file_hits(
+        ~r/\b(import|alias|require)\b[\s(]*((Elixir\.)?(\{[^}]*)?\b(Code|EEx|Mix)\b|:(erl_\w+|elixir\w*|compile|code|os|file|prim_file|filelib|init)\b)/
+      )
+
+    assert renamed == [],
+           "a compile-time module renamed under lib/:\n  " <> Enum.join(renamed, "\n  ")
+
     assert length(Boundary.hits(~r/\bMix\./)) == 1
 
     # Nor a read of the environment or the disk, at any position -- a module body runs at
     # compile time and could bake a secret into the beam.
     reads =
       Boundary.hits(
-        ~r/:os\.|\bFile\.|:file\.|:prim_file\.|:erl_prim_loader\.|:filelib\.|\bPath\.wildcard|:init\.|System\.(get_env|fetch_env!?|user_home!?|argv|tmp_dir!?|cmd|shell)\b|Application\.(get_env|fetch_env!?|compile_env!?|get_all_env)\b|:application\.get_env/
+        ~r/:os\.|\bFile\.|:file\.|:prim_file\.|:erl_prim_loader\.|:filelib\.|\bPath\.wildcard|:init\.|System\.(get_env|fetch_env!?|user_home!?|argv|tmp_dir!?|cmd|shell|find_executable)\b|Application\.(get_env|fetch_env!?|compile_env!?|get_all_env)\b|:application\.get_env/
       )
 
     assert reads == [], "environment or disk reads under lib/:\n  " <> Boundary.format(reads)
