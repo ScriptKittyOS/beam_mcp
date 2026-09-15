@@ -80,11 +80,13 @@ The sign is a *slot*. The package carries it so that a rendered graph can show a
 beside each edge; a **consumer** fills it — the host that embeds this package, or any party
 holding a graph it produced; the pages use the two words for the same role. Nothing in the
 package computes one. There is no setter: a consumer writes the struct field
-(`%{edge | sign: :deny}`) and hands the graph to `BeamMCP.Connectome.Graph.new/1`, which checks
-the value against the vocabulary and refuses, never corrects, anything else. **The bytes carry
-no field saying which consumer wrote a sign, or when**: an edge is `from`, `to`, `kind`,
-`provenance`, `sign` and nothing more, so a sign's author and its time are the consumer's own
-record to keep, outside this package.
+(`%{edge | sign: :deny}`) and rebuilds the graph from its parts —
+`BeamMCP.Connectome.Graph.new(nodes: g.nodes, edges: signed, schema_version: 2)` — or lets
+`BeamMCP.Connectome.Graph.check/1` or the encoder see it; each checks the value against the
+vocabulary and refuses, never corrects, anything else. **The bytes carry no field saying which
+consumer wrote a sign, or when**: the bytes' edge object is `from`, `to`, `kind`,
+`provenance`, `sign` and nothing more (a weight travels in the sidecar), so a sign's author and
+its time are the consumer's own record to keep, outside this package.
 
 `:unset` says exactly one thing: that nothing was handed here. It does not say that no policy
 exists, that none spoke, or that none was computed — a host whose authority plane denied an

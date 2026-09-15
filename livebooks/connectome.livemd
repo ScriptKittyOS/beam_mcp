@@ -134,7 +134,7 @@ defmodule Wiring do
           {"declared_and_observed", "declared, and seen in the window"},
           {"declared_never_observed", "dead authority: declared, never seen"},
           {"observed_but_undeclared", "a drift finding: seen, never declared"},
-          {"changed_sign", "in both, with a sign that differs"}
+          {"changed_sign", "in both, a sign supplied on both sides, the two different"}
         ],
         "\n",
         fn {class, meaning} ->
