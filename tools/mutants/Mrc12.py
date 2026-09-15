@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '      if path(dg, @root, target, opts) == false,\n'
-new = '      if path(dg, @root, target, opts) != false,\n'
+old = '      if path(dg, @root, target, %{max_hops: :infinity}) == false,\n'
+new = '      if path(dg, @root, target, %{max_hops: :infinity}) != false,\n'
 
 if s.count(old) != 1:
     sys.exit("Mrc12: anchor found %d times" % s.count(old))

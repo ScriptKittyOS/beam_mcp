@@ -31,10 +31,21 @@ defmodule BeamMCP.Connectome.Reach do
   O(V + E) -- so the witness is a *shortest* path among those that cross no gate.
   `dominates?/4` is the definition itself: `target` is reachable from the entries with `gate`
   present and unreachable with it removed -- two searches, O(V + E), the single-query form.
-  `mandatory_pass/3` is Lengauer–Tarjan (1979), the simple variant with path compression,
-  O(E log V) -- OTP's `:digraph_utils` has no dominator function (measured), so it is written
-  here and held to the removal definition by a property that asks `dominates?/4` about every
-  node. Every function is polynomial; none enumerates paths.
+  `mandatory_pass/3` is Lengauer–Tarjan (1979), the simple variant with path compression --
+  O(E log V) in the paper's array model; the state here is immutable maps, so O(E log² V) --
+  over one build: the depth-first numbering it starts with is also how an unreachable target
+  is found. OTP's `:digraph_utils` has no dominator function (measured), so it is written here
+  and held to the removal definition by a property that asks `dominates?/4` about every node.
+  Every function is polynomial; none enumerates paths.
+
+  ## Options are scoped to the question they bear on
+
+  `kinds:` and `max_edges:` apply to every query. `max_hops:` applies to the two path questions
+  only; `entries:` to the two entry-set questions only. **An option that cannot bear on the
+  question asked is refused by name** (`{:error, {:unknown_option, key}}`), not read: a review
+  found that with `max_hops:` read by `dominates?/4` the module could hand back a gate-free
+  witness round a node and, in the same breath, call that node a dominator. Bounded-length
+  dominance is a different question from the one Lengauer–Tarjan answers, and it is not offered.
 
   ## Caps and refusals, by name
 
@@ -47,8 +58,11 @@ defmodule BeamMCP.Connectome.Reach do
   That is the boundary: what is cheap on the BEAM (searches, dominators) is here; what is not
   is refused rather than attempted with a cap that would be raised until it meant nothing.
 
-  An unknown option, an option of the wrong shape, an edge kind outside the vocabulary and a
-  node id the graph does not hold are each refused by name. Signs are not consulted:
+  An unknown option, an option of the wrong shape, an edge kind outside the vocabulary, a
+  node id the graph does not hold, an entry set that is empty (a graph with no server node and
+  no `entries:`), and a graph `BeamMCP.Connectome.Graph.check/1` would refuse (a literal with a
+  dangling edge, say -- `{:error, {:invalid_graph, reason}}`) are each refused by name, before
+  a table is built. Signs are not consulted:
   sign-aware reachability beyond "avoid these nodes" waits for a consumer that populates them.
   """
 
@@ -66,13 +80,15 @@ defmodule BeamMCP.Connectome.Reach do
 
   @root :"$reach_root"
   @default_max_edges 1_000_000
-  @options [:entries, :kinds, :max_hops, :max_edges]
+  @path_options [:kinds, :max_hops, :max_edges]
+  @entry_options [:entries, :kinds, :max_edges]
 
   @typedoc "Why a query was refused; every reason names what was wrong (an `:invalid` names the option)."
   @type refusal ::
           {:unknown_option, atom()}
           | {:invalid, atom(), term()}
           | {:unknown_node, String.t()}
+          | {:invalid_graph, term()}
           | {:cap, :max_edges, pos_integer()}
           | {:unreachable, String.t()}
           | {:refused, :all_paths}
@@ -81,9 +97,9 @@ defmodule BeamMCP.Connectome.Reach do
   @spec reachable?(Graph.t(), String.t(), String.t(), keyword()) ::
           {:ok, boolean()} | {:error, refusal()}
   def reachable?(%Graph{} = graph, from, to, opts \\ []) do
-    with {:ok, opts} <- options(graph, opts),
-         :ok <- known(graph, [from, to]),
-         :ok <- cap(graph, opts) do
+    with {:ok, opts} <- options(graph, opts, @path_options),
+         :ok <- admitted(graph, opts),
+         :ok <- known(graph, [from, to]) do
       with_digraph(graph, opts, [], fn dg ->
         {:ok, path(dg, from, to, opts) != false}
       end)
@@ -98,9 +114,9 @@ defmodule BeamMCP.Connectome.Reach do
   @spec reachable_without(Graph.t(), String.t(), String.t(), [String.t()], keyword()) ::
           {:ok, false | Path.t()} | {:error, refusal()}
   def reachable_without(%Graph{} = graph, from, to, gates, opts \\ []) when is_list(gates) do
-    with {:ok, opts} <- options(graph, opts),
-         :ok <- known(graph, [from, to | gates]),
-         :ok <- cap(graph, opts) do
+    with {:ok, opts} <- options(graph, opts, @path_options),
+         :ok <- admitted(graph, opts),
+         :ok <- known(graph, [from, to | gates]) do
       without(graph, from, to, gates, opts)
     end
   end
@@ -128,9 +144,9 @@ defmodule BeamMCP.Connectome.Reach do
   @spec dominates?(Graph.t(), String.t(), String.t(), keyword()) ::
           {:ok, boolean()} | {:error, refusal()}
   def dominates?(%Graph{} = graph, gate, target, opts \\ []) do
-    with {:ok, opts} <- options(graph, opts),
+    with {:ok, opts} <- options(graph, opts, @entry_options),
+         :ok <- admitted(graph, opts),
          :ok <- known(graph, [gate, target]),
-         :ok <- cap(graph, opts),
          :ok <- reachable_from_entries(graph, target, opts) do
       dominates(graph, gate, target, opts)
     end
@@ -139,7 +155,9 @@ defmodule BeamMCP.Connectome.Reach do
   defp dominates(_graph, target, target, _opts), do: {:ok, true}
 
   defp dominates(graph, gate, target, opts) do
-    with_digraph(graph, opts, [gate], fn dg -> {:ok, path(dg, @root, target, opts) == false} end)
+    with_digraph(graph, opts, [gate], fn dg ->
+      {:ok, path(dg, @root, target, %{max_hops: :infinity}) == false}
+    end)
   end
 
   @doc """
@@ -149,15 +167,19 @@ defmodule BeamMCP.Connectome.Reach do
   @spec mandatory_pass(Graph.t(), String.t(), keyword()) ::
           {:ok, MapSet.t(String.t())} | {:error, refusal()}
   def mandatory_pass(%Graph{} = graph, target, opts \\ []) do
-    with {:ok, opts} <- options(graph, opts),
-         :ok <- known(graph, [target]),
-         :ok <- cap(graph, opts),
-         :ok <- reachable_from_entries(graph, target, opts) do
-      with_digraph(graph, opts, [], fn dg ->
-        idom = lengauer_tarjan(dg, @root)
-        {:ok, dominators(idom, target)}
-      end)
+    with {:ok, opts} <- options(graph, opts, @entry_options),
+         :ok <- admitted(graph, opts),
+         :ok <- known(graph, [target]) do
+      # One build: the algorithm's own depth-first numbering says whether the target is
+      # reachable, so no separate search is made for that.
+      with_digraph(graph, opts, [], fn dg -> passes(lengauer_tarjan(dg, @root), target) end)
     end
+  end
+
+  defp passes({:ok, idom}, target) do
+    if Map.has_key?(idom, target),
+      do: {:ok, dominators(idom, target)},
+      else: {:error, {:unreachable, target}}
   end
 
   @doc "Refused by name: enumerating every path is exponential and is not a question this package answers."
@@ -167,10 +189,10 @@ defmodule BeamMCP.Connectome.Reach do
 
   # --- options and refusals ------------------------------------------------------------------
 
-  defp options(graph, opts) do
+  defp options(graph, opts, allowed) do
     with :ok <- keyword(opts),
-         :ok <- unknown(opts),
-         {:ok, entries} <- entries(graph, opts),
+         :ok <- unknown(opts, allowed),
+         {:ok, entries} <- entries(graph, opts, :entries in allowed),
          {:ok, kinds} <- kinds(opts),
          {:ok, max_hops} <- max_hops(opts),
          {:ok, max_edges} <- max_edges(opts) do
@@ -182,23 +204,40 @@ defmodule BeamMCP.Connectome.Reach do
     if Keyword.keyword?(opts), do: :ok, else: {:error, {:invalid, :options, opts}}
   end
 
-  defp unknown(opts) do
-    case Enum.find(Keyword.keys(opts), &(&1 not in @options)) do
+  defp unknown(opts, allowed) do
+    case Enum.find(Keyword.keys(opts), &(&1 not in allowed)) do
       nil -> :ok
       key -> {:error, {:unknown_option, key}}
     end
   end
 
-  defp entries(graph, opts) do
+  # The entry set: given, or the server nodes. Empty either way is refused -- a graph with no
+  # server node and no `entries:` would otherwise answer every target unreachable, silently.
+  defp entries(_graph, _opts, false), do: {:ok, []}
+
+  defp entries(graph, opts, true) do
     case Keyword.fetch(opts, :entries) do
-      :error ->
-        {:ok, for(%{kind: :server, id: id} <- graph.nodes, do: id)}
+      :error -> servers(graph)
+      {:ok, ids} when is_list(ids) and ids != [] -> with(:ok <- known(graph, ids), do: {:ok, ids})
+      {:ok, other} -> {:error, {:invalid, :entries, other}}
+    end
+  end
 
-      {:ok, ids} when is_list(ids) and ids != [] ->
-        with :ok <- known(graph, ids), do: {:ok, ids}
+  defp servers(graph) do
+    case for(%{kind: :server, id: id} <- graph.nodes, do: id) do
+      [] -> {:error, {:invalid, :entries, []}}
+      ids -> {:ok, ids}
+    end
+  end
 
-      {:ok, other} ->
-        {:error, {:invalid, :entries, other}}
+  # The cap first (a count), then the graph itself: a literal `%Graph{}` a host built without
+  # `Graph.new/1` may carry a dangling edge `:digraph` would drop without a word.
+  defp admitted(graph, opts) do
+    with :ok <- cap(graph, opts) do
+      case Graph.check(graph) do
+        :ok -> :ok
+        {:error, reason} -> {:error, {:invalid_graph, reason}}
+      end
     end
   end
 
@@ -244,7 +283,7 @@ defmodule BeamMCP.Connectome.Reach do
 
   defp reachable_from_entries(graph, target, opts) do
     with_digraph(graph, opts, [], fn dg ->
-      if path(dg, @root, target, opts) == false,
+      if path(dg, @root, target, %{max_hops: :infinity}) == false,
         do: {:error, {:unreachable, target}},
         else: :ok
     end)
@@ -297,15 +336,21 @@ defmodule BeamMCP.Connectome.Reach do
     end
   end
 
-  # The witness carries input edges: for each step, the first edge in the graph's canonical
-  # order between the two vertices whose kind the query admitted. One exists by construction.
+  # The witness carries input edges: for each step, the first edge in the graph's edge order
+  # (canonical, for a graph `Graph.new/1` built) between the two vertices whose kind the query
+  # admitted. One exists by construction. The admitted edges are indexed once by `{from, to}`
+  # -- O(E) -- so a long witness costs its hops, not hops times E.
   defp witness(graph, vertices, %{kinds: kinds}) do
+    by_pair =
+      graph.edges
+      |> Enum.filter(&(&1.kind in kinds))
+      |> Enum.reverse()
+      |> Enum.reduce(%{}, fn e, acc -> Map.put(acc, {e.from, e.to}, e) end)
+
     edges =
       vertices
       |> Enum.chunk_every(2, 1, :discard)
-      |> Enum.map(fn [a, b] ->
-        Enum.find(graph.edges, &(&1.from == a and &1.to == b and &1.kind in kinds))
-      end)
+      |> Enum.map(fn [a, b] -> Map.fetch!(by_pair, {a, b}) end)
 
     %Path{nodes: vertices, edges: edges}
   end
@@ -339,10 +384,13 @@ defmodule BeamMCP.Connectome.Reach do
       Enum.reduce((n - 1)..1//-1, state, fn i, st -> steps_2_and_3(dg, st, vertex, vertex[i]) end)
 
     # Step 4: explicit immediate dominators, in preorder.
-    Enum.reduce(1..(n - 1)//1, state.idom, fn i, idom ->
-      w = vertex[i]
-      if idom[w] != vertex[state.semi[w]], do: Map.put(idom, w, idom[idom[w]]), else: idom
-    end)
+    idom =
+      Enum.reduce(1..(n - 1)//1, state.idom, fn i, idom ->
+        w = vertex[i]
+        if idom[w] != vertex[state.semi[w]], do: Map.put(idom, w, idom[idom[w]]), else: idom
+      end)
+
+    {:ok, idom}
   end
 
   # For one vertex w, in reverse preorder. Step 2: its semidominator, the smallest preorder
