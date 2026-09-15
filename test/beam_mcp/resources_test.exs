@@ -45,7 +45,8 @@ defmodule BeamMCP.ResourcesTest do
             name: "by-id",
             mime_type: "application/json"
           },
-          %ResourceTemplateSpec{uri_template: "injected://only-here/tree/{+path}", name: "tree"}
+          %ResourceTemplateSpec{uri_template: "injected://only-here/tree/{+path}", name: "tree"},
+          %ResourceTemplateSpec{uri_template: "injected://only-here/{name}.txt", name: "dotted"}
         ],
         prompts: []
       }
@@ -66,7 +67,12 @@ defmodule BeamMCP.ResourcesTest do
     def read_resource("injected://only-here/tree/" <> path),
       do: {:ok, [%{uri: "injected://only-here/tree/#{path}", text: path}]}
 
-    def read_resource(other), do: {:error, {:unexpected, other}}
+    def read_resource("injected://only-here/" <> file),
+      do: {:ok, [%{uri: "injected://only-here/#{file}", text: file}]}
+
+    # Host code must never run for a uri the catalog does not list or match: the refusal is
+    # the server's, before this function. A raise here is how a test tells the two apart.
+    def read_resource(other), do: raise("host code ran for #{other}")
   end
 
   defmodule Malformed do
@@ -114,7 +120,7 @@ defmodule BeamMCP.ResourcesTest do
                ~w(injected://only-here/a injected://only-here/m injected://only-here/z)
 
       assert Enum.map(Catalog.templates(Injected), & &1.uri_template) ==
-               ~w(injected://only-here/by-id/{id} injected://only-here/tree/{+path})
+               ~w(injected://only-here/by-id/{id} injected://only-here/tree/{+path} injected://only-here/{name}.txt)
     end
 
     test "validate/1 refuses a resources entry that is neither spec, by name" do
@@ -250,16 +256,17 @@ defmodule BeamMCP.ResourcesTest do
                  "name" => "by-id",
                  "mimeType" => "application/json"
                },
-               %{"uriTemplate" => "injected://only-here/tree/{+path}", "name" => "tree"}
+               %{"uriTemplate" => "injected://only-here/tree/{+path}", "name" => "tree"},
+               %{"uriTemplate" => "injected://only-here/{name}.txt", "name" => "dotted"}
              ]
 
       assert r["resultType"] == "complete"
 
-      s = state(Injected, page_size: 1)
+      s = state(Injected, page_size: 2)
       first = call(s, "resources/templates/list", %{})["result"]
-      assert [%{"name" => "by-id"}] = first["resourceTemplates"]
+      assert [%{"name" => "by-id"}, %{"name" => "tree"}] = first["resourceTemplates"]
       second = call(s, "resources/templates/list", %{"cursor" => first["nextCursor"]})["result"]
-      assert [%{"name" => "tree"}] = second["resourceTemplates"]
+      assert [%{"name" => "dotted"}] = second["resourceTemplates"]
       refute Map.has_key?(second, "nextCursor")
     end
 
@@ -301,6 +308,12 @@ defmodule BeamMCP.ResourcesTest do
 
       # {id} is one segment: a slash inside it is not a match, so the uri is not listed.
       r = call(s, "resources/read", %{"uri" => "injected://only-here/by-id/4/2"})
+      assert r["error"]["code"] == -32_002
+
+      # A literal character of the template is literal: the "." of ".txt" is not "any".
+      r = call(s, "resources/read", %{"uri" => "injected://only-here/notes.txt"})["result"]
+      assert [%{"text" => "notes.txt"}] = r["contents"]
+      r = call(s, "resources/read", %{"uri" => "injected://only-here/notes-txt"})
       assert r["error"]["code"] == -32_002
     end
 
