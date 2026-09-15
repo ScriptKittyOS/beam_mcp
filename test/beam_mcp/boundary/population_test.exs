@@ -24,10 +24,28 @@ defmodule BeamMCP.Boundary.PopulationTest do
     assert File.read!(Path.join(root, "mix.exs")) =~ ~s|defp elixirc_paths(_), do: ["lib"]|
     # Mix's own compilers and no other: nothing else generates code into the application.
     assert config[:compilers] == nil
-    # And no macro under lib/: the only generated code -- which the readers do not read -- is
-    # the compiler's own.
-    macros = Boundary.hits(~r/\bdefmacrop?\b/)
-    assert macros == [], "macros under lib/:\n  " <> Boundary.format(macros)
+    # And no macro, no quote and no compiler call under lib/: code that runs at compile time
+    # leaves no call in the beam, so the artefact censuses cannot see it; the text holds it here.
+    # One allowance, by its exact line: the package reads its own version from mix.exs.
+    compile_time =
+      for {_, _, text} = hit <-
+            Boundary.hits(~r/\bdefmacrop?\b|\bquote\b|:elixir\.|\bCode\.(?!ensure_)|\bMix\./),
+          String.trim(text) != "@server_version Mix.Project.config()[:version]",
+          do: hit
+
+    assert compile_time == [],
+           "compile-time code under lib/:\n  " <> Boundary.format(compile_time)
+
+    assert length(Boundary.hits(~r/\bMix\./)) == 1
+
+    # Nor a read of the environment or the disk, at any position -- a module body runs at
+    # compile time and could bake a secret into the beam.
+    reads =
+      Boundary.hits(
+        ~r/:os\.|\bFile\.|:file\.|System\.(get_env|fetch_env!?)\b|Application\.(get_env|fetch_env!?|compile_env!?)\b/
+      )
+
+    assert reads == [], "environment or disk reads under lib/:\n  " <> Boundary.format(reads)
 
     assert Boundary.lib_files() != []
   end
@@ -35,15 +53,24 @@ defmodule BeamMCP.Boundary.PopulationTest do
   # The artefact, not only the source: a beam left in the build by a source that is gone
   # (Mix does not prune Erlang artefacts) is still in the application's module list, and a
   # census over lib/ would never see it.
-  test "every module the built application lists is a BeamMCP module" do
-    Application.load(:beam_mcp)
-    {:ok, modules} = :application.get_key(:beam_mcp, :modules)
+  test "every module the built application lists is a BeamMCP module, and the list is the ebin" do
+    modules = Boundary.app_modules()
     assert modules != []
+    # The `.app` is regenerated on a one-second mtime; the ebin is the artefact. They must agree.
+    assert Enum.sort(modules) == Enum.sort(Boundary.ebin_modules())
 
     strays =
       for m <- modules, not String.starts_with?(Atom.to_string(m), "Elixir.BeamMCP."), do: m
 
     assert strays == [],
            "modules in the built application from outside BeamMCP: #{inspect(strays)}"
+  end
+
+  test "the dependencies the lock file holds are exactly the listed ones" do
+    lock = Boundary.root() |> Path.join("mix.lock") |> File.read!()
+    names = Regex.scan(~r/^  "([a-z_]+)":/m, lock) |> Enum.map(fn [_, n] -> n end)
+
+    assert Enum.sort(names) ==
+             ~w(bandit bunt credo earmark_parser ex_doc file_system hpax jason makeup makeup_elixir makeup_erlang mime nimble_parsec plug plug_crypto stream_data telemetry thousand_island websock)
   end
 end
