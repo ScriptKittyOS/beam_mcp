@@ -45,7 +45,7 @@ defmodule BeamMCP.Connectome.Diff do
   "in both" classes together), `declared_endpoint_covered` (declared edges whose `from`
   and `to` are both observed node ids), `observed_endpoint_declared` (observed edges whose
   `from` and `to` are both declared node ids), `declared_nodes`, `observed_nodes`,
-  `nodes_in_both`, and two one-sided sign counts (016d) -- `declared_sign_only` (labels in
+  `nodes_in_both`, and two one-sided sign counts -- `declared_sign_only` (labels in
   both with a sign supplied on the declared side and `:unset` on the observed) and
   `observed_sign_only` (the reverse: an authority spoke during the run about an edge nobody
   had signed at configuration time), one per direction because the two directions are
@@ -188,7 +188,7 @@ defmodule BeamMCP.Connectome.Diff do
         declared_nodes: MapSet.size(declared_ids),
         observed_nodes: MapSet.size(observed_ids),
         nodes_in_both: MapSet.size(MapSet.intersection(declared_ids, observed_ids)),
-        # A sign on one side only is not a change (016d): it is counted, per direction, so a
+        # A sign on one side only is not a change: it is counted, per direction, so a
         # consumer sees each alone. :unset means no sign was supplied on that side.
         declared_sign_only: Enum.count(in_both, &(d[&1] != :unset and o[&1] == :unset)),
         observed_sign_only: Enum.count(in_both, &(o[&1] != :unset and d[&1] == :unset))

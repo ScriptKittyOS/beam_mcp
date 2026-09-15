@@ -81,9 +81,10 @@ All notable changes to this project are documented here. The format follows
   signs, so the word had to be the narrow true one. `BeamMCP.Connectome.Edge.check/1` refuses
   `:unknown` by name.
 - **`:ungoverned` is a fifth value, a consumer's:** a consumer looked and no gate applies to
-  this edge. The package never treats it as suppression — the diff records the edge and its
-  sign exactly as any other, and a census holds that no code line filters, hides or downgrades
-  an edge by its sign. The sign is orthogonal to drift: an observed edge nobody declared is
+  this edge. The package never treats it as suppression — the diff records the edge exactly
+  as any other (a sign appears in the diff record only in a changed-sign entry; every sign is
+  in the graph's bytes), and a census holds that no code line filters, hides or downgrades an
+  edge by its sign. The bytes carry no field saying which consumer wrote a sign or when. The sign is orthogonal to drift: an observed edge nobody declared is
   `observed_but_undeclared` whatever its sign.
 - **Changed-sign is two authorities disagreeing.** A label in both graphs is `changed_sign`
   when both signs are supplied — neither `:unset` — and they differ; held over all
@@ -101,11 +102,16 @@ All notable changes to this project are documented here. The format follows
   bytes at `1` stay exactly as they were and their hashes stay verifiable; the version tells
   a verifier which vocabulary applies (`docs/connectome-canonical.md`, *Versions*).
   `BeamMCP.Connectome.Graph.new/1` refuses any version but `2`.
-- **How to tell whether you are affected:** if any code of yours pattern-matches or compares
-  an edge's `sign` against `:unknown`, reads `"sign":"unknown"` out of the bytes, or builds a
-  `%BeamMCP.Connectome.Graph{}` with `schema_version: 1`, it breaks; replace `:unknown` with
-  `:unset` and the version with `2`. Bytes you have already hashed and stored are unaffected.
-  No other value, field or order moved.
+- **How to tell whether you are affected:** if any code of yours pattern-matches, compares
+  against, or *writes* `:unknown` into an edge's `sign` — a comparison never holds again
+  rather than failing; a write is refused by `BeamMCP.Connectome.Graph.new/1` — reads
+  `"sign":"unknown"` out of the bytes, enumerates the sign strings as a closed set (it now
+  meets `"unset"` and `"ungoverned"`), builds a `%BeamMCP.Connectome.Graph{}` with
+  `schema_version: 1`, or checks a diff record for `"schema_version":1`, it breaks; replace
+  `:unknown` with `:unset` and each version with `2`. Bytes you have already hashed and
+  stored are unaffected. A diff record re-derived over the same two graphs hashes differently
+  from a stored 0.4.0 one: its `coverage` gained the two counts and its version moved. On the
+  graph's bytes no other value, field or order moved.
 
 ### Changed — on the wire, in `server/discover` and in what a transport advertises
 

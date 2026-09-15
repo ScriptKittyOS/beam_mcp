@@ -99,16 +99,23 @@ and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.
 ## Versions
 
 `schema_version` names the vocabulary the bytes were written in. **`1`** (0.4.0): the sign
-values were `allow`, `deny`, `hold`, `unknown`. **`2`** (0.5.0 onward): `unknown` is
-`unset` — no sign was supplied to the package that wrote the bytes — and `ungoverned` is a
-fifth value, a consumer's affirmative "no gate applies". Nothing else moved.
+values were `allow`, `deny`, `hold`, `unknown`. **`2`** (the release after 0.4.0, which
+carries this note): `unset` — no sign was supplied to the package that wrote the bytes — and
+`ungoverned`, a consumer's affirmative "no rule of my policy applies", replace `unknown`.
+Nothing else moved. **At `1`, `unknown` covers both of them**: a 0.4.0 consumer that looked at
+an edge and found nothing governing it had no `ungoverned` to write, so its honest value was
+`unknown` too, and the bytes do not say which case a given `unknown` was. A reader must not
+narrow a version-1 `unknown` to `unset`; it is "one of the two, unrecorded which".
 
 A verifier holding bytes at `1` verifies them exactly as before: the hash is SHA-256 over the
 bytes, and the bytes did not change — published 0.4.0 hashes stay verifiable forever. What the
 version tells the verifier is how to *read* the sign field: at `1`, `unknown` is a valid sign
 and `ungoverned` is not; at `2`, `unset` and `ungoverned` are valid and `unknown` is not. A
 reader that resolves the vocabulary by the version it finds first (as Avro resolves a writer's
-schema against a reader's) needs no other signal. The package itself writes `2` and only `2`,
+schema against a reader's) needs no other signal. A sign outside the vocabulary of the version
+the bytes name is a malformed record: the hash still verifies (it is over the bytes), and the
+record is refused, never corrected — the rule the package applies to itself in
+`BeamMCP.Connectome.Graph.new/1`. The package itself writes `2` and only `2`,
 and `BeamMCP.Connectome.Graph.new/1` refuses a graph carrying any other version rather than
 translating it: bytes are not re-imported here, only produced and hashed.
 

@@ -415,8 +415,8 @@ bytes whoever wrote it.
   observed but undeclared (a drift finding), changed sign — with ten coverage counts the
   consumer divides. [`docs/connectome-diff.md`](docs/connectome-diff.md).
 
-**What it never does.** It populates no sign — `:allow`, `:deny` and `:hold` are the host's
-to write, and the package writes only `:unset` — signs no finding, holds no key and decides
+**What it never does.** It populates no sign — `:allow`, `:deny`, `:hold` and `:ungoverned` are
+a consumer's to write, and the package writes only `:unset` — signs no finding, holds no key and decides
 no authority; a census test over `lib/` holds that. It claims no MCP capability the
 specification does not define: neither protocol revision has a topology primitive, so nothing
 on the wire changes and no capability is invented.
