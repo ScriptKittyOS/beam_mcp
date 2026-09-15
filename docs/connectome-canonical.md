@@ -88,10 +88,10 @@ A server `"s"` with one tool `"t"` (labelled `mode: :read_only`) and the one dec
 from the server to the tool. Its canonical bytes, on one line:
 
 ```json-canonical
-{"schema_version":1,"nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unknown","to":"s/tool/t"}]}
+{"schema_version":2,"nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
 ```
 
-sha256: `53c20fb1efc7a179be40e9edea9c37704102619789961af2385b5bf8b0834643`
+sha256: `de6db70dc7316885176c4a7493ee07c46e33ec3bb90951dc54908a74e81dc90d`
 
 Reproduce it without the package: paste the line above into a file with no trailing newline
 and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.

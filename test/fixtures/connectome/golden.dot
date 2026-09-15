@@ -4,8 +4,8 @@ digraph connectome {
   "srv/resource/r:%2F%2Fa" [kind="resource", level="server"];
   "srv/server" [kind="server", level="server"];
   "srv/tool/écho" [kind="tool", level="server", "label_command_class"="observe", "label_mode"="read_only", "label_nested"="{\"n\":2,\"ok\":true}", "label_title"="café"];
-  "srv/module/Enum" -> "srv/boundary/application/beam_mcp" [kind="message", provenance="observed", sign="unknown"];
-  "srv/server" -> "srv/tool/écho" [kind="invoke", provenance="declared", sign="unknown"];
-  "srv/tool/écho" -> "srv/module/Enum" [kind="invoke", provenance="declared", sign="unknown"];
-  "srv/tool/écho" -> "srv/resource/r:%2F%2Fa" [kind="read", provenance="observed", sign="unknown"];
+  "srv/module/Enum" -> "srv/boundary/application/beam_mcp" [kind="message", provenance="observed", sign="unset"];
+  "srv/server" -> "srv/tool/écho" [kind="invoke", provenance="declared", sign="unset"];
+  "srv/tool/écho" -> "srv/module/Enum" [kind="invoke", provenance="declared", sign="unset"];
+  "srv/tool/écho" -> "srv/resource/r:%2F%2Fa" [kind="read", provenance="observed", sign="unset"];
 }

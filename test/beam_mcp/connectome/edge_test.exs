@@ -10,11 +10,11 @@ defmodule BeamMCP.Connectome.EdgeTest do
   @to Node.id({:tool, "srv", :echo})
 
   describe "Edge.new/1" do
-    test "builds an edge whose sign is :unknown, because the package writes nothing else" do
+    test "builds an edge whose sign is :unset, because the package writes nothing else" do
       assert {:ok, %Edge{} = edge} =
                Edge.new(from: @from, to: @to, kind: :invoke, provenance: :declared)
 
-      assert edge.sign == :unknown
+      assert edge.sign == :unset
       assert edge.weight == nil
       assert {edge.from, edge.to, edge.kind, edge.provenance} == {@from, @to, :invoke, :declared}
     end
@@ -34,7 +34,7 @@ defmodule BeamMCP.Connectome.EdgeTest do
                  to: @to,
                  kind: :invoke,
                  provenance: :declared,
-                 sign: :unknown
+                 sign: :unset
                )
     end
 
@@ -92,6 +92,24 @@ defmodule BeamMCP.Connectome.EdgeTest do
       {:ok, b} = Edge.new(from: @from, to: @to, kind: :invoke, provenance: :declared, weight: 9)
       assert Edge.key(a) == Edge.key(b)
       assert Edge.key(a) == {@from, @to, :invoke, :declared}
+    end
+  end
+
+  describe "the sign vocabulary (016d)" do
+    # :unset -- no sign has been supplied to this package -- is the default and the only value
+    # the package writes. The four others are a consumer's: :allow, :deny, :hold, and :ungoverned,
+    # the affirmative case that a consumer looked and no gate applies. :unknown is not a sign.
+    test "check/1 accepts every value of the vocabulary a host may write, :ungoverned included" do
+      {:ok, edge} = Edge.new(from: @from, to: @to, kind: :invoke, provenance: :declared)
+
+      for sign <- [:allow, :deny, :hold, :ungoverned, :unset] do
+        assert :ok == Edge.check(%{edge | sign: sign}), inspect(sign)
+      end
+    end
+
+    test "check/1 refuses :unknown by name: it is not a sign, and a graph from before the rename is not this vocabulary" do
+      {:ok, edge} = Edge.new(from: @from, to: @to, kind: :invoke, provenance: :declared)
+      assert {:error, {:invalid, :sign, :unknown}} = Edge.check(%{edge | sign: :unknown})
     end
   end
 end

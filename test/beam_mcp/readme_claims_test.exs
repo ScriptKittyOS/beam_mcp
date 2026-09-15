@@ -722,14 +722,14 @@ defmodule BeamMCP.ReadmeClaimsTest do
     alias BeamMCP.Connectome.Observed
     alias BeamMCP.Fixture.Livebook, as: Fixture
 
-    test "the package writes only :unknown into the sign slot, on both graphs" do
-      claims("the package writes only `:unknown`")
+    test "the package writes only :unset into the sign slot, on both graphs" do
+      claims("the package writes only `:unset`")
       claims("It populates no sign")
 
       %{"fx.declared.json" => declared, "fx.observed.json" => observed} = Fixture.exports()
 
       for bytes <- [declared, observed], edge <- Jason.decode!(bytes)["edges"] do
-        assert edge["sign"] == "unknown"
+        assert edge["sign"] == "unset"
       end
     end
 

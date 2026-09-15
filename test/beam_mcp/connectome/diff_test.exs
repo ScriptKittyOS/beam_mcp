@@ -29,7 +29,7 @@ defmodule BeamMCP.Connectome.DiffTest do
   # The sign slot is the host's: there is no setter, a host writes the struct field (010
   # pins that a host's sign survives Graph.new/1).
   defp edge(from, to, prov, opts \\ []) do
-    {sign, opts} = Keyword.pop(opts, :sign, :unknown)
+    {sign, opts} = Keyword.pop(opts, :sign, :unset)
 
     edge =
       Edge.new!(
@@ -51,7 +51,7 @@ defmodule BeamMCP.Connectome.DiffTest do
   #   a -> c   declared only                                       -> declared_never_observed
   #   b -> c   observed only                                       -> observed_but_undeclared
   #   c -> a   both, declared :allow, observed :deny               -> changed_sign
-  #   b -> a   both, declared :allow, observed :unknown -- a sign the consumer did not supply
+  #   b -> a   both, declared :allow, observed :unset -- a sign the consumer did not supply
   #            on both sides is not a change                      -> declared_and_observed
   defp crafted do
     nodes = [srv(), tool(:a), tool(:b), tool(:c)]
@@ -430,6 +430,127 @@ defmodule BeamMCP.Connectome.DiffTest do
     end
   end
 
+  describe "changed-sign is two authorities disagreeing (016d)" do
+    # The table, exhaustively: a label in both graphs is changed-sign when both signs are
+    # supplied -- neither :unset -- and they differ. :unset is abstention, not a verdict, and
+    # never participates; :ungoverned IS a supplied value, so it disagrees with :deny.
+    @signs [:allow, :deny, :hold, :ungoverned, :unset]
+
+    test "of the twenty-five pairs, exactly the twelve with two supplied and different signs are changed-sign" do
+      for d <- @signs, o <- @signs do
+        declared =
+          graph([srv(), tool("a")], [
+            edge(Node.id({:server, @server}), id("a"), :declared, sign: d)
+          ])
+
+        observed =
+          graph([srv(), tool("a")], [
+            edge(Node.id({:server, @server}), id("a"), :observed, sign: o)
+          ])
+
+        {:ok, diff} = Diff.run(declared, observed, window: @window)
+        expected = d != :unset and o != :unset and d != o
+
+        assert diff.classes.changed_sign != [] == expected, "declared #{d}, observed #{o}"
+
+        assert diff.classes.declared_and_observed != [] == not expected,
+               "declared #{d}, observed #{o}"
+      end
+    end
+
+    test ":ungoverned against :deny is changed-sign; :unset against :ungoverned is not" do
+      declared =
+        graph([srv(), tool("a")], [
+          edge(Node.id({:server, @server}), id("a"), :declared, sign: :ungoverned)
+        ])
+
+      observed =
+        graph([srv(), tool("a")], [
+          edge(Node.id({:server, @server}), id("a"), :observed, sign: :deny)
+        ])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert [%{declared_sign: :ungoverned, observed_sign: :deny}] = diff.classes.changed_sign
+
+      declared =
+        graph([srv(), tool("a")], [
+          edge(Node.id({:server, @server}), id("a"), :declared, sign: :unset)
+        ])
+
+      observed =
+        graph([srv(), tool("a")], [
+          edge(Node.id({:server, @server}), id("a"), :observed, sign: :ungoverned)
+        ])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert diff.classes.changed_sign == []
+      assert length(diff.classes.declared_and_observed) == 1
+    end
+
+    test "the standalone case -- :unset on both sides -- never produces a finding" do
+      declared =
+        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :declared)])
+
+      observed =
+        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :observed)])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert diff.classes.changed_sign == [] and diff.classes.observed_but_undeclared == []
+    end
+  end
+
+  describe "the sign is orthogonal to drift (016d)" do
+    # :ungoverned means no gate applies, not "not declared"; if drift classification consulted
+    # the sign, :ungoverned would become a way to hide drift.
+    test "an observed edge nobody declared lands in observed_but_undeclared whatever the declared graph's signs" do
+      declared =
+        graph([srv(), tool("a"), tool("b")], [
+          edge(Node.id({:server, @server}), id("a"), :declared, sign: :ungoverned)
+        ])
+
+      observed =
+        graph([srv(), tool("a"), tool("b")], [
+          edge(Node.id({:server, @server}), id("a"), :observed, sign: :ungoverned),
+          edge(Node.id({:server, @server}), id("b"), :observed, sign: :ungoverned)
+        ])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert [%{to: to}] = diff.classes.observed_but_undeclared
+      assert to == id("b")
+    end
+
+    test "a declared :ungoverned edge is recorded exactly as any other: observed, it is declared_and_observed; never observed, it is dead authority" do
+      declared =
+        graph([srv(), tool("a"), tool("b")], [
+          edge(Node.id({:server, @server}), id("a"), :declared, sign: :ungoverned),
+          edge(Node.id({:server, @server}), id("b"), :declared, sign: :ungoverned)
+        ])
+
+      observed =
+        graph([srv(), tool("a"), tool("b")], [
+          edge(Node.id({:server, @server}), id("a"), :observed)
+        ])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert [%{to: a}] = diff.classes.declared_and_observed
+      assert a == id("a")
+      assert [%{to: b}] = diff.classes.declared_never_observed
+      assert b == id("b")
+    end
+
+    test "the record's schema_version is 2: its own axis, bumped for its own semantics" do
+      declared =
+        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :declared)])
+
+      observed =
+        graph([srv(), tool("a")], [edge(Node.id({:server, @server}), id("a"), :observed)])
+
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert diff.schema_version == 2
+      assert Diff.to_record(diff).schema_version == 2
+    end
+  end
+
   describe "properties" do
     property "every edge of either input lands in exactly one class, and the classes partition the label union" do
       check all({declared, observed} <- pair_gen()) do
@@ -521,7 +642,7 @@ defmodule BeamMCP.Connectome.DiffTest do
   defp pairs(names) do
     list_of(
       {member_of(names), member_of(names), member_of([:invoke, :read, :message]),
-       member_of([:allow, :deny, :unknown])},
+       member_of([:allow, :deny, :hold, :ungoverned, :unset])},
       max_length: 8
     )
   end

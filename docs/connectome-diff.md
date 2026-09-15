@@ -122,7 +122,7 @@ way; nothing else. Its keys, in the order the rule gives them:
   then the kind's name, comparing UTF-16 code units, so equal inputs give equal bytes
   whatever order the graphs were built in.
 - `"coverage"` — the eight counts.
-- `"schema_version"` — `1`.
+- `"schema_version"` — `2` (the record's own axis, bumped in 0.5.0 when changed-sign excluded `unset` by name and two counts were added; `1` records carry the earlier semantics).
 - `"window"` — the consumer's map.
 
 Nothing else enters the record: no weight, no latency, no argument, no label, no name the
@@ -141,10 +141,10 @@ Server `srv`, tools `a`, `b`, `c` on both sides. Declared: `a→b`, `a→c`, `c�
 "2026-09-14T00:00:00Z"}`. The bytes (733 of them, one line):
 
 ```
-{"classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"nodes_in_both":4,"observed_edges":4,"observed_endpoint_declared":4,"observed_nodes":4},"schema_version":1,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
+{"classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"nodes_in_both":4,"observed_edges":4,"observed_endpoint_declared":4,"observed_nodes":4},"schema_version":2,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
 ```
 
-SHA-256: `806ff64ebeffb02a8869c37fa9ebe0e99776a58fa60c089f5453ac4ecb229568`. The four
+SHA-256: `ea77f7c9439ef05dad5a7c49c728e032e2329b41778ef2f168c2989342665c17`. The four
 classes hold one label each but `declared_and_observed`, which holds two: `b→a` is there
 because its observed sign is `unknown`, not supplied.
 
