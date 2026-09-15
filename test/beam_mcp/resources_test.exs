@@ -190,6 +190,46 @@ defmodule BeamMCP.ResourcesTest do
       assert message =~ "d://{x}"
     end
 
+    # Found by a review lane: `{/p}`, `{?q}`, `{id*}` and the other RFC 6570 forms were
+    # advertised verbatim and matched as if they were `{var}` -- a client expanding the
+    # template per the RFC got -32002 for the uri it produced, which is advertise/readable
+    # drift, the defect this slice exists to prevent. A template names only what the matcher
+    # claims: `{varname}` and `{+varname}`.
+    test "validate/1 refuses a uri_template with an expression the matcher does not claim, by name" do
+      for bad <- [
+            "x://a{/p}",
+            "x://a?{?q}",
+            "x://a{#f}",
+            "x://a{.e}",
+            "x://a/{a,b}",
+            "x://a/{id:3}",
+            "x://a/{id*}",
+            "x://a/{}",
+            "x://a/{+}"
+          ] do
+        mod = Module.concat(__MODULE__, "T#{:erlang.phash2(bad)}")
+
+        Module.create(
+          mod,
+          quote do
+            def capabilities,
+              do: %{
+                tools: [],
+                resources: [%ResourceTemplateSpec{uri_template: unquote(bad), name: "t"}],
+                prompts: []
+              }
+
+            def read_resource(uri), do: {:ok, [%{uri: uri, text: ""}]}
+          end,
+          Macro.Env.location(__ENV__)
+        )
+
+        assert {:error, message} = Catalog.validate(mod), bad
+        assert message =~ "uri_template", bad
+        assert message =~ bad, bad
+      end
+    end
+
     test "validate/1 refuses a catalog that lists only a template and cannot read one" do
       defmodule TemplateOnly do
         def capabilities,
@@ -272,9 +312,23 @@ defmodule BeamMCP.ResourcesTest do
       assert r["error"]["message"] =~ "cursor"
       assert r["error"]["message"] =~ "malformed"
 
+      # The message names the list the cursor should have belonged to, never the wire's own
+      # bytes: a client-supplied kind of any length or content is not echoed.
       r = call(s, "resources/list", %{"cursor" => Cursor.encode(:tools, "x")})
       assert r["error"]["code"] == -32_602
-      assert r["error"]["message"] =~ "tools"
+      assert r["error"]["message"] =~ "another list"
+      assert r["error"]["message"] =~ "resources"
+      refute r["error"]["message"] =~ "tools"
+
+      forged =
+        Base.url_encode64(
+          Jason.encode!(%{"v" => 1, "k" => String.duplicate("k", 10_000), "a" => "x"}),
+          padding: false
+        )
+
+      r = call(s, "resources/list", %{"cursor" => forged})
+      assert r["error"]["code"] == -32_602
+      assert byte_size(r["error"]["message"]) < 200
 
       r = call(s, "resources/list", %{"cursor" => 5})
       assert r["error"]["code"] == -32_602
@@ -300,6 +354,27 @@ defmodule BeamMCP.ResourcesTest do
 
     test "an empty catalog is an empty page" do
       assert %{"resources" => []} = call(state(Empty), "resources/list", %{})["result"]
+    end
+
+    # Found by a review lane: JSON-RPC permits an array params, and a legacy resources/list
+    # carrying one raised inside the clause and, on stdio, ended the loop. The HTTP transport
+    # refuses a non-map params before the core; the core must not depend on that.
+    test "a params that is not an object is invalid params, on both lists, at the legacy era" do
+      s = state(Injected)
+
+      for method <- ["resources/list", "resources/templates/list"],
+          params <- [[], "x", 5, true] do
+        {_, r} =
+          Server.handle_message(s, %{
+            "jsonrpc" => "2.0",
+            "id" => 3,
+            "method" => method,
+            "params" => params
+          })
+
+        assert r["error"]["code"] == -32_602, "#{method} with params #{inspect(params)}"
+        assert r["error"]["message"] =~ "params"
+      end
     end
   end
 
@@ -332,7 +407,7 @@ defmodule BeamMCP.ResourcesTest do
       first = call(s, "resources/list", %{})["result"]
       r = call(s, "resources/templates/list", %{"cursor" => first["nextCursor"]})
       assert r["error"]["code"] == -32_602
-      assert r["error"]["message"] =~ "resources"
+      assert r["error"]["message"] =~ "resource_templates"
     end
   end
 
@@ -362,6 +437,11 @@ defmodule BeamMCP.ResourcesTest do
 
       r = call(s, "resources/read", %{"uri" => "injected://only-here/tree/x/y/z"})["result"]
       assert [%{"text" => "x/y/z"}] = r["contents"]
+
+      # "across segments" means every character: a newline inside the expansion is matched
+      # too (a review lane measured `.+` stopping at one).
+      r = call(s, "resources/read", %{"uri" => "injected://only-here/tree/x\ny"})["result"]
+      assert [%{"text" => "x\ny"}] = r["contents"]
 
       # {id} is one segment: a slash inside it is not a match, so the uri is not listed.
       r = call(s, "resources/read", %{"uri" => "injected://only-here/by-id/4/2"})
