@@ -193,6 +193,121 @@ defmodule BeamMCP.Connectome.ReachTest do
     end
   end
 
+  describe "what round 1 found: an option that cannot bear on the question is refused, not read" do
+    # Both lanes, independently: with max_hops: 4 the module handed back a gate-free four-hop
+    # witness round g and, in the same breath, said g dominates x -- and the root's own edge
+    # counted as a hop. Bounded-length dominance is not the question Lengauer-Tarjan answers.
+    test "max_hops is refused by name on the two entry-set questions" do
+      g =
+        graph([:a, :b, :c, :g, :x], [
+          {:srv, :g},
+          {:g, :x},
+          {:srv, :a},
+          {:a, :b},
+          {:b, :c},
+          {:c, :x}
+        ])
+
+      assert {:ok, %Path{nodes: nodes}} =
+               Reach.reachable_without(g, id(:srv), id(:x), [id(:g)], max_hops: 4)
+
+      assert length(nodes) == 5
+
+      assert {:error, {:unknown_option, :max_hops}} =
+               Reach.dominates?(g, id(:g), id(:x), max_hops: 4)
+
+      assert {:error, {:unknown_option, :max_hops}} = Reach.mandatory_pass(g, id(:x), max_hops: 3)
+      # And without it the two dominance answers agree with the witness: g is not a gate.
+      assert {:ok, false} = Reach.dominates?(g, id(:g), id(:x))
+      assert {:ok, MapSet.new([id(:srv)])} == Reach.mandatory_pass(g, id(:x))
+    end
+
+    test "entries is refused by name on the two path questions" do
+      g = gate_fixture()
+
+      assert {:error, {:unknown_option, :entries}} =
+               Reach.reachable?(g, id(:srv), id(:x), entries: [id(:a)])
+
+      assert {:error, {:unknown_option, :entries}} =
+               Reach.reachable_without(g, id(:srv), id(:x), [], entries: [id(:a)])
+    end
+
+    test "a graph with no server node and no entries given is refused by name, not answered unreachable" do
+      g = graph([:a, :x], [{:a, :x}])
+      g = %{g | nodes: Enum.reject(g.nodes, &(&1.kind == :server))}
+      assert {:error, {:invalid, :entries, []}} = Reach.mandatory_pass(g, id(:x))
+      assert {:error, {:invalid, :entries, []}} = Reach.dominates?(g, id(:a), id(:x))
+    end
+
+    test "a literal graph Graph.check/1 would refuse is refused with its reason, not answered" do
+      g = gate_fixture()
+
+      dangling =
+        Edge.new!(from: id(:x), to: "srv/tool/nowhere", kind: :invoke, provenance: :declared)
+
+      literal = %{g | edges: g.edges ++ [dangling]}
+
+      assert {:error, {:invalid_graph, {:dangling_edge, "srv/tool/nowhere"}}} =
+               Reach.reachable?(literal, id(:srv), id(:x))
+
+      assert {:error, {:invalid_graph, _}} = Reach.mandatory_pass(literal, id(:x))
+    end
+  end
+
+  describe "three page claims, pinned" do
+    test "from == to with both among the gates is false, never a one-node witness that crosses a gate" do
+      g = gate_fixture()
+      assert {:ok, false} = Reach.reachable_without(g, id(:g), id(:g), [id(:g)])
+    end
+
+    test "a reachable target dominates itself" do
+      assert {:ok, true} = Reach.dominates?(gate_fixture(), id(:x), id(:x))
+    end
+
+    property "the witness is a shortest gate-free path: its hop count is the breadth-first distance" do
+      check all({g, gates} <- graph_gen()) do
+        case Reach.reachable_without(g, id(:srv), id(:x), gates) do
+          {:ok, false} ->
+            assert bfs_distance(g, id(:srv), id(:x), gates) == :none
+
+          {:ok, %Path{edges: edges}} ->
+            assert length(edges) == bfs_distance(g, id(:srv), id(:x), gates)
+        end
+      end
+    end
+  end
+
+  # An independent breadth-first distance over the graph's edge list, gates removed.
+  defp bfs_distance(g, from, to, gates) do
+    blocked = MapSet.new(gates)
+
+    if from in blocked or to in blocked,
+      do: :none,
+      else: bfs(g, [{from, 0}], MapSet.new([from]), to, blocked)
+  end
+
+  defp bfs(_g, [], _seen, _to, _blocked), do: :none
+  defp bfs(_g, [{to, d} | _], _seen, to, _blocked), do: d
+
+  defp bfs(g, [{v, d} | rest], seen, to, blocked) do
+    next =
+      for e <- g.edges,
+          e.from == v,
+          not MapSet.member?(seen, e.to),
+          not MapSet.member?(blocked, e.to),
+          do: e.to
+
+    next = Enum.uniq(next)
+
+    bfs(
+      g,
+      rest ++ Enum.map(next, &{&1, d + 1}),
+      Enum.reduce(next, seen, &MapSet.put(&2, &1)),
+      to,
+      blocked
+    )
+  end
+
   describe "refusals, by name" do
     test "a graph over the edge cap is refused, and the refusal names the cap" do
       g = gate_fixture()
@@ -231,7 +346,7 @@ defmodule BeamMCP.Connectome.ReachTest do
     end
   end
 
-  # Random graphs over eight tool names, always with a server and an x; gates drawn from the
+  # Random graphs over six tool names and x, always with a server; gates drawn from the
   # tools other than x.
   defp graph_gen do
     names = [:a, :b, :c, :d, :e, :f]
