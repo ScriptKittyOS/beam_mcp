@@ -22,7 +22,7 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
 1. **The top level is an object with exactly three members, in this fixed order:**
    `"schema_version"`, then `"nodes"`, then `"edges"`. This is the one place the order is
    fixed rather than sorted, so the version is the first thing a reader meets. The schema
-   version is the integer `1`.
+   version is the integer `2` (see *Versions* below).
 2. **`"nodes"` is an array sorted by `"id"`** — by the bytes of the UTF-8 id, which is the
    same as by code point. Each node is an object with exactly `"id"`, `"kind"`, `"labels"`,
    `"level"` — in that order, which is their sorted order.
@@ -96,9 +96,25 @@ sha256: `de6db70dc7316885176c4a7493ee07c46e33ec3bb90951dc54908a74e81dc90d`
 Reproduce it without the package: paste the line above into a file with no trailing newline
 and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.
 
+## Versions
+
+`schema_version` names the vocabulary the bytes were written in. **`1`** (0.4.0): the sign
+values were `allow`, `deny`, `hold`, `unknown`. **`2`** (0.5.0 onward): `unknown` is
+`unset` — no sign was supplied to the package that wrote the bytes — and `ungoverned` is a
+fifth value, a consumer's affirmative "no gate applies". Nothing else moved.
+
+A verifier holding bytes at `1` verifies them exactly as before: the hash is SHA-256 over the
+bytes, and the bytes did not change — published 0.4.0 hashes stay verifiable forever. What the
+version tells the verifier is how to *read* the sign field: at `1`, `unknown` is a valid sign
+and `ungoverned` is not; at `2`, `unset` and `ungoverned` are valid and `unknown` is not. A
+reader that resolves the vocabulary by the version it finds first (as Avro resolves a writer's
+schema against a reader's) needs no other signal. The package itself writes `2` and only `2`,
+and `BeamMCP.Connectome.Graph.new/1` refuses a graph carrying any other version rather than
+translating it: bytes are not re-imported here, only produced and hashed.
+
 ## The sidecar
 
-Weights are written separately as `{"schema_version":1,"weights":[…]}`, one object per edge
+Weights are written separately as `{"schema_version":2,"weights":[…]}`, one object per edge
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
 integer; a float weight is written in the shortest form that round-trips

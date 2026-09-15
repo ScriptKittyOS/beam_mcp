@@ -141,7 +141,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
   describe "encode/1" do
     test "schema_version first, then nodes by id, then edges by key; every other object sorted by key" do
       {:ok, bytes} = Canonical.encode(golden_graph())
-      assert String.starts_with?(bytes, ~s({"schema_version":1,"nodes":[{"id":"))
+      assert String.starts_with?(bytes, ~s({"schema_version":2,"nodes":[{"id":"))
       assert bytes == File.read!(Path.join(@fixtures, "golden.json"))
     end
 

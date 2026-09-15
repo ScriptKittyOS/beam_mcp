@@ -31,8 +31,10 @@ defmodule BeamMCP.Connectome.Diff do
     * `declared_never_observed` -- **dead authority**: declared, never seen in the window;
     * `observed_but_undeclared` -- **drift, a finding**: seen in the window, never declared;
     * `changed_sign` -- in both, and the consumer supplied a sign on BOTH sides (neither is
-      `:unknown`) and they differ. A sign on one side only is not a change; the package
-      never guesses what the missing one would have been.
+      `:unset`) and they differ: two authorities disagree. `:unset` is abstention, not a
+      verdict, and never participates; `:ungoverned` is a supplied value and does. A sign on
+      one side only is not a change; the package never guesses what the missing one would
+      have been.
 
   Every label of either input lands in exactly one class (a property test says so).
 
@@ -67,7 +69,9 @@ defmodule BeamMCP.Connectome.Diff do
 
   alias BeamMCP.Connectome.{Canonical, Edge, Graph}
 
-  @schema_version 1
+  # The record's own axis, separate from the graph's. 2 since 0.5.0: changed-sign excludes
+  # `:unset` by name and the vocabulary it compares is the graph's at 2.
+  @schema_version 2
 
   @typedoc "An edge's identity in the diff: from, to, kind."
   @type label :: %{from: String.t(), to: String.t(), kind: Edge.kind()}
@@ -284,9 +288,11 @@ defmodule BeamMCP.Connectome.Diff do
 
   defp nfc(s), do: String.normalize(s, :nfc)
 
-  # Both supplied and different. `:unknown` on either side is not a change.
+  # Both supplied and different: two authorities disagree. `:unset` on either side is not a
+  # change -- no sign was supplied to this package on that side, so there is nothing to
+  # disagree with. `:ungoverned` is supplied, and disagrees with `:deny`.
   defp changed_sign?(declared, observed),
-    do: declared != :unknown and observed != :unknown and declared != observed
+    do: declared != :unset and observed != :unset and declared != observed
 
   defp label_map({from, to, kind}), do: %{from: from, to: to, kind: kind}
 

@@ -58,7 +58,7 @@ defmodule BeamMCP.Connectome.Declared do
   ## What this module does not do
 
   It observes nothing (that is the observed connectome), reads no resource, and writes no sign:
-  every edge is `provenance: :declared`, `sign: :unknown`, `weight: nil`. Boundary declarations
+  every edge is `provenance: :declared`, `sign: :unset`, `weight: nil`. Boundary declarations
   read by reflection (`boundaries: :reflect`) are refused by name until the mechanism has been
   measured.
   """

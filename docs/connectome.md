@@ -17,7 +17,7 @@ together.
 
 beam_mcp renders authority; it never decides it. The connectome carries a sign slot so that a
 graph can show what a policy allowed, denied or held — and the package itself writes only
-`:unknown` into that slot. It populates no sign, signs no finding, holds no key, and makes no
+`:unset` into that slot. It populates no sign, signs no finding, holds no key, and makes no
 authority decision. Those belong to the host, behind the same `:authorize` and `:authorize_body`
 hooks the transport already offers — where a host keeps its own risk tiers, approvals and
 receipts, none of which this package holds. The connectome is not an MCP capability: neither protocol
@@ -71,10 +71,31 @@ A tool dispatch is an `:invoke` edge whose source is the server node. There is n
 | `:allow` | the host's policy permits this edge |
 | `:deny` | the host's policy forbids it |
 | `:hold` | the host's policy holds it for a decision it does not make alone — an advisory, never an approval |
-| `:unknown` | no policy has spoken; **the only value the package itself ever writes** |
+| `:ungoverned` | a consumer looked and no gate applies to this edge — an affirmative statement, a supplied value like the three above; never a reason for the package to leave the edge out of anything |
+| `:unset` | no sign has been supplied to this package; **the only value the package itself ever writes** |
 
 The sign is a *slot*. The package carries it so that a rendered graph can show a policy's verdict
 beside each edge; the host fills it. Nothing in the package computes one.
+
+`:unset` says exactly one thing: that nothing was handed here. It does not say that no policy
+exists, that none spoke, or that none was computed — a host whose authority plane denied an
+edge, where that verdict never reached this package, gets `:unset` on that edge, and a graph
+that read `:unset` as "no policy spoke" would be wrong about the world. That is why the value is
+named for the slot's state and not for the world's. (Until 0.5.0 the value was `:unknown`,
+glossed "no policy has spoken"; the rename is the correction, and the bytes carry
+`schema_version` `2` from here so a reader knows which vocabulary applies —
+[`docs/connectome-canonical.md`](connectome-canonical.md).)
+
+There is no `:not_applicable` and no `:indeterminate`: nothing in the package can produce them,
+no consumer exists that does, and a value nothing writes is dead vocabulary a later reader will
+misuse. A sign means the same thing on a declared edge and on an observed one; the pair
+(`provenance`, `sign`) carries the whole fact, and no third value is added to say which side it
+came from: on a declared edge a sign is what a consumer wrote against the configuration; on an
+observed edge it is what a consumer wrote against the run. **The package never treats any
+sign as suppression** — `:ungoverned` included: the diff records the edge and its sign exactly
+as it records any other, and whether to suppress a finding is a consumer's decision, made in a
+system that can say who decided and when. A sign is also orthogonal to drift: an observed edge
+nobody declared is drift whatever its sign.
 
 ## Level
 

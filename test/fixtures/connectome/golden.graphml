@@ -37,22 +37,22 @@
     <edge source="srv/module/Enum" target="srv/boundary/application/beam_mcp">
       <data key="ekind">message</data>
       <data key="provenance">observed</data>
-      <data key="sign">unknown</data>
+      <data key="sign">unset</data>
     </edge>
     <edge source="srv/server" target="srv/tool/écho">
       <data key="ekind">invoke</data>
       <data key="provenance">declared</data>
-      <data key="sign">unknown</data>
+      <data key="sign">unset</data>
     </edge>
     <edge source="srv/tool/écho" target="srv/module/Enum">
       <data key="ekind">invoke</data>
       <data key="provenance">declared</data>
-      <data key="sign">unknown</data>
+      <data key="sign">unset</data>
     </edge>
     <edge source="srv/tool/écho" target="srv/resource/r:%2F%2Fa">
       <data key="ekind">read</data>
       <data key="provenance">observed</data>
-      <data key="sign">unknown</data>
+      <data key="sign">unset</data>
     </edge>
   </graph>
 </graphml>

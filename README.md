@@ -416,7 +416,7 @@ bytes whoever wrote it.
   consumer divides. [`docs/connectome-diff.md`](docs/connectome-diff.md).
 
 **What it never does.** It populates no sign — `:allow`, `:deny` and `:hold` are the host's
-to write, and the package writes only `:unknown` — signs no finding, holds no key and decides
+to write, and the package writes only `:unset` — signs no finding, holds no key and decides
 no authority; a census test over `lib/` holds that. It claims no MCP capability the
 specification does not define: neither protocol revision has a topology primitive, so nothing
 on the wire changes and no capability is invented.
@@ -458,7 +458,7 @@ it. These are absent by decision, not by immaturity: they live on the consumer's
 boundary this project chose on its first day, and the package exists partly to keep them
 there. A small surface can look unfinished from the outside; this one is a commodity layer
 that says which it is. The list is derived, not typed: the thesis sentence at the top of this
-README, the census test that no line under `lib/` writes a sign other than `:unknown`, and a
+README, the census test that no line under `lib/` writes a sign other than `:unset`, and a
 test that no line under `lib/` names a receipt, an approval, a risk tier or egress. The full
 boundary — eleven entries, each with the test that enforces it by path and by name — is
 [`docs/will-not-implement.md`](docs/will-not-implement.md), held to the tests in both

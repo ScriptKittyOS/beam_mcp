@@ -9,10 +9,15 @@ defmodule BeamMCP.Connectome.Edge do
   ## The sign slot
 
   An edge carries a `sign` so that a rendered graph can show a policy's verdict beside it.
-  **This package writes `:unknown` into that slot and nothing else.** `new/1` does not accept
-  `:sign` as a key; the struct's default is `:unknown`; there is no setter. A host that renders
-  its own policy does so on its own copy of the graph, outside this package. A census test
-  over `lib/` holds this: no code line writes or names any other sign.
+  **This package writes `:unset` into that slot and nothing else.** `:unset` means one thing:
+  no sign has been supplied to this package -- not that none exists, not that none was
+  computed, only that nothing was handed here. `new/1` does not accept `:sign` as a key; the
+  struct's default is `:unset`; there is no setter. The other four values are a consumer's:
+  `:allow`, `:deny`, `:hold`, and `:ungoverned` -- the affirmative case, a consumer looked and
+  no gate applies to this edge. `:ungoverned` is a value like the others, recorded and diffed
+  like the others; the package never treats it as suppression. A host that renders its own
+  policy does so on its own copy of the graph, outside this package. A census test over `lib/`
+  holds this: no code line writes or names any other sign, and none filters an edge by one.
 
   ## Identity
 
@@ -24,7 +29,7 @@ defmodule BeamMCP.Connectome.Edge do
 
   @kinds [:invoke, :read, :message, :supervise]
   @provenances [:declared, :observed]
-  @signs [:allow, :deny, :hold, :unknown]
+  @signs [:allow, :deny, :hold, :ungoverned, :unset]
   @keys [:from, :to, :kind, :provenance, :weight]
   @required [:from, :to, :kind, :provenance]
 
@@ -33,7 +38,7 @@ defmodule BeamMCP.Connectome.Edge do
   def kinds, do: @kinds
 
   @enforce_keys [:from, :to, :kind, :provenance]
-  defstruct [:from, :to, :kind, :provenance, :weight, sign: :unknown]
+  defstruct [:from, :to, :kind, :provenance, :weight, sign: :unset]
 
   @typedoc "What the edge is: a call, a read, a message, a supervision link."
   @type kind :: :invoke | :read | :message | :supervise
@@ -41,8 +46,8 @@ defmodule BeamMCP.Connectome.Edge do
   @typedoc "Which build produced the edge."
   @type provenance :: :declared | :observed
 
-  @typedoc "A policy's verdict on the edge; the package itself writes only `:unknown`."
-  @type sign :: :allow | :deny | :hold | :unknown
+  @typedoc "A policy's verdict on the edge; the package itself writes only `:unset`, which means no sign has been supplied to it."
+  @type sign :: :allow | :deny | :hold | :ungoverned | :unset
 
   @typedoc "A measurement carried on the edge -- a count, a summary -- or nothing."
   @type weight :: nil | number()
@@ -61,7 +66,7 @@ defmodule BeamMCP.Connectome.Edge do
 
   @doc """
   Builds an edge from `from:`, `to:` (node ids), `kind:`, `provenance:` and an optional
-  `weight:`. Its sign is `:unknown`.
+  `weight:`. Its sign is `:unset`.
 
   Options are a keyword list; anything else is refused as `{:invalid, :opts, value}`.
 

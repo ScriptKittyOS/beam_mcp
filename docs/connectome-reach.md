@@ -68,7 +68,7 @@ Bounded-length dominance is a different question from the one Lengauer–Tarjan 
 it is not offered.
 
 **Signs are not consulted.** An edge's `sign` is the host's (`docs/connectome.md`); the
-package writes `:unknown` and reads none of them here. "Avoid these nodes" is the whole of
+package writes `:unset` and reads none of them here. "Avoid these nodes" is the whole of
 the sign-aware question this release answers; reachability that reads `:deny` off an edge
 waits for a consumer that populates signs.
 
