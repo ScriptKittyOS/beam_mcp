@@ -48,7 +48,7 @@ defmodule BeamMCP.Boundary do
   `{path, line}` for every construction of a struct named by one of `aliases` (e.g. `[[:ToolSpec],
   [:BeamMCP, :ToolSpec]]`) under lib/, read from the AST rather than the text: a `%Mod{}` literal
   outside a pattern position, a `%{__struct__: Mod}` map, or a `Mod.__struct__/0,1` call. Pattern
-  positions -- a clause head, the left of `=`, `<-` and `->`, the first argument of `match?/2` --
+  positions -- a clause head, the left of `=`, `<-` and `->`, the first argument of `Kernel.match?/2` --
   are matches, not constructions, and are not reported.
   """
   def struct_constructions(aliases) do
