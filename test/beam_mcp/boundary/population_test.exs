@@ -30,7 +30,7 @@ defmodule BeamMCP.Boundary.PopulationTest do
     compile_time =
       for {_, _, text} = hit <-
             Boundary.hits(
-              ~r/\bdefmacrop?\b|\bu?n?quote\b|:elixir\.|:elixir_\w+\.|:compile\.|:erl_(eval|parse|scan)\.|:code\.load\w*\(|\bCode\.(?!ensure_)|Elixir\.Code\b|\balias\s+Code\b|\bEEx\.|\bMix\./
+              ~r/\bdefmacrop?\b|\bu?n?quote\b|:elixir\.|:elixir_\w+\.|:compile\.|:erl_(eval|parse|scan)\.|:code\.load\w*\(|\bCode\.(?!ensure_)|Elixir\.Code\b|\balias\s*\(?\s*(Elixir\.)?(\{[^}]*)?\bCode\b|\bEEx\.|\bMix\./
             ),
           String.trim(text) != "@server_version Mix.Project.config()[:version]",
           do: hit
