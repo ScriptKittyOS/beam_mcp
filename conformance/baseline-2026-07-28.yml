@@ -3,7 +3,7 @@
 #
 # Expected failures for the 2026-07-28 requirement set. Every entry carries its reason word:
 #   deliberately-out   the package refuses the surface by decision (README, "deliberately out")
-#   decided-not-built  decided, no code yet (the resources and prompts wire surfaces, planned)
+#   decided-not-built  decided, no code yet (the prompts wire surface, planned)
 #   not-implemented    a content type or behaviour the package does not emit or read
 #   harness            the suite needs a diagnostic tool this package cannot honestly serve
 # A scenario that starts passing makes the suite exit 1 (stale) until its line is removed.
@@ -19,17 +19,12 @@ server:
   - tools-call-embedded-resource # not-implemented (text content only)
   - tools-call-mixed-content # not-implemented (text content only)
   - tools-call-with-progress # not-implemented (no progress notifications)
-  - resources-list # decided-not-built (the resources surface, planned)
-  - resources-read-text # decided-not-built (the resources surface, planned)
-  - resources-read-binary # decided-not-built (the resources surface, planned)
-  - resources-templates-read # decided-not-built (the resources surface, planned)
   - prompts-list # decided-not-built (the prompts surface, planned)
   - prompts-get-simple # decided-not-built (the prompts surface, planned)
   - prompts-get-with-args # decided-not-built (the prompts surface, planned)
   - prompts-get-embedded-resource # decided-not-built (the prompts surface, planned)
   - prompts-get-with-image # decided-not-built (the prompts surface, planned)
-  - caching # decided-not-built (its resources/ and prompts/ list calls)
-  - sep-2164-resource-not-found # decided-not-built (resources/read answers -32601, not -32602 + data.uri; the resources surface, planned)
+  - caching # decided-not-built (its prompts/list call; the tools and resources checks pass)
   - input-required-result-missing-input-response # harness (SEP-2322 re-request needs the elicitation tool)
   - input-required-result-ignore-extra-params # harness (test_input_required_result_elicitation)
   - input-required-result-basic-elicitation # harness (test_input_required_result_elicitation)

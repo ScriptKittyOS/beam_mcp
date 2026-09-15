@@ -42,7 +42,8 @@ defmodule BeamMCP.Catalog do
   `read_resource/1` answers `{:ok, contents}` -- a list of `%{uri: String.t(), text:
   String.t()}` or `%{uri: String.t(), blob: binary()}` maps, each with an optional
   `mime_type:`; the server base64-encodes a blob -- or `{:error, reason}`, which reaches
-  the client as `-32002` carrying the reason as data.
+  the client as the revision's not-found code (`-32602` under 2026-07-28, `-32002` under
+  2025-11-25) carrying the reason as data.
 
   ## Why `capabilities/0` and not `BeamMCP.ToolCatalog.all/0`
 

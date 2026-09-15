@@ -46,9 +46,58 @@ defmodule BeamMCP.Conformance.Catalog do
           input_schema: %{"type" => "object", "properties" => %{}}
         }
       ],
-      resources: [],
+      # The suite's diagnostic resources, called BY URI: a static text one, a static binary
+      # one, and a template with one parameter. Only what this package serves honestly.
+      resources: [
+        %BeamMCP.ResourceSpec{
+          uri: "test://static-text",
+          name: "static-text",
+          description: "The suite's static text resource.",
+          mime_type: "text/plain"
+        },
+        %BeamMCP.ResourceSpec{
+          uri: "test://static-binary",
+          name: "static-binary",
+          description: "The suite's static binary resource.",
+          mime_type: "application/octet-stream"
+        },
+        %BeamMCP.ResourceTemplateSpec{
+          uri_template: "test://template/{id}/data",
+          name: "template",
+          description: "The suite's parameterised resource."
+        }
+      ],
       prompts: []
     }
+  end
+
+  @impl true
+  def read_resource("test://static-text"),
+    do:
+      {:ok, [%{uri: "test://static-text", text: "Hello from beam_mcp", mime_type: "text/plain"}]}
+
+  def read_resource("test://static-binary"),
+    do:
+      {:ok,
+       [
+         %{
+           uri: "test://static-binary",
+           blob: <<0, 1, 2, 255>>,
+           mime_type: "application/octet-stream"
+         }
+       ]}
+
+  def read_resource("test://template/" <> rest) do
+    id = rest |> String.split("/") |> hd()
+
+    {:ok,
+     [
+       %{
+         uri: "test://template/#{id}/data",
+         text: ~s({"id":"#{id}"}),
+         mime_type: "application/json"
+       }
+     ]}
   end
 end
 
