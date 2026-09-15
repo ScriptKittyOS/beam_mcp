@@ -196,7 +196,12 @@ defmodule BeamMCP.ResourcesTest do
     # drift, the defect this slice exists to prevent. A template names only what the matcher
     # claims: `{varname}` and `{+varname}`.
     test "validate/1 refuses a uri_template with an expression the matcher does not claim, by name" do
+      # An unbalanced brace is not an expression and not a literal a client can expand (RFC
+      # 6570 forbids a bare brace in a literal): refused too, so every template advertised is
+      # one a client can expand.
       for bad <- [
+            "x://a/{a",
+            "x://a/}b{",
             "x://a{/p}",
             "x://a?{?q}",
             "x://a{#f}",

@@ -26,7 +26,7 @@ defmodule BeamMCP.CursorTest do
       assert Cursor.encode(:resources, "x") == Cursor.encode(:resources, "x")
     end
 
-    test "is opaque by contract: the key is not in the clear, though nothing is signed" do
+    test "is opaque by contract: the key is not present as literal bytes, though nothing is signed" do
       cursor = Cursor.encode(:resources, "file:///secret-name")
       refute String.contains?(cursor, "secret-name")
     end
