@@ -91,7 +91,7 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
            "capabilities/0 call sites in the text:\n  " <> Boundary.format(sites)
   end
 
-  test "every name the package reaches by dot syntax is one of its own fields" do
+  test "every name the package reaches by dot syntax is on its pinned list" do
     names = Boundary.dotted_names()
 
     assert Enum.sort(names) == Enum.sort(@dotted),

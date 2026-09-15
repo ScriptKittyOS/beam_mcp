@@ -63,8 +63,12 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :xref
   ]
 
-  # The eight atoms that name a loadable module and occur in the compiled forms as data, not as
-  # a call target: file and compile attributes, the tracer's flag names, the compiler's own.
+  # The eight atoms that name a loadable module and occur in the compiled forms other than as
+  # a call target: `-file`/`-compile` attributes and the compiler's own (`:file`, `:compile`,
+  # `:elixir`), export lists (`:init`), the tracer's option names (`:trace`), a handler's message
+  # tag (`:error_logger`), a tuple tag in the canonical encoder (`:array`), and `:json` -- a local
+  # function name that OTP 28 turned into a module's name, the collision this census is loud
+  # about. Exact for the OTP the gate runs; an older OTP without `json` reads one fewer.
   @named_not_called [:array, :compile, :elixir, :error_logger, :file, :init, :json, :trace]
 
   # The functions called on the modules through which code, names, secrets, the operating
