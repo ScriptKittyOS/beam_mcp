@@ -1019,8 +1019,9 @@ if Code.ensure_loaded?(Plug) do
           {:mismatch, 400,
            header_error(id, "#{@protocol_header} header value is not valid UTF-8")}
 
+        # A body-shape fault, not a header one: the same -32602 the core gives on stdio.
         :invalid ->
-          {:mismatch, 400, header_error(id, "_meta must be a JSON object when present")}
+          {:mismatch, 400, error(id, -32_602, "Invalid params: params._meta must be an object")}
 
         body_version ->
           compare_versions(values, body_version, id)

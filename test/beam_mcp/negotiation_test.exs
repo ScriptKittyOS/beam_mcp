@@ -230,7 +230,7 @@ defmodule BeamMCP.NegotiationTest do
       {next, nil} =
         Server.handle_message(state, %{
           "jsonrpc" => "2.0",
-          "method" => "shutdown",
+          "method" => "exit",
           "_meta" => @spec_meta
         })
 

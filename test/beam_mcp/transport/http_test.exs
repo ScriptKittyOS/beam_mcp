@@ -550,7 +550,7 @@ defmodule BeamMCP.Transport.HTTPTest do
         conn = post(body, [{@hdr, @modern}, {"mcp-method", "tools/list"}])
 
         assert conn.status == 400, "a _meta of #{inspect(meta)} should be refused, not crash"
-        assert body!(conn)["error"]["code"] == -32_020
+        assert body!(conn)["error"]["code"] == -32_602
       end
     end
   end

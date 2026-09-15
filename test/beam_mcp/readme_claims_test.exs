@@ -690,6 +690,12 @@ defmodule BeamMCP.ReadmeClaimsTest do
       claims("| `2026-07-28` | **7 / 37** | **5 / 6**")
       claims("| `2025-11-25` over HTTP | **0 / 30** | 0 / 5 |")
       claims("both ship together or neither does")
+      claims("21 of 30 checks pass, 5 are skipped")
+      changelog = File.read!(Path.join(__DIR__, "../../CHANGELOG.md"))
+
+      assert changelog =~ "`2026-07-28` 7 / 37 and 5 / 6; `2025-11-25` over HTTP 0 / 30",
+             "the CHANGELOG's numbers moved"
+
       claims("the HTTP transport\nserves `2026-07-28` only, and `2025-11-25` lives on stdio")
 
       root = Path.join(__DIR__, "../..")

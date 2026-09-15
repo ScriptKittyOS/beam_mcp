@@ -152,14 +152,22 @@ defmodule BeamMCP.Server do
   # `params._meta` is there too, because two accepted shapes would be permanent and the wrong
   # one would quietly outlive the right one. This clause runs before every other so that no
   # method -- server/discover included -- is answered off a `_meta` in the wrong place.
-  def handle_message(state, %{"jsonrpc" => "2.0", "_meta" => _} = message) do
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "_meta" => _}) do
     {state,
      error(
-       message["id"],
+       id,
        -32_602,
        "Invalid params: _meta belongs in params._meta (2026-07-28 RequestParams), not at " <>
          "the top level of the request"
      )}
+  end
+
+  # A NOTIFICATION is never answered (JSON-RPC 2.0), so the position rule cannot refuse one:
+  # a misplaced _meta on a notification is dropped and the notification is served as it would
+  # be bare. Over HTTP the transport refuses the shape with 400 before this is reached.
+  def handle_message(state, %{"jsonrpc" => "2.0", "_meta" => _} = notification)
+      when not is_map_key(notification, "id") do
+    handle_message(state, Map.delete(notification, "_meta"))
   end
 
   # server/discover is mandatory in 2026-07-28, and on stdio it doubles as the era probe: a
@@ -264,14 +272,26 @@ defmodule BeamMCP.Server do
   # A params._meta that names no protocol version is not a legacy request; it is an invalid
   # one. (A legacy request either carries no _meta at all -- the initialize opener -- or names
   # 2025-11-25 in it.)
-  def handle_message(state, %{"jsonrpc" => "2.0", "params" => %{"_meta" => %{} = meta}} = message)
+  def handle_message(state, %{
+        "jsonrpc" => "2.0",
+        "id" => id,
+        "params" => %{"_meta" => %{} = meta}
+      })
       when not is_map_key(meta, @version_meta_key) do
     {state,
      error(
-       message["id"],
+       id,
        -32_602,
        "Invalid params: params._meta lacks io.modelcontextprotocol/protocolVersion"
      )}
+  end
+
+  # `params._meta` is any JSON value once `params` is an object; one that is not an object is
+  # invalid params, not a legacy request. (`NotificationParams._meta` is optional and a
+  # notification is never answered, so this is for requests.)
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "params" => %{"_meta" => meta}})
+      when not is_map(meta) do
+    {state, error(id, -32_602, "Invalid params: params._meta must be an object")}
   end
 
   def handle_message(state, %{"jsonrpc" => "2.0", "method" => "notifications/initialized"}) do

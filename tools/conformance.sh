@@ -16,7 +16,12 @@
 # baseline files carry every expected failure with its reason word; the suite exits 1 on an
 # unexpected failure and on a stale baseline entry, and so does this script.
 #
-#     tools/conformance.sh                (needs Node >= 22; the first run fetches the suite)
+#     tools/conformance.sh                (needs Node >= 22 and python3; the first run fetches the suite)
+#
+# THE RULE THE ROWS USE is the suite's own under --expected-failures: a scenario passes when
+# none of its checks is FAILURE or WARNING (SKIPPED and INFO do not fail it). The suite's plain
+# console summary marks a WARNING-only scenario with a tick; the baseline verdict does not, and
+# the baseline verdict is the one that can exit 1, so it is the one the rows follow.
 #
 # Environment: PORT (default 4321), OUT (results directory, default a temp dir).
 set -uo pipefail
@@ -33,6 +38,10 @@ CLAIMED="server-stateless tools-list tools-call-simple-text tools-call-error dns
 
 if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
   echo "conformance FAIL: node >= 22 not found ($(node --version 2>/dev/null || echo none)); the suite needs it" >&2
+  exit 2
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "conformance FAIL: python3 not found; the rows are derived from checks.json with it" >&2
   exit 2
 fi
 
@@ -60,10 +69,16 @@ for line in listing.splitlines():
     if line.startswith("Server scenarios"): section = "server"
     elif line.startswith("Client scenarios") or line.startswith("Run and reported"): section = None
     elif section == "server" and line.startswith("  - "): scored.append(line.strip()[2:])
+def latest(name):
+    # The suite writes a timestamped directory per run; with OUT reused, the newest is the run.
+    ds = sorted(glob.glob(os.path.join(out, f"server-{name}-*")))
+    return ds[-1] if ds else None
+def checks_of(name):
+    d = latest(name)
+    return json.load(open(os.path.join(d, "checks.json"))) if d else None
 def passed(name):
-    ds = glob.glob(os.path.join(out, f"server-{name}-*"))
-    if not ds: return None
-    checks = json.load(open(os.path.join(ds[0], "checks.json")))
+    checks = checks_of(name)
+    if checks is None: return None
     # The suite's own rule under --expected-failures: a WARNING check fails the scenario too.
     return all(c.get("status") not in ("FAILURE", "WARNING") for c in checks)
 suite_pass = sum(1 for s in scored if passed(s))
@@ -72,14 +87,19 @@ claimed_pass = sum(1 for s in claimed_scored if passed(s))
 failing_claimed = [s for s in claimed_scored if not passed(s)]
 detail = ""
 for s in failing_claimed:
-    ds = glob.glob(os.path.join(out, f"server-{s}-*"))
-    checks = json.load(open(os.path.join(ds[0], "checks.json"))) if ds else []
-    ok = sum(1 for c in checks if c.get("status") not in ("FAILURE", "WARNING"))
-    detail += f" ({s} {ok}/{len(checks)} checks)"
+    checks = checks_of(s) or []
+    ok = sum(1 for c in checks if c.get("status") == "SUCCESS")
+    skipped = sum(1 for c in checks if c.get("status") == "SKIPPED")
+    bad = sum(1 for c in checks if c.get("status") in ("FAILURE", "WARNING"))
+    detail += f" ({s}: {ok} pass, {skipped} skipped, {bad} fail of {len(checks)} checks)"
 print(f"conformance {rev}: suite {suite_pass}/{len(scored)} scored server scenarios; claimed surface {claimed_pass}/{len(claimed_scored)}{detail}")
 PY
 )
-  echo "$rows (suite exit $rc)"
+  if [ -z "$rows" ]; then
+    echo "conformance FAIL: no rows derived for $rev (python3 or checks.json missing)"; status=1
+  else
+    echo "$rows (suite exit $rc)"
+  fi
   [ "$rc" -eq 0 ] || status=1
 done
 echo "results: $OUT"

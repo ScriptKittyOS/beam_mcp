@@ -43,7 +43,7 @@ All notable changes to this project are documented here. The format follows
   per revision with a reason word each; the suite exits 1 on a regression and on a stale
   entry. Measured 2026-09-15: `2026-07-28` 7 / 37 and 5 / 6; `2025-11-25` over HTTP 0 / 30 by
   design (HTTP serves `2026-07-28` only; `2025-11-25` lives on stdio, which the suite cannot
-  drive). The README carries the rows with their provenance. Needs Node ≥ 22.
+  drive). The README carries the rows with their provenance. Needs Node ≥ 22 and python3.
 
 ### Changed — BREAKING: the request `_meta` is read where the schema puts it, `params._meta`
 
@@ -60,7 +60,9 @@ All notable changes to this project are documented here. The format follows
   compatibility mode, because two accepted shapes would be permanent; a `params._meta` without
   `clientCapabilities` on a modern request is `-32602`; over HTTP the header is matched to
   `params._meta`, nothing is stamped, and a request whose `params._meta` is missing or lacks a
-  required field is `-32602` with HTTP 400 (SEP-2575). A notification's `_meta` stays optional.
+  required field is `-32602` with HTTP 400 (SEP-2575). A notification's `_meta` stays optional,
+  and a notification is never answered: one carrying a misplaced or version-less `_meta` is
+  served as if bare over stdio, and refused with 400 over HTTP where every POST is checked.
   **How to tell whether you are affected:** if your client puts `"_meta"` beside `"method"` in
   the request object, it now gets `-32602 Invalid params: _meta belongs in params._meta`; move
   it inside `"params"` — `{"method": "tools/call", "params": {"name": ..., "arguments": ...,
