@@ -45,106 +45,87 @@ defmodule BeamMCP.Boundary do
   end
 
   @doc """
-  `{path, line}` for every construction of a struct named by one of `aliases` (e.g. `[[:ToolSpec],
-  [:BeamMCP, :ToolSpec]]`) under lib/, read from the AST rather than the text: a `%Mod{}` literal
-  outside a pattern position, a `%{__struct__: Mod}` map, a `Mod.__struct__/0,1` call, a
-  `struct/1,2` or `struct!/1,2` call on the module, or a `Map.put(_, :__struct__, Mod)`. Inside
-  the module's own `defmodule`, `__MODULE__` names it and counts the same. Pattern positions --
-  a clause head, the left of `=`, `<-` and `->`, the first argument of `Kernel.match?/2` -- are
-  matches, not constructions; a `@type`, `@typep`, `@opaque`, `@spec` or `@callback` is a
-  declaration and is not walked.
+  The modules compiled from lib/ -- the built application's module list, kept to those whose
+  compile-time source is under lib/ (the test build compiles test/support into the same app).
   """
-  def struct_constructions(aliases) do
-    for path <- lib_files(),
-        {:ok, ast} = Code.string_to_quoted(File.read!(Path.join(@root, path))),
-        line <- ast |> constructions(aliases, false, false) |> Enum.sort() |> Enum.uniq(),
-        do: {path, line}
+  def lib_modules do
+    Application.load(:beam_mcp)
+    {:ok, modules} = :application.get_key(:beam_mcp, :modules)
+
+    for m <- modules,
+        source = m.module_info(:compile)[:source],
+        String.starts_with?(to_string(source), Path.join(@root, "lib")),
+        do: m
   end
 
-  # self? -- inside a `defmodule` whose name is one of the aliases, so `__MODULE__` is it.
-  defp constructions({:defmodule, _, [{:__aliases__, _, mod}, body]}, aliases, pattern?, _self?) do
-    constructions(body, aliases, pattern?, mod in aliases)
+  @doc """
+  `{edges, unresolved}` from `:xref` over the compiled lib/ modules, BIFs included: every call
+  `{{caller_m, f, a}, {callee_m, f, a}}` the beams make, and every call whose module or function
+  is only known at runtime (`:"$M_EXPR"` / `:"$F_EXPR"`).
+  """
+  def xref do
+    {:ok, ref} = :xref.start([])
+
+    try do
+      :xref.set_default(ref, warnings: false, verbose: false, builtins: true)
+      for m <- lib_modules(), do: {:ok, _} = :xref.add_module(ref, :code.which(m))
+      {:ok, edges} = :xref.q(ref, ~c"E")
+      {:ok, unresolved} = :xref.q(ref, ~c"UC")
+      {edges, unresolved}
+    after
+      :xref.stop(ref)
+    end
   end
 
-  defp constructions({:@, _, [{attr, _, _}]}, _aliases, _pattern?, _self?)
-       when attr in [:type, :typep, :opaque, :spec, :callback, :macrocallback] do
-    []
+  @doc """
+  Every site of `atom` in the compiled forms of the lib/ modules, as `{module, location, context}`:
+  the context is `{:pattern, key}` inside a map pattern (Erlang abstract format writes a pattern's
+  fields as `map_field_exact` and a construction's as `map_field_assoc`; an update `%{m | k: v}` is
+  the four-element map form and is reported as `{:update, key}`), `{:construction, key}` inside a
+  map literal, or `:value` anywhere else. Compiler-generated sites carry location `0` or a
+  `generated: true` annotation.
+  """
+  def atom_sites(atom) do
+    for m <- lib_modules(),
+        {:ok, {_, [{:abstract_code, {:raw_abstract_v1, forms}}]}} =
+          :beam_lib.chunks(:code.which(m), [:abstract_code]),
+        {location, context} <- sites(forms, atom, :value, []),
+        do: {m, location, context}
   end
 
-  defp constructions({op, _, [head, body]}, aliases, _pattern?, self?)
-       when op in [:def, :defp, :defmacro, :defmacrop] do
-    constructions(head, aliases, true, self?) ++ constructions(body, aliases, false, self?)
+  defp sites({:map, _, fields}, atom, _ctx, acc) when is_list(fields),
+    do: Enum.reduce(fields, acc, &field_sites(&1, atom, :map, &2))
+
+  defp sites({:map, _, expr, fields}, atom, ctx, acc) do
+    acc = sites(expr, atom, ctx, acc)
+    Enum.reduce(fields, acc, &field_sites(&1, atom, :update, &2))
   end
 
-  defp constructions({op, _, [lhs, rhs]}, aliases, _pattern?, self?)
-       when op in [:=, :<-, :match?] do
-    constructions(lhs, aliases, true, self?) ++ constructions(rhs, aliases, false, self?)
-  end
+  defp sites({:atom, location, atom}, atom, ctx, acc), do: [{location, ctx} | acc]
 
-  defp constructions(
-         {{:., _, [{:__aliases__, _, [:Kernel]}, :match?]}, _, [lhs, rhs]},
-         aliases,
-         _p,
-         self?
-       ) do
-    constructions(lhs, aliases, true, self?) ++ constructions(rhs, aliases, false, self?)
-  end
+  defp sites(tuple, atom, ctx, acc) when is_tuple(tuple),
+    do: Enum.reduce(Tuple.to_list(tuple), acc, &sites(&1, atom, ctx, &2))
 
-  defp constructions({:->, _, [args, body]}, aliases, _pattern?, self?) do
-    constructions(args, aliases, true, self?) ++ constructions(body, aliases, false, self?)
-  end
+  defp sites(list, atom, ctx, acc) when is_list(list),
+    do: Enum.reduce(list, acc, &sites(&1, atom, ctx, &2))
 
-  defp constructions({:%, meta, [target, map]}, aliases, pattern?, self?) do
-    hit(target, meta, aliases, pattern?, self?) ++ constructions(map, aliases, pattern?, self?)
-  end
+  defp sites(_, _, _, acc), do: acc
 
-  defp constructions({:%{}, meta, fields}, aliases, pattern?, self?) when is_list(fields) do
-    hit =
-      case Keyword.get(fields, :__struct__) do
-        nil -> []
-        target -> hit(target, meta, aliases, pattern?, self?)
-      end
+  defp field_sites({:map_field_exact, _, {:atom, _, key}, value}, atom, :map, acc),
+    do: sites(value, atom, {:pattern, key}, acc)
 
-    hit ++ Enum.flat_map(fields, &constructions(&1, aliases, pattern?, self?))
-  end
+  defp field_sites({:map_field_assoc, _, {:atom, _, key}, value}, atom, :map, acc),
+    do: sites(value, atom, {:construction, key}, acc)
 
-  defp constructions({{:., _, [target, :__struct__]}, meta, args}, aliases, pattern?, self?) do
-    hit(target, meta, aliases, pattern?, self?) ++ constructions(args, aliases, pattern?, self?)
-  end
+  defp field_sites({_, _, {:atom, _, key}, value}, atom, :update, acc),
+    do: sites(value, atom, {:update, key}, acc)
 
-  defp constructions({op, meta, [target | rest]}, aliases, pattern?, self?)
-       when op in [:struct, :struct!] do
-    hit(target, meta, aliases, pattern?, self?) ++ constructions(rest, aliases, pattern?, self?)
-  end
+  defp field_sites({_, _, key, value}, atom, _kind, acc),
+    do: sites(value, atom, :value, sites(key, atom, :value, acc))
 
-  defp constructions(
-         {{:., _, [{:__aliases__, _, [:Map]}, :put]}, meta, [m, :__struct__, target]},
-         aliases,
-         pattern?,
-         self?
-       ) do
-    hit(target, meta, aliases, pattern?, self?) ++ constructions(m, aliases, pattern?, self?)
-  end
-
-  defp constructions({_, _, args}, aliases, pattern?, self?) when is_list(args) do
-    Enum.flat_map(args, &constructions(&1, aliases, pattern?, self?))
-  end
-
-  defp constructions({a, b}, aliases, pattern?, self?),
-    do: constructions(a, aliases, pattern?, self?) ++ constructions(b, aliases, pattern?, self?)
-
-  defp constructions(list, aliases, pattern?, self?) when is_list(list),
-    do: Enum.flat_map(list, &constructions(&1, aliases, pattern?, self?))
-
-  defp constructions(_, _, _, _), do: []
-
-  defp hit(_target, _meta, _aliases, true, _self?), do: []
-
-  defp hit({:__aliases__, _, mod}, meta, aliases, false, _self?),
-    do: if(mod in aliases, do: [meta[:line]], else: [])
-
-  defp hit({:__MODULE__, _, _}, meta, _aliases, false, true), do: [meta[:line]]
-  defp hit(_, _, _, _, _), do: []
+  def generated?(0), do: true
+  def generated?(location) when is_list(location), do: Keyword.get(location, :generated, false)
+  def generated?(_), do: false
 
   def format(hits),
     do: Enum.map_join(hits, "\n  ", fn {p, n, t} -> "#{p}:#{n}: #{String.trim(t)}" end)

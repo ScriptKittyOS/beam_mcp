@@ -99,7 +99,7 @@ All notable changes to this project are documented here. The format follows
   domain or a catalog — each
   with its reason in a line and the test that enforces it, by path and by name. The tests are
   the proof; the page is the contract. The README's *Deliberately out* paragraph points at it.
-- **Ten censuses under `test/beam_mcp/boundary/`** put a test behind the six entries that had
+- **Eleven censuses under `test/beam_mcp/boundary/`** put a test behind the six entries that had
   rested on reading (no key material and no `:crypto` call but `hash/2`; no signing or MAC
   primitive and no `sign` function; the advertised capability keys a subset of each revision's
   `ServerCapabilities`; no `Mcp-Session-Id` emitted, honoured or read; no OAuth, no client
@@ -108,10 +108,14 @@ All notable changes to this project are documented here. The format follows
   acts of authority in the spellings code uses (`risk_tier`, `approved`, `masked`), one behind
   the reach refusals (`all_paths` defined once, as the refusal; no motif matcher), one
   behind the reader itself (nothing compiles into the application from outside `lib/`, in the
-  source and in the built artefact), and one behind every other census (no code evaluated and
-  no module, function or atom built at runtime, so the written names are the only names). One
-  reader over `lib/**/*.ex`, the files the compiler reads; the tool-construction census reads
-  the syntax tree. Each was shown red by a planted
+  source and in the built artefact), one behind every other census (no code evaluated and no
+  module, function or atom built at runtime, by name), and **one over the artefact itself**:
+  `:xref` over the compiled beams pins exactly the modules the package calls, the functions it
+  calls on the modules that could reach code, secrets, the OS or another node, and the one atom
+  it makes from a binary — a call under any spelling resolves to the same edge, so a new
+  library, evaluator, socket, shell, remote spawn, key store or environment read fails until it
+  is named. One reader over `lib/**/*.ex` for the text censuses; the tool-construction census
+  reads the compiled forms, where the struct's atom may occur only in a map pattern. Each was shown red by a planted
   violation. `Plug.Crypto`, in the lock file through `plug`, is barred by name.
 - **A README pin repaired, test-only**: "the observed graph carries edge identity only, never
   a payload byte" sent its marker to a tool with no schema, where argument normalisation
