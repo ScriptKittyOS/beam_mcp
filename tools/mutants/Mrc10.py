@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '        {:ok, for(%{kind: :server, id: id} <- graph.nodes, do: id)}\n'
-new = '        {:ok, for(%{kind: :tool, id: id} <- graph.nodes, do: id)}\n'
+old = '    case for(%{kind: :server, id: id} <- graph.nodes, do: id) do\n'
+new = '    case for(%{kind: :tool, id: id} <- graph.nodes, do: id) do\n'
 
 if s.count(old) != 1:
     sys.exit("Mrc10: anchor found %d times" % s.count(old))

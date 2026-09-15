@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '    with_digraph(graph, opts, [gate], fn dg -> {:ok, path(dg, @root, target, opts) == false} end)\n'
-new = '    with_digraph(graph, opts, [gate], fn dg -> {:ok, path(dg, @root, target, opts) != false} end)\n'
+old = '      {:ok, path(dg, @root, target, %{max_hops: :infinity}) == false}\n'
+new = '      {:ok, path(dg, @root, target, %{max_hops: :infinity}) != false}\n'
 
 if s.count(old) != 1:
     sys.exit("Mrc4: anchor found %d times" % s.count(old))
