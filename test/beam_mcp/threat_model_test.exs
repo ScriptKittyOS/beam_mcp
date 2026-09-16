@@ -123,8 +123,7 @@ defmodule BeamMCP.ThreatModelTest do
       max = BeamMCP.JSON.max_depth()
       deep = String.duplicate("[", max + 1) <> String.duplicate("]", max + 1)
       ping = ~s({"jsonrpc":"2.0","id":2,"method":"ping"})
-      output = drive_stdio(deep <> "\n" <> ping <> "\n")
-      [first, second] = output |> String.split("\n", trim: true) |> Enum.map(&Jason.decode!/1)
+      [first, second] = drive_stdio(deep <> "\n" <> ping <> "\n") |> lines()
       assert %{"error" => %{"code" => -32_600, "message" => message}} = first
       assert message =~ "nests deeper than #{max} levels"
       assert second["id"] == 2
@@ -167,7 +166,115 @@ defmodule BeamMCP.ThreatModelTest do
     test "the bound is one number, read from one place, and it is the number the page states" do
       max = BeamMCP.JSON.max_depth()
       assert is_integer(max) and max > 0
-      assert page() =~ "#{max} levels"
+      assert page() =~ "nests deeper than #{max} levels"
+      assert page() =~ "past **#{max} levels**"
+    end
+
+    test "the number is sixty-four, pinned by bytes and not by the constant it pins" do
+      # A review lane moved @max_depth to 8 and the suite stayed green: every other test here
+      # is written relative to max_depth/0. This one is not.
+      assert {:ok, _} =
+               BeamMCP.JSON.decode(String.duplicate("[", 64) <> String.duplicate("]", 64))
+
+      assert {:error, {:nesting, 65, 64}} =
+               BeamMCP.JSON.decode(String.duplicate("[", 65) <> String.duplicate("]", 65))
+    end
+  end
+
+  describe "duplicate keys are refused, not resolved" do
+    # Jason keeps the first of two equal keys; most other parsers keep the last. A hop in front
+    # of this server that routes on the last "name" while this server executes the first is
+    # the two-sources-of-truth the header check exists to close, reopened inside the body.
+    @dup ~s({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"strict","name":"echo",) <>
+           ~s("arguments":{},"_meta":{"io.modelcontextprotocol/protocolVersion":"#{@modern}",) <>
+           ~s("io.modelcontextprotocol/clientCapabilities":{}}}})
+
+    test "over HTTP a body with a repeated key is -32600 and 400, naming the key" do
+      conn = post(@dup, "tools/call")
+      assert conn.status == 400
+      %{"error" => %{"code" => -32_600, "message" => message}} = Jason.decode!(conn.resp_body)
+      assert message =~ ~s(duplicate key "name")
+    end
+
+    test "over stdio a line with a repeated key is -32600 naming the key, and the loop keeps going" do
+      ping = ~s({"jsonrpc":"2.0","id":2,"method":"ping"})
+      [first, second] = drive_stdio(@dup <> "\n" <> ping <> "\n") |> lines()
+      assert %{"error" => %{"code" => -32_600, "message" => message}} = first
+      assert message =~ ~s(duplicate key "name")
+      assert second["id"] == 2
+    end
+
+    test "the decoder names the first repeated key at any depth, and admits equal keys in different objects" do
+      assert {:error, {:duplicate_key, "a"}} = BeamMCP.JSON.decode(~s({"x":{"a":1,"b":2,"a":3}}))
+
+      assert {:ok, %{"x" => %{"a" => 1}, "y" => %{"a" => 2}}} =
+               BeamMCP.JSON.decode(~s({"x":{"a":1},"y":{"a":2}}))
+
+      assert {:ok, [%{"a" => 1}, %{"a" => 2}]} = BeamMCP.JSON.decode(~s([{"a":1},{"a":2}]))
+    end
+  end
+
+  describe "the stdio loop under a hostile line or a host fault" do
+    test "a host dispatch that raises, throws or exits is answered -32603 with the id, and the loop keeps going" do
+      faults = [fn -> raise "boom SECRET=1" end, fn -> throw(:x) end, fn -> exit(:y) end]
+
+      for fault <- faults do
+        call =
+          ~s({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"echo","arguments":{}}})
+
+        ping = ~s({"jsonrpc":"2.0","id":8,"method":"ping"})
+
+        [first, second] =
+          drive_stdio(call <> "\n" <> ping <> "\n", fn _n, _a, _o -> fault.() end) |> lines()
+
+        assert %{"id" => 7, "error" => %{"code" => -32_603, "message" => message}} = first
+        refute message =~ "SECRET"
+        refute inspect(first) =~ "SECRET"
+        assert second["id"] == 8
+      end
+    end
+
+    test "a line that is JSON but not an object is -32600 naming the type, never silence" do
+      for {line, type} <- [
+            {~s("x"), "a string"},
+            {"42", "a number"},
+            {"null", "null"},
+            {"true", "a scalar"}
+          ] do
+        ping = ~s({"jsonrpc":"2.0","id":2,"method":"ping"})
+        [first, second] = drive_stdio(line <> "\n" <> ping <> "\n") |> lines()
+        assert %{"error" => %{"code" => -32_600, "message" => message}} = first
+        assert message == "Expected a JSON object, got #{type}"
+        assert second["id"] == 2
+      end
+    end
+
+    test "a parse error carries no inspected term and none of the client's bytes" do
+      [first] = drive_stdio("{not json SECRET=2\n") |> lines()
+
+      assert %{
+               "error" =>
+                 %{"code" => -32_700, "message" => "Parse error: body is not valid JSON"} = err
+             } = first
+
+      refute Map.has_key?(err, "data")
+      refute inspect(first) =~ "SECRET"
+    end
+
+    test "a line past the frame bound is refused once, its tail discarded to the newline, and the next line answered" do
+      long = String.duplicate("x", 1_048_577) <> " SECRET=3"
+      ping = ~s({"jsonrpc":"2.0","id":2,"method":"ping"})
+      [first, second] = drive_stdio(long <> "\n" <> ping <> "\n") |> lines()
+
+      assert %{
+               "error" => %{
+                 "code" => -32_700,
+                 "message" => "Parse error: line exceeds 1048576 bytes"
+               }
+             } = first
+
+      refute inspect(first) =~ "SECRET"
+      assert second["id"] == 2
     end
   end
 
@@ -188,15 +295,17 @@ defmodule BeamMCP.ThreatModelTest do
     File.read!(path)
   end
 
+  defp lines(output), do: output |> String.split("\n", trim: true) |> Enum.map(&Jason.decode!/1)
+
   # The stdio loop over a StringIO, as stdio_test does: the group leader is what
   # `IO.binread(:stdio, _)` resolves to.
-  defp drive_stdio(input) do
+  defp drive_stdio(input, dispatch \\ fn _n, a, _o -> {:ok, a} end) do
     {:ok, device} = StringIO.open(input, encoding: :latin1)
     original = Process.group_leader()
     Process.group_leader(self(), device)
 
     try do
-      Stdio.run(catalog: Catalog, dispatch: fn _n, a, _o -> {:ok, a} end)
+      Stdio.run(catalog: Catalog, dispatch: dispatch)
     after
       Process.group_leader(self(), original)
     end
