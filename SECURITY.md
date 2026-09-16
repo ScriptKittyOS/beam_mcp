@@ -71,7 +71,8 @@ entry says so when it does.
 
 | version | supported |
 |---|---|
-| `0.4.x` | yes |
+| `0.5.x` | yes |
+| `0.4.x` | no — superseded |
 | `0.3.x` | no — superseded |
 | `0.2.x` | no — superseded |
 | `0.1.x` | no — superseded |
