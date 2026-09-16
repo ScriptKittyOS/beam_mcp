@@ -609,7 +609,7 @@ defmodule BeamMCP.Server do
     end
   end
 
-  defp answer_prompt(id, _name, _catalog, {:ok, %{messages: messages} = rendered})
+  defp answer_prompt(id, _name, catalog, {:ok, %{messages: messages} = rendered})
        when is_list(messages) do
     case Enum.reduce_while(messages, {:ok, []}, &encode_message/2) do
       {:ok, encoded} ->
@@ -623,7 +623,7 @@ defmodule BeamMCP.Server do
         )
 
       {:error, defect} ->
-        error(id, -32_603, "Internal error: get_prompt/2 " <> defect)
+        error(id, -32_603, "Internal error: #{inspect(catalog)}.get_prompt/2 " <> defect)
     end
   end
 

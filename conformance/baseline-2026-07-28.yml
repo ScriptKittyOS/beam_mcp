@@ -3,7 +3,7 @@
 #
 # Expected failures for the 2026-07-28 requirement set. Every entry carries its reason word:
 #   deliberately-out   the package refuses the surface by decision (README, "deliberately out")
-#   decided-not-built  decided, no code yet (completion/complete; the MRTR prompt)
+#   decided-not-built  decided, no code yet (completion/complete)
 #   not-implemented    a content type or behaviour the package does not emit or read
 #   harness            the suite needs a diagnostic tool this package cannot honestly serve
 # A scenario that starts passing makes the suite exit 1 (stale) until its line is removed.
