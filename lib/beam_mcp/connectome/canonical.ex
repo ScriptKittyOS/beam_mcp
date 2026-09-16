@@ -33,6 +33,9 @@ defmodule BeamMCP.Connectome.Canonical do
 
   alias BeamMCP.Connectome.{Edge, Graph}
 
+  @typedoc "The digest the envelope names in its bytes and the hash is computed with."
+  @type algorithm :: :sha256 | :sha384 | :sha512
+
   @typedoc """
   Why a graph could not be encoded canonically. The first fault met is named; labels are
   read in term order (atoms before strings, strings bytewise), so which of two faults is

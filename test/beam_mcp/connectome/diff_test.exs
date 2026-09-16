@@ -407,8 +407,10 @@ defmodule BeamMCP.Connectome.DiffTest do
                ~s({"classes":{"changed_sign":[{"declared_sign":"allow","from":")
              )
 
-      assert bytes =~ ~s("schema_version":2)
+      assert bytes =~ ~s("schema_version":3)
       assert bytes =~ ~s("observed_endpoint_declared":4,"observed_nodes":4)
+      # The record's keys sort, so the algorithm is the first member a reader meets.
+      assert String.starts_with?(bytes, ~s({"algorithm":"sha256","classes":{))
 
       assert bytes =~
                ~s("window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"})
@@ -425,10 +427,12 @@ defmodule BeamMCP.Connectome.DiffTest do
       page = File.read!("docs/connectome-diff.md")
       [_, block | _] = String.split(page, "\n```\n")
       [_, hex] = Regex.run(~r/SHA-256: `([0-9a-f]{64})`/, page)
+      [_, hex384] = Regex.run(~r/SHA-384: `([0-9a-f]{96})`/, page)
       {declared, observed} = crafted()
       {:ok, diff} = Diff.run(declared, observed, window: @window)
       assert Diff.encode!(diff) == String.trim(block)
       assert Diff.hash_hex!(diff) == hex
+      assert Diff.hash_hex!(diff, algorithm: :sha384) == hex384
       assert page =~ "The bytes (#{byte_size(String.trim(block))} of them, one line)"
     end
 
@@ -590,7 +594,7 @@ defmodule BeamMCP.Connectome.DiffTest do
       assert b == id("b")
     end
 
-    test "the record's schema_version is 2: its own axis, bumped for its own semantics" do
+    test "the record's schema_version is 3: its own axis, bumped when the algorithm joined the bytes" do
       declared =
         graph([srv(), tool("s"), tool("a")], [edge("s", "a", :declared)])
 
@@ -598,8 +602,25 @@ defmodule BeamMCP.Connectome.DiffTest do
         graph([srv(), tool("s"), tool("a")], [edge("s", "a", :observed)])
 
       {:ok, diff} = Diff.run(declared, observed, window: @window)
-      assert diff.schema_version == 2
-      assert Diff.to_record(diff).schema_version == 2
+      assert diff.schema_version == 3
+      assert Diff.to_record(diff).schema_version == 3
+    end
+
+    test "the record names its algorithm in the bytes, sha256 by default and sha384/sha512 by option, and the hash follows" do
+      {declared, observed} = crafted()
+      {:ok, diff} = Diff.run(declared, observed, window: @window)
+      assert Diff.encode!(diff) == Diff.encode!(diff, algorithm: :sha256)
+      bytes384 = Diff.encode!(diff, algorithm: :sha384)
+      assert String.starts_with?(bytes384, ~s({"algorithm":"sha384","classes":{))
+      assert Diff.hash!(diff, algorithm: :sha384) == :crypto.hash(:sha384, bytes384)
+
+      assert Diff.hash_hex!(diff, algorithm: :sha512) ==
+               Base.encode16(:crypto.hash(:sha512, Diff.encode!(diff, algorithm: :sha512)),
+                 case: :lower
+               )
+
+      refute Map.has_key?(Diff.to_record(diff), :algorithm)
+      assert_raise ArgumentError, ~r/algorithm/, fn -> Diff.encode(diff, algorithm: :md5) end
     end
   end
 

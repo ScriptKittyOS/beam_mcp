@@ -150,6 +150,26 @@ defmodule BeamMCP.Connectome.SurfaceTest do
           do: assert(doc =~ line)
     end
 
+    test "call/2 keys the hex by the algorithm's name, chosen by the host's option", %{
+      collector: c
+    } do
+      opts = [declared: @declared, observed: c, algorithm: :sha384]
+
+      assert {:ok, %{graph: "declared", bytes: bytes, sha384: hex} = result} =
+               Surface.call(%{graph: "declared"}, opts)
+
+      refute Map.has_key?(result, :sha256)
+      assert bytes =~ ~s("algorithm":"sha384")
+      assert hex == Base.encode16(:crypto.hash(:sha384, bytes), case: :lower)
+
+      assert {:ok, [%{text: text}]} = Surface.read("connectome://observed", opts)
+      assert text =~ ~s("algorithm":"sha384")
+
+      assert_raise ArgumentError, ~r/algorithm/, fn ->
+        Surface.call(%{graph: "declared"}, Keyword.put(opts, :algorithm, :md5))
+      end
+    end
+
     test "call/2 answers the graph's name, its bytes verbatim and their sha256", %{collector: c} do
       assert {:ok, %{graph: "declared", bytes: bytes, sha256: hex}} =
                Surface.call(%{graph: "declared"}, declared: @declared)

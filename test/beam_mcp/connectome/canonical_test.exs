@@ -607,6 +607,89 @@ defmodule BeamMCP.Connectome.CanonicalTest do
                String.trim(File.read!(Path.join(@fixtures, "golden.sha256")))
     end
 
+    test "the envelope names its algorithm right after the version, and the default is sha256" do
+      g = golden_graph()
+      {:ok, bytes} = Canonical.encode(g)
+      assert String.starts_with?(bytes, ~s({"schema_version":3,"algorithm":"sha256","nodes":[))
+      assert Canonical.encode!(g, algorithm: :sha256) == bytes
+    end
+
+    test "an envelope tagged sha384 round-trips: the bytes name it and the hash is SHA-384 over them" do
+      g = golden_graph()
+      {:ok, bytes} = Canonical.encode(g, algorithm: :sha384)
+      assert String.starts_with?(bytes, ~s({"schema_version":3,"algorithm":"sha384","nodes":[))
+      assert {:ok, hash} = Canonical.hash(g, algorithm: :sha384)
+      assert hash == :crypto.hash(:sha384, bytes)
+      assert byte_size(hash) == 48
+      assert Canonical.hash_hex!(g, algorithm: :sha384) == Base.encode16(hash, case: :lower)
+      assert String.length(Canonical.hash_hex!(g, algorithm: :sha384)) == 96
+
+      assert Canonical.hash_hex!(g, algorithm: :sha384) ==
+               String.trim(File.read!(Path.join(@fixtures, "golden.sha384")))
+
+      # The bytes differ from the sha256 envelope in the one member only.
+      assert String.replace(bytes, ~s("algorithm":"sha384"), ~s("algorithm":"sha256")) ==
+               Canonical.encode!(g)
+    end
+
+    test "sha512 is the third choice, and the three are the whole list" do
+      g = golden_graph()
+      {:ok, bytes} = Canonical.encode(g, algorithm: :sha512)
+      assert bytes =~ ~s("algorithm":"sha512")
+      assert Canonical.hash!(g, algorithm: :sha512) == :crypto.hash(:sha512, bytes)
+      assert byte_size(Canonical.hash!(g, algorithm: :sha512)) == 64
+
+      assert Canonical.hash_hex!(g, algorithm: :sha512) ==
+               String.trim(File.read!(Path.join(@fixtures, "golden.sha512")))
+
+      assert Canonical.algorithms() == [:sha256, :sha384, :sha512]
+    end
+
+    test "an algorithm outside the list is refused at the option by name, before any byte is written" do
+      g = golden_graph()
+
+      for bad <- [:md5, :sha1, :sha, "sha256", :sha3_256, nil, 256] do
+        e = assert_raise ArgumentError, fn -> Canonical.encode(g, algorithm: bad) end
+        assert e.message =~ "algorithm"
+        assert e.message =~ inspect(bad)
+        assert e.message =~ ":sha256, :sha384, :sha512"
+        assert_raise ArgumentError, fn -> Canonical.hash(g, algorithm: bad) end
+        assert_raise ArgumentError, fn -> Canonical.hash_value(%{a: 1}, algorithm: bad) end
+      end
+
+      assert_raise ArgumentError, ~r/option/, fn -> Canonical.encode(g, digest: :sha384) end
+    end
+
+    test "hash_value/2 takes the algorithm too, over the same bytes" do
+      value = %{"schema_version" => 3, "k" => [1, 2]}
+      {:ok, bytes} = Canonical.encode_value(value)
+      assert Canonical.hash_value!(value) == :crypto.hash(:sha256, bytes)
+      assert Canonical.hash_value!(value, algorithm: :sha512) == :crypto.hash(:sha512, bytes)
+    end
+
+    test "bytes at schema_version 2 stay verifiable the way the migration note says: the version first, then SHA-256" do
+      # The goldens 0.4.0 and 0.5.0 published: no algorithm member. A verifier reads the
+      # version; below 3 the digest is SHA-256 by the page, at 3 it is the member named.
+      v2 = File.read!(Path.join(@fixtures, "golden.v2.json"))
+      v2_hex = String.trim(File.read!(Path.join(@fixtures, "golden.v2.sha256")))
+      assert String.starts_with?(v2, ~s({"schema_version":2,"nodes":[))
+      refute v2 =~ "algorithm"
+      assert verifier_algorithm(v2) == :sha256
+      assert Base.encode16(:crypto.hash(verifier_algorithm(v2), v2), case: :lower) == v2_hex
+
+      v3 = File.read!(Path.join(@fixtures, "golden.json"))
+      assert verifier_algorithm(v3) == :sha256
+
+      assert Base.encode16(:crypto.hash(:sha256, v3), case: :lower) ==
+               String.trim(File.read!(Path.join(@fixtures, "golden.sha256")))
+
+      assert verifier_algorithm(Canonical.encode!(golden_graph(), algorithm: :sha384)) == :sha384
+
+      # And the package itself no longer writes 2: a graph carrying it is refused, not translated.
+      assert {:error, {:invalid, :schema_version, 2}} =
+               Graph.new(nodes: [], edges: [], schema_version: 2)
+    end
+
     test "a weight change alters the sidecar and not the hash" do
       g = golden_graph()
       [e | rest] = Enum.filter(g.edges, &(&1.weight != nil))
@@ -895,11 +978,27 @@ defmodule BeamMCP.Connectome.CanonicalTest do
     end
   end
 
+  # What the migration note tells a verifier to do, in a dozen lines: read the version, then
+  # the algorithm the bytes name -- SHA-256 when they name none, below 3.
+  defp verifier_algorithm(bytes) do
+    %{"schema_version" => version} = record = Jason.decode!(bytes)
+
+    case {version, record["algorithm"]} do
+      {v, nil} when v < 3 ->
+        :sha256
+
+      {v, name} when v >= 3 and name in ["sha256", "sha384", "sha512"] ->
+        String.to_existing_atom(name)
+    end
+  end
+
   describe "the worked example in docs/connectome-canonical.md" do
     test "the document's bytes and hex are what the encoder produces" do
       doc = File.read!("docs/connectome-canonical.md")
       [_, bytes_in_doc] = Regex.run(~r/```json-canonical\n(.*?)\n```/s, doc)
       [_, hex_in_doc] = Regex.run(~r/sha256: `([0-9a-f]{64})`/, doc)
+      [_, hex384_in_doc] = Regex.run(~r/sha384: `([0-9a-f]{96})`/, doc)
+      [_, hex512_in_doc] = Regex.run(~r/sha512: `([0-9a-f]{128})`/, doc)
 
       s = Node.new!(kind: :server, level: :server, identity: {:server, "s"})
 
@@ -916,6 +1015,12 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
       assert Canonical.encode!(g) == bytes_in_doc
       assert Canonical.hash_hex!(g) == hex_in_doc
+      # The page carries the same example's SHA-384 and SHA-512 too, each over the bytes
+      # that name that algorithm -- one member differs -- so a reader reproduces all three.
+      assert Canonical.hash_hex!(g, algorithm: :sha384) == hex384_in_doc
+      assert Canonical.hash_hex!(g, algorithm: :sha512) == hex512_in_doc
+      [_, bytes384_in_doc] = Regex.run(~r/```json-canonical-sha384\n(.*?)\n```/s, doc)
+      assert Canonical.encode!(g, algorithm: :sha384) == bytes384_in_doc
     end
   end
 end
