@@ -483,7 +483,7 @@ defmodule BeamMCP.Connectome.DiffTest do
     end
   end
 
-  describe "changed-sign is two authorities disagreeing (016d)" do
+  describe "changed-sign is two authorities disagreeing" do
     # The table, exhaustively: a label in both graphs is changed-sign when both signs are
     # supplied -- neither :unset -- and they differ. :unset is abstention, not a verdict, and
     # never participates; :ungoverned IS a supplied value, so it disagrees with :deny.
@@ -551,7 +551,7 @@ defmodule BeamMCP.Connectome.DiffTest do
     end
   end
 
-  describe "the sign is orthogonal to drift (016d)" do
+  describe "the sign is orthogonal to drift" do
     # :ungoverned means no gate applies, not "not declared"; if drift classification consulted
     # the sign, :ungoverned would become a way to hide drift.
     test "an observed edge nobody declared lands in observed_but_undeclared whatever the declared graph's signs" do
