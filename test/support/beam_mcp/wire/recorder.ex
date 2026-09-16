@@ -6,8 +6,9 @@ defmodule BeamMCP.Wire.Recorder do
   Records what the package puts on the wire for the advertising methods -- `server/discover`,
   `tools/list`, `resources/list`, `resources/templates/list`, `prompts/list` -- on the core
   (which is what stdio writes, one line per message) and through the HTTP transport, for one
-  catalog. The recording is a map from `"<transport> <method>"` to the decoded response, with
-  nothing normalised: a change anywhere in a response is a change in the recording.
+  catalog. The recording is a map from the method to `%{"core" => the decoded response,
+  "http" => the decoded HTTP body, "http_status" => the status}`, with nothing normalised: a
+  change anywhere in a response is a change in the recording.
 
   Made so that a slice adding entries to a catalog can hold that every other byte on the
   wire stayed where it was: record before, record after, and the diff must be the entries.

@@ -41,7 +41,8 @@ All notable changes to this project are documented here. The format follows
 - **Multi-round-trip requests are out, by name** (`docs/will-not-implement.md`, entry 12; the
   `BeamMCP.Server` moduledoc): every request is answered completely or refused; the one
   `resultType` written is `"complete"`; `inputResponses` and `requestState` are read nowhere,
-  and a request carrying them is served as if it carried neither. A census holds it.
+  and a request carrying them is served as if it carried neither. A census holds the names
+  unread; a nine-case wire test holds the answer unchanged.
 
 ### Fixed — `Mcp-Name` on `resources/read` and `prompts/get` over HTTP
 
