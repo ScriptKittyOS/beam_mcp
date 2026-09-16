@@ -250,8 +250,8 @@ defmodule BeamMCP.Connectome.GraphTest do
       %Graph{} = g = Graph.new!(nodes: nodes, edges: edges, schema_version: @version)
       assert Graph.check(g) == :ok
 
-      assert Graph.check(%Graph{g | schema_version: 3}) ==
-               {:error, {:invalid, :schema_version, 3}}
+      assert Graph.check(%Graph{g | schema_version: 4}) ==
+               {:error, {:invalid, :schema_version, 4}}
 
       assert Graph.check(%Graph{g | nodes: :none}) == {:error, {:invalid, :nodes, :none}}
       assert Graph.check(%Graph{g | edges: [1]}) == {:error, {:invalid, :edges, [1]}}

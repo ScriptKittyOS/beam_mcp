@@ -189,6 +189,20 @@ hashed as bytes, never parsed back into its identity.
 
 An edge carries exactly one provenance. Comparing the two graphs is how a drift finding is made.
 
+## Algorithm
+
+| algorithm | the digest the canonical bytes name and are hashed with |
+| -- | -- |
+| `:sha256` | SHA-256, the default indefinitely; 32 bytes, 64 hexadecimal characters |
+| `:sha384` | SHA-384, by option; 48 bytes, 96 characters |
+| `:sha512` | SHA-512, by option; 64 bytes, 128 characters |
+
+A canonical envelope — the graph's and the diff record's — names one algorithm in its bytes,
+and its hash is that digest over exactly those bytes; a verifier reads the name from the bytes
+(`docs/connectome-canonical.md`, rule 9). The three are the whole list: the package refuses any
+other name at the option, before a byte is written. The package holds no key and makes no
+signature; which of the three a consumer accepts is the consumer's policy.
+
 ## Weight
 
 An edge may carry a weight — an observed call count, a latency summary. Weights are measurements.

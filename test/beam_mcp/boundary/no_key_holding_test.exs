@@ -10,8 +10,12 @@ defmodule BeamMCP.Boundary.NoKeyHoldingTest do
   # derivation and signing library `plug` brings into the lock file, which is not `:crypto` by
   # name. Key material by any other name -- an environment variable, a `_KEY` constant -- is
   # barred by the way it would be loaded, since a census cannot know what a binary is (the
-  # tracer keeps its running flag in `:persistent_term`, so the store itself is not barred). And `:crypto.hash/2` is called at exactly two sites, both counted,
-  # so that a third site must say what it hashes.
+  # tracer keeps its running flag in `:persistent_term`, so the store itself is not barred). And
+  # `:crypto.hash/2` is called at exactly ONE site, the canonical module's `digest/2`, with the
+  # algorithm a variable bound from the caller's option (`:sha256`, `:sha384` or `:sha512`, the
+  # envelope naming which) and never a literal -- until the algorithm joined the bytes there
+  # were two sites, each spelling `:sha256`; a second site now must say what it hashes and why
+  # the one site does not serve.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
@@ -25,9 +29,13 @@ defmodule BeamMCP.Boundary.NoKeyHoldingTest do
     assert Boundary.hits(~r/:crypto\.hash\(/) != []
   end
 
-  test ":crypto.hash/2 is called at two sites, both over canonical bytes" do
+  test ":crypto.hash/2 is called at one site, over canonical bytes, with the algorithm a variable" do
     sites = Boundary.hits(~r/:crypto\.hash\(/)
-    assert length(sites) == 2, "sites:\n  " <> Boundary.format(sites)
-    assert Enum.all?(sites, fn {path, _, _} -> path == "lib/beam_mcp/connectome/canonical.ex" end)
+    assert length(sites) == 1, "sites:\n  " <> Boundary.format(sites)
+    assert [{"lib/beam_mcp/connectome/canonical.ex", _line, text}] = sites
+    assert text =~ ":crypto.hash(algorithm, bytes)"
+    # No digest is spelled as a literal anywhere under lib/ outside the list the option is
+    # checked against: the choice is the caller's and the page's, not a file's.
+    assert Boundary.hits(~r/:crypto\.hash\(:sha/) == []
   end
 end

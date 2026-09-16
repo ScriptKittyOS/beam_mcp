@@ -24,8 +24,23 @@ defmodule BeamMCP.Connectome.Canonical do
   This module writes its own JSON: the value domain is small (objects, arrays, strings,
   integers, booleans, null) and the layout has to be reproducible in a few lines elsewhere.
   Nested objects sort their keys as RFC 8785 does, by UTF-16 code unit; the top level is the
-  one deliberate departure from that scheme -- `schema_version`, `nodes`, `edges`, in that
-  order, so the version is the first thing a reader meets.
+  one deliberate departure from that scheme -- `schema_version`, `algorithm`, `nodes`,
+  `edges`, in that order, so the version is the first thing a reader meets and the digest
+  the second.
+
+  ## The algorithm is in the bytes
+
+  The envelope names the digest it is hashed with, so a verifier reads it from the bytes
+  rather than from a page: `algorithm:` on `encode/2`, `hash/2`, `hash_hex/2` and
+  `hash_value/2` is `:sha256` (the default, indefinitely), `:sha384` or `:sha512`, and
+  nothing else -- an option outside the three raises `ArgumentError` naming it before a byte
+  is written, since a name the bytes would carry that no verifier can act on is not a choice.
+  The digest is computed at one private site, with the algorithm a variable bound from the
+  option; there is no compile-time constant to change. Bytes written before the member
+  existed (`schema_version` 1 and 2, releases 0.4.0 and 0.5.0) name no algorithm and are
+  SHA-256 by the page's rule for those versions; the page's Versions section says what a
+  verifier holding them does. This package holds no key and makes no signature: what a
+  consumer signs is the hash, and which of the three it accepts is the consumer's policy.
 
   Strings are NFC-normalised before anything else. Two nodes whose ids coincide after
   normalisation are refused, never merged: the graph said they were two.
@@ -35,6 +50,13 @@ defmodule BeamMCP.Connectome.Canonical do
 
   @typedoc "The digest the envelope names in its bytes and the hash is computed with."
   @type algorithm :: :sha256 | :sha384 | :sha512
+
+  @algorithms [:sha256, :sha384, :sha512]
+  @default_algorithm :sha256
+
+  @doc "The three digests an envelope may name, in the order the page lists them."
+  @spec algorithms() :: [algorithm()]
+  def algorithms, do: @algorithms
 
   @typedoc """
   Why a graph could not be encoded canonically. The first fault met is named; labels are
@@ -52,10 +74,13 @@ defmodule BeamMCP.Connectome.Canonical do
           | {:not_xml, String.t(), char()}
 
   @doc """
-  The canonical bytes of the declared form of `graph`.
+  The canonical bytes of the declared form of `graph`, naming the digest `algorithm:`
+  chooses (`:sha256` unless the caller says otherwise).
   """
-  @spec encode(Graph.t()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
-  def encode(%Graph{} = graph) do
+  @spec encode(Graph.t(), keyword()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
+  def encode(%Graph{} = graph, opts \\ []) do
+    algorithm = algorithm!(opts)
+
     with :ok <- checked(graph),
          {:ok, nodes} <- canonical_nodes(graph.nodes),
          {:ok, edges} <- canonical_edges(graph.edges) do
@@ -63,7 +88,9 @@ defmodule BeamMCP.Connectome.Canonical do
        IO.iodata_to_binary([
          ~s({"schema_version":),
          Integer.to_string(graph.schema_version),
-         ~s(,"nodes":),
+         ~s(,"algorithm":"),
+         Atom.to_string(algorithm),
+         ~s(","nodes":),
          array(nodes),
          ~s(,"edges":),
          array(edges),
@@ -72,9 +99,9 @@ defmodule BeamMCP.Connectome.Canonical do
     end
   end
 
-  @doc "`encode/1`, raising `ArgumentError` with the same named reason."
-  @spec encode!(Graph.t()) :: binary()
-  def encode!(graph), do: bang(encode(graph), "encode")
+  @doc "`encode/2`, raising `ArgumentError` with the same named reason."
+  @spec encode!(Graph.t(), keyword()) :: binary()
+  def encode!(graph, opts \\ []), do: bang(encode(graph, opts), "encode")
 
   @doc """
   Everything `encode/1` refuses, without writing a byte: `BeamMCP.Connectome.Graph.check/1`'s refusals as
@@ -116,35 +143,77 @@ defmodule BeamMCP.Connectome.Canonical do
   @spec encode_value!(map()) :: binary()
   def encode_value!(value), do: bang(encode_value(value), "encode_value")
 
-  @doc "SHA-256 over `encode_value/1`'s bytes."
-  @spec hash_value(map()) :: {:ok, <<_::256>>} | {:error, {:uncanonical, uncanonical()}}
-  def hash_value(value) do
-    with {:ok, bytes} <- encode_value(value), do: {:ok, :crypto.hash(:sha256, bytes)}
+  @doc """
+  The digest `algorithm:` names over `encode_value/1`'s bytes. A record that names its own
+  algorithm (the diff does) puts the name in the value it hands here, and this function
+  hashes with what the option says -- the caller keeps the two the same, as
+  `BeamMCP.Connectome.Diff.hash/2` does.
+  """
+  @spec hash_value(map(), keyword()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
+  def hash_value(value, opts \\ []) do
+    algorithm = algorithm!(opts)
+    with {:ok, bytes} <- encode_value(value), do: {:ok, digest(algorithm, bytes)}
   end
 
-  @doc "`hash_value/1`, raising."
-  @spec hash_value!(map()) :: <<_::256>>
-  def hash_value!(value), do: bang(hash_value(value), "hash_value")
+  @doc "`hash_value/2`, raising."
+  @spec hash_value!(map(), keyword()) :: binary()
+  def hash_value!(value, opts \\ []), do: bang(hash_value(value, opts), "hash_value")
 
-  @doc "SHA-256 over the canonical bytes."
-  @spec hash(Graph.t()) :: {:ok, <<_::256>>} | {:error, {:uncanonical, uncanonical()}}
-  def hash(graph) do
-    with {:ok, bytes} <- encode(graph), do: {:ok, :crypto.hash(:sha256, bytes)}
+  @doc """
+  The hash over the canonical bytes, with the digest the bytes name: 32 bytes for
+  `:sha256`, 48 for `:sha384`, 64 for `:sha512`.
+  """
+  @spec hash(Graph.t(), keyword()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
+  def hash(graph, opts \\ []) do
+    algorithm = algorithm!(opts)
+    with {:ok, bytes} <- encode(graph, algorithm: algorithm), do: {:ok, digest(algorithm, bytes)}
   end
 
-  @doc "`hash/1`, raising."
-  @spec hash!(Graph.t()) :: <<_::256>>
-  def hash!(graph), do: bang(hash(graph), "hash")
+  @doc "`hash/2`, raising."
+  @spec hash!(Graph.t(), keyword()) :: binary()
+  def hash!(graph, opts \\ []), do: bang(hash(graph, opts), "hash")
 
-  @doc "The hash as lowercase hexadecimal."
-  @spec hash_hex(Graph.t()) :: {:ok, String.t()} | {:error, {:uncanonical, uncanonical()}}
-  def hash_hex(graph) do
-    with {:ok, h} <- hash(graph), do: {:ok, Base.encode16(h, case: :lower)}
+  @doc "The hash as lowercase hexadecimal: 64, 96 or 128 characters by the algorithm."
+  @spec hash_hex(Graph.t(), keyword()) ::
+          {:ok, String.t()} | {:error, {:uncanonical, uncanonical()}}
+  def hash_hex(graph, opts \\ []) do
+    with {:ok, h} <- hash(graph, opts), do: {:ok, Base.encode16(h, case: :lower)}
   end
 
-  @doc "`hash_hex/1`, raising."
-  @spec hash_hex!(Graph.t()) :: String.t()
-  def hash_hex!(graph), do: bang(hash_hex(graph), "hash_hex")
+  @doc "`hash_hex/2`, raising."
+  @spec hash_hex!(Graph.t(), keyword()) :: String.t()
+  def hash_hex!(graph, opts \\ []), do: bang(hash_hex(graph, opts), "hash_hex")
+
+  @doc """
+  The algorithm an option list names, validated: `:sha256` when it names none, one of
+  `algorithms/0` otherwise, and `ArgumentError` for anything else or for a key this module
+  does not take. Public so a caller that writes the name into its own record (the diff) and
+  this module hash with one answer.
+  """
+  @spec algorithm!(keyword()) :: algorithm()
+  def algorithm!(opts) when is_list(opts) do
+    case Keyword.keys(opts) -- [:algorithm] do
+      [] ->
+        :ok
+
+      other ->
+        raise ArgumentError, "unknown option(s) #{inspect(other)}; the one option is :algorithm"
+    end
+
+    case Keyword.get(opts, :algorithm, @default_algorithm) do
+      algorithm when algorithm in @algorithms ->
+        algorithm
+
+      other ->
+        raise ArgumentError,
+              "algorithm: #{inspect(other)} is not one of #{Enum.map_join(@algorithms, ", ", &inspect/1)}"
+    end
+  end
+
+  # The one site that computes a digest. The algorithm is a variable bound from the option
+  # above, never a literal here, so the choice is the caller's and the page's, not this
+  # file's -- and the key-holding census counts this site alone.
+  defp digest(algorithm, bytes), do: :crypto.hash(algorithm, bytes)
 
   @doc """
   The observed sidecar: the weights, keyed by edge, in the same layout rules. Never hashed

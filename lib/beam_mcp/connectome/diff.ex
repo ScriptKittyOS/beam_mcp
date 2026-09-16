@@ -63,9 +63,13 @@ defmodule BeamMCP.Connectome.Diff do
 
   ## The bytes
 
-  `encode/1` is `BeamMCP.Connectome.Canonical.encode_value/1` over `to_record/1`: the
-  label grammar of a node's `"labels"` object (rule 4 of `docs/connectome-canonical.md`),
-  so a consumer's existing verifier parses the diff unchanged. Each label is an object
+  `encode/2` is `BeamMCP.Connectome.Canonical.encode_value/1` over `to_record/1` with the
+  algorithm's name added under `"algorithm"` -- the label grammar of a node's `"labels"`
+  object (rule 4 of `docs/connectome-canonical.md`), so a consumer's existing verifier
+  parses the diff unchanged, and the record names the digest it is hashed with as the
+  graph's envelope does (`algorithm:` on `encode/2`, `hash/2` and `hash_hex/2`; `:sha256`
+  unless the caller says `:sha384` or `:sha512`; the keys sort, so the algorithm is the
+  first member a reader meets). Each label is an object
   `from`, `kind`, `to`; a changed-sign entry adds `declared_sign` and `observed_sign`; the
   lists are sorted by the canonical order of `from`, then `to`, then `kind`, so equal
   inputs give equal bytes whatever order the graphs were built in. Nothing else enters the
@@ -75,8 +79,9 @@ defmodule BeamMCP.Connectome.Diff do
   alias BeamMCP.Connectome.{Canonical, Edge, Graph}
 
   # The record's own axis, separate from the graph's. 2 since 0.5.0: changed-sign excludes
-  # `:unset` by name and the vocabulary it compares is the graph's at 2.
-  @schema_version 2
+  # `:unset` by name and the vocabulary it compares is the graph's at 2. 3 since the release
+  # after: the record names its algorithm in the bytes, as the graph's envelope does.
+  @schema_version 3
 
   @typedoc "An edge's identity in the diff: from, to, kind."
   @type label :: %{from: String.t(), to: String.t(), kind: Edge.kind()}
@@ -215,31 +220,49 @@ defmodule BeamMCP.Connectome.Diff do
     }
   end
 
-  @doc "The canonical bytes of the record: `BeamMCP.Connectome.Canonical.encode_value/1` over `to_record/1`."
-  @spec encode(t()) :: {:ok, binary()} | {:error, term()}
-  def encode(%__MODULE__{} = diff), do: Canonical.encode_value(to_record(diff))
+  @doc """
+  The canonical bytes of the record, naming the digest `algorithm:` chooses:
+  `BeamMCP.Connectome.Canonical.encode_value/1` over `to_record/1` plus `"algorithm"`.
+  """
+  @spec encode(t(), keyword()) :: {:ok, binary()} | {:error, term()}
+  def encode(%__MODULE__{} = diff, opts \\ []),
+    do: Canonical.encode_value(with_algorithm(diff, opts))
 
-  @doc "`encode/1`, raising."
-  @spec encode!(t()) :: binary()
-  def encode!(%__MODULE__{} = diff), do: Canonical.encode_value!(to_record(diff))
+  @doc "`encode/2`, raising."
+  @spec encode!(t(), keyword()) :: binary()
+  def encode!(%__MODULE__{} = diff, opts \\ []),
+    do: Canonical.encode_value!(with_algorithm(diff, opts))
 
-  @doc "SHA-256 over the canonical bytes."
-  @spec hash(t()) :: {:ok, <<_::256>>} | {:error, term()}
-  def hash(%__MODULE__{} = diff), do: Canonical.hash_value(to_record(diff))
-
-  @doc "`hash/1`, raising."
-  @spec hash!(t()) :: <<_::256>>
-  def hash!(%__MODULE__{} = diff), do: Canonical.hash_value!(to_record(diff))
-
-  @doc "The hash as lowercase hexadecimal, the form the page writes it in."
-  @spec hash_hex(t()) :: {:ok, String.t()} | {:error, term()}
-  def hash_hex(%__MODULE__{} = diff) do
-    with {:ok, hash} <- hash(diff), do: {:ok, Base.encode16(hash, case: :lower)}
+  @doc "The digest the bytes name, over them: 32, 48 or 64 bytes by the algorithm."
+  @spec hash(t(), keyword()) :: {:ok, binary()} | {:error, term()}
+  def hash(%__MODULE__{} = diff, opts \\ []) do
+    algorithm = Canonical.algorithm!(opts)
+    Canonical.hash_value(with_algorithm(diff, algorithm: algorithm), algorithm: algorithm)
   end
 
-  @doc "`hash_hex/1`, raising."
-  @spec hash_hex!(t()) :: String.t()
-  def hash_hex!(%__MODULE__{} = diff), do: Base.encode16(hash!(diff), case: :lower)
+  @doc "`hash/2`, raising."
+  @spec hash!(t(), keyword()) :: binary()
+  def hash!(%__MODULE__{} = diff, opts \\ []) do
+    algorithm = Canonical.algorithm!(opts)
+    Canonical.hash_value!(with_algorithm(diff, algorithm: algorithm), algorithm: algorithm)
+  end
+
+  @doc "The hash as lowercase hexadecimal, the form the page writes it in."
+  @spec hash_hex(t(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  def hash_hex(%__MODULE__{} = diff, opts \\ []) do
+    with {:ok, hash} <- hash(diff, opts), do: {:ok, Base.encode16(hash, case: :lower)}
+  end
+
+  @doc "`hash_hex/2`, raising."
+  @spec hash_hex!(t(), keyword()) :: String.t()
+  def hash_hex!(%__MODULE__{} = diff, opts \\ []),
+    do: Base.encode16(hash!(diff, opts), case: :lower)
+
+  # The record with the algorithm's name in it: what the bytes are written from. The struct
+  # itself does not carry it -- the digest is the caller's choice at the moment of encoding,
+  # as it is for the graph, not a property of the diff.
+  defp with_algorithm(diff, opts),
+    do: Map.put(to_record(diff), :algorithm, Canonical.algorithm!(opts))
 
   @options [:window]
 

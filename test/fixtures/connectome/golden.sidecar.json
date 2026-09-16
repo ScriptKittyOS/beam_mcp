@@ -1,1 +1,1 @@
-{"schema_version":2,"weights":[{"from":"srv/module/Enum","kind":"message","provenance":"observed","to":"srv/boundary/application/beam_mcp","weight":1},{"from":"srv/tool/écho","kind":"read","provenance":"observed","to":"srv/resource/r:%2F%2Fa","weight":3}]}
+{"schema_version":3,"weights":[{"from":"srv/module/Enum","kind":"message","provenance":"observed","to":"srv/boundary/application/beam_mcp","weight":1},{"from":"srv/tool/écho","kind":"read","provenance":"observed","to":"srv/resource/r:%2F%2Fa","weight":3}]}

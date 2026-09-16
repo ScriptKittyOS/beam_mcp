@@ -33,7 +33,9 @@ defmodule BeamMCP.MixProject do
           "docs/connectome-diff.md",
           "docs/connectome-reach.md",
           "docs/will-not-implement.md",
-          "docs/threat-model.md"
+          "docs/threat-model.md",
+          "docs/crypto-posture.md",
+          "docs/fips.md"
         ],
         # Grouped by namespace, not by a list of names: a module added under either prefix
         # lands in its group without an edit here. The core modules are the ungrouped rest.
@@ -43,7 +45,7 @@ defmodule BeamMCP.MixProject do
         ],
         groups_for_extras: [
           Connectome: ~r{^docs/connectome},
-          Policy: ~r{^docs/(will-not-implement|threat-model)}
+          Policy: ~r{^docs/(will-not-implement|threat-model|crypto-posture|fips)}
         ]
       ]
     ]
@@ -57,8 +59,10 @@ defmodule BeamMCP.MixProject do
     # call edges with. Optional, in the one spelling Mix honours -- `tools: :optional` inside
     # extra_applications. A separate `optional_applications:` key is accepted by Mix and
     # ignored, and the first version of this line shipped tools as REQUIRED in the .app;
-    # a test reads the .app the build writes.
-    [extra_applications: [:logger, tools: :optional]]
+    # a test reads the .app the build writes. `crypto` is the digest's application, required:
+    # until 0.6.0 it was absent here and an HTTP host had it only through plug and bandit,
+    # both optional -- a stdio-only release would have had no :crypto.hash/2 at all.
+    [extra_applications: [:logger, :crypto, tools: :optional]]
   end
 
   defp deps do

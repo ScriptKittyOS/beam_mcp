@@ -123,13 +123,22 @@ in UTF-16 code-unit order and unique after NFC, strings NFC, every atom a string
 name of its field, integers as integers, arrays in the order given, nested objects the same
 way; nothing else. Its keys, in the order the rule gives them:
 
+- `"algorithm"` — the digest the record is hashed with, `"sha256"` unless the caller chose
+  `"sha384"` or `"sha512"` (`algorithm:` on `BeamMCP.Connectome.Diff.encode/2` and `hash/2`;
+  rule 9 of `docs/connectome-canonical.md`, the same three names). The keys sort, so it is
+  the first member a reader meets; it is under the hash like every other.
 - `"classes"` — an object with the four class names as keys, each an array of label objects
   `{"from","kind","to"}` (an empty class is `[]`); a `changed_sign` entry carries
   `"declared_sign"` and `"observed_sign"` too. Each array is sorted by `from`, then `to`,
   then the kind's name, comparing UTF-16 code units, so equal inputs give equal bytes
   whatever order the graphs were built in.
 - `"coverage"` — the ten counts (eight since 0.4.0; the two one-sided sign counts since 0.5.0).
-- `"schema_version"` — `2` (the record's own axis, bumped in 0.5.0 when changed-sign excluded `unset` by name and two counts were added; `1` records carry the earlier semantics).
+- `"schema_version"` — `3` (the record's own axis: bumped to `2` in 0.5.0 when changed-sign
+  excluded `unset` by name and two counts were added, and to `3` in the release after when
+  the algorithm joined the bytes; `1` and `2` records carry the earlier semantics, name no
+  algorithm, and are SHA-256 over their bytes — a verifier reads the version first and
+  hashes `1` and `2` records with SHA-256 exactly as before, as the canonical page's
+  *Versions* section says for the graph).
 - `"window"` — the consumer's map.
 
 Nothing else enters the record: no weight, no latency, no argument, no label, no name the
@@ -137,21 +146,24 @@ graphs did not already carry — and every name they do carry is in it: a tool's
 a registered process's name is identity and is published, as `docs/connectome-observed.md`
 says; a secret in a name is published here too. `hash/1` encodes and hashes; a consumer that
 wants both the bytes and the hash hashes the bytes it already holds rather than paying the
-encode twice. `BeamMCP.Connectome.Diff.hash/1` is SHA-256 over these bytes, the raw 32; `BeamMCP.Connectome.Diff.hash_hex/1` is
-the same as lowercase hexadecimal, the form this page writes it in.
+encode twice. `BeamMCP.Connectome.Diff.hash/2` is the digest the bytes name over these bytes — the raw
+32, 48 or 64; `BeamMCP.Connectome.Diff.hash_hex/2` is the same as lowercase hexadecimal, the form this page
+writes it in.
 
 ## Worked example
 
 Server `srv`, tools `a`, `b`, `c` on both sides. Declared: `a→b`, `a→c`, `c→a` (sign
 `allow`), `b→a` (sign `allow`). Observed: `a→b`, `b→c`, `c→a` (sign `deny`), `b→a` (sign
 `unset`). Window `{"ended_at": "2026-09-14T01:00:00Z", "started_at":
-"2026-09-14T00:00:00Z"}`. The bytes (779 of them, one line):
+"2026-09-14T00:00:00Z"}`. The bytes (800 of them, one line):
 
 ```
-{"classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"declared_sign_only":1,"nodes_in_both":4,"observed_edges":4,"observed_endpoint_declared":4,"observed_nodes":4,"observed_sign_only":0},"schema_version":2,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
+{"algorithm":"sha256","classes":{"changed_sign":[{"declared_sign":"allow","from":"srv/tool/c","kind":"invoke","observed_sign":"deny","to":"srv/tool/a"}],"declared_and_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/b"},{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/a"}],"declared_never_observed":[{"from":"srv/tool/a","kind":"invoke","to":"srv/tool/c"}],"observed_but_undeclared":[{"from":"srv/tool/b","kind":"invoke","to":"srv/tool/c"}]},"coverage":{"declared_and_observed":3,"declared_edges":4,"declared_endpoint_covered":4,"declared_nodes":4,"declared_sign_only":1,"nodes_in_both":4,"observed_edges":4,"observed_endpoint_declared":4,"observed_nodes":4,"observed_sign_only":0},"schema_version":3,"window":{"ended_at":"2026-09-14T01:00:00Z","started_at":"2026-09-14T00:00:00Z"}}
 ```
 
-SHA-256: `422a3e16785e590d57b8c67ae075fe86473a3d04b2af3c9e5637d54da6e402cb`. The four
+SHA-256: `a8a4206fb65febc83ed099be8b7408b6938795efc8a92f7cac1f53781c4312e1`. Under `algorithm: :sha384`
+the first member reads `"algorithm":"sha384"`, the rest of the line is byte-identical, and
+SHA-384: `2efccb9b6852b3d4088b170987fd7e51c52d474a81522e3203d9420eda199fd2d872aebbd1e60e44b5c9b2b1e0b0090e`. The four
 classes hold one label each but `declared_and_observed`, which holds two: `b→a` is there
 because its observed sign is `unset`, not supplied.
 

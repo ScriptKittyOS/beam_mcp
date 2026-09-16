@@ -11,18 +11,23 @@ importing the package. `BeamMCP.Connectome.Canonical` is one implementation of i
 two disagree, the page is right and the code is the defect.
 
 Vocabulary is in `docs/connectome.md`. What is hashed is the **declared form** of a graph:
-its schema version, its nodes and its edges. Weights are not in it — a weight is a
-measurement, and the declared hash is a claim about wiring — and travel in a separate
-**sidecar** that is never hashed with the declared bytes.
+its schema version, the algorithm it is hashed with, its nodes and its edges. Weights are
+not in it — a weight is a measurement, and the declared hash is a claim about wiring — and
+travel in a separate **sidecar** that is never hashed with the declared bytes.
 
 ## Layout
 
 The bytes are UTF-8 JSON with no insignificant whitespace, written under these rules:
 
-1. **The top level is an object with exactly three members, in this fixed order:**
-   `"schema_version"`, then `"nodes"`, then `"edges"`. This is the one place the order is
-   fixed rather than sorted, so the version is the first thing a reader meets. The schema
-   version is the integer `2` (see *Versions* below).
+1. **The top level is an object with exactly four members, in this fixed order:**
+   `"schema_version"`, then `"algorithm"`, then `"nodes"`, then `"edges"`. This is the one
+   place the order is fixed rather than sorted, so the version is the first thing a reader
+   meets and the digest the second. The schema version is the integer `3` (see *Versions*
+   below). The algorithm is one of the three strings `"sha256"`, `"sha384"`, `"sha512"` —
+   the name under which the digest is known to `:crypto`, lowercase, no hyphen — and it is
+   what rule 9 hashes the bytes with. A name outside the three is not a canonical form: the
+   package refuses it at the option before writing a byte, and a verifier meeting one
+   refuses the record rather than guessing a digest.
 2. **`"nodes"` is an array sorted by `"id"`** — by the bytes of the UTF-8 id, which is the
    same as by code point. Each node is an object with exactly `"id"`, `"kind"`, `"labels"`,
    `"level"` — in that order, which is their sorted order.
@@ -79,49 +84,91 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    labels map, and its fields are the private layout of another module, which a release may
    change. A refusal at any depth is reported by node, by the label it was met under, and by
    that label's whole value.
-9. **The hash is SHA-256 over exactly these bytes**, written as sixty-four lowercase
-   hexadecimal characters when written as text.
+9. **The hash is the digest the bytes name, over exactly these bytes:** SHA-256 for
+   `"algorithm":"sha256"` (32 bytes; sixty-four lowercase hexadecimal characters when
+   written as text), SHA-384 for `"sha384"` (48 bytes; ninety-six), SHA-512 for `"sha512"`
+   (64 bytes; one hundred and twenty-eight). The algorithm member is part of the bytes, so
+   it is under the hash: two envelopes of the same graph that name different digests are
+   different bytes with different hashes, and neither is a rewrite of the other. A verifier
+   reads the version first, then the algorithm, then hashes — it never chooses a digest the
+   bytes do not name, and it treats a name it does not know as a malformed record. SHA-256 is
+   the default the package writes when the caller names none, and stays the default
+   indefinitely; the other two are a caller's option (`algorithm:` on
+   `BeamMCP.Connectome.Canonical.encode/2` and `hash/2`), never a constant of a release.
 
 ## Worked example
 
 A server `"s"` with one tool `"t"` (labelled `mode: :read_only`) and the one declared edge
-from the server to the tool. Its canonical bytes, on one line:
+from the server to the tool. Its canonical bytes under the default algorithm, on one line:
 
 ```json-canonical
-{"schema_version":2,"nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
+{"schema_version":3,"algorithm":"sha256","nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
 ```
 
-sha256: `de6db70dc7316885176c4a7493ee07c46e33ec3bb90951dc54908a74e81dc90d`
+sha256: `a401cd47f0f0410d17248538eb8a3ef00018f6a31bf6fb6a7b9b0ba3377f570e`
 
 Reproduce it without the package: paste the line above into a file with no trailing newline
 and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.
 
+The same graph under SHA-384 is a different envelope — one member differs — and so a
+different hash, over the bytes that name it:
+
+```json-canonical-sha384
+{"schema_version":3,"algorithm":"sha384","nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
+```
+
+sha384: `f5b9b2f4fe21a4bfe88721d804f4f82d167f73f7dd59b1a64ae0196f4cf78f05a6b9a3efa6d02e7362469796dbba53dd`
+
+(`sha384sum` over that line.) Under SHA-512 the member reads `"algorithm":"sha512"` and the
+rest of the line is byte-identical:
+
+sha512: `26cacb025eeaeabb0c441a293882ab81ec2436b80559618fd700dc494f9a5d2e2c6d46cee69a68cbdc84746aa9d64a4a11da027df7b0bc733ba1091031ee2e78`
+
+A blind reader reproduces all three from this page alone: rule 1 fixes the four members and
+their order, rule 9 the digest by the member's value, and the line is the same in every
+byte but that value.
+
 ## Versions
 
-`schema_version` names the vocabulary the bytes were written in. **`1`** (0.4.0): the sign
-values were `allow`, `deny`, `hold`, `unknown`. **`2`** (the release after 0.4.0, which
-carries this note): `unset` — no sign was supplied to the package that wrote the bytes — and
-`ungoverned`, a consumer's affirmative "no rule of my policy applies", replace `unknown`.
-Nothing else moved. **At `1`, `unknown` covers both of them**: a 0.4.0 consumer that looked at
-an edge and found nothing governing it had no `ungoverned` to write, so its honest value was
-`unknown` too, and the bytes do not say which case a given `unknown` was. A reader must not
-narrow a version-1 `unknown` to `unset`; it is "one of the two, unrecorded which".
+`schema_version` names the vocabulary the bytes were written in and, from `3`, the shape of
+the envelope. **`1`** (0.4.0): the sign values were `allow`, `deny`, `hold`, `unknown`.
+**`2`** (0.5.0): `unset` — no sign was supplied to the package that wrote the bytes — and
+`ungoverned`, a consumer's affirmative "no rule of my policy applies", replace `unknown`;
+nothing else moved. **`3`** (the release after 0.5.0, which carries this note): the envelope
+names its algorithm as a fourth top-level member, `"algorithm"`, between the version and the
+nodes (rule 1), and the hash is that digest over the bytes (rule 9). The vocabulary is `2`'s,
+unchanged. **At `1`, `unknown` covers both of `2`'s new signs**: a 0.4.0 consumer that looked
+at an edge and found nothing governing it had no `ungoverned` to write, so its honest value
+was `unknown` too, and the bytes do not say which case a given `unknown` was. A reader must
+not narrow a version-1 `unknown` to `unset`; it is "one of the two, unrecorded which".
 
-A verifier holding bytes at `1` verifies them exactly as before: the hash is SHA-256 over the
-bytes, and the bytes did not change — published 0.4.0 hashes stay verifiable forever. What the
-version tells the verifier is how to *read* the sign field: at `1`, `unknown` is a valid sign
-and `ungoverned` is not; at `2`, `unset` and `ungoverned` are valid and `unknown` is not. A
-reader that resolves the vocabulary by the version it finds first (as Avro resolves a writer's
-schema against a reader's) needs no other signal. A sign outside the vocabulary of the version
-the bytes name is a malformed record: the hash still verifies (it is over the bytes), and the
-record is refused, never corrected — the rule the package applies to itself in
-`BeamMCP.Connectome.Graph.new/1`. The package itself writes `2` and only `2`,
-and `BeamMCP.Connectome.Graph.new/1` refuses a graph carrying any other version rather than
-translating it: bytes are not re-imported here, only produced and hashed.
+**What a verifier holding bytes at `1` or `2` does** — 0.4.0 and 0.5.0 bytes exist in the
+world, and their hashes stay verifiable forever under their own version: those bytes name no
+algorithm, and **at `1` and `2` the digest is SHA-256**, by this rule and by no member of the
+bytes; the verifier hashes the bytes it holds, unchanged, with SHA-256, and compares. It does
+not add an `"algorithm"` member, rewrite the version, or re-encode: a `2` envelope with a
+member inserted is different bytes with a different hash, not a migration. At `3` the
+verifier reads the member and hashes with what it names; a `3` envelope without the member,
+or a `1` or `2` envelope with one, is a malformed record and is refused. So the whole
+verifier is: read `schema_version`; below `3`, SHA-256; at `3`, the named digest; anything
+else, refuse. Published 0.4.0 and 0.5.0 hashes verify under that rule exactly as they did the
+day they were written.
+
+What the version tells the verifier beyond the digest is how to *read* the sign field: at
+`1`, `unknown` is a valid sign and `ungoverned` is not; at `2` and `3`, `unset` and
+`ungoverned` are valid and `unknown` is not. A reader that resolves the vocabulary by the
+version it finds first (as Avro resolves a writer's schema against a reader's) needs no other
+signal. A sign outside the vocabulary of the version the bytes name is a malformed record:
+the hash still verifies (it is over the bytes), and the record is refused, never corrected —
+the rule the package applies to itself in `BeamMCP.Connectome.Graph.new/1`. The package itself
+writes `3` and only `3`, and `BeamMCP.Connectome.Graph.new/1` refuses a graph carrying any
+other version rather than translating it: bytes are not re-imported here, only produced and
+hashed. `test/fixtures/connectome/golden.v2.json` and `golden.v2.sha256` are 0.5.0's goldens
+kept as they were, and a test verifies them the way this section says.
 
 ## The sidecar
 
-Weights are written separately as `{"schema_version":2,"weights":[…]}`, one object per edge
+Weights are written separately as `{"schema_version":3,"weights":[…]}` — the graph's version, no algorithm member, since the sidecar is never hashed —, one object per edge
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
 integer; a float weight is written in the shortest form that round-trips

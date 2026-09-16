@@ -139,9 +139,14 @@ defmodule BeamMCP.Connectome.CanonicalTest do
   # --- the bytes ----------------------------------------------------------------------------
 
   describe "encode/1" do
-    test "schema_version first, then nodes by id, then edges by key; every other object sorted by key" do
+    test "schema_version first, the algorithm second, then nodes by id, then edges by key; every other object sorted by key" do
       {:ok, bytes} = Canonical.encode(golden_graph())
-      assert String.starts_with?(bytes, ~s({"schema_version":2,"nodes":[{"id":"))
+
+      assert String.starts_with?(
+               bytes,
+               ~s({"schema_version":3,"algorithm":"sha256","nodes":[{"id":")
+             )
+
       assert bytes == File.read!(Path.join(@fixtures, "golden.json"))
     end
 
@@ -658,6 +663,15 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       end
 
       assert_raise ArgumentError, ~r/option/, fn -> Canonical.encode(g, digest: :sha384) end
+    end
+
+    test "the .app the build writes depends on crypto, so a release without plug and bandit still hashes" do
+      # The digest is :crypto's, an OTP application of its own. plug and bandit are optional
+      # and each depends on it, so an HTTP host had it by accident; a stdio-only release
+      # built from the .app alone did not, and `hash/2` would have been :undef there. Read
+      # from the .app, not from mix.exs, as the tools pin is.
+      assert :crypto in Application.spec(:beam_mcp, :applications)
+      refute :crypto in (Application.spec(:beam_mcp, :optional_applications) || [])
     end
 
     test "hash_value/2 takes the algorithm too, over the same bytes" do

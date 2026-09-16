@@ -412,7 +412,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
       claims("argument is the request body exactly as received")
       claims("the reason goes to the log, never to the caller")
       claims("A post-read refusal does not close the connection")
-      claims("This package performs no cryptography.")
+      claims("This Plug performs no cryptography.")
       claims("verifying is the host's work")
     end
 
