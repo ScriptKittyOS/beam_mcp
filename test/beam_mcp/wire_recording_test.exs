@@ -10,6 +10,11 @@ defmodule BeamMCP.WireRecordingTest do
   entries added answers exactly that plus the entries -- nothing else on the wire moved, and
   `server/discover` is identical (as decoded JSON: the recording holds the decoded responses,
   and the encoder is deterministic): no capability was claimed for a graph.
+
+  The recording pins the package version the results carry, so a release bump fails both
+  tests; the rule then is to re-record with the recorder on the fixture catalog WITHOUT the
+  surface's entries -- "before" means the catalog without them, which the second test keeps
+  meaningful -- and to say so in that commit.
   """
   use ExUnit.Case, async: true
 

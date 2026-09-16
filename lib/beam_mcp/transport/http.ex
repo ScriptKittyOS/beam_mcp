@@ -714,10 +714,19 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    # "Mcp-Name | params.name or params.uri | tools/call, resources/read, prompts/get".
-    # Of those, this package implements tools/call.
+    # "Mcp-Name | params.name or params.uri | tools/call, resources/read, prompts/get". All
+    # three are served now; the check covered tools/call alone from the day it was the only
+    # one, and a review lane found the other two answering 200 without the header.
     defp check_name_header(conn, %{"method" => "tools/call"} = message, id) do
       check_named(conn, "mcp-name", param(message, "name"), id)
+    end
+
+    defp check_name_header(conn, %{"method" => "prompts/get"} = message, id) do
+      check_named(conn, "mcp-name", param(message, "name"), id)
+    end
+
+    defp check_name_header(conn, %{"method" => "resources/read"} = message, id) do
+      check_named(conn, "mcp-name", param(message, "uri"), id)
     end
 
     defp check_name_header(_conn, _message, _id), do: :ok

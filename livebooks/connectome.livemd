@@ -249,9 +249,10 @@ Kino.DataTable.new(
 
 ## Into Neo4j, without a fourth exporter
 
-The package stops at canonical JSON: the three renderings it carries (canonical JSON, DOT,
-GraphML) are already the largest surface no hash covers, and a Cypher exporter would be a
-fourth place for the next escaping defect, verifiable by nobody against the hash. A Neo4j
+The package stops at canonical JSON: its two other renderings (DOT, GraphML) are already the
+largest surface no hash covers — the hash is over the canonical bytes alone — and a Cypher
+exporter would be a third such place for the next escaping defect, verifiable by nobody
+against the hash. A Neo4j
 user loads the canonical bytes directly with APOC's JSON loader -- one statement over the
 `nodes` array and one over `edges`, each node keyed by its `id`, each edge by the
 `from`/`to` ids the bytes already carry. This cell builds those two statements from the
