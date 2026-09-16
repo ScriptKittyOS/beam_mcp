@@ -522,6 +522,33 @@ defmodule BeamMCP.Transport.HTTPTest do
     test "Mcp-Name is not required on methods that carry no name" do
       assert post(msg("tools/list")).status == 200
     end
+
+    # Found by a review lane after the resources and prompts primitives landed: the routing
+    # table names three methods for Mcp-Name -- tools/call (params.name), resources/read
+    # (params.uri), prompts/get (params.name) -- and the check covered the first only, with a
+    # comment from the day the package served only tools/call.
+    test "Mcp-Name is required on resources/read (params.uri) and prompts/get (params.name), and must match" do
+      read = msg("resources/read", %{"params" => %{"uri" => "r://a"}})
+      assert post(read, [{@hdr, @modern}, {"mcp-method", "resources/read"}]).status == 400
+
+      wrong =
+        post(read, [{@hdr, @modern}, {"mcp-method", "resources/read"}, {"mcp-name", "r://b"}])
+
+      assert wrong.status == 400
+      assert body!(wrong)["error"]["code"] == -32_020
+
+      right =
+        post(read, [{@hdr, @modern}, {"mcp-method", "resources/read"}, {"mcp-name", "r://a"}])
+
+      refute right.status == 400
+
+      get = msg("prompts/get", %{"params" => %{"name" => "greet"}})
+      assert post(get, [{@hdr, @modern}, {"mcp-method", "prompts/get"}]).status == 400
+      wrong = post(get, [{@hdr, @modern}, {"mcp-method", "prompts/get"}, {"mcp-name", "other"}])
+      assert wrong.status == 400
+      right = post(get, [{@hdr, @modern}, {"mcp-method", "prompts/get"}, {"mcp-name", "greet"}])
+      refute right.status == 400
+    end
   end
 
   describe "an unimplemented method" do
