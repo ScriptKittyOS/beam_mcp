@@ -54,7 +54,7 @@ defmodule BeamMCP.JSON do
   compares it — `"a"` and `"\\u0061"` are one key — and a byte walk that compared raw keys
   would miss exactly the pair a hop in front would merge. What that costs, per shape, is
   measured on `docs/threat-model.md`: a request-sized body twice a 2 µs decode; a 1 MiB body
-  1.0–2.6× the decoder's own time, the key-dense shapes at the top of that band.
+  2.0–2.6× the decoder's own time, the key-dense shapes at the top of that band.
   """
   @spec decode(binary()) ::
           {:ok, term()}
