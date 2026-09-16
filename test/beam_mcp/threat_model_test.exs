@@ -313,7 +313,7 @@ defmodule BeamMCP.ThreatModelTest do
       end
     end
 
-    test "the reader sees a citation beside escaped quotes in the prose, and refuses a commented-out or skipped test" do
+    test "the reader sees a citation beside escaped quotes in the prose, and asks ExUnit which cited tests are live" do
       row =
         ~s(| **x** | REFUSED | says `"name"` and \\"quoted\\" | ) <>
           ~s(`test/beam_mcp/threat_model_test.exs` "a name" "another" | — |)
@@ -321,13 +321,19 @@ defmodule BeamMCP.ThreatModelTest do
       assert BeamMCP.Boundary.citations(row) ==
                [{"test/beam_mcp/threat_model_test.exs", ["a name", "another"]}]
 
+      # Liveness is ExUnit's answer, read from the module's own test list and tags -- not a
+      # text reader's: a review lane found five skip spellings a text reader called live and
+      # ExUnit skipped, and a describetag is block-wide. The fixture modules register nothing
+      # with the runner.
       dir =
         Path.join(System.tmp_dir!(), "beam_mcp_citation_#{System.unique_integer([:positive])}")
 
       File.mkdir_p!(Path.join(dir, "test"))
 
       File.write!(Path.join(dir, "test/a_test.exs"), """
-      defmodule A do
+      defmodule BeamMCP.CitationFixtureA do
+        use ExUnit.Case, register: false
+
         # test "commented out" do
         @tag :skip
         test "skipped" do
@@ -351,8 +357,26 @@ defmodule BeamMCP.ThreatModelTest do
         test "skipped across a blank line" do
         end
 
-        @describetag :skip
-        test "skipped by describetag" do
+        @tag :skip
+        # a comment inside the attribute run
+        test "skipped past a comment" do
+        end
+
+        @tag skip: false
+        test "not skipped after all" do
+        end
+
+        describe "a block" do
+          @describetag :skip
+          test "skipped by describetag" do
+          end
+
+          setup do
+            :ok
+          end
+
+          test "skipped by describetag, later in the block" do
+          end
         end
 
         test "live" do
@@ -361,8 +385,10 @@ defmodule BeamMCP.ThreatModelTest do
       """)
 
       File.write!(Path.join(dir, "test/b_test.exs"), """
-      defmodule B do
+      defmodule BeamMCP.CitationFixtureB do
+        use ExUnit.Case, register: false
         @moduletag :skip
+
         test "skipped by moduletag" do
         end
       end
@@ -370,18 +396,22 @@ defmodule BeamMCP.ThreatModelTest do
 
       page =
         ~s(`test/a_test.exs` "commented out" "skipped" "skipped then tagged" "skipped by keyword" ) <>
-          ~s("skipped with a reason" "skipped across a blank line" "skipped by describetag" "live"; ) <>
+          ~s("skipped with a reason" "skipped across a blank line" "skipped past a comment" ) <>
+          ~s("not skipped after all" "skipped by describetag" ) <>
+          ~s("skipped by describetag, later in the block" "live"; ) <>
           ~s(`test/b_test.exs` "skipped by moduletag")
 
       assert BeamMCP.Boundary.citation_defects(page, dir) == [
-               ~s(test/a_test.exs names no test "commented out"),
-               ~s(test/a_test.exs names no test "skipped"),
-               ~s(test/a_test.exs names no test "skipped then tagged"),
-               ~s(test/a_test.exs names no test "skipped by keyword"),
-               ~s(test/a_test.exs names no test "skipped with a reason"),
-               ~s(test/a_test.exs names no test "skipped across a blank line"),
-               ~s(test/a_test.exs names no test "skipped by describetag"),
-               ~s(test/b_test.exs names no test "skipped by moduletag")
+               ~s(test/a_test.exs names no live test "commented out"),
+               ~s(test/a_test.exs names no live test "skipped"),
+               ~s(test/a_test.exs names no live test "skipped then tagged"),
+               ~s(test/a_test.exs names no live test "skipped by keyword"),
+               ~s(test/a_test.exs names no live test "skipped with a reason"),
+               ~s(test/a_test.exs names no live test "skipped across a blank line"),
+               ~s(test/a_test.exs names no live test "skipped past a comment"),
+               ~s(test/a_test.exs names no live test "skipped by describetag"),
+               ~s(test/a_test.exs names no live test "skipped by describetag, later in the block"),
+               ~s(test/b_test.exs names no live test "skipped by moduletag")
              ]
 
       File.rm_rf!(dir)
@@ -401,6 +431,51 @@ defmodule BeamMCP.ThreatModelTest do
       assert only["id"] == 2
       [refused] = drive_stdio(pad.(1_048_577 - base) <> "\n") |> lines()
       assert refused["error"]["message"] == "Parse error: line exceeds 1048576 bytes"
+    end
+
+    test "a header line of a legacy Content-Length block is bounded like any line, and refused by name past it" do
+      long_header = "X-Lane: " <> String.duplicate("h", 4 * 1_048_576)
+      ping = ~s({"jsonrpc":"2.0","id":2,"method":"ping"})
+
+      input =
+        "Content-Length: #{byte_size(ping)}\r\n#{long_header}\r\n\r\n" <> ping <> ping <> "\n"
+
+      [first, second] = drive_stdio(input) |> lines()
+      assert first["error"]["message"] == "Parse error: line exceeds 1048576 bytes"
+      assert second["id"] == 2
+    end
+
+    test "reading a line costs the loop about the line's bytes, not sixty times them" do
+      # The reader once accumulated one-byte binaries in a list: ~40 B of heap per byte of
+      # line, 46-67 MiB for a 1 MiB line (a review lane's measurement). A line is now built
+      # as one binary, and the loop process's heap stays within a few times the line.
+      pad = fn n ->
+        ~s({"jsonrpc":"2.0","id":2,"method":"ping","pad":") <> String.duplicate("x", n) <> ~s("})
+      end
+
+      line = pad.(1_048_576 - byte_size(pad.(0)))
+      parent = self()
+
+      spawn_link(fn ->
+        output = drive_stdio(line <> "\n")
+        {:total_heap_size, words} = Process.info(self(), :total_heap_size)
+        send(parent, {:done, output, words * 8})
+      end)
+
+      assert_receive {:done, output, heap_bytes}, 60_000
+      assert [%{"id" => 2}] = lines(output)
+
+      assert heap_bytes < 8 * 1_048_576,
+             "the loop's heap reached #{div(heap_bytes, 1_048_576)} MiB"
+    end
+
+    test "a size refusal is -32600 on stdio as it is over HTTP, so one vector has one code" do
+      long = String.duplicate("x", 1_048_577)
+      [first] = drive_stdio(long <> "\n") |> lines()
+      assert first["error"]["code"] == -32_600
+      input = "Content-Length: 1048577\r\n\r\n" <> String.duplicate("a", 1_048_577)
+      [frame] = drive_stdio(input) |> lines()
+      assert frame["error"]["code"] == -32_600
     end
 
     test "a legacy Content-Length frame over the cap is refused by name and its declared body is drained, never read as the next frames" do
