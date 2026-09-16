@@ -94,7 +94,7 @@ edge, where that verdict never reached this package, gets `:unset` on that edge,
 that read `:unset` as "no policy spoke" would be wrong about the world. That is why the value is
 named for the slot's state and not for the world's. (Until 0.5.0 the value was `:unknown`,
 glossed "no policy has spoken"; the rename is the correction, and the bytes carry
-`schema_version` `2` from here so a reader knows which vocabulary applies —
+`schema_version` `2` or later from here — `3` today — so a reader knows which vocabulary applies —
 [`docs/connectome-canonical.md`](connectome-canonical.md).)
 
 There is no `:not_applicable` and no `:indeterminate`: nothing in the package can produce them,
