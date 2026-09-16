@@ -408,7 +408,8 @@ defmodule BeamMCP.Catalog do
     end)
   end
 
-  # The resources list: two structs only; a reader once anything is listed; no key twice.
+  # The resources list: two structs only; every uri, uri_template and name a string; a reader
+  # once anything is listed; no key twice; no template expression the matcher does not claim.
   defp validate_resources(catalog, resources) do
     cond do
       not Enum.all?(resources, &resource_entry?/1) ->
@@ -417,10 +418,10 @@ defmodule BeamMCP.Catalog do
            "or %BeamMCP.ResourceTemplateSpec{}"}
 
       non_string_field(resources) != nil ->
-        {:bad, value} = non_string_field(resources)
+        {:bad, field, value} = non_string_field(resources)
 
         {:error,
-         "#{inspect(catalog)}.capabilities/0's :resources carries " <>
+         "#{inspect(catalog)}.capabilities/0's :resources carries a #{field} of " <>
            "#{inspect(value)}, which is not a string"}
 
       resources != [] and not function_exported?(catalog, :read_resource, 1) ->
@@ -469,13 +470,19 @@ defmodule BeamMCP.Catalog do
     |> Enum.find_value(fn {{_, key}, n} -> if n > 1, do: key end)
   end
 
-  # The first uri, uri_template or name that is not a string, tagged, or nil.
+  # The first uri, uri_template or name that is not a string, tagged with its field, or nil.
   defp non_string_field(entries) do
     Enum.find_value(entries, fn
-      %BeamMCP.ResourceSpec{uri: uri, name: name} -> non_string([uri, name])
-      %BeamMCP.ResourceTemplateSpec{uri_template: t, name: name} -> non_string([t, name])
+      %BeamMCP.ResourceSpec{uri: uri, name: name} ->
+        non_string_of(uri: uri, name: name)
+
+      %BeamMCP.ResourceTemplateSpec{uri_template: t, name: name} ->
+        non_string_of(uri_template: t, name: name)
     end)
   end
+
+  defp non_string_of(fields),
+    do: Enum.find_value(fields, fn {field, v} -> if not is_binary(v), do: {:bad, field, v} end)
 
   defp resource_entry?(%BeamMCP.ResourceSpec{}), do: true
   defp resource_entry?(%BeamMCP.ResourceTemplateSpec{}), do: true
