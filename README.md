@@ -267,7 +267,7 @@ answers `403`; a hook that raises answers `500` and tells the caller nothing.
 is still on the wire and the adapter would drain it; by the time this hook runs the body is read,
 the connection is clean, and an ordinary response is possible.
 
-**This package performs no cryptography.** The hook is named `:authorize_body` rather than
+**This Plug performs no cryptography.** The hook is named `:authorize_body` rather than
 `:verify_signature` because verifying is the host's work; making it possible is this module's.
 
 ### Resources this Plug bounds, and the ones it does not
@@ -497,8 +497,12 @@ is absent; it never skips.
 ## The connectome
 
 The package exports a composed system's call graph — its wiring diagram — twice, and diffs the
-two. Every export is canonical JSON with a SHA-256 over it, so the same graph gives the same
-bytes whoever wrote it.
+two. Every export is canonical JSON that names the digest it is hashed with — SHA-256 unless
+the host chooses SHA-384 or SHA-512 by option — so the same graph gives the same bytes whoever
+wrote it, and a verifier reads the algorithm from the bytes
+([`docs/connectome-canonical.md`](docs/connectome-canonical.md); the package's whole
+cryptographic posture, and what a FIPS-mode host needs from it, are
+[`docs/crypto-posture.md`](docs/crypto-posture.md) and [`docs/fips.md`](docs/fips.md)).
 
 - **Declared** — `BeamMCP.Connectome.Declared.build/1` reads what *can* happen: the catalog,
   the call edges of the modules in scope from their beams (OTP's `:xref`), and a grouping of
@@ -523,7 +527,8 @@ resources — `connectome://declared`, `connectome://observed`, `connectome://di
 its own catalog, and `call/2` for the one `:observe` tool a host that exposes tools only
 writes itself (the package holds no tool; the spec to copy is in the moduledoc); each answers
 the canonical bytes, byte-identical to the file export (the tool carries them verbatim under
-`bytes` with their SHA-256 beside), and nothing else. The host's `read_resource/1` and
+`bytes` with their hash beside, keyed by the algorithm's name — `sha256` unless the host's
+`algorithm:` says otherwise), and nothing else. The host's `read_resource/1` and
 dispatch delegate to `read/2` and `call/2` with the builder's options, the collector's name
 and the consumer's window. Read-only by construction and by test: the package's state is
 compared term for term before and after a call (the tool's own call is a dispatch, which a

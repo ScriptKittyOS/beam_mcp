@@ -34,7 +34,8 @@ defmodule BeamMCP.Connectome.Surface do
   `connectome://diff` answers exactly `BeamMCP.Connectome.Diff.encode/1` of the record
   (`docs/connectome-diff.md`). A consumer who has the file has the resource, byte for byte, and
   the hash rule the canonical page defines verifies either. The tool answers the same bytes as the value of
-  `bytes` in its structured content, with their SHA-256 beside them, so a client verifies
+  `bytes` in its structured content, with their hash beside them under the algorithm's name
+  (`sha256` unless the host's `algorithm:` option says `:sha384` or `:sha512`), so a client verifies
   without re-encoding; the tool result's text content is the server's rendering of that map,
   as for every tool, and is not the bytes.
 
@@ -50,8 +51,11 @@ defmodule BeamMCP.Connectome.Surface do
 
   `declared:` is `BeamMCP.Connectome.Declared.build/1`'s option list; `observed:` the
   collector's name (`BeamMCP.Connectome.Observed`); `window:` the consumer's map the diff
-  record carries verbatim. Each is read only when its graph asks for it, and a missing one is
-  refused by name. Every sign the package writes is `:unset` (`docs/connectome.md`).
+  record carries verbatim; `algorithm:` the digest the bytes name and the hash is computed
+  with, `:sha256` when absent, `:sha384` or `:sha512` by choice, anything else refused by
+  `ArgumentError` before a graph is built. Each is read only when its graph asks for it, and
+  a missing one is refused by name. Every sign the package writes is `:unset`
+  (`docs/connectome.md`).
 
   ## Read-only, by construction and by test
 
@@ -125,14 +129,16 @@ defmodule BeamMCP.Connectome.Surface do
 
   @doc """
   The tool's call, for the host's dispatch: the graph's name, its bytes verbatim and their
-  SHA-256 in lower-case hex -- the hash the canonical page defines, computed by the same
-  functions -- or a refusal by name. Takes the arguments as the server hands them to a
-  dispatch (keyed by the declared name, `:graph`).
+  hash in lower-case hex under the algorithm's name (`sha256`, or `sha384`/`sha512` when the
+  host's `algorithm:` option chose one -- the bytes name the same) -- the hash the canonical
+  page defines, computed by the same functions -- or a refusal by name. Takes the arguments
+  as the server hands them to a dispatch (keyed by the declared name, `:graph`).
   """
   @spec call(map(), keyword()) :: {:ok, map()} | {:error, term()}
   def call(%{graph: graph}, opts) when graph in @graphs and is_list(opts) do
     with {:ok, {bytes, hash}} <- bytes(graph, opts) do
-      {:ok, %{graph: graph, bytes: bytes, sha256: Base.encode16(hash, case: :lower)}}
+      hex = Base.encode16(hash, case: :lower)
+      {:ok, %{algorithm(opts) => hex, graph: graph, bytes: bytes}}
     end
   end
 
@@ -141,11 +147,11 @@ defmodule BeamMCP.Connectome.Surface do
 
   # The bytes and their hash, both from the canonical module: the surface computes neither.
   defp bytes("declared", opts) do
-    with {:ok, graph} <- declared(opts), do: graph_bytes(graph)
+    with {:ok, graph} <- declared(opts), do: graph_bytes(graph, opts)
   end
 
   defp bytes("observed", opts) do
-    with {:ok, graph} <- observed(opts), do: graph_bytes(graph)
+    with {:ok, graph} <- observed(opts), do: graph_bytes(graph, opts)
   end
 
   defp bytes("diff", opts) do
@@ -153,16 +159,20 @@ defmodule BeamMCP.Connectome.Surface do
          {:ok, declared} <- declared(opts),
          {:ok, observed} <- observed(opts),
          {:ok, diff} <- Diff.run(declared, observed, window: window),
-         {:ok, bytes} <- Diff.encode(diff),
-         {:ok, hash} <- Diff.hash(diff),
+         {:ok, bytes} <- Diff.encode(diff, algorithm: algorithm(opts)),
+         {:ok, hash} <- Diff.hash(diff, algorithm: algorithm(opts)),
          do: {:ok, {bytes, hash}}
   end
 
-  defp graph_bytes(graph) do
-    with {:ok, bytes} <- Canonical.encode(graph),
-         {:ok, hash} <- Canonical.hash(graph),
+  defp graph_bytes(graph, opts) do
+    with {:ok, bytes} <- Canonical.encode(graph, algorithm: algorithm(opts)),
+         {:ok, hash} <- Canonical.hash(graph, algorithm: algorithm(opts)),
          do: {:ok, {bytes, hash}}
   end
+
+  # The host's choice of digest, validated where the canonical module validates it: the
+  # bytes name it, and the result keys the hex by the same name.
+  defp algorithm(opts), do: Canonical.algorithm!(Keyword.take(opts, [:algorithm]))
 
   defp declared(opts) do
     with {:ok, build} <- fetch(opts, :declared),

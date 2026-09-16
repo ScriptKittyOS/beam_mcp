@@ -400,11 +400,14 @@ defmodule BeamMCP.Connectome.DiffTest do
       bytes = Diff.encode!(diff)
 
       # The same writer, called on the record as a plain map, gives the same bytes.
-      assert {:ok, ^bytes} = Canonical.encode_value(Diff.to_record(diff))
+      # The record plus the algorithm's name is what the encoder is handed: to_record/1 stays
+      # the diff's own fields, the name joining at the moment of encoding.
+      assert {:ok, ^bytes} =
+               Canonical.encode_value(Map.put(Diff.to_record(diff), :algorithm, :sha256))
 
       assert String.starts_with?(
                bytes,
-               ~s({"classes":{"changed_sign":[{"declared_sign":"allow","from":")
+               ~s({"algorithm":"sha256","classes":{"changed_sign":[{"declared_sign":"allow","from":")
              )
 
       assert bytes =~ ~s("schema_version":3)

@@ -11,6 +11,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — the canonical envelope names its algorithm; `schema_version` 3; SHA-384 and SHA-512 by option
+
+- **The algorithm is in the bytes.** A canonical envelope carries a fourth top-level member,
+  `"algorithm"`, right after `"schema_version"`: `"sha256"`, `"sha384"` or `"sha512"`, and its
+  hash is that digest over exactly those bytes, so a verifier reads the algorithm from what it
+  holds (`docs/connectome-canonical.md`, rules 1 and 9, with the worked example under all three;
+  `docs/connectome.md` defines the three names). The diff record gains the same member (its
+  keys sort, so it comes first; `docs/connectome-diff.md`). **`schema_version` is `3`** on the
+  graph and on the diff record, and `BeamMCP.Connectome.Graph.new/1` refuses `2` as it refused
+  `1` — bytes are produced and hashed here, never re-imported. **Breaking for a consumer that
+  parses the envelope with a fixed member list**; nothing else about the layout moved.
+- **SHA-256 stays the default, indefinitely; the other two are an option, never a constant.**
+  `algorithm:` on `BeamMCP.Connectome.Canonical.encode/2`, `hash/2`, `hash_hex/2`,
+  `hash_value/2`, on `BeamMCP.Connectome.Diff.encode/2`, `hash/2`, `hash_hex/2`, and in
+  `BeamMCP.Connectome.Surface`'s host options; anything outside the three is refused by
+  `ArgumentError` naming it, before a byte is written. The digest is computed at one site under
+  `lib/`, with the algorithm a variable — the key-holding census now pins one site, not two.
+  The wire's `tools/call` result keys the hex by the algorithm's name: `sha256` as before under
+  the default, `sha384` or `sha512` when the host chose one.
+- **A verifier holding 0.4.0 or 0.5.0 bytes** (`schema_version` 1 or 2) hashes them, unchanged,
+  with SHA-256 and compares — those bytes name no algorithm, and at those versions the digest is
+  SHA-256 by the page's rule; published hashes stay verifiable forever. The canonical page's
+  *Versions* section says so in full, and 0.5.0's goldens are kept in the tree and verified that
+  way by a test.
+- **Two pages:** `docs/crypto-posture.md` (one primitive at one site; three digests named in the
+  bytes; no key, no signature; the seam for a signing package) and `docs/fips.md` (what a
+  FIPS-mode host needs — a `crypto` built against a validated OpenSSL FIPS provider,
+  `application:start(crypto)`, `enable_fips_mode/1` or `fips_mode: true` — and that this
+  package enables none of it and cannot, by census).
+- **Fixed on the way: the `.app` now requires `crypto`.** It did not; an HTTP host had it only
+  through `plug` and `bandit`, both optional, and a stdio-only release built from the `.app`
+  would have had no `:crypto.hash/2` at all. Found by writing the FIPS page's sentence about it
+  and reading the built `.app`; pinned by a test that reads the `.app`.
+- **How to tell whether you are affected:** a consumer that verifies by hashing the bytes it
+  holds is not — the member is under the hash like every other. A consumer that parses the
+  envelope by position or by a fixed member list meets `"algorithm"` at the second position.
+  A host that passes nothing gets `sha256` everywhere it did. Latency stays out of the signed
+  envelope, by decision: it is a measurement of one machine on one day, not a property of the
+  graph, and lives in the unsigned sidecar as before.
+
 ### Added — the HTTP body read deadline is the Plug's option, and its default is a chosen number
 
 - **`read_timeout:` on `BeamMCP.Transport.HTTP`** — one whole-body deadline, this package's

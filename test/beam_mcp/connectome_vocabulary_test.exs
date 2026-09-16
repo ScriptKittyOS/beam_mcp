@@ -54,6 +54,7 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
     {"Sign", [:allow, :deny, :hold, :ungoverned, :unset]},
     {"Level", [:mfa, :module, :boundary, :server]},
     {"Provenance", [:declared, :observed]},
+    {"Algorithm", [:sha256, :sha384, :sha512]},
     {"Identity", [:application, :boundary_module]}
   ]
   @names ["connectome", "declared connectome", "observed connectome", "drift finding"]
