@@ -62,11 +62,12 @@ defmodule BeamMCP.Connectome.Surface do
   collector records every dispatch, so after the first `tools/call` of the tool the observed
   graph carries the tool's own edge (the resource path is not a dispatch and adds nothing);
   a host whose `declared:` names its own catalog has that edge declared too, so it lands as
-  a matched edge, not as drift; and since an observed edge's weight is a call count, each call
-  of the tool for `observed` or `diff` raises its own edge's weight by one in the sidecar and
-  in the diff's weights -- the canonical bytes of the observed graph carry no weight and are
-  unchanged after the first call, which is what the `idempotentHint` a `:read_only` tool
-  carries promises of them. Pagination of a large graph's bytes and subscriptions on
+  a matched edge, not as drift; and since an observed edge's weight is a call count, every
+  call of the tool, whichever graph it asks for, raises its own edge's weight by one in the
+  observed graph's weight sidecar -- the canonical bytes of the observed graph and of the
+  diff record carry no weight and are unchanged after the first call, which is what the
+  `idempotentHint` a `:read_only` tool carries promises of them. Pagination of a large
+  graph's bytes and subscriptions on
   `connectome://observed` are out of this module (the server sends no notifications: the
   capability is advertised with `subscribe: false`).
   """
