@@ -13,14 +13,16 @@ All notable changes to this project are documented here. The format follows
 
 Everything since `0.4.0`, newest entry first. **What moved on the wire in this release**, each
 in its own entry below: three resources methods, two prompts methods and one pagination cursor
-added; `server/discover`'s result filled to the `2026-07-28` `DiscoverResult` and a
-transport's advertised revisions narrowed to what it serves; `Mcp-Name` required on
+added, with the `resources` and `prompts` capabilities they advertise in `initialize` and
+`server/discover`; `server/discover`'s result filled to the `2026-07-28` `DiscoverResult` and
+a transport's advertised revisions narrowed to what it serves; `Mcp-Name` required on
 `resources/read` and `prompts/get` over HTTP; a tuple error reason encoded as an array and
 `-32022`'s `data.requested` sent as a string; and one break on the wire — the request `_meta`
 read at `params._meta` and refused at the top level. The sign-vocabulary break is in the
-exported bytes, not on the wire; the two catalog breaks are in the host contract. **The
-connectome surface moved nothing:** the five advertising methods were recorded on the core and
-through the HTTP transport before `BeamMCP.Connectome.Surface` existed
+exported bytes, not a break on the wire — no 0.4.0 method carried a sign; the surface that now
+carries the bytes is new. The two catalog breaks are in the host contract. **The connectome
+surface moved nothing:** the five advertising methods were recorded on the core and through
+the HTTP transport before `BeamMCP.Connectome.Surface` existed
 (`test/fixtures/wire/pre-017.json`), and `test/beam_mcp/wire_recording_test.exs` holds the
 same catalog to that recording and the catalog with the surface's entries to the recording
 plus exactly those entries, `server/discover` identical. No capability is claimed that the
@@ -187,7 +189,7 @@ specification does not define; the census under `test/beam_mcp/boundary/` holds 
   constraints; signs are not read. `max_edges:` is the one cap, refused by name; `all_paths/4`
   is refused by name, always — enumerating paths is exponential and no cap makes it a
   question this package answers. `docs/connectome-reach.md` is the contract, with the
-  measured cost on the gate's 10 000-edge fixture (a search ~11 ms, dominators ~30 ms),
+  measured cost on the gate's 10 000-edge fixture (a search ~14–21 ms, dominators ~22–25 ms),
   recorded by every gate run (`bench/reach.exs`) and judged by nothing.
 - **`BeamMCP.Connectome.Edge.kinds/0`** — the edge vocabulary from one site.
 - **Nothing on the wire changes.** No method, field or capability is added.
