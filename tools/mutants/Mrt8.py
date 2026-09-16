@@ -7,7 +7,7 @@ import io
 import sys
 p = sys.argv[1]
 s = io.open(p, encoding="utf-8").read()
-old = """    defp piece_length(false, _size), do: 0"""
+old = """    defp piece_length(false, _size), do: -1"""
 new = """    defp piece_length(false, size), do: min(@read_piece, @max_body_bytes - size)"""
 assert s.count(old) == 1, "anchor not found once: %d" % s.count(old)
 s = s.replace(old, new)

@@ -21,8 +21,11 @@ s = s.replace(old, new)
 # close_after/1 is now unused: remove it, or --warnings-as-errors fails the build before the
 # suite runs and the table records a kill no test made.
 start = s.index("    # Refusing before the body is read leaves the connection")
-end = s.index('defp close_after(conn), do: put_resp_header(conn, "connection", "close")\n', start)
-end += len('defp close_after(conn), do: put_resp_header(conn, "connection", "close")\n')
+close_end = """        _ -> put_resp_header(conn, "connection", "close")
+      end
+    end
+"""
+end = s.index(close_end, start) + len(close_end)
 s = s[:start] + s[end:]
 assert "close_after(conn)" not in s, "orphan call left behind"
 io.open(p, "w", encoding="utf-8").write(s)

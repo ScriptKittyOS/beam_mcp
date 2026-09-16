@@ -73,10 +73,14 @@ if Code.ensure_loaded?(Plug) do
         deadline, this package's own: the body is read in pieces against one clock, each read
         given what remains, so a client that has sent its headers and then drips the body is
         answered `408` when it lapses, however many bytes arrived and however the adapter splits
-        the reads (over HTTP/2 the adapter's reader is asked for one frame at a time, so every
-        DATA frame returns to this clock). A body must declare its length — `transfer-encoding:
-        chunked` is refused with `411` before the read, since a chunked body is read chunk by
-        chunk on a per-chunk clock that no deadline above it can bound. The `408` is this Plug's
+        the reads (over HTTP/2 the adapter's reader is asked for less than one frame, so every
+        DATA frame, an empty one included, returns to this clock; a stream kept open by control
+        frames alone — WINDOW_UPDATE, a HEADERS without END_STREAM — is held past the deadline
+        by the adapter's own wait, which nothing outside it can end: thirteen bytes per window,
+        nothing accumulated, and whatever body then comes is refused). A body must declare its
+        length — `transfer-encoding: chunked` is refused with `411` before the read, since a
+        chunked body is read chunk by chunk on a per-chunk clock that no deadline above it can
+        bound. The `408` is this Plug's
         JSON-RPC refusal, with `connection: close` over HTTP/1.1 (over HTTP/2 the stream ends
         with the response); nothing is written to the host's log for it — the adapter's own
         error-level line at its read timeout no longer fires, since the deadline is this Plug's.
@@ -635,15 +639,28 @@ if Code.ensure_loaded?(Plug) do
     end
 
     # How much one read asks for. Over HTTP/1 a piece, or what is left under the cap -- zero at
-    # the cap, so the last read answers whether the body is complete. Over HTTP/2 always zero:
-    # the adapter gathers DATA frames inside one read until the length asked for is exceeded,
-    # each frame on its own clock -- a review lane dripped one byte per frame and was served
-    # after 20 s under a 300 ms deadline -- and a length of zero is exceeded by any frame, so
-    # every frame returns to this loop's clock, and an empty `:more` there is the adapter's
-    # per-read timeout, not "more remains". A body at the cap is then refused by the size rule
-    # on the next frame, or accepted when the stream ends.
+    # the cap, so the last read answers whether the body is complete. Over HTTP/2 always below
+    # zero: the adapter gathers DATA frames inside one read until the frames gathered EXCEED
+    # the length asked for, each frame on its own clock -- a review lane dripped one byte per
+    # frame and was served after 20 s under a 300 ms deadline -- so the length is set where
+    # any frame exceeds it. Zero was the first cut, and an EMPTY frame does not exceed zero:
+    # a drip of empty frames held the read (2,321 ms for 300) and grew the adapter's
+    # accumulator by one empty binary per frame. Below zero, every DATA frame returns to this
+    # loop's clock, and an empty `:more` is the adapter's per-read timeout, not "more
+    # remains". A body at the cap is then refused by the size rule on the next frame, or
+    # accepted when the stream ends.
+    #
+    # What this cannot reach: a frame that carries no DATA. A WINDOW_UPDATE, or a HEADERS
+    # without END_STREAM, re-arms the adapter's own wait for the whole of what this call
+    # gave it, and that wait is a receive on the adapter's messages that nothing outside it
+    # can end -- the one lever left is the stream process itself, and ending it gives the
+    # client no answer at all (the adapter forgets the stream and drops its frames), which
+    # is declined. So a stream kept open by control frames alone is held by the adapter past
+    # the deadline: thirteen bytes per window, nothing accumulated, and whatever body comes
+    # is refused here, since the clock is read on return. The threat model states it as the
+    # adapter's, with a test that fails the day the adapter bounds it.
     defp piece_length(true, size), do: min(@read_piece, @max_body_bytes - size)
-    defp piece_length(false, _size), do: 0
+    defp piece_length(false, _size), do: -1
 
     defp too_large(conn) do
       {:refused, conn, 413, error(nil, -32_600, "Request body exceeds #{@max_body_bytes} bytes")}
