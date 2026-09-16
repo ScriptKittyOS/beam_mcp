@@ -24,7 +24,9 @@ defmodule BeamMCP.Connectome.Graph do
   alias BeamMCP.Connectome.{Edge, Node}
 
   # 2 since 0.5.0: the sign vocabulary changed (`unknown` -> `unset`, `ungoverned` added), so
-  # bytes at 1 and bytes at 2 read their signs against different vocabularies.
+  # bytes at 1 and bytes at 2 read their signs against different vocabularies. 3 since the
+  # release after: the canonical envelope names its algorithm as a fourth top-level member,
+  # and bytes at 1 and 2, which name none, are SHA-256 by the page's rule for those versions.
   @schema_version 3
   @keys [:nodes, :edges, :schema_version]
   @required [:nodes, :edges, :schema_version]
