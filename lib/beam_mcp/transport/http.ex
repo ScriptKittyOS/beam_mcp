@@ -81,7 +81,10 @@ if Code.ensure_loaded?(Plug) do
         indefinitely, and whatever body then comes is refused; a WINDOW_UPDATE costs the client
         thirteen bytes and the host nothing accumulated, a HEADERS without END_STREAM writes a
         warning line per frame to the host's log carrying the client's header bytes — the
-        threat model states both). A body must declare its
+        threat model states both, and the two `Bandit` listener options that bound the
+        exposure: `http_2_options: [default_local_settings: [max_concurrent_streams: n]]`
+        caps the held streams per connection, `http_2_options: [enabled: false]` removes
+        HTTP/2 from the listener). A body must declare its
         length — `transfer-encoding: chunked` is refused with `411` before the read, since a
         chunked body is read chunk by chunk on a per-chunk clock that no deadline above it can
         bound. The `408` is this Plug's
