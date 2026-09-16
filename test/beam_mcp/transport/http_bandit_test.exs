@@ -773,10 +773,13 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
              "408 came at #{ms_long} ms for a 1,500 ms deadline"
     end
 
-    # A chunked drip: headers with transfer-encoding: chunked, then one one-byte chunk every
-    # `every_ms` for `count` chunks, then nothing. Bandit's own :read_timeout is a per-read clock
-    # that every chunk resets; the deadline this package promises is the whole body's.
-    defp chunked_drip(port, count, every_ms, wait_ms) do
+    test "a chunked body is refused with 411 before it is read, so no drip can reset the deadline chunk by chunk" do
+      # The adapter reads a chunked body chunk by chunk, each chunk on its own clock, and gathers
+      # chunks until the length asked for is filled: a client sending one byte per chunk was
+      # SERVED after 43 s under a 15 s deadline (a review lane's measurement). An MCP request is
+      # one complete JSON message under a 1 MiB cap; it declares its length or it is refused.
+      port = listen(read_timeout: 300)
+
       {:ok, sock} =
         :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false, packet: :raw], @connect_ms)
 
@@ -787,26 +790,13 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
       started = System.monotonic_time(:millisecond)
       :ok = :gen_tcp.send(sock, head)
-
-      for _ <- 1..count do
-        Process.sleep(every_ms)
-        :gen_tcp.send(sock, "1\r\nx\r\n")
-      end
-
-      result = :gen_tcp.recv(sock, 0, wait_ms)
+      {:ok, bytes} = :gen_tcp.recv(sock, 0, 5_000)
       elapsed = System.monotonic_time(:millisecond) - started
       :gen_tcp.close(sock)
-      {elapsed, result}
-    end
-
-    test "the deadline is the whole body's whatever the transfer coding: a chunked drip that resets the adapter's clock is still 408 at the deadline" do
-      # Ten one-byte chunks every 200 ms under a 300 ms deadline: each chunk resets Bandit's
-      # per-read timer, so under the adapter's clock this client is served; under a whole-body
-      # deadline it is refused at 300 ms from its headers.
-      {elapsed, result} = chunked_drip(listen(read_timeout: 300), 10, 200, 5_000)
-      assert {:ok, bytes} = result
-      assert bytes =~ "HTTP/1.1 408"
-      assert elapsed >= 300 and elapsed < 1_500, "408 came at #{elapsed} ms for a 300 ms deadline"
+      assert bytes =~ "HTTP/1.1 411"
+      assert bytes =~ "connection: close"
+      assert bytes =~ "must declare its length"
+      assert elapsed < 300, "the 411 came at #{elapsed} ms; it is issued before the body is read"
     end
 
     test "a body over the adapter's read length and under the cap is one deadline, not two" do
