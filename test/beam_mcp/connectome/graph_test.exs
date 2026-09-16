@@ -59,6 +59,16 @@ defmodule BeamMCP.Connectome.GraphTest do
       assert {:error, {:missing, :schema_version}} = Graph.new(nodes: nodes, edges: edges)
     end
 
+    test "the version is 3, and the two the package wrote before are refused rather than translated" do
+      assert Graph.schema_version() == 3
+
+      assert {:error, {:invalid, :schema_version, 2}} =
+               Graph.new(nodes: [], edges: [], schema_version: 2)
+
+      assert {:error, {:invalid, :schema_version, 1}} =
+               Graph.new(nodes: [], edges: [], schema_version: 1)
+    end
+
     test "a schema_version this slice does not define is refused by value" do
       {nodes, edges} = fixture()
 
