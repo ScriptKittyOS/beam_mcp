@@ -616,6 +616,15 @@ defmodule BeamMCP.Connectome.DiffTest do
       bytes384 = Diff.encode!(diff, algorithm: :sha384)
       assert String.starts_with?(bytes384, ~s({"algorithm":"sha384","classes":{))
       assert Diff.hash!(diff, algorithm: :sha384) == :crypto.hash(:sha384, bytes384)
+      # The non-raising form too: a mutant that hashed with the default over bytes naming
+      # sha384 survived while hash!/2 had a body of its own and every pin went through it.
+      assert Diff.hash(diff, algorithm: :sha384) == {:ok, :crypto.hash(:sha384, bytes384)}
+
+      assert Diff.hash_hex(diff, algorithm: :sha512) ==
+               {:ok,
+                Base.encode16(:crypto.hash(:sha512, Diff.encode!(diff, algorithm: :sha512)),
+                  case: :lower
+                )}
 
       assert Diff.hash_hex!(diff, algorithm: :sha512) ==
                Base.encode16(:crypto.hash(:sha512, Diff.encode!(diff, algorithm: :sha512)),
