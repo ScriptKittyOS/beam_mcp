@@ -10,7 +10,7 @@ entry below is something `beam_mcp` will never do, with the reason in a line and
 enforces it, by path and by name. **The tests are the proof; this page is the contract.** A
 request to cross one of these lines is a request for a different package: the *host* — the
 application that embeds this package, supplies its catalog and dispatch function, and owns
-every decision about them — for entries 1, 4, 7 and 11; a *signer*, a separate package with
+every decision about them — for entries 1, 4, 7, 11 and 12; a *signer*, a separate package with
 one callback over the canonical bytes, decided and not yet written, for entries 2 and 3; a
 client, a logger, an authorization server or a graph-mining library that this project will not
 write, for entries 9, 5, 8 and 10; and for entry 6, the specification itself, since only it can

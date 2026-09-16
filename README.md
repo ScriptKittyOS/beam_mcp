@@ -506,21 +506,21 @@ collector, the tracer and its stated threat model in
 
 ## What this package is, and is not
 
-**Shipping now.** The protocol core for `2026-07-28` and `2025-11-25`; the stdio and
-stateless Streamable HTTP transports; JSON Schema validation of tool arguments; the catalog
-contract — tools, resources and prompts declared by the host (`BeamMCP.ToolSpec`,
-`BeamMCP.ResourceSpec` and `BeamMCP.ResourceTemplateSpec`, `BeamMCP.PromptSpec`), tools
-dispatched through the host's function, resources read and prompts rendered through its two
-optional callbacks, the resource and prompt lists paginated by one keyset cursor
-(`BeamMCP.Cursor`; `tools/list` is not yet); the connectome spine above — declared, observed, canonical bytes, diff — with the Livebook that
-renders it and the read-only surface a host puts on the wire (`BeamMCP.Connectome.Surface`);
-and reachability queries over a graph (`BeamMCP.Connectome.Reach`: can an entry reach an
-effect, can it do so without crossing a gate — with a witness path made of the graph's own
-edges — does a gate dominate an effect, and which nodes every path must cross; on OTP's
-`:digraph`, dominators by Lengauer–Tarjan, no new dependency;
-[`docs/connectome-reach.md`](docs/connectome-reach.md)). Every module named in this
-paragraph is held to the built application by a census, and every module named in the next
-two is held absent from it.
+**Shipping now.** The protocol core for `2026-07-28` and `2025-11-25`; the stdio and stateless
+Streamable HTTP transports; JSON Schema validation of tool arguments; the catalog contract —
+tools, resources and prompts declared by the host (`BeamMCP.ToolSpec`, `BeamMCP.ResourceSpec`
+and `BeamMCP.ResourceTemplateSpec`, `BeamMCP.PromptSpec`), tools dispatched through the host's
+function, resources read and prompts rendered through its two optional callbacks, the resource
+and prompt lists paginated by one keyset cursor (`BeamMCP.Cursor`; `tools/list` is not yet);
+the connectome spine above — declared, observed, canonical bytes, diff — with the Livebook
+that renders it and the read-only surface a host puts on the wire
+(`BeamMCP.Connectome.Surface`); and reachability queries over a graph
+(`BeamMCP.Connectome.Reach`: can an entry reach an effect, can it do so without crossing a
+gate — with a witness path made of the graph's own edges — does a gate dominate an effect, and
+which nodes every path must cross; on OTP's `:digraph`, dominators by Lengauer–Tarjan, no new
+dependency; [`docs/connectome-reach.md`](docs/connectome-reach.md)). Every module named in
+this paragraph is held by a census to the set compiled from `lib/`, and any module named in
+the three paragraphs below is held absent from it (none names one today).
 
 **Decided and not built.** Settled by an owner decision, with no code behind it yet: a
 federation seam for merging graphs from several nodes; and effective connectivity, the
@@ -540,7 +540,7 @@ there. A small surface can look unfinished from the outside; this one is a commo
 that says which it is. The list is derived, not typed: the thesis sentence at the top of this
 README, the census test that no line under `lib/` writes a sign other than `:unset`, and a
 test that no line under `lib/` names a receipt, an approval, a risk tier or egress. The full
-boundary — eleven entries, each with the test that enforces it by path and by name — is
+boundary — twelve entries, each with the test that enforces it by path and by name — is
 [`docs/will-not-implement.md`](docs/will-not-implement.md), held to the tests in both
 directions by a census of its own; a request to cross it is answered by pointing there.
 
