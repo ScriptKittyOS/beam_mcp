@@ -835,6 +835,68 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
              "408 came at #{elapsed} ms for a 1,000 ms deadline"
     end
 
+    # HTTP/2, which Bandit serves on the same plaintext listener by prior knowledge. Its body
+    # reader gathers DATA frames inside one read_body/2 call, each frame on its own clock, so a
+    # review lane dripping one byte per frame was SERVED after 20 s under a 300 ms deadline.
+    defp h2_headers(body_length) do
+      [
+        {":method", "POST"},
+        {":scheme", "http"},
+        {":authority", "localhost"},
+        {":path", "/mcp"},
+        {"content-type", "application/json"},
+        {"content-length", Integer.to_string(body_length)},
+        {"mcp-protocol-version", @modern},
+        {"mcp-method", "tools/call"},
+        {"mcp-name", "echo"}
+      ]
+    end
+
+    test "over HTTP/2 a drip of one byte per frame is still answered at the deadline, and the refusal is readable" do
+      body = call_json(1, 200)
+      port = listen(read_timeout: 300)
+      started = System.monotonic_time(:millisecond)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+
+      # Twenty frames over two seconds: a per-frame clock never fires while they keep coming,
+      # and a whole-body clock answers at 300 ms regardless.
+      for i <- 0..19 do
+        Process.sleep(100)
+        BeamMCP.H2C.data(sock, binary_part(body, i, 1))
+      end
+
+      result = BeamMCP.H2C.response(sock, 5_000)
+      elapsed = System.monotonic_time(:millisecond) - started
+      BeamMCP.H2C.close(sock)
+      assert {:ok, _headers, response_body} = result
+      assert response_body =~ "not received within 300 ms"
+
+      assert elapsed >= 300 and elapsed < 2_100,
+             "the answer came at #{elapsed} ms for a 300 ms deadline"
+    end
+
+    test "over HTTP/2 a whole body under the deadline is served, and a refusal before the body is a response, not a stream reset" do
+      body = call_json(1, 0)
+      port = listen(read_timeout: 1_000)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+      BeamMCP.H2C.data(sock, body, true)
+      assert {:ok, _headers, response_body} = BeamMCP.H2C.response(sock, 5_000)
+      assert response_body =~ ~s("id":1)
+      BeamMCP.H2C.close(sock)
+
+      # An Origin refusal is issued before the body: over HTTP/1.1 it carries connection: close;
+      # over HTTP/2 that header is a malformed response (RFC 9113, 8.2.2) and the client saw a
+      # stream reset instead of the 403.
+      port = listen(allowed_origins: ["https://app.example.com"])
+
+      sock =
+        BeamMCP.H2C.open(port, [{"origin", "https://evil.example"} | h2_headers(byte_size(body))])
+
+      assert {:ok, _headers, refusal} = BeamMCP.H2C.response(sock, 5_000)
+      assert refusal =~ "Origin not allowed"
+      BeamMCP.H2C.close(sock)
+    end
+
     test "the default is the stated one, and a drip client under it is not answered inside a second" do
       assert HTTP.read_timeout_default() == 15_000
       body = call_json(1, 200)
