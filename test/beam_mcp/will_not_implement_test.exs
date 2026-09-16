@@ -88,12 +88,12 @@ defmodule BeamMCP.WillNotImplementTest do
   test "the README's count of entries is the page's row count, spelled as the README spells it" do
     n = length(rows(page()))
     assert n > 0
-    readme = File.read!(Path.join(@root, "README.md"))
+    # The README's whitespace folded as the page's is below, so a reflow at the em dash is
+    # read whole; the phrase is the README's own idiom ("boundary — twelve entries,").
+    readme = File.read!(Path.join(@root, "README.md")) |> String.replace(~r/\s+/u, " ")
     word = Enum.at(@words, n - 1)
     assert word, "#{n} rows: more than this test spells; extend @words"
 
-    # The README's own idiom, on one line ("boundary — twelve entries,"); a reflow at the em
-    # dash goes red here and is fixed by keeping the phrase whole.
     assert readme =~ "boundary — #{word} entries",
            "the page has #{n} rows and the README does not say \"boundary — #{word} entries\" " <>
              "-- a row was added or removed and the README's count did not move with it"
@@ -110,8 +110,9 @@ defmodule BeamMCP.WillNotImplementTest do
     [_, sentence] = String.split(sentence, "request to cross one of these lines", parts: 2)
 
     # `u`: the en dash is three bytes, and without it the class consumes one of them. A
-    # range in any glyph, spaced or not, or worded, is refused by name rather than read.
-    refute sentence =~ ~r/\d\s*[-–—]\s*\d|\d (?:to|through) \d/u,
+    # range -- hyphen, en dash, em dash or minus sign, spaced or not, or "to"/"through" -- is
+    # refused by name rather than read.
+    refute sentence =~ ~r/\d\s*[-–—−]\s*\d|\d (?:to|through) \d/u,
            "the placement sentence writes a range; list each entry so the census can read it"
 
     placed =
