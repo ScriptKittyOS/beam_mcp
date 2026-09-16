@@ -60,7 +60,7 @@ defmodule BeamMCP.MixProject do
     # extra_applications. A separate `optional_applications:` key is accepted by Mix and
     # ignored, and the first version of this line shipped tools as REQUIRED in the .app;
     # a test reads the .app the build writes. `crypto` is the digest's application, required:
-    # until 0.6.0 it was absent here and an HTTP host had it only through plug and bandit,
+    # through 0.5.0 it was absent here and an HTTP host had it only through plug and bandit,
     # both optional -- a stdio-only release would have had no :crypto.hash/2 at all.
     [extra_applications: [:logger, :crypto, tools: :optional]]
   end

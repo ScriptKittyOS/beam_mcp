@@ -59,6 +59,19 @@ defmodule BeamMCP.Connectome.GraphTest do
       assert {:error, {:missing, :schema_version}} = Graph.new(nodes: nodes, edges: edges)
     end
 
+    test "the vocabulary page's rebuild recipe names the version by the function, so it survives a bump" do
+      # A consumer copied `schema_version: 2` from the page after the version moved to 3 and
+      # got `{:invalid, :schema_version, 2}` (a review lane, 2026-09-16). The recipe now reads
+      # the version from the function, and this pin holds the page to that spelling.
+      page = File.read!("docs/connectome.md")
+
+      recipe =
+        "BeamMCP.Connectome.Graph.new(nodes: g.nodes, edges: signed, schema_version: BeamMCP.Connectome.Graph.schema_version())"
+
+      assert page =~ recipe
+      refute page =~ ~r/schema_version: \d/
+    end
+
     test "the version is 3, and the two the package wrote before are refused rather than translated" do
       assert Graph.schema_version() == 3
 
