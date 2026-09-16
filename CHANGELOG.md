@@ -47,11 +47,12 @@ All notable changes to this project are documented here. The format follows
 ### Fixed — a tuple error reason from a host's dispatch is a tool error, not a crash
 
 - A dispatch answering `{:error, {:missing, :window}}` — a tuple reason, the shape this
-  package's own refusals take — met the server's JSON encoder with no clause for a tuple, and
-  the request crashed. A tuple is now a JSON array on the wire (`["missing", "window"]`) in
-  the tool error's `structuredContent.error` and its text. Found while pinning the connectome
-  tool; any host that returned a tuple reason before got a crash, so no working client sees a
-  change.
+  package's own refusals take — passed the tuple through to the JSON encoder, whose protocol
+  has no implementation for one, and the request crashed. A tuple is now a JSON array on the
+  wire (`["missing", "window"]`): in a tool error's `structuredContent.error` and its text,
+  and in the `reason` a `resources/read` or `prompts/get` refusal carries as data. Found while
+  pinning the connectome tool; any host that returned a tuple reason before got a crash, so
+  no working client sees a change.
 
 ### Fixed — `Mcp-Name` on `resources/read` and `prompts/get` over HTTP
 

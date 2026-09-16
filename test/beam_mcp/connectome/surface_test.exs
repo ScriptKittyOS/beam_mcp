@@ -288,6 +288,26 @@ defmodule BeamMCP.Connectome.SurfaceTest do
       assert text =~ "missing"
     end
 
+    # The same clause carries a tuple reason in a resources/read refusal's data: the Surface's
+    # own {:missing, :window}, forwarded by the host's read_resource/1, reaches the client as
+    # ["missing", "window"] and the response encodes (before it, the transport's encoder would
+    # have met the raw tuple).
+    test "a tuple refusal forwarded by the host's read_resource/1 is the refusal's data, encodable" do
+      defmodule NoWindow do
+        @behaviour Catalog
+        @impl true
+        def capabilities, do: %{tools: [], resources: Surface.resources(), prompts: []}
+        @impl true
+        def read_resource(uri), do: Surface.read(uri, declared: [server: "fx"], observed: :none)
+      end
+
+      s = Server.new(catalog: NoWindow)
+      r = call(s, "resources/read", %{"uri" => "connectome://diff"})
+      assert r["error"]["code"] == -32_602
+      assert r["error"]["data"]["reason"] == ["missing", "window"]
+      assert is_binary(Jason.encode!(r))
+    end
+
     test "a graph name outside the enum is refused by the tools validator, before the tool runs" do
       s = Server.new(catalog: Host, dispatch: fn _, _, _ -> raise "tool ran" end)
 
