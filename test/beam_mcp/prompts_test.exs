@@ -217,6 +217,45 @@ defmodule BeamMCP.PromptsTest do
       assert {:error, message} = Catalog.validate(AtomArgument)
       assert message =~ ":opt"
       assert message =~ "string"
+
+      # nil and false are the values a find-by-value sentinel mistakes for "not found" -- a
+      # review lane got `name: nil` past the first cut, and prompts/get crashed on it.
+      for bad <- [nil, false] do
+        mod = Module.concat(__MODULE__, "N#{:erlang.phash2(bad)}")
+
+        Module.create(
+          mod,
+          quote do
+            def capabilities,
+              do: %{
+                tools: [],
+                resources: [],
+                prompts: [
+                  %PromptSpec{name: "p", arguments: [%PromptArgument{name: unquote(bad)}]}
+                ]
+              }
+
+            def get_prompt(_, _), do: {:ok, %{messages: []}}
+          end,
+          Macro.Env.location(__ENV__)
+        )
+
+        result = Catalog.validate(mod)
+
+        assert match?({:error, _}, result),
+               "argument name #{inspect(bad)} validated: #{inspect(result)}"
+
+        {:error, message} = result
+        assert message =~ inspect(bad)
+      end
+
+      defmodule NilPrompt do
+        def capabilities, do: %{tools: [], resources: [], prompts: [%PromptSpec{name: nil}]}
+        def get_prompt(_, _), do: {:ok, %{messages: []}}
+      end
+
+      assert {:error, message} = Catalog.validate(NilPrompt)
+      assert message =~ "nil"
     end
 
     test "validate/1 refuses a prompt whose arguments are not all PromptArguments, by name" do
@@ -420,10 +459,10 @@ defmodule BeamMCP.PromptsTest do
       assert r["error"]["data"] == %{"name" => "zeta", "reason" => "zeta cannot be rendered"}
     end
 
-    test "a malformed reader answer is -32603 naming the defect" do
+    test "a malformed reader answer is -32603 naming the catalog, the callback and the defect" do
       r = call(state(Malformed), "prompts/get", %{"name" => "bad"})
       assert r["error"]["code"] == -32_603
-      assert r["error"]["message"] =~ "get_prompt/2"
+      assert r["error"]["message"] =~ "#{inspect(Malformed)}.get_prompt/2"
       assert r["error"]["message"] =~ "role"
     end
 

@@ -148,7 +148,10 @@ defmodule BeamMCP.ResourcesTest do
       for entry <- [
             %ResourceSpec{uri: :u, name: "n"},
             %ResourceSpec{uri: "u://x", name: :n},
-            %ResourceTemplateSpec{uri_template: :t, name: "n"}
+            %ResourceTemplateSpec{uri_template: :t, name: "n"},
+            %ResourceSpec{uri: nil, name: "n"},
+            %ResourceSpec{uri: "u://x", name: false},
+            %ResourceTemplateSpec{uri_template: nil, name: "n"}
           ] do
         mod = Module.concat(__MODULE__, "S#{:erlang.phash2(entry)}")
 
@@ -167,6 +170,7 @@ defmodule BeamMCP.ResourcesTest do
         assert match?({:error, _}, result), "#{inspect(entry)} validated: #{inspect(result)}"
         {:error, message} = result
         assert message =~ "string", inspect(entry)
+        refute message =~ "raised", inspect(entry)
       end
     end
 
@@ -523,7 +527,7 @@ defmodule BeamMCP.ResourcesTest do
     test "a malformed reader answer is -32603 naming the defect, never a crash or a reshaped payload" do
       r = call(state(Malformed), "resources/read", %{"uri" => "mal://x"})
       assert r["error"]["code"] == -32_603
-      assert r["error"]["message"] =~ "read_resource/1"
+      assert r["error"]["message"] =~ "#{inspect(Malformed)}.read_resource/1"
       assert r["error"]["message"] =~ "uri"
     end
 
