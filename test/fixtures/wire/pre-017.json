@@ -1,0 +1,296 @@
+{
+  "prompts/list": {
+    "core": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "prompts": [
+          {
+            "name": "greet"
+          }
+        ],
+        "resultType": "complete",
+        "ttlMs": 0
+      }
+    },
+    "http": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "prompts": [
+          {
+            "name": "greet"
+          }
+        ],
+        "resultType": "complete",
+        "ttlMs": 0
+      }
+    },
+    "http_status": 200
+  },
+  "resources/list": {
+    "core": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "resources": [
+          {
+            "name": "a",
+            "uri": "r://a"
+          }
+        ],
+        "resultType": "complete",
+        "ttlMs": 0
+      }
+    },
+    "http": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "resources": [
+          {
+            "name": "a",
+            "uri": "r://a"
+          }
+        ],
+        "resultType": "complete",
+        "ttlMs": 0
+      }
+    },
+    "http_status": 200
+  },
+  "resources/templates/list": {
+    "core": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "resourceTemplates": [
+          {
+            "name": "t",
+            "uriTemplate": "r://t/{x}"
+          }
+        ],
+        "resultType": "complete",
+        "ttlMs": 0
+      }
+    },
+    "http": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "resourceTemplates": [
+          {
+            "name": "t",
+            "uriTemplate": "r://t/{x}"
+          }
+        ],
+        "resultType": "complete",
+        "ttlMs": 0
+      }
+    },
+    "http_status": 200
+  },
+  "server/discover": {
+    "core": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "capabilities": {
+          "prompts": {
+            "listChanged": false
+          },
+          "resources": {
+            "listChanged": false,
+            "subscribe": false
+          },
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "resultType": "complete",
+        "supportedVersions": [
+          "2026-07-28",
+          "2025-11-25"
+        ],
+        "ttlMs": 0
+      }
+    },
+    "http": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "capabilities": {
+          "prompts": {
+            "listChanged": false
+          },
+          "resources": {
+            "listChanged": false,
+            "subscribe": false
+          },
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "resultType": "complete",
+        "supportedVersions": [
+          "2026-07-28"
+        ],
+        "ttlMs": 0
+      }
+    },
+    "http_status": 200
+  },
+  "tools/list": {
+    "core": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "resultType": "complete",
+        "tools": [
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": true
+            },
+            "description": "Echo.",
+            "inputSchema": {
+              "additionalProperties": true,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "echo"
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false
+            },
+            "description": "Write.",
+            "inputSchema": {
+              "additionalProperties": true,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "write"
+          }
+        ],
+        "ttlMs": 0
+      }
+    },
+    "http": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "_meta": {
+          "io.modelcontextprotocol/serverInfo": {
+            "name": "fixture",
+            "version": "0.4.0"
+          }
+        },
+        "cacheScope": "private",
+        "resultType": "complete",
+        "tools": [
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": true
+            },
+            "description": "Echo.",
+            "inputSchema": {
+              "additionalProperties": true,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "echo"
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false
+            },
+            "description": "Write.",
+            "inputSchema": {
+              "additionalProperties": true,
+              "properties": {},
+              "type": "object"
+            },
+            "name": "write"
+          }
+        ],
+        "ttlMs": 0
+      }
+    },
+    "http_status": 200
+  }
+}
