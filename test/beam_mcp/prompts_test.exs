@@ -330,6 +330,10 @@ defmodule BeamMCP.PromptsTest do
       r = call(s, "prompts/get", %{"name" => "greet", "arguments" => %{}})
       assert r["error"]["code"] == -32_602
       assert r["error"]["message"] =~ "who"
+      # Every refusal on this method carries data naming the prompt and the reason, so a
+      # client reads one shape (a review lane found the CHANGELOG claiming it before it held).
+      assert %{"name" => "greet", "reason" => reason} = r["error"]["data"]
+      assert reason =~ "who"
 
       r = call(s, "prompts/get", %{"name" => "greet", "arguments" => %{"who" => 1}})
       assert r["error"]["code"] == -32_602
