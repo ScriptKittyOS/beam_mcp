@@ -431,9 +431,10 @@ typed; both ship together or neither does.
 | `2025-11-25` over HTTP | **0 / 30** | 0 / 5 | 2026-09-15, `tools/conformance.sh` |
 
 **Suite totals do not hide the failures.** The twenty-one `2026-07-28` failures are surfaces
-this package holds out by decision — completion, content types beyond text — and scenarios
-that need diagnostic tools this harness does not invent (subscriptions are skipped checks,
-not failures), each named with its reason word in `conformance/baseline-2026-07-28.yml`; the
+this package holds out by decision — completion, content types beyond text, progress
+notifications — and scenarios that need diagnostic tools this harness does not invent
+(subscriptions are skipped checks, not failures), each named with its reason word in
+`conformance/baseline-2026-07-28.yml`; the
 suite exits 1 on a regression *or* on a baselined scenario that starts passing (the resource
 and prompt scenarios left the file the day they passed). A scenario passes when none of its checks is `FAILURE` or `WARNING` —
 the suite's rule under `--expected-failures`, which ticks two fewer scored scenarios than

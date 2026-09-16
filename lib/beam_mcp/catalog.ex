@@ -56,7 +56,15 @@ defmodule BeamMCP.Catalog do
   `%{role: :user | :assistant, text: String.t()}`, `description` optional -- or
   `{:error, reason}`, which reaches the client as `-32602` carrying the reason as data. A
   catalog that lists a prompt must export `get_prompt/2` and must not name a prompt, or an
-  argument within one, twice; `validate/1` refuses each.
+  argument within one, twice, nor name either with anything but a string; `validate/1`
+  refuses each.
+
+  ## A reader that raises
+
+  `read_resource/1` and `get_prompt/2` are called as a tool's dispatch is: an exception in
+  them is not caught by the core. Over HTTP the transport answers `-32603 Internal error`
+  with the request's id and logs the exception; on stdio the loop ends. The shape the reader
+  must return is checked, and a wrong shape is `-32603` by name; a raise is the host's.
 
   ## Why `capabilities/0` and not `BeamMCP.ToolCatalog.all/0`
 
@@ -335,6 +343,11 @@ defmodule BeamMCP.Catalog do
         {:error,
          "#{inspect(catalog)}.capabilities/0's :prompts must all be %BeamMCP.PromptSpec{}"}
 
+      non_string_name(prompts) != nil ->
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's :prompts carries the name " <>
+           "#{inspect(non_string_name(prompts))}, which is not a string"}
+
       prompts != [] and not function_exported?(catalog, :get_prompt, 2) ->
         {:error,
          "#{inspect(catalog)} lists a prompt and does not export get_prompt/2, " <>
@@ -361,6 +374,14 @@ defmodule BeamMCP.Catalog do
     names |> Enum.frequencies() |> Enum.find_value(fn {name, n} -> if n > 1, do: name end)
   end
 
+  # The first prompt or argument name that is not a string, or nil. An atom would be
+  # advertised as a string by the encoder and then refused or crashed on: held here, at startup.
+  defp non_string_name(prompts) do
+    Enum.find_value(prompts, fn %BeamMCP.PromptSpec{name: name, arguments: args} ->
+      Enum.find([name | Enum.map(args, & &1.name)], &(not is_binary(&1)))
+    end)
+  end
+
   defp repeated_argument(prompts) do
     Enum.find_value(prompts, fn %BeamMCP.PromptSpec{name: name, arguments: args} ->
       if r = repeated(Enum.map(args, & &1.name)), do: {name, r}
@@ -374,6 +395,11 @@ defmodule BeamMCP.Catalog do
         {:error,
          "#{inspect(catalog)}.capabilities/0's :resources must all be %BeamMCP.ResourceSpec{} " <>
            "or %BeamMCP.ResourceTemplateSpec{}"}
+
+      non_string_field(resources) != nil ->
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's :resources carries " <>
+           "#{inspect(non_string_field(resources))}, which is not a string"}
 
       resources != [] and not function_exported?(catalog, :read_resource, 1) ->
         {:error,
@@ -419,6 +445,17 @@ defmodule BeamMCP.Catalog do
     end)
     |> Enum.frequencies()
     |> Enum.find_value(fn {{_, key}, n} -> if n > 1, do: key end)
+  end
+
+  # The first uri, uri_template or name that is not a string, or nil.
+  defp non_string_field(entries) do
+    Enum.find_value(entries, fn
+      %BeamMCP.ResourceSpec{uri: uri, name: name} ->
+        Enum.find([uri, name], &(not is_binary(&1)))
+
+      %BeamMCP.ResourceTemplateSpec{uri_template: t, name: name} ->
+        Enum.find([t, name], &(not is_binary(&1)))
+    end)
   end
 
   defp resource_entry?(%BeamMCP.ResourceSpec{}), do: true
