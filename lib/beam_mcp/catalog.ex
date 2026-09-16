@@ -335,8 +335,9 @@ defmodule BeamMCP.Catalog do
     end
   end
 
-  # The prompts list: PromptSpec structs only; a reader once anything is listed; no prompt
-  # named twice, no argument named twice within a prompt.
+  # The prompts list: PromptSpec structs only, each with a list of PromptArguments; every
+  # name a string; a reader once anything is listed; no prompt named twice, no argument named
+  # twice within a prompt.
   defp validate_prompts(catalog, prompts) do
     cond do
       not Enum.all?(prompts, &match?(%BeamMCP.PromptSpec{}, &1)) ->
@@ -349,9 +350,11 @@ defmodule BeamMCP.Catalog do
            "must carry a list of %BeamMCP.PromptArgument{} as its arguments"}
 
       non_string_name(prompts) != nil ->
+        {:bad, value} = non_string_name(prompts)
+
         {:error,
          "#{inspect(catalog)}.capabilities/0's :prompts carries the name " <>
-           "#{inspect(non_string_name(prompts))}, which is not a string"}
+           "#{inspect(value)}, which is not a string"}
 
       prompts != [] and not function_exported?(catalog, :get_prompt, 2) ->
         {:error,
@@ -386,13 +389,18 @@ defmodule BeamMCP.Catalog do
     end)
   end
 
-  # The first prompt or argument name that is not a string, or nil. An atom would be
-  # advertised as a string by the encoder and then refused or crashed on: held here, at startup.
+  # The first prompt or argument name that is not a string, tagged, or nil. An atom would be
+  # advertised as a string by the encoder and then refused or crashed on: held here, at
+  # startup. Tagged because the offending value may itself be nil or false, which a find by
+  # value would report as "not found" (a review lane got `name: nil` past the first cut).
   defp non_string_name(prompts) do
     Enum.find_value(prompts, fn %BeamMCP.PromptSpec{name: name, arguments: args} ->
-      Enum.find([name | Enum.map(args, & &1.name)], &(not is_binary(&1)))
+      non_string([name | Enum.map(args, & &1.name)])
     end)
   end
+
+  defp non_string(values),
+    do: Enum.find_value(values, &if(not is_binary(&1), do: {:bad, &1}))
 
   defp repeated_argument(prompts) do
     Enum.find_value(prompts, fn %BeamMCP.PromptSpec{name: name, arguments: args} ->
@@ -409,9 +417,11 @@ defmodule BeamMCP.Catalog do
            "or %BeamMCP.ResourceTemplateSpec{}"}
 
       non_string_field(resources) != nil ->
+        {:bad, value} = non_string_field(resources)
+
         {:error,
          "#{inspect(catalog)}.capabilities/0's :resources carries " <>
-           "#{inspect(non_string_field(resources))}, which is not a string"}
+           "#{inspect(value)}, which is not a string"}
 
       resources != [] and not function_exported?(catalog, :read_resource, 1) ->
         {:error,
@@ -459,14 +469,11 @@ defmodule BeamMCP.Catalog do
     |> Enum.find_value(fn {{_, key}, n} -> if n > 1, do: key end)
   end
 
-  # The first uri, uri_template or name that is not a string, or nil.
+  # The first uri, uri_template or name that is not a string, tagged, or nil.
   defp non_string_field(entries) do
     Enum.find_value(entries, fn
-      %BeamMCP.ResourceSpec{uri: uri, name: name} ->
-        Enum.find([uri, name], &(not is_binary(&1)))
-
-      %BeamMCP.ResourceTemplateSpec{uri_template: t, name: name} ->
-        Enum.find([t, name], &(not is_binary(&1)))
+      %BeamMCP.ResourceSpec{uri: uri, name: name} -> non_string([uri, name])
+      %BeamMCP.ResourceTemplateSpec{uri_template: t, name: name} -> non_string([t, name])
     end)
   end
 
