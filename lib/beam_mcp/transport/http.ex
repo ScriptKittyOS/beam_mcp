@@ -51,6 +51,12 @@ if Code.ensure_loaded?(Plug) do
         called **after** the body is read and **before** it is decoded. The second argument is
         the request body exactly as received. Whatever it returns as a reason goes to the log,
         never to the caller.
+      * `:read_timeout` — positive integer, milliseconds, default `#{15_000}`. The whole-body
+        deadline: a client that has sent its headers and then drips the body is answered `408`
+        when it lapses, however many bytes arrived. A DoS control, and the host's to set: longer
+        behind a slow link, shorter facing the open internet. The default is a chosen number
+        with its reasoning beside the constant, not the adapter's default (which it was, unstated,
+        for two releases).
 
     The bytes are the ones the client sent, not a re-encoding of them. A signature covers
     bytes, so handing a hook `Jason.encode!(Jason.decode!(body))` would break every correct
@@ -121,6 +127,21 @@ if Code.ensure_loaded?(Plug) do
     # 1 MiB of decoded body. Without a cap, a request body is an unbounded allocation an
     # unauthenticated caller controls.
     @max_body_bytes 1_048_576
+
+    # THE BODY READ DEADLINE, A CHOSEN NUMBER. `read_body/2`'s `:read_timeout` is a whole-body
+    # deadline: a client that has sent its headers and then drips the body is answered 408 when
+    # it lapses, however many bytes arrived. For two releases this package passed none and the
+    # value in force was Bandit's default for such a call -- 15,000 ms -- which the README
+    # called "inherited from the server". It was not a server setting and nobody had chosen
+    # it (a review lane read Bandit and ThousandIsland and found no knob). The number is kept,
+    # and it is now chosen: 15 s is long enough that a legitimate 1 MiB body arrives on any
+    # link this package has been measured on, and short enough that a drip attack costs the
+    # host at most the body cap per connection for fifteen seconds -- a legitimate request was
+    # served in under 0.01 s with 12,000 drip clients in flight against it (2026-09-07). It is
+    # a DoS control, and the host's: a host behind a slow link raises it, a host facing the
+    # open internet lowers it, through `read_timeout:`. `Plug.Test` never times out, so the
+    # deadline is measured against a real listener (`http_bandit_test.exs`).
+    @read_timeout_default 15_000
     @method_not_found "Method not found:"
 
     # Removed from the protocol by 2026-07-28: the stateless change deleted the handshake
@@ -140,7 +161,7 @@ if Code.ensure_loaded?(Plug) do
     # This Plug's own options; everything else in the keyword list belongs to Server.new/1.
     # Derived by exclusion rather than by naming what to keep: a `Keyword.take` list silently
     # dropped `tools_ttl_ms` and `tools_cache_scope` when they were added, and a test caught it.
-    @plug_opts [:authorize, :allowed_origins, :authorize_body]
+    @plug_opts [:authorize, :allowed_origins, :authorize_body, :read_timeout]
 
     # Extracted from `init/1` rather than inlined, and not for tidiness: adding this check
     # inline took `init/1` to a cyclomatic complexity of 11 against a limit of 9, and the gate
@@ -232,10 +253,14 @@ if Code.ensure_loaded?(Plug) do
         """
       end
 
+      read_timeout =
+        validate_read_timeout!(Keyword.get(opts, :read_timeout, @read_timeout_default))
+
       %{
         authorize: authorize,
         authorize_body: authorize_body,
         allowed_origins: origins,
+        read_timeout: read_timeout,
         # This transport serves the 2026-07-28 stateless model and refuses every other
         # revision on every POST, so the core it builds advertises exactly that -- in
         # server/discover's supportedVersions and in -32022's supported. Dual-era is a
@@ -341,7 +366,7 @@ if Code.ensure_loaded?(Plug) do
         with {:ok, conn} <- check_origin(conn, opts.allowed_origins),
              {:ok, conn} <- check_method(conn),
              {:ok, conn} <- authorize(conn, opts.authorize) do
-          read_body_bounded(conn)
+          read_body_bounded(conn, opts.read_timeout)
         end
 
       case result do
@@ -501,8 +526,24 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp read_body_bounded(conn) do
-      case read_body(conn, length: @max_body_bytes) do
+    defp validate_read_timeout!(ms) when is_integer(ms) and ms > 0, do: ms
+
+    defp validate_read_timeout!(other) do
+      raise ArgumentError, """
+      BeamMCP.Transport.HTTP's :read_timeout must be a positive integer of milliseconds --
+      the whole-body deadline after which a client still sending its body is answered 408.
+      The default is #{@read_timeout_default}.
+
+      Got: #{inspect(other)}
+      """
+    end
+
+    @doc "The whole-body read deadline in milliseconds when `read_timeout:` is not given: `#{@read_timeout_default}`."
+    @spec read_timeout_default() :: pos_integer()
+    def read_timeout_default, do: @read_timeout_default
+
+    defp read_body_bounded(conn, read_timeout) do
+      case read_body(conn, length: @max_body_bytes, read_timeout: read_timeout) do
         {:ok, body, conn} ->
           {:ok, body, conn}
 

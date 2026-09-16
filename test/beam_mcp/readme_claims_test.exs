@@ -437,11 +437,11 @@ defmodule BeamMCP.ReadmeClaimsTest do
       claims("num_acceptors * num_connections")
       claims("1,638,400")
       # Once "inherits from the server -- 15,000 ms under Bandit"; a review lane read Bandit and
-      # ThousandIsland and found no server option for the body read: the 15,000 ms is Bandit's
-      # default for a read_body/2 call that passes none, which is what this package passes.
-      claims("`Bandit`'s default for a")
-      claims("15,000 ms")
-      claims("not a server option a host can set")
+      # ThousandIsland and found no server option for the body read. Now the deadline is the
+      # Plug's own option, and the README's number is the module's default.
+      claims("`read_timeout:` (default 15,000 ms")
+      assert HTTP.read_timeout_default() == 15_000
+      claims("a drip client is answered `408`")
       claims("whole-body deadline rather than a per-read reset")
       claims("It does not bound **headers**")
     end
