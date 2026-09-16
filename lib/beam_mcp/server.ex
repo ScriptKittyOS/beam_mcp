@@ -942,6 +942,10 @@ defmodule BeamMCP.Server do
   end
 
   defp to_json_value(value) when is_list(value), do: Enum.map(value, &to_json_value/1)
+  # A tuple is a JSON array: a host's {:error, {:missing, :window}} reaches the client as
+  # ["missing", "window"] rather than meeting an encoder with no clause for it (measured: the
+  # request crashed before this clause existed).
+  defp to_json_value(value) when is_tuple(value), do: value |> Tuple.to_list() |> to_json_value()
   defp to_json_value(value) when is_atom(value), do: Atom.to_string(value)
   defp to_json_value(value), do: value
 
