@@ -171,6 +171,8 @@ defmodule BeamMCP.ResourcesTest do
         {:error, message} = result
         assert message =~ "string", inspect(entry)
         refute message =~ "raised", inspect(entry)
+        # The field is named, so a host with several entries finds the one.
+        assert message =~ ~r/a (uri|uri_template|name) of/, inspect(entry)
       end
     end
 
