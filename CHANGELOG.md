@@ -19,7 +19,8 @@ All notable changes to this project are documented here. The format follows
   holds (`docs/connectome-canonical.md`, rules 1 and 9, with the worked example under all three;
   `docs/connectome.md` defines the three names). The diff record gains the same member (its
   keys sort, so it comes first; `docs/connectome-diff.md`). **`schema_version` is `3`** on the
-  graph and on the diff record, and `BeamMCP.Connectome.Graph.new/1` refuses `2` as it refused
+  graph, on the diff record and on the sidecar (which follows the graph's version and names no
+  algorithm, since it is never hashed), and `BeamMCP.Connectome.Graph.new/1` refuses `2` as it refused
   `1` — bytes are produced and hashed here, never re-imported. **Breaking for a consumer that
   parses the envelope with a fixed member list**; nothing else about the layout moved.
 - **SHA-256 stays the default, indefinitely; the other two are an option, never a constant.**
@@ -45,11 +46,15 @@ All notable changes to this project are documented here. The format follows
   would have had no `:crypto.hash/2` at all. Found by writing the FIPS page's sentence about it
   and reading the built `.app`; pinned by a test that reads the `.app`.
 - **How to tell whether you are affected:** a consumer that verifies by hashing the bytes it
-  holds is not — the member is under the hash like every other. A consumer that parses the
-  envelope by position or by a fixed member list meets `"algorithm"` at the second position.
-  A host that passes nothing gets `sha256` everywhere it did. Latency stays out of the signed
-  envelope, by decision: it is a measurement of one machine on one day, not a property of the
-  graph, and lives in the unsigned sidecar as before.
+  holds is not — the member is under the hash like every other. A consumer that parses by
+  position or by a fixed member list meets the member in three artefacts, each differently:
+  the **graph envelope** carries `"algorithm"` at the second position (the order is fixed);
+  the **diff record** carries it at the first (its keys sort); the **sidecar** carries no
+  member at all and moves its `schema_version` from `2` to `3` with the graph's — a consumer
+  gating the sidecar on `2` refuses it. `schema_version` is `3` in all three. A host that
+  passes nothing gets `sha256` everywhere it did. Latency stays out of the signed envelope,
+  by decision: it is a measurement of one machine on one day, not a property of the graph,
+  and lives in the unsigned sidecar as before.
 
 ### Added — the HTTP body read deadline is the Plug's option, and its default is a chosen number
 

@@ -18,7 +18,7 @@ beam_mcp exports a composed MCP system's call graph twice -- **declared** (what 
 happen, from the catalog and `:xref`) and **observed** (what did happen, from a
 telemetry span on the one dispatch site) -- and diffs the two into four classes. Every
 export is canonical JSON (`docs/connectome-canonical.md`): the same graph gives the same
-bytes and the same SHA-256, whoever wrote it.
+bytes and the same hash — the digest the bytes name, SHA-256 here — whoever wrote it.
 
 This notebook renders those exports and nothing else. It does not install `beam_mcp`, and
 no cell names it: a reader with only the JSON -- a reviewer, an auditor, a consumer on
