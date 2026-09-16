@@ -78,6 +78,43 @@ defmodule BeamMCP.WillNotImplementTest do
              Enum.join(marked -- cited_paths, "\n  ")
   end
 
+  @words ~w(one two three four five six seven eight nine ten eleven twelve thirteen fourteen
+            fifteen sixteen seventeen eighteen nineteen twenty)
+
+  # The page's numbered rows: `| 12 | **...` -- the population every count below is held to.
+  defp rows(text),
+    do: Regex.scan(~r/^\| (\d+) \|/m, text, capture: :all_but_first) |> List.flatten()
+
+  test "the README's count of entries is the page's row count, spelled as the README spells it" do
+    n = length(rows(page()))
+    assert n > 0
+    readme = File.read!(Path.join(@root, "README.md"))
+    word = Enum.at(@words, n - 1)
+
+    assert readme =~ "#{word} entries",
+           "the page has #{n} rows and the README does not say \"#{word} entries\" -- a row " <>
+             "was added or removed and the README's count did not move with it"
+  end
+
+  test "the page's placement sentence names every row exactly once" do
+    # "for entries 1, 4, 7, 11 and 12; ... for entries 2 and 3; ... for entries 9, 5, 8 and 10;
+    # and for entry 6" -- every row has an owner to point a request at, and none has two.
+    [sentence | _] = String.split(page(), "Such a request is answered", parts: 2)
+    [_, sentence] = String.split(sentence, "A\nrequest to cross one of these lines", parts: 2)
+
+    placed =
+      ~r/entr(?:y|ies) ([\d, and]+?)(?:;|\.|,\s+the)/
+      |> Regex.scan(sentence, capture: :all_but_first)
+      |> List.flatten()
+      |> Enum.flat_map(&Regex.scan(~r/\d+/, &1))
+      |> List.flatten()
+
+    expected = page() |> rows() |> Enum.sort()
+
+    assert Enum.sort(placed) == expected,
+           "rows #{inspect(expected)}; the placement sentence names #{inspect(Enum.sort(placed))}"
+  end
+
   test "every file under test/beam_mcp/boundary/ carries the marker" do
     files = @root |> Path.join(@boundary_dir <> "/*_test.exs") |> Path.wildcard()
     assert files != []
