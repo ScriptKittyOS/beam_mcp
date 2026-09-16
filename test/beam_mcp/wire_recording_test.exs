@@ -13,6 +13,7 @@ defmodule BeamMCP.WireRecordingTest do
   use ExUnit.Case, async: true
 
   alias BeamMCP.Connectome.Surface
+  alias BeamMCP.Fixture.ConnectomeTool
   alias BeamMCP.Fixture.Declared.Catalog, as: Fixture
   alias BeamMCP.Wire.Recorder
 
@@ -26,7 +27,7 @@ defmodule BeamMCP.WireRecordingTest do
 
       %{
         caps
-        | tools: caps.tools ++ [Surface.tool()],
+        | tools: caps.tools ++ [ConnectomeTool.spec()],
           resources: caps.resources ++ Surface.resources()
       }
     end
@@ -90,7 +91,7 @@ defmodule BeamMCP.WireRecordingTest do
   end
 
   defp connectome_tool_definition do
-    tool = Surface.tool()
+    tool = ConnectomeTool.spec()
 
     %{
       "name" => "connectome",

@@ -476,11 +476,24 @@ bytes whoever wrote it.
   observed but undeclared (a drift finding), changed sign — with ten coverage counts the
   consumer divides. [`docs/connectome-diff.md`](docs/connectome-diff.md).
 
+**On the wire, as a host chooses.** `BeamMCP.Connectome.Surface` gives a host three read-only
+resources — `connectome://declared`, `connectome://observed`, `connectome://diff` — to put in
+its own catalog, and `call/2` for the one `:observe` tool a host that exposes tools only
+writes itself (the package holds no tool; the spec to copy is in the moduledoc); each answers
+the canonical bytes, byte-identical to the file export (the tool carries them verbatim under
+`bytes` with their SHA-256 beside), and nothing else. The host's `read_resource/1` and
+dispatch delegate to `read/2` and `call/2` with the builder's options, the collector's name
+and the consumer's window. Read-only by
+construction and by test: the package's state is hashed before and after a call. Nothing
+else on the wire moves when a host adds them — a recording of the five advertising methods
+on both transports, before and after, differs by exactly the entries.
+
 **What it never does.** It populates no sign — `:allow`, `:deny`, `:hold` and `:ungoverned` are
 a consumer's to write, and the package writes only `:unset` — signs no finding, holds no key and decides
 no authority; a census test over `lib/` holds that. It claims no MCP capability the
 specification does not define: neither protocol revision has a topology primitive, so nothing
-on the wire changes and no capability is invented.
+on the wire changes and no capability is invented — `connectome://` is a URI scheme of this
+package's own, served by the resources primitive like any other resource.
 
 [`livebooks/connectome.livemd`](https://github.com/ScriptKittyOS/beam_mcp/blob/main/livebooks/connectome.livemd) renders the declared graph, the
 observed graph with its weights and the diff, from the JSON export alone — it installs Kino
@@ -501,15 +514,13 @@ gate — with a witness path made of the graph's own edges — does a gate domin
 and which nodes every path must cross; on OTP's `:digraph`, dominators by Lengauer–Tarjan,
 no new dependency; [`docs/connectome-reach.md`](docs/connectome-reach.md)).
 
-**Decided and not built.** Settled by an owner decision, with no code behind it yet:
-the `resources/*` and `prompts/*` wire surfaces for what
-the catalog already declares; `connectome://` resources exposing the graphs through MCP
-itself, a scheme of this package's own and not a claimed capability; a federation seam for
-merging graphs from several nodes; and effective connectivity, the observed graph weighted
-into the declared one.
+**Decided and not built.** Settled by an owner decision, with no code behind it yet: a
+federation seam for merging graphs from several nodes; and effective connectivity, the
+observed graph weighted into the declared one. Multi-round-trip requests are decided
+*against* ([`docs/will-not-implement.md`](docs/will-not-implement.md), entry 12).
 
-**Scheduled.** In that order, each at the minor position while the package is `0.x`:
-the wire surfaces, then the federation seam, then effective connectivity.
+**Scheduled.** In that order, each at the minor position while the package is `0.x`: the
+federation seam, then effective connectivity.
 `1.0.0` follows once the public API and the stated threat model have each survived a full
 minor release unchanged.
 

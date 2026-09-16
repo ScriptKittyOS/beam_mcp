@@ -28,6 +28,18 @@ defmodule BeamMCP.Server do
   know what it is talking to, and `initialize`, which selects legacy semantics whatever else
   it carries. Neither result is decorated.
 
+  ## What it does not do: multi-round-trip requests
+
+  `2026-07-28` lets a server answer `tools/call`, `resources/read` or `prompts/get` with an
+  `InputRequiredResult` and continue on a later request carrying `inputResponses` and a
+  `requestState`. This core does not: every request is answered completely or refused, the
+  one `resultType` it writes is `"complete"`, and the two continuation parameters are read
+  nowhere -- a request carrying them is served as if it carried neither, because nothing
+  here ever asked for input. The reason is the first sentence of this page: no process, no
+  state of its own; an input-required round trip is state between two messages, and the
+  host that wants one owns exactly that state, above this core. Stated on the
+  will-not-implement page (entry 12) with the census that holds it.
+
   ## What the host supplies
 
       BeamMCP.Server.new(
