@@ -293,6 +293,90 @@ defmodule BeamMCP.ThreatModelTest do
 
       assert BeamMCP.Boundary.citation_defects(page(), @root) == []
     end
+
+    test "every REFUSED or BOUNDED row of the wire table cites at least one test, read row by row" do
+      # A consumer-parse-back lane found a row whose citations the reader returned as none: the
+      # prose column carried escaped quotes, and the pairing of quotes shifted across the
+      # backtick path. A row that vanishes from the population is caught here, per row.
+      rows =
+        page()
+        |> String.split("\n")
+        |> Enum.filter(&String.starts_with?(&1, "| **"))
+        |> Enum.filter(fn row ->
+          [_, _vector, posture | _] = String.split(row, "|")
+          posture =~ "REFUSED" or posture =~ "BOUNDED"
+        end)
+
+      assert length(rows) >= 10
+
+      for row <- rows do
+        [_, vector | _] = String.split(row, "|")
+
+        assert BeamMCP.Boundary.citations(row) != [],
+               "the row #{String.trim(vector)} cites no test the reader can see"
+      end
+    end
+
+    test "the reader sees a citation beside escaped quotes in the prose, and refuses a commented-out or skipped test" do
+      row =
+        ~s(| **x** | REFUSED | says `"name"` and \\"quoted\\" | ) <>
+          ~s(`test/beam_mcp/threat_model_test.exs` "a name" "another" | — |)
+
+      assert BeamMCP.Boundary.citations(row) ==
+               [{"test/beam_mcp/threat_model_test.exs", ["a name", "another"]}]
+
+      dir =
+        Path.join(System.tmp_dir!(), "beam_mcp_citation_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(Path.join(dir, "test"))
+
+      File.write!(Path.join(dir, "test/a_test.exs"), """
+      defmodule A do
+        # test "commented out" do
+        @tag :skip
+        test "skipped" do
+        end
+
+        test "live" do
+        end
+      end
+      """)
+
+      page = ~s(`test/a_test.exs` "commented out" "skipped" "live")
+
+      assert BeamMCP.Boundary.citation_defects(page, dir) == [
+               ~s(test/a_test.exs names no test "commented out"),
+               ~s(test/a_test.exs names no test "skipped")
+             ]
+
+      File.rm_rf!(dir)
+    end
+  end
+
+  describe "the stdio frame bounds at their edges" do
+    test "a line of exactly 1 MiB is admitted, one byte more is refused, and the message says exceeds" do
+      pad = fn n ->
+        ~s({"jsonrpc":"2.0","id":2,"method":"ping","pad":") <> String.duplicate("x", n) <> ~s("})
+      end
+
+      base = byte_size(pad.(0))
+      exact = pad.(1_048_576 - base)
+      assert byte_size(exact) == 1_048_576
+      [only] = drive_stdio(exact <> "\n") |> lines()
+      assert only["id"] == 2
+      [refused] = drive_stdio(pad.(1_048_577 - base) <> "\n") |> lines()
+      assert refused["error"]["message"] == "Parse error: line exceeds 1048576 bytes"
+    end
+
+    test "a legacy Content-Length frame over the cap is refused by name and its declared body is drained, never read as the next frames" do
+      smuggled = ~s({"jsonrpc":"2.0","id":99,"method":"ping","smuggled":true})
+      body = smuggled <> "\n" <> String.duplicate("a", 1_100_000) <> "\n"
+      ping = ~s({"jsonrpc":"2.0","id":2,"method":"ping"})
+      input = "Content-Length: #{byte_size(body)}\r\n\r\n" <> body <> ping <> "\n"
+      [first, second] = drive_stdio(input) |> lines()
+      assert first["error"]["message"] == "Parse error: frame exceeds 1048576 bytes"
+      assert second["id"] == 2
+    end
   end
 
   defp page do
