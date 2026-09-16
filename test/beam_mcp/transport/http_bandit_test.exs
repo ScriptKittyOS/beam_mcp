@@ -914,7 +914,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
              "the answer came at #{elapsed} ms for a 300 ms deadline"
     end
 
-    test "over HTTP/2 a stream kept open by HEADERS frames without END_STREAM is held the same way, and each frame is a warning line in the host's log" do
+    test "over HTTP/2 a stream kept open by HEADERS frames without END_STREAM is held the same way, each frame a warning line in the host's log" do
       # The other control-frame hold, and the one that reaches the log: the adapter reads a
       # HEADERS without END_STREAM as trailers, ignores it with a warning carrying the
       # client's header bytes, and waits again. Recorded like the WINDOW_UPDATE hold.
