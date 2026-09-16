@@ -267,6 +267,27 @@ defmodule BeamMCP.Connectome.SurfaceTest do
                Base.encode16(:crypto.hash(:sha256, File.read!(@export)), case: :lower)
     end
 
+    # Found while pinning the clause above: Surface's refusals are tuples, and a host that
+    # forwards one as its dispatch's {:error, reason} met the server's JSON encoder, which
+    # had no clause for a tuple -- the request crashed. A tuple is a JSON array on the wire.
+    test "a tuple refusal forwarded by the host's dispatch is a tool error, not a crash" do
+      s =
+        Server.new(
+          catalog: Host,
+          dispatch: fn :connectome, args, _ -> Surface.call(args, observed: Host.collector()) end
+        )
+
+      r =
+        call(s, "tools/call", %{"name" => "connectome", "arguments" => %{"graph" => "declared"}})[
+          "result"
+        ]
+
+      assert r["isError"] == true
+      assert r["structuredContent"]["error"] == ["missing", "declared"]
+      assert [%{"type" => "text", "text" => text}] = r["content"]
+      assert text =~ "missing"
+    end
+
     test "a graph name outside the enum is refused by the tools validator, before the tool runs" do
       s = Server.new(catalog: Host, dispatch: fn _, _, _ -> raise "tool ran" end)
 
@@ -286,7 +307,9 @@ defmodule BeamMCP.Connectome.SurfaceTest do
       s =
         Server.new(
           catalog: Host,
-          dispatch: fn :connectome, args, _ -> Surface.call(args, observed: Host.collector()) end
+          dispatch: fn :connectome, args, _ ->
+            Surface.call(args, declared: @declared, observed: Host.collector())
+          end
         )
 
       before = Observed.rows(Host.collector())
@@ -299,6 +322,36 @@ defmodule BeamMCP.Connectome.SurfaceTest do
                {{{:server, _}, {:tool, _, :connectome}, :invoke}, _, _, _} -> true
                _ -> false
              end)
+
+      # Every later call, whichever graph it asks for, raises that edge's count by one -- and
+      # the observed graph's canonical bytes, which carry no weight, stay the same.
+      count = fn ->
+        Enum.find_value(Observed.rows(Host.collector()), fn
+          {{_, {:tool, _, :connectome}, _}, n, _, _} -> n
+          _ -> nil
+        end)
+      end
+
+      second =
+        call(s, "tools/call", %{"name" => "connectome", "arguments" => %{"graph" => "observed"}})[
+          "result"
+        ]
+
+      third =
+        call(s, "tools/call", %{"name" => "connectome", "arguments" => %{"graph" => "declared"}})[
+          "result"
+        ]
+
+      assert count.() == 3
+      assert third["isError"] == false
+
+      after_three =
+        call(s, "tools/call", %{"name" => "connectome", "arguments" => %{"graph" => "observed"}})[
+          "result"
+        ]
+
+      assert after_three["structuredContent"]["bytes"] == second["structuredContent"]["bytes"]
+      refute after_three["structuredContent"]["bytes"] =~ "weight"
     end
 
     test "server/discover claims no capability for it" do
