@@ -914,6 +914,27 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
              "the answer came at #{elapsed} ms for a 300 ms deadline"
     end
 
+    test "over HTTP/2 a body is refused at the frame that crosses the cap, not at the stream's end" do
+      # The size rule on a `:more` piece is HTTP/2's alone -- over HTTP/1 a read never asks
+      # past the cap -- and it decides WHEN the 413 comes: at the crossing frame, not after
+      # the stream ends or the deadline lapses. A mutant that gave it a piece of slack held a
+      # 64 KiB overrun in memory and answered a stream still open with 408 at the deadline.
+      port = listen(read_timeout: 300)
+      cap = 1_048_576
+      frame = :binary.copy(<<"x">>, 16_384)
+      sock = BeamMCP.H2C.open(port, h2_headers(cap + 3 * byte_size(frame)))
+
+      # Sixty-four frames reach the cap exactly; the sixty-fifth crosses it. Two more are
+      # sent so the crossing is not the last frame, and the stream is never ended.
+      for _ <- 1..66, do: BeamMCP.H2C.data(sock, frame)
+      result = BeamMCP.H2C.response(sock, 5_000)
+      BeamMCP.H2C.close(sock)
+
+      assert {:ok, headers, body} = result
+      assert {":status", "413"} in headers
+      assert body =~ "Request body exceeds #{cap} bytes"
+    end
+
     test "over HTTP/2 a stream kept open by WINDOW_UPDATE frames alone is held past the deadline by the adapter, and nothing late is served" do
       # The residue the threat model states: a control frame re-arms the adapter's own wait,
       # which nothing outside it can end, so the hold is the adapter's -- thirteen bytes per
