@@ -687,7 +687,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
   describe "the conformance README claims" do
     test "the two rows are the ones the README states, the suite version is the script's pin, and every baseline entry carries a reason word" do
-      claims("| `2026-07-28` | **12 / 37** | **5 / 6**")
+      claims("| `2026-07-28` | **16 / 37** | **5 / 6**")
       claims("| `2025-11-25` over HTTP | **0 / 30** | 0 / 5 |")
       claims("both ship together or neither does")
       claims("21 of 30 checks pass, 5 are skipped")
@@ -700,6 +700,9 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
       assert changelog =~ "the\n  `2026-07-28` suite row is 12 / 37",
              "the resources entry's row moved"
+
+      assert changelog =~ "the\n  `2026-07-28` suite row is 16 / 37",
+             "the prompts entry's row moved"
 
       claims("the HTTP transport\nserves `2026-07-28` only, and `2025-11-25` lives on stdio")
 

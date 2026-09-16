@@ -3,7 +3,7 @@
 #
 # Expected failures for the 2026-07-28 requirement set. Every entry carries its reason word:
 #   deliberately-out   the package refuses the surface by decision (README, "deliberately out")
-#   decided-not-built  decided, no code yet (the prompts wire surface, planned)
+#   decided-not-built  decided, no code yet (completion/complete; the MRTR prompt)
 #   not-implemented    a content type or behaviour the package does not emit or read
 #   harness            the suite needs a diagnostic tool this package cannot honestly serve
 # A scenario that starts passing makes the suite exit 1 (stale) until its line is removed.
@@ -19,12 +19,8 @@ server:
   - tools-call-embedded-resource # not-implemented (text content only)
   - tools-call-mixed-content # not-implemented (text content only)
   - tools-call-with-progress # not-implemented (no progress notifications)
-  - prompts-list # decided-not-built (the prompts surface, planned)
-  - prompts-get-simple # decided-not-built (the prompts surface, planned)
-  - prompts-get-with-args # decided-not-built (the prompts surface, planned)
-  - prompts-get-embedded-resource # decided-not-built (the prompts surface, planned)
-  - prompts-get-with-image # decided-not-built (the prompts surface, planned)
-  - caching # decided-not-built (its prompts/list call; the tools and resources checks pass)
+  - prompts-get-embedded-resource # not-implemented (text content only)
+  - prompts-get-with-image # not-implemented (text content only)
   - input-required-result-missing-input-response # harness (SEP-2322 re-request needs the elicitation tool)
   - input-required-result-ignore-extra-params # harness (test_input_required_result_elicitation)
   - input-required-result-basic-elicitation # harness (test_input_required_result_elicitation)
@@ -33,7 +29,7 @@ server:
   - input-required-result-request-state # harness
   - input-required-result-multiple-input-requests # harness
   - input-required-result-multi-round # harness
-  - input-required-result-non-tool-request # decided-not-built (prompts/get; then harness: the diagnostic prompt)
+  - input-required-result-non-tool-request # harness (the MRTR diagnostic prompt, test_input_required_result_prompt, which needs 017's InputRequiredResult)
   - input-required-result-result-type # harness
   - input-required-result-tampered-state # harness
   - input-required-result-capability-check # harness
