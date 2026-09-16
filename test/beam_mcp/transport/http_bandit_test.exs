@@ -896,8 +896,8 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     test "over HTTP/2 an empty DATA frame returns to the deadline's clock like any other" do
       # The adapter's reader returns when the frames gathered EXCEED the length asked for; an
       # empty frame exceeds nothing, so under a length of zero a drip of empty frames held
-      # the read (2,321 ms for 300 in this slice's red; a review lane measured 2,021) and grew its accumulator by one empty
-      # binary per frame. The length asked for is now below zero.
+      # the read (2,321 ms for 300 in this slice's red; a review lane measured 2,021) and grew
+      # its accumulator by one empty binary per frame. The length asked for is now below zero.
       body = call_json(1, 200)
       port = listen(read_timeout: 300)
       started = System.monotonic_time(:millisecond)
