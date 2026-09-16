@@ -112,7 +112,9 @@ defmodule BeamMCP.Boundary.PackageReachTest do
       trace: 3,
       trace_info: 2,
       trace_pattern: 3,
-      tuple_size: 1
+      tuple_size: 1,
+      # A tuple error reason to a JSON array (Server.to_json_value/1); reads nothing.
+      tuple_to_list: 1
     ],
     :code => [get_object_code: 1],
     Code => [ensure_compiled: 1, ensure_loaded?: 1],

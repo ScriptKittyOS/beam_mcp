@@ -44,6 +44,15 @@ All notable changes to this project are documented here. The format follows
   and a request carrying them is served as if it carried neither. A census holds the names
   unread; a nine-case wire test holds the answer unchanged.
 
+### Fixed — a tuple error reason from a host's dispatch is a tool error, not a crash
+
+- A dispatch answering `{:error, {:missing, :window}}` — a tuple reason, the shape this
+  package's own refusals take — met the server's JSON encoder with no clause for a tuple, and
+  the request crashed. A tuple is now a JSON array on the wire (`["missing", "window"]`) in
+  the tool error's `structuredContent.error` and its text. Found while pinning the connectome
+  tool; any host that returned a tuple reason before got a crash, so no working client sees a
+  change.
+
 ### Fixed — `Mcp-Name` on `resources/read` and `prompts/get` over HTTP
 
 - The routing table requires `Mcp-Name` on three methods — `tools/call` (`params.name`),
