@@ -55,6 +55,11 @@ defmodule BeamMCP.H2C do
   def window_update(sock, increment),
     do: :gen_tcp.send(sock, frame(0x8, 0x0, @stream, <<0::1, increment::31>>))
 
+  # A second HEADERS on the stream with END_HEADERS and without END_STREAM: malformed under
+  # RFC 9113, 8.1 (trailers end the stream), which the adapter reads as trailers, ignores with
+  # a warning line, and re-arms its wait on -- the other way a stream is held.
+  def headers(sock, fields), do: :gen_tcp.send(sock, frame(0x1, 0x4, @stream, hpack(fields)))
+
   def close(sock), do: :gen_tcp.close(sock)
 
   def response(sock, timeout_ms) do
