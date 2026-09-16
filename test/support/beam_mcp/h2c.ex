@@ -13,14 +13,27 @@ defmodule BeamMCP.H2C do
   `open/2` connects and sends the preface, an empty SETTINGS and the request HEADERS (with
   END_HEADERS, without END_STREAM); `data/3` sends one DATA frame; `finish/1` an empty DATA
   with END_STREAM; `response/2` reads frames until the stream's HEADERS and DATA have arrived
-  (or RST_STREAM, or the timeout), returning `{:ok, headers_block, body}` -- the block raw,
-  since decoding Huffman is not this client's business -- or `{:rst, code}` or `:timeout`.
+  (or RST_STREAM, or the timeout), returning `{:ok, headers, body}` -- the headers decoded
+  with the adapter's own HPACK library, since what the server sent is the point -- or
+  `{:rst, code}` or `:timeout`.
+
+  One rule of a real client is kept: a response carrying a connection-specific header
+  (`connection`, `keep-alive`, `transfer-encoding`, `upgrade`, ...) is malformed under
+  RFC 9113, 8.2.2, and nghttp2 -- Node, curl -- answers it with a stream reset and gives the
+  application nothing. `response/2` returns `{:malformed, name}` for it. Without this rule
+  the client accepts what a real one refuses, and a test that reads a refusal through it
+  proves nothing about the refusal's shape on the wire: a mutant that put `connection: close`
+  back on HTTP/2 responses survived the suite until this rule was written.
   """
 
   import Bitwise
 
   @preface "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
   @stream 1
+
+  # RFC 9113, 8.2.2: the hop-by-hop fields HTTP/2 has no place for. The adapter's own list,
+  # which it applies to requests; a client applies it to responses.
+  @connection_specific ~w[connection keep-alive proxy-connection transfer-encoding upgrade]
 
   def open(port, headers) do
     {:ok, sock} =
@@ -85,7 +98,17 @@ defmodule BeamMCP.H2C do
 
   defp handle({0x1, flags, @stream}, payload, state, rest, _headers, body) do
     block = strip_padding_and_priority(payload, flags)
-    if end_stream?(flags), do: {:ok, block, body}, else: read_frames(state, rest, block, body)
+    {:ok, headers, _table} = HPAX.decode(block, HPAX.new(4096))
+
+    case Enum.find(headers, fn {name, _value} -> name in @connection_specific end) do
+      {name, _value} ->
+        {:malformed, name}
+
+      nil ->
+        if end_stream?(flags),
+          do: {:ok, headers, body},
+          else: read_frames(state, rest, headers, body)
+    end
   end
 
   defp handle({0x0, flags, @stream}, payload, state, rest, headers, body) do
