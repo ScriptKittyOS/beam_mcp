@@ -852,6 +852,25 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       ]
     end
 
+    # Sends `frames` on the stream `interval` ms apart from another process, so the test
+    # process can read the response as it arrives and time THAT: a first cut timed its own
+    # send loop, which measured nothing about the server (a review lane's finding).
+    defp drip_h2(sock, frames, interval) do
+      spawn(fn ->
+        for send <- frames do
+          Process.sleep(interval)
+          send.(sock)
+        end
+      end)
+    end
+
+    defp h2_answered_at(sock, started) do
+      result = BeamMCP.H2C.response(sock, 5_000)
+      elapsed = System.monotonic_time(:millisecond) - started
+      BeamMCP.H2C.close(sock)
+      {result, elapsed}
+    end
+
     test "over HTTP/2 a drip of one byte per frame is still answered at the deadline, and the refusal is readable" do
       body = call_json(1, 200)
       port = listen(read_timeout: 300)
@@ -860,22 +879,61 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
       # Twenty frames over two seconds: a per-frame clock never fires while they keep coming,
       # and a whole-body clock answers at 300 ms regardless.
-      for i <- 0..19 do
-        Process.sleep(100)
-        BeamMCP.H2C.data(sock, binary_part(body, i, 1))
-      end
+      frames = for i <- 0..19, do: &BeamMCP.H2C.data(&1, binary_part(body, i, 1))
+      drip_h2(sock, frames, 100)
+      {result, elapsed} = h2_answered_at(sock, started)
 
-      result = BeamMCP.H2C.response(sock, 5_000)
-      elapsed = System.monotonic_time(:millisecond) - started
-      BeamMCP.H2C.close(sock)
       # The client applies RFC 9113, 8.2.2 to the response as nghttp2 does: a `connection`
       # header here would be `{:malformed, "connection"}`, the reset a lane's Node client saw.
       assert {:ok, headers, response_body} = result
       assert {":status", "408"} in headers
       assert response_body =~ "not received within 300 ms"
 
-      assert elapsed >= 300 and elapsed < 2_100,
+      assert elapsed >= 300 and elapsed < 1_000,
              "the answer came at #{elapsed} ms for a 300 ms deadline"
+    end
+
+    test "over HTTP/2 an empty DATA frame returns to the deadline's clock like any other" do
+      # The adapter's reader returns when the frames gathered EXCEED the length asked for; an
+      # empty frame exceeds nothing, so under a length of zero a drip of empty frames held
+      # the read (2,021 ms for 300, a review lane) and grew its accumulator by one empty
+      # binary per frame. The length asked for is now below zero.
+      body = call_json(1, 200)
+      port = listen(read_timeout: 300)
+      started = System.monotonic_time(:millisecond)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+
+      frames = List.duplicate(&BeamMCP.H2C.data(&1, <<>>), 20)
+      drip_h2(sock, frames, 100)
+      {result, elapsed} = h2_answered_at(sock, started)
+
+      assert {:ok, headers, _body} = result
+      assert {":status", "408"} in headers
+
+      assert elapsed >= 300 and elapsed < 1_000,
+             "the answer came at #{elapsed} ms for a 300 ms deadline"
+    end
+
+    test "over HTTP/2 a stream kept open by WINDOW_UPDATE frames alone is held past the deadline by the adapter, and nothing late is served" do
+      # The residue the threat model states: a control frame re-arms the adapter's own wait,
+      # which nothing outside it can end, so the hold is the adapter's -- thirteen bytes per
+      # window, nothing accumulated, the body refused whenever it comes. This test records
+      # that; the day the adapter bounds it, this fails and the page's row is rewritten.
+      body = call_json(1, 200)
+      port = listen(read_timeout: 300)
+      started = System.monotonic_time(:millisecond)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+
+      frames =
+        List.duplicate(&BeamMCP.H2C.window_update(&1, 1), 10) ++
+          [&BeamMCP.H2C.data(&1, body, true)]
+
+      drip_h2(sock, frames, 100)
+      {result, elapsed} = h2_answered_at(sock, started)
+
+      assert {:ok, headers, _body} = result
+      assert {":status", "408"} in headers
+      assert elapsed >= 1_000, "the hold ended at #{elapsed} ms: the adapter bounds it now"
     end
 
     test "over HTTP/2 a whole body under the deadline is served, and a refusal before the body is a response, not a stream reset" do
