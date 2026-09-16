@@ -111,26 +111,51 @@ defmodule BeamMCP.Boundary do
     end
   end
 
-  # A cited test is a live one: a `test "name"` line that is not commented out and not under
-  # a `@tag :skip` -- a citation of a test that never runs would read as coverage.
+  @skip_module ~r/^\s*@moduletag\b.*\bskip\b/
+  @skip_tag ~r/^\s*@(?:tag|describetag)\b.*\bskip\b/
+  @attribute_or_blank ~r/^\s*(?:@(?:tag|describetag)\b.*)?$/
+
+  # A cited test is a live one: a `test "name"` line that is not commented out and not skipped
+  # -- a citation of a test that never runs would read as coverage. Skipped means a `@tag` or
+  # `@describetag` naming skip in any of ExUnit's spellings (`:skip`, `skip: true`, `skip:
+  # "why"`) among the attribute lines above the test, blank lines between allowed, or a
+  # `@moduletag` naming skip above the file's first test. What the reader does not see: an
+  # `--exclude` at the runner.
   defp unnamed_tests(path, names, source) do
     lines = String.split(source, "\n")
 
     live =
-      lines
-      |> Enum.with_index()
-      |> Enum.filter(fn {line, i} ->
-        Regex.match?(~r/^\s*(?:property|test) "/, line) and not skipped?(lines, i)
-      end)
-      |> Enum.map(&elem(&1, 0))
+      if module_skipped?(lines) do
+        []
+      else
+        lines
+        |> Enum.with_index()
+        |> Enum.filter(fn {line, i} ->
+          Regex.match?(~r/^\s*(?:property|test) "/, line) and not skipped?(lines, i)
+        end)
+        |> Enum.map(&elem(&1, 0))
+      end
 
     for n <- names,
         not Enum.any?(live, &String.contains?(&1, ~s(test "#{n}"))),
         do: "#{path} names no test #{inspect(n)}"
   end
 
+  # A `@moduletag` naming skip above the file's first test skips them all; one below the first
+  # test is not read (a test file that writes a fixture file carries the words in a heredoc).
+  defp module_skipped?(lines) do
+    lines
+    |> Enum.take_while(&(not Regex.match?(~r/^\s*(?:property|test) "/, &1)))
+    |> Enum.any?(&Regex.match?(@skip_module, &1))
+  end
+
+  # Walk up from the test line over attribute and blank lines; any of them naming skip skips it.
   defp skipped?(lines, i) do
-    i > 0 and Regex.match?(~r/^\s*@tag :skip\b/, Enum.at(lines, i - 1))
+    lines
+    |> Enum.slice(0, i)
+    |> Enum.reverse()
+    |> Enum.take_while(&Regex.match?(@attribute_or_blank, &1))
+    |> Enum.any?(&Regex.match?(@skip_tag, &1))
   end
 
   @doc "Every module the built application's `.app` file lists."

@@ -333,16 +333,55 @@ defmodule BeamMCP.ThreatModelTest do
         test "skipped" do
         end
 
+        @tag :skip
+        @tag :other
+        test "skipped then tagged" do
+        end
+
+        @tag skip: true
+        test "skipped by keyword" do
+        end
+
+        @tag skip: "why"
+        test "skipped with a reason" do
+        end
+
+        @tag :skip
+
+        test "skipped across a blank line" do
+        end
+
+        @describetag :skip
+        test "skipped by describetag" do
+        end
+
         test "live" do
         end
       end
       """)
 
-      page = ~s(`test/a_test.exs` "commented out" "skipped" "live")
+      File.write!(Path.join(dir, "test/b_test.exs"), """
+      defmodule B do
+        @moduletag :skip
+        test "skipped by moduletag" do
+        end
+      end
+      """)
+
+      page =
+        ~s(`test/a_test.exs` "commented out" "skipped" "skipped then tagged" "skipped by keyword" ) <>
+          ~s("skipped with a reason" "skipped across a blank line" "skipped by describetag" "live"; ) <>
+          ~s(`test/b_test.exs` "skipped by moduletag")
 
       assert BeamMCP.Boundary.citation_defects(page, dir) == [
                ~s(test/a_test.exs names no test "commented out"),
-               ~s(test/a_test.exs names no test "skipped")
+               ~s(test/a_test.exs names no test "skipped"),
+               ~s(test/a_test.exs names no test "skipped then tagged"),
+               ~s(test/a_test.exs names no test "skipped by keyword"),
+               ~s(test/a_test.exs names no test "skipped with a reason"),
+               ~s(test/a_test.exs names no test "skipped across a blank line"),
+               ~s(test/a_test.exs names no test "skipped by describetag"),
+               ~s(test/b_test.exs names no test "skipped by moduletag")
              ]
 
       File.rm_rf!(dir)
