@@ -108,12 +108,14 @@ step "optional deps" bash tools/probe_optional_deps.sh
 # of its two ceilings -- the owner's, set at roughly double the stable worst measured, with
 # the reasoning in the script (it recorded and judged nothing until 0.5.0: a one-shot's ~35 %
 # spread was no base for a ceiling). `bench/reach.exs` records the reachability queries' cost
-# on the same fixture the same way and judges no number -- it is the measurement graph cost
-# is decided against -- but fails when a query is refused on the fixture, so a cap lowered
-# below the fixture's need turns this step red by name. All three scripts are run here, so a
-# file under bench/ that does not compile fails this step rather than sitting outside every
-# population the gate reads (the defect tools/ once had). Their one-line figures are kept in
-# the note, because a pass that hides its number is a number nobody can compare later.
+# -- a warm-up and medians of five, its rounds in the calling process since their results are
+# small, on the diff's declared side with the server wired in -- and judges no number: it is
+# the measurement graph cost is decided against. It fails when a query is refused on the
+# fixture, so a cap lowered below the fixture's need turns this step red by name. The three
+# scripts are named here; a fourth file under bench/ is format-checked (the format population
+# names bench/**) and not run -- the limit of this step, stated rather than hidden. Their
+# one-line figures are kept in the note, because a pass that hides its number is a number
+# nobody can compare later.
 bench_out=$(mix run bench/overhead.exs 2>&1); bench_rc=$?
 diff_out=$(mix run bench/diff.exs 2>&1); diff_rc=$?
 reach_out=$(mix run bench/reach.exs 2>&1); reach_rc=$?
