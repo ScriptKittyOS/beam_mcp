@@ -287,21 +287,30 @@ the connection is clean, and an ordinary response is possible.
   at one fixed buffer size — so there is no number to design against there, only the
   server-side constant above.
 - It is a time bound, and the bound is yours: `read_timeout:` (default 15,000 ms, a chosen
-  number with its reasoning beside the constant) is one whole-body deadline — the body is read
-  in pieces against one clock, each read given what remains, so a drip client is answered `408`
-  when it lapses, however many bytes arrived and however the adapter splits the reads (a
-  cap-sized body is two adapter reads, and under the adapter's own per-read clock it got two
-  deadlines — measured, 1,909 ms for 1,000). Measured through a real `Bandit` listener: `408` at
-  300, 301, 327 ms for a 300 ms deadline and 1,500, 1,500, 1,501 ms for 1,500 ms. The `408` is
-  this package's refusal — the JSON-RPC error object every refusal carries, `connection: close`
-  as for every refusal issued before the body is read. A body must declare its length:
-  `transfer-encoding: chunked` is refused with `411` before the body is read, because the
-  adapter reads a chunked body chunk by chunk on a per-chunk clock and a client sending one byte
-  per chunk was served after 43 s under a 15 s deadline (measured) — an MCP request is one
-  complete JSON message under the cap, and a chunked body defeats every whole-body bound. For
-  two releases this package passed no deadline at all, and the value in force was `Bandit`'s
-  default for such a call, which the README called "inherited from the server"; it was neither a
-  server option nor a choice.
+  number with its reasoning beside the constant) is one whole-body deadline, this package's own
+  — the body is read in pieces against one clock, each read given what remains, so a drip client
+  is answered `408` when it lapses, however many bytes arrived and however the adapter splits
+  the reads (the adapter's own `:read_timeout` is a per-read clock: a cap-sized body is two
+  adapter reads and got two deadlines, 1,909 ms for 1,000; over HTTP/2, which `Bandit` serves on
+  the same listener, its reader gathers DATA frames on a per-frame clock and a
+  one-byte-per-frame drip of a valid call was served after 20 s under a 300 ms deadline — both
+  measured by review lanes, 2026-09-16, and both closed: over HTTP/2 the reader is asked for one
+  frame at a time). Measured through a real `Bandit` listener: `408` at 300, 301, 327 ms for a
+  300 ms deadline and 1,500, 1,500, 1,501 ms for 1,500 ms; over HTTP/2 a twenty-frame drip
+  answered at the deadline. The `408` is this package's refusal — the JSON-RPC error object
+  every refusal carries, with `connection: close` over HTTP/1.1 as for every refusal issued
+  before the body is read (over HTTP/2 the stream ends with the response; the header would be a
+  malformed one there, and a client answered with it saw a stream reset in place of the refusal
+  — measured, and closed for every pre-body refusal). Nothing is written to the host's log for a
+  `408`: the adapter's own error-level line at its read timeout no longer fires, since the
+  deadline is this package's. A body must declare its length: `transfer-encoding: chunked` is
+  refused with `411` before the body is read, because the adapter reads a chunked body chunk by
+  chunk on a per-chunk clock and a client sending one byte per chunk was served after 43 s under
+  a 15 s deadline (a review lane, 2026-09-16) — an MCP request is one complete JSON message
+  under the cap, and a chunked body defeats every whole-body bound; no MCP client this package
+  has been run against sends one. For two releases this package passed no deadline at all, and
+  the value in force was `Bandit`'s default for such a call, which the README called "inherited
+  from the server"; it was neither a server option nor a choice.
 - It does not bound **headers**. `@max_body_bytes` is a body limit; the number and size of
   request headers are your HTTP server's settings, as the read timeout was until it became
   `read_timeout:`.

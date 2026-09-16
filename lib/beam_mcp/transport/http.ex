@@ -9,6 +9,24 @@
 # tarball claimed it would.
 if Code.ensure_loaded?(Plug) do
   defmodule BeamMCP.Transport.HTTP do
+    # THE BODY READ DEADLINE, A CHOSEN NUMBER. `read_body/2`'s `:read_timeout` is a whole-body
+    # deadline: a client that has sent its headers and then drips the body is answered 408 when
+    # it lapses, however many bytes arrived. For two releases this package passed none and the
+    # value in force was Bandit's default for such a call -- 15,000 ms -- which the README
+    # called "inherited from the server". It was not a server setting and nobody had chosen
+    # it (a review lane read Bandit and ThousandIsland and found no knob). The number is kept,
+    # and it is now chosen. What 15 s means is arithmetic, not a link measurement (every
+    # measurement this package has is on loopback): a body at the 1,048,576-byte cap under a
+    # 15,000 ms whole-body deadline needs 68.3 KiB/s (69.9 kB/s, ~559 kbit/s) sustained, below which a
+    # legitimate maximum-size request is answered 408; and a drip attack costs the host at most
+    # the body cap per connection for fifteen seconds -- a legitimate request was served in
+    # under 0.01 s while 12,000 drip connections had been opened against it (2026-09-07;
+    # cumulative opens with attrition under way, not a steady state). It is a DoS control, and
+    # the host's: a host behind a slow link raises it, a host facing the open internet lowers
+    # it, through `read_timeout:`. `Plug.Test` never times out, so the deadline is measured
+    # against a real listener (`http_bandit_test.exs`).
+    @read_timeout_default 15_000
+
     @moduledoc """
     Stateless Streamable HTTP transport: a `Plug` serving `2026-07-28` at one endpoint.
 
@@ -51,13 +69,18 @@ if Code.ensure_loaded?(Plug) do
         called **after** the body is read and **before** it is decoded. The second argument is
         the request body exactly as received. Whatever it returns as a reason goes to the log,
         never to the caller.
-      * `:read_timeout` — positive integer, milliseconds, default `#{15_000}`. One whole-body
+      * `:read_timeout` — positive integer, milliseconds, default `#{@read_timeout_default}`. One whole-body
         deadline, this package's own: the body is read in pieces against one clock, each read
         given what remains, so a client that has sent its headers and then drips the body is
         answered `408` when it lapses, however many bytes arrived and however the adapter splits
-        the reads. A body must declare its length — `transfer-encoding: chunked` is refused with
-        `411` before the read, since a chunked body is read chunk by chunk on a per-chunk clock
-        that no deadline above it can bound. A DoS control, and the host's to set: longer behind
+        the reads (over HTTP/2 the adapter's reader is asked for one frame at a time, so every
+        DATA frame returns to this clock). A body must declare its length — `transfer-encoding:
+        chunked` is refused with `411` before the read, since a chunked body is read chunk by
+        chunk on a per-chunk clock that no deadline above it can bound. The `408` is this Plug's
+        JSON-RPC refusal, with `connection: close` over HTTP/1.1 (over HTTP/2 the stream ends
+        with the response); nothing is written to the host's log for it — the adapter's own
+        error-level line at its read timeout no longer fires, since the deadline is this Plug's.
+        A DoS control, and the host's to set: longer behind
         a slow link, shorter facing the open internet. The default is a chosen number with its
         reasoning beside the constant, not the adapter's default (which it was, unstated, for
         two releases).
@@ -132,23 +155,6 @@ if Code.ensure_loaded?(Plug) do
     # unauthenticated caller controls.
     @max_body_bytes 1_048_576
 
-    # THE BODY READ DEADLINE, A CHOSEN NUMBER. `read_body/2`'s `:read_timeout` is a whole-body
-    # deadline: a client that has sent its headers and then drips the body is answered 408 when
-    # it lapses, however many bytes arrived. For two releases this package passed none and the
-    # value in force was Bandit's default for such a call -- 15,000 ms -- which the README
-    # called "inherited from the server". It was not a server setting and nobody had chosen
-    # it (a review lane read Bandit and ThousandIsland and found no knob). The number is kept,
-    # and it is now chosen. What 15 s means is arithmetic, not a link measurement (every
-    # measurement this package has is on loopback): a body at the 1,048,576-byte cap under a
-    # 15,000 ms whole-body deadline needs 69.9 KiB/s (~573 kbit/s) sustained, below which a
-    # legitimate maximum-size request is answered 408; and a drip attack costs the host at most
-    # the body cap per connection for fifteen seconds -- a legitimate request was served in
-    # under 0.01 s while 12,000 drip connections had been opened against it (2026-09-07;
-    # cumulative opens with attrition under way, not a steady state). It is a DoS control, and
-    # the host's: a host behind a slow link raises it, a host facing the open internet lowers
-    # it, through `read_timeout:`. `Plug.Test` never times out, so the deadline is measured
-    # against a real listener (`http_bandit_test.exs`).
-    @read_timeout_default 15_000
     @method_not_found "Method not found:"
 
     # Removed from the protocol by 2026-07-28: the stateless change deleted the handshake
@@ -593,22 +599,30 @@ if Code.ensure_loaded?(Plug) do
       if remaining <= 0 do
         timed_out(conn, read_timeout)
       else
-        length = min(@read_piece, @max_body_bytes - size)
+        http1 = get_http_protocol(conn) != :"HTTP/2"
+        length = piece_length(http1, size)
 
         try do
-          read_body(conn, length: length, read_length: length, read_timeout: remaining)
+          read_body(conn, length: length, read_length: @read_piece, read_timeout: remaining)
         rescue
           exception ->
             if Plug.Exception.status(exception) == 408,
               do: timed_out(conn, read_timeout),
               else: reraise(exception, __STACKTRACE__)
         else
+          {:ok, piece, conn} when size + byte_size(piece) > @max_body_bytes ->
+            too_large(conn)
+
           {:ok, piece, conn} ->
             {:ok, IO.iodata_to_binary([acc, piece]), conn}
 
-          {:more, piece, conn} when size + byte_size(piece) >= @max_body_bytes ->
-            {:refused, conn, 413,
-             error(nil, -32_600, "Request body exceeds #{@max_body_bytes} bytes")}
+          # More remains. Over the cap, or exactly at it when this read asked for nothing more
+          # (a length of zero is the question "is the body complete?", and `:more` is no): 413.
+          {:more, piece, conn} when size + byte_size(piece) > @max_body_bytes ->
+            too_large(conn)
+
+          {:more, piece, conn} when length == 0 and byte_size(piece) == 0 and http1 ->
+            too_large(conn)
 
           {:more, piece, conn} ->
             read_by_deadline(conn, deadline, read_timeout, [acc, piece], size + byte_size(piece))
@@ -618,6 +632,21 @@ if Code.ensure_loaded?(Plug) do
              error(nil, -32_700, "Could not read request body: #{inspect(reason)}")}
         end
       end
+    end
+
+    # How much one read asks for. Over HTTP/1 a piece, or what is left under the cap -- zero at
+    # the cap, so the last read answers whether the body is complete. Over HTTP/2 always zero:
+    # the adapter gathers DATA frames inside one read until the length asked for is exceeded,
+    # each frame on its own clock -- a review lane dripped one byte per frame and was served
+    # after 20 s under a 300 ms deadline -- and a length of zero is exceeded by any frame, so
+    # every frame returns to this loop's clock, and an empty `:more` there is the adapter's
+    # per-read timeout, not "more remains". A body at the cap is then refused by the size rule
+    # on the next frame, or accepted when the stream ends.
+    defp piece_length(true, size), do: min(@read_piece, @max_body_bytes - size)
+    defp piece_length(false, _size), do: 0
+
+    defp too_large(conn) do
+      {:refused, conn, 413, error(nil, -32_600, "Request body exceeds #{@max_body_bytes} bytes")}
     end
 
     defp timed_out(conn, read_timeout) do
@@ -1391,7 +1420,16 @@ if Code.ensure_loaded?(Plug) do
     # so makes the refusal clean rather than leaving the adapter to drain a body this server
     # has already declined, or to drop the connection without telling the client. One caller,
     # `before_body/2`, which is the whole population -- see the derivation there.
-    defp close_after(conn), do: put_resp_header(conn, "connection", "close")
+    # Over HTTP/2 there is no connection to close under a refused request -- the stream ends
+    # with the response -- and `connection: close` on an HTTP/2 response is a malformed one
+    # (RFC 9113, 8.2.2): a client answered that way saw a stream reset in place of the 403
+    # (a review lane's measurement). The header is HTTP/1's.
+    defp close_after(conn) do
+      case get_http_protocol(conn) do
+        :"HTTP/2" -> conn
+        _ -> put_resp_header(conn, "connection", "close")
+      end
+    end
 
     defp header_error(id, message) do
       %{
