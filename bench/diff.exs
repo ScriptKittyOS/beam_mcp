@@ -21,10 +21,12 @@
 # or cried wolf. Measured with a warm-up and the median of five instead, the figures settle --
 # but the encoder's figure depends on the HEAP HISTORY of the process that runs it (measured
 # 2026-09-16 on this fixture, one machine, 32 schedulers, OTP 28): 115-126 ms in a fresh
-# process; 133-151 ms in a process still holding the result of one earlier encode; 240-252 ms
-# in a process still holding six diff records from earlier rounds (a review lane measured
-# 165-217 holding up to five, and ~112 when each earlier result was dropped) -- the benchmark's
-# own garbage raising the encoder's GC cost, not a cost a consumer's request pays. So every timed round here runs in a FRESH PROCESS (a Task),
+# process; 133-151 ms over eight consecutive encodes in one scratch script's process, each
+# result dropped; 240-252 ms in a process still holding six diff records from earlier rounds.
+# A review lane's own script read 111-119 with each result dropped and 165-225 holding one to
+# five earlier results -- the bands are each script's, not a law, and they disagree in the
+# middle; what they agree on is the direction: the benchmark's own garbage raises the
+# encoder's GC cost, and that is not a cost a consumer's request pays. So every timed round here runs in a FRESH PROCESS (a Task),
 # and the figure is the operation's alone. Ten runs of this script on the release head, so
 # measured: run 117.9-121.6 ms, encode 121.1-130.1 ms. The owner's rule sets each ceiling at roughly
 # DOUBLE the stable worst of those runs -- 121.6 -> 245, 130.1 -> 260 -- so a noisy runner does

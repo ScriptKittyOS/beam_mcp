@@ -90,6 +90,7 @@ defmodule BeamMCP.WillNotImplementTest do
     assert n > 0
     readme = File.read!(Path.join(@root, "README.md"))
     word = Enum.at(@words, n - 1)
+    assert word, "#{n} rows: more than this test spells; extend @words"
 
     assert readme =~ "#{word} entries",
            "the page has #{n} rows and the README does not say \"#{word} entries\" -- a row " <>
@@ -100,7 +101,11 @@ defmodule BeamMCP.WillNotImplementTest do
     # "for entries 1, 4, 7, 11 and 12; ... for entries 2 and 3; ... for entries 9, 5, 8 and 10;
     # and for entry 6" -- every row has an owner to point a request at, and none has two.
     [sentence | _] = String.split(page(), "Such a request is answered", parts: 2)
-    [_, sentence] = String.split(sentence, "A\nrequest to cross one of these lines", parts: 2)
+    # Anchored on words, not on a line break: the paragraph may be reflowed.
+    [_, sentence] = String.split(sentence, "request to cross one of these lines", parts: 2)
+
+    refute sentence =~ ~r/\d[-–]\d/,
+           "the placement sentence writes a range; list each entry so the census can read it"
 
     placed =
       ~r/entr(?:y|ies) ([\d, and]+?)(?:;|\.|,\s+the)/
