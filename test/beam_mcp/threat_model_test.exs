@@ -274,8 +274,8 @@ defmodule BeamMCP.ThreatModelTest do
 
       assert %{
                "error" => %{
-                 "code" => -32_700,
-                 "message" => "Parse error: line exceeds 1048576 bytes"
+                 "code" => -32_600,
+                 "message" => "Request line exceeds 1048576 bytes"
                }
              } = first
 
@@ -430,7 +430,7 @@ defmodule BeamMCP.ThreatModelTest do
       [only] = drive_stdio(exact <> "\n") |> lines()
       assert only["id"] == 2
       [refused] = drive_stdio(pad.(1_048_577 - base) <> "\n") |> lines()
-      assert refused["error"]["message"] == "Parse error: line exceeds 1048576 bytes"
+      assert refused["error"]["message"] == "Request line exceeds 1048576 bytes"
     end
 
     test "a header line of a legacy Content-Length block is bounded like any line, and refused by name past it" do
@@ -441,7 +441,7 @@ defmodule BeamMCP.ThreatModelTest do
         "Content-Length: #{byte_size(ping)}\r\n#{long_header}\r\n\r\n" <> ping <> ping <> "\n"
 
       [first, second] = drive_stdio(input) |> lines()
-      assert first["error"]["message"] == "Parse error: line exceeds 1048576 bytes"
+      assert first["error"]["message"] == "Request line exceeds 1048576 bytes"
       assert second["id"] == 2
     end
 
@@ -458,15 +458,17 @@ defmodule BeamMCP.ThreatModelTest do
 
       spawn_link(fn ->
         output = drive_stdio(line <> "\n")
+        # What the loop RETAINS: the line is one off-heap binary, consumed; the byte-at-a-time
+        # reads leave garbage the collector takes as it goes (sampled maxima 0-3 MiB during
+        # the read, measured), which is timing, not a cost of the line.
+        :erlang.garbage_collect()
         {:total_heap_size, words} = Process.info(self(), :total_heap_size)
         send(parent, {:done, output, words * 8})
       end)
 
       assert_receive {:done, output, heap_bytes}, 60_000
       assert [%{"id" => 2}] = lines(output)
-
-      assert heap_bytes < 8 * 1_048_576,
-             "the loop's heap reached #{div(heap_bytes, 1_048_576)} MiB"
+      assert heap_bytes < 2 * 1_048_576, "the loop retained #{div(heap_bytes, 1024)} KiB"
     end
 
     test "a size refusal is -32600 on stdio as it is over HTTP, so one vector has one code" do
@@ -484,7 +486,7 @@ defmodule BeamMCP.ThreatModelTest do
       ping = ~s({"jsonrpc":"2.0","id":2,"method":"ping"})
       input = "Content-Length: #{byte_size(body)}\r\n\r\n" <> body <> ping <> "\n"
       [first, second] = drive_stdio(input) |> lines()
-      assert first["error"]["message"] == "Parse error: frame exceeds 1048576 bytes"
+      assert first["error"]["message"] == "Request frame exceeds 1048576 bytes"
       assert second["id"] == 2
     end
   end
