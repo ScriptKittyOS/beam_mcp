@@ -3,11 +3,10 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF — beam_mcp, release 0.5.0 prepared; the release commit is the owner's
+# HANDOFF — beam_mcp, after release 0.5.0
 
 Tag and publish are owner steps — never `mix hex.publish`, never push a tag, never bump the
-version in `mix.exs`. Those were done for 0.4.0 by the owner on 2026-09-14 and are done the
-same way for 0.5.0.
+version in `mix.exs`. Those were done for 0.5.0 by the owner, as for 0.4.0.
 
 The slice records — plans, findings, lane reports, signoffs, archived gate runs — live in the
 project's internal tree, not in this repository. Nothing here summarises a review that has not
@@ -15,7 +14,7 @@ happened.
 
 ## State
 
-- **Everything since `0.4.0` is in `[Unreleased]`**, with a paragraph under the heading saying
+- **`0.5.0` carries everything since `0.4.0`**, with a paragraph under its heading saying
   what moved on the wire and citing the recording that holds the connectome surface to having
   moved nothing. Eight slices landed by rebase: reachability (`BeamMCP.Connectome.Reach`), the
   conformance harness and the four wire fixes it forced (one a break: `params._meta`), the
@@ -23,14 +22,14 @@ happened.
   pages in the tarball, the resources primitive and the cursor, the prompts primitive, and the
   connectome on the wire (`BeamMCP.Connectome.Surface`). Four breaks — one on the wire, one in
   the exported bytes, two in the host contract — each with a how-to-tell sentence in its entry.
-- `mix.exs` still says `0.4.0`; the README still recommends `~> 0.4.0`. The release commit —
-  `mix.exs`, the README requirement and its paragraph (a fourth use of the minor position),
-  the `[0.5.0]` heading's date, `SECURITY.md`'s table, the wire recording re-taken at the new
-  version (it pins the version the results carry, and says so), this file's title — is
-  prepared as a patch measured on a preview and applied by the owner.
+- `mix.exs` says `0.5.0`. The README recommends `~> 0.5.0` (a fourth use of the minor
+  position, the paragraph beside it naming the three kinds of break), and a test binds that
+  requirement to the version and refuses `0.4.0` across them. The wire recording was re-taken
+  at this version, since it pins the version the results carry; the fixture catalog without
+  the surface's entries is still what "before" means.
 - **No head hash is written here** — a hash written into the file it describes cannot include
   the commit that writes it. `git log main..slice/018-release-0-5-0` is the authority.
-- Gate on the slice head: thirteen steps, every line `pass` — format (the tracked set, not a
+- Gate on the release commit: thirteen steps, every line `pass` — format (the tracked set, not a
   glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
   deps, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
   encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
@@ -95,11 +94,11 @@ refused.
 - The `2025-11-25` revision is served on stdio only; over HTTP the conformance row for it is
   0 / 30 by design, and the README says so beside the number.
 
-## To release 0.5.0
+## The release steps, for the record
 
-1. Merge the slice PR to `main` by rebase (the ruleset requires two green checks).
-2. Apply the release patch — or say the word and the agent applies it — then the gate on the
-   result, thirteen `pass`, output recorded by command and exit code.
+1. The slice PR merged to `main` by rebase (the ruleset requires two green checks).
+2. This release commit applied by the owner, then the gate on the result, thirteen `pass`,
+   output recorded by command and exit code.
 3. `mix hex.publish`, then tag `v0.5.0` signed — or tag first and publish immediately after.
    The GitHub ruleset targets **branches, not tags**, so a tag push is unprotected: what is
    tagged is what was read.

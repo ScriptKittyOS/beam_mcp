@@ -14,17 +14,21 @@ and refuses one that is not; what a tool *does* is the host's business.
 
 ```elixir
 def deps do
-  [{:beam_mcp, "~> 0.4.0"}]
+  [{:beam_mcp, "~> 0.5.0"}]
 end
 ```
 
-**`~> 0.4.0`, not the more usual `~> 0.4`.** While this package is `0.x` it documents
-breaks at the **minor** position, and it has used that position three times: `0.2.0` removed
-two fields from results for legacy-declared requests, `0.3.0` added the HTTP transport and the
-`ttlMs`/`cacheScope` fields `2026-07-28` requires on `tools/list`, and `0.4.0` replaces the
+**`~> 0.5.0`, not the more usual `~> 0.5`.** While this package is `0.x` it documents breaks
+at the **minor** position, and it has used that position four times: `0.2.0` removed two
+fields from results for legacy-declared requests, `0.3.0` added the HTTP transport and the
+`ttlMs`/`cacheScope` fields `2026-07-28` requires on `tools/list`, `0.4.0` replaced the
 catalog behaviour a host implements — `BeamMCP.ToolCatalog` by `BeamMCP.Catalog` — a break in
-the host contract rather than on the wire, at the same position. `~> 0.4` admits `0.5.0`, so
-it would carry you across the next such break on a routine `mix deps.update`; `~> 0.4.0` does
+the host contract rather than on the wire, and `0.5.0` reads a request's `_meta` at
+`params._meta` and refuses it at the top level (on the wire), renames the one sign the package
+writes and moves `schema_version` to `2` (in the exported bytes), and requires a catalog's
+`resources` and `prompts` lists to hold the package's structs (the host contract), each with a
+how-to-tell sentence in the changelog. `~> 0.5` admits `0.6.0`, so it
+would carry you across the next such break on a routine `mix deps.update`; `~> 0.5.0` does
 not. The tighter form is deliberate and is not an over-pin to be tidied away.
 
 ## Two contracts
