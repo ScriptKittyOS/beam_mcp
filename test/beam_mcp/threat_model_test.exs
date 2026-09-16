@@ -447,8 +447,9 @@ defmodule BeamMCP.ThreatModelTest do
 
     test "reading a line costs the loop about the line's bytes, not sixty times them" do
       # The reader once accumulated one-byte binaries in a list: ~40 B of heap per byte of
-      # line, 46-67 MiB for a 1 MiB line (a review lane's measurement). A line is now built
-      # as one binary, and the loop process's heap stays within a few times the line.
+      # line, 46-67 MiB LIVE for a 1 MiB line (a review lane's measurement). A line is now
+      # built as one off-heap binary. Measured while the line is being read, by a sampler --
+      # what the loop retains after the read is nothing either way, so that is not the pin.
       pad = fn n ->
         ~s({"jsonrpc":"2.0","id":2,"method":"ping","pad":") <> String.duplicate("x", n) <> ~s("})
       end
@@ -456,19 +457,28 @@ defmodule BeamMCP.ThreatModelTest do
       line = pad.(1_048_576 - byte_size(pad.(0)))
       parent = self()
 
-      spawn_link(fn ->
-        output = drive_stdio(line <> "\n")
-        # What the loop RETAINS: the line is one off-heap binary, consumed; the byte-at-a-time
-        # reads leave garbage the collector takes as it goes (sampled maxima 0-3 MiB during
-        # the read, measured), which is timing, not a cost of the line.
-        :erlang.garbage_collect()
-        {:total_heap_size, words} = Process.info(self(), :total_heap_size)
-        send(parent, {:done, output, words * 8})
-      end)
+      reader =
+        spawn_link(fn ->
+          receive do
+            :go -> send(parent, {:done, drive_stdio(line <> "\n")})
+          end
+        end)
 
-      assert_receive {:done, output, heap_bytes}, 60_000
+      sampler =
+        spawn_link(fn ->
+          send(reader, :go)
+          send(parent, {:max_heap, sample_max_heap(reader, 0)})
+        end)
+
+      assert_receive {:done, output}, 60_000
       assert [%{"id" => 2}] = lines(output)
-      assert heap_bytes < 2 * 1_048_576, "the loop retained #{div(heap_bytes, 1024)} KiB"
+      assert_receive {:max_heap, max_bytes}, 5_000
+      _ = sampler
+
+      # 0 MiB sampled after the fix; the list design read 58, and a whole-line downcase in
+      # the Content-Length check -- the sampler's first find -- 40.
+      assert max_bytes < 8 * 1_048_576,
+             "the loop's heap reached #{div(max_bytes, 1_048_576)} MiB while reading a 1 MiB line"
     end
 
     test "a size refusal is -32600 on stdio as it is over HTTP, so one vector has one code" do
@@ -503,6 +513,18 @@ defmodule BeamMCP.ThreatModelTest do
     case String.split(line, "|") do
       ["", " **" <> _, posture | _] -> posture =~ "REFUSED" or posture =~ "BOUNDED"
       _ -> false
+    end
+  end
+
+  # The largest total_heap_size seen on `pid` while it lives, sampled every millisecond.
+  defp sample_max_heap(pid, max) do
+    case Process.info(pid, :total_heap_size) do
+      {:total_heap_size, words} ->
+        Process.sleep(1)
+        sample_max_heap(pid, max(max, words * 8))
+
+      nil ->
+        max
     end
   end
 

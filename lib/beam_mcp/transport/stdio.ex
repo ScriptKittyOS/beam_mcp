@@ -177,8 +177,19 @@ defmodule BeamMCP.Transport.Stdio do
 
   defp decode(body), do: BeamMCP.JSON.decode(body)
 
+  # Only the prefix is downcased: `String.downcase/1` over the whole line builds a list per
+  # character, and on a 1 MiB line that was 40 MiB of heap for a fifteen-byte question (a
+  # sampler in the test suite found it; the reader itself keeps the line off-heap).
+  @content_length "content-length:"
+  @content_length_bytes byte_size(@content_length)
+
+  defp content_length_header?(line) when byte_size(line) < @content_length_bytes, do: false
+
   defp content_length_header?(line) do
-    line |> String.downcase() |> String.starts_with?("content-length:")
+    line
+    |> binary_part(0, @content_length_bytes)
+    |> String.downcase()
+    |> Kernel.==(@content_length)
   end
 
   # Legacy LSP-style framing, retained for callers written against the old behaviour.
