@@ -190,6 +190,35 @@ defmodule BeamMCP.PromptsTest do
       assert message =~ "argument"
     end
 
+    # Found by a review lane: an atom name passed validate/1, was advertised as a string by
+    # the encoder, and was then refused by prompts/get -- or, as an argument name, crashed
+    # the normaliser. A name is a string, held at startup like every other shape.
+    test "validate/1 refuses a prompt or argument whose name is not a string, by name" do
+      defmodule AtomPrompt do
+        def capabilities, do: %{tools: [], resources: [], prompts: [%PromptSpec{name: :p}]}
+        def get_prompt(_, _), do: {:ok, %{messages: []}}
+      end
+
+      assert {:error, message} = Catalog.validate(AtomPrompt)
+      assert message =~ ":p"
+      assert message =~ "string"
+
+      defmodule AtomArgument do
+        def capabilities,
+          do: %{
+            tools: [],
+            resources: [],
+            prompts: [%PromptSpec{name: "p", arguments: [%PromptArgument{name: :opt}]}]
+          }
+
+        def get_prompt(_, _), do: {:ok, %{messages: []}}
+      end
+
+      assert {:error, message} = Catalog.validate(AtomArgument)
+      assert message =~ ":opt"
+      assert message =~ "string"
+    end
+
     test "validate/1 accepts an empty prompts list without a reader" do
       assert :ok = Catalog.validate(Empty)
     end

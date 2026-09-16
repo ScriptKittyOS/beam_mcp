@@ -144,6 +144,32 @@ defmodule BeamMCP.ResourcesTest do
       assert message =~ "read_resource/1"
     end
 
+    test "validate/1 refuses a resource or template whose uri, uri_template or name is not a string" do
+      for entry <- [
+            %ResourceSpec{uri: :u, name: "n"},
+            %ResourceSpec{uri: "u://x", name: :n},
+            %ResourceTemplateSpec{uri_template: :t, name: "n"}
+          ] do
+        mod = Module.concat(__MODULE__, "S#{:erlang.phash2(entry)}")
+
+        Module.create(
+          mod,
+          quote do
+            def capabilities,
+              do: %{tools: [], resources: [unquote(Macro.escape(entry))], prompts: []}
+
+            def read_resource(uri), do: {:ok, [%{uri: uri, text: ""}]}
+          end,
+          Macro.Env.location(__ENV__)
+        )
+
+        result = Catalog.validate(mod)
+        assert match?({:error, _}, result), "#{inspect(entry)} validated: #{inspect(result)}"
+        {:error, message} = result
+        assert message =~ "string", inspect(entry)
+      end
+    end
+
     test "validate/1 accepts an empty resources list without a reader" do
       assert :ok = Catalog.validate(Empty)
     end
