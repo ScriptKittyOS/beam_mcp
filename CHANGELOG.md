@@ -11,6 +11,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the HTTP body read deadline is the Plug's option, and its default is a chosen number
+
+- **`read_timeout:` on `BeamMCP.Transport.HTTP`** — the whole-body deadline passed to
+  `read_body/2`: a client that has sent its headers and then drips the body is answered `408`
+  when it lapses, however many bytes arrived. Measured through a real `Bandit` listener: `408`
+  at 300, 301, 327 ms for a 300 ms deadline and 1,500, 1,500, 1,501 ms for 1,500 ms. The default
+  is 15,000 ms — the number the transport has been running under — but chosen now, with its
+  reasoning beside the constant: for two releases this package passed no `:read_timeout` and the
+  value in force was `Bandit`'s default for such a call, which the README called "inherited from
+  the server"; a review lane read `Bandit` and `ThousandIsland` and found no server option for
+  the body read, so nobody had chosen it and no host could change it. A DoS control, and the
+  host's: longer behind a slow link, shorter facing the open internet; a value that is not a
+  positive integer is refused at `init/1` by name. The threat model's slow-client row moves from
+  delegated to bounded, with the test. **How to tell whether you are affected:** a host that
+  passes nothing sees the same 15 s it always had; only the README's account of where it came
+  from changes.
+
 ### Added — the threat model, package-wide, with the wire bounded vector by vector
 
 - **`docs/threat-model.md`**: who is trusted for what — the host for everything, the client on

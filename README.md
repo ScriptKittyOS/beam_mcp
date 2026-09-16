@@ -286,12 +286,14 @@ the connection is clean, and an ordinary response is possible.
   package — the same 24 measurements put it between 1.125 MiB and 7.438 MiB, varying run to run
   at one fixed buffer size — so there is no number to design against there, only the
   server-side constant above.
-- It is not a time bound. A slow client is held by `read_body/2`'s `:read_timeout`, which this
-  package does not pass; under `Bandit` the value then in force is `Bandit`'s default for a
-  `read_body/2` call that passes none — 15,000 ms — and not a server option a host can set (the
-  listener's `read_timeout` governs the request line and headers only). That is a
-  whole-body deadline rather than a per-read reset, so a drip client is answered `408` at 15 s
-  rather than held indefinitely. That makes slow connections a **transient** rather than a hold:
+- It is a time bound, and the bound is yours: `read_timeout:` (default 15,000 ms, a chosen
+  number with its reasoning beside the constant) is passed to `read_body/2` as its
+  whole-body deadline rather than a per-read reset, so a drip client is answered `408` when it
+  lapses —
+  measured at 300, 301, 327 ms for a 300 ms deadline and 1,500, 1,500, 1,501 ms for 1,500 ms,
+  through a real `Bandit` listener. For two releases this package passed none, and the value
+  in force was `Bandit`'s default for such a call, which the README called "inherited from the
+  server"; it was neither a server option nor a choice. That makes slow connections a **transient** rather than a hold:
   they cost memory for at most the timeout, and a legitimate request was still served in under
   0.01 s with 12,000 of them in flight.
 

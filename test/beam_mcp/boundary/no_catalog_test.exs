@@ -66,7 +66,7 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
     catalog classes collector command_class companion coverage description dfnum dispatch
     dispatch_opts edges entries external from id idom input_schema kind kinds label labels level
     macro max_duration_ms method mode module_ids modules name no_beam no_debug_info nodes parent
-    pids provenance schema_version semi server server_name server_opts shutdown? sign sources
+    pids provenance read_timeout schema_version semi server server_name server_opts shutdown? sign sources
     supported_versions to tools tools_cache_scope tools_ttl_ms ungrouped ungrouped_calls
     unreadable unresolved weight window
     annotations icons mime_type page_size resources resources_cache_scope resources_ttl_ms
