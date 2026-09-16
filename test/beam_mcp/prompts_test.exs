@@ -219,6 +219,33 @@ defmodule BeamMCP.PromptsTest do
       assert message =~ "string"
     end
 
+    test "validate/1 refuses a prompt whose arguments are not all PromptArguments, by name" do
+      defmodule LooseArgs do
+        def capabilities,
+          do: %{
+            tools: [],
+            resources: [],
+            prompts: [%PromptSpec{name: "p", arguments: [%{name: "a"}]}]
+          }
+
+        def get_prompt(_, _), do: {:ok, %{messages: []}}
+      end
+
+      assert {:error, message} = Catalog.validate(LooseArgs)
+      assert message =~ "PromptArgument"
+      assert message =~ ~s("p")
+
+      defmodule MapArgs do
+        def capabilities,
+          do: %{tools: [], resources: [], prompts: [%PromptSpec{name: "p", arguments: %{a: 1}}]}
+
+        def get_prompt(_, _), do: {:ok, %{messages: []}}
+      end
+
+      assert {:error, message} = Catalog.validate(MapArgs)
+      assert message =~ "PromptArgument"
+    end
+
     test "validate/1 accepts an empty prompts list without a reader" do
       assert :ok = Catalog.validate(Empty)
     end
