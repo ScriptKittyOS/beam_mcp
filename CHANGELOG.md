@@ -31,8 +31,10 @@ All notable changes to this project are documented here. The format follows
   request is one complete JSON message under a 1 MiB cap; no MCP client this package has been
   run against sends one); and over HTTP/2, which `Bandit` serves on the same listener, the
   reader gathers DATA frames on a per-frame clock and a one-byte-per-frame drip of a valid call
-  was served after 20 s under a 300 ms deadline — now the reader is asked for one frame at a
-  time, so every frame returns to the deadline's clock. Over HTTP/2 every refusal issued before
+  was served after 20 s under a 300 ms deadline — now the reader is asked for less than one
+  frame, so every DATA frame, an empty one included, returns to the deadline's clock (a stream
+  kept open by control frames alone is held by the adapter's own wait past the deadline; the
+  threat model states it, with the cost). Over HTTP/2 every refusal issued before
   the body is read had carried `connection: close`, a malformed response there (RFC 9113), and
   an HTTP/2 client saw a stream reset in place of the `403`, `405`, `413`; the header is
   HTTP/1.1's now and the refusal arrives. A value that is not a positive integer is refused at

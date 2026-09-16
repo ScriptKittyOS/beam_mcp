@@ -7,8 +7,8 @@ import io
 import sys
 p = sys.argv[1]
 s = io.open(p, encoding="utf-8").read()
-old = """          read_body(conn, length: length, read_length: length, read_timeout: remaining)"""
-new = """          read_body(conn, length: length, read_length: length, read_timeout: read_timeout + remaining - remaining)"""
+old = """          read_body(conn, length: length, read_length: @read_piece, read_timeout: remaining)"""
+new = """          read_body(conn, length: length, read_length: @read_piece, read_timeout: read_timeout + remaining - remaining)"""
 assert s.count(old) == 1, "anchor not found once: %d" % s.count(old)
 s = s.replace(old, new)
 io.open(p, "w", encoding="utf-8").write(s)

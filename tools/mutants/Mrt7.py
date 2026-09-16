@@ -7,7 +7,7 @@ import io
 import sys
 p = sys.argv[1]
 s = io.open(p, encoding="utf-8").read()
-old = """          {:more, piece, conn} when size + byte_size(piece) >= @max_body_bytes ->"""
+old = """          {:more, piece, conn} when size + byte_size(piece) > @max_body_bytes ->"""
 new = """          {:more, piece, conn} when size + byte_size(piece) > @max_body_bytes + @read_piece ->"""
 assert s.count(old) == 1, "anchor not found once: %d" % s.count(old)
 s = s.replace(old, new)
