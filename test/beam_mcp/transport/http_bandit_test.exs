@@ -706,4 +706,78 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       end)
     end
   end
+
+  describe "the body read timeout is the Plug's option, stated, and it is what bounds a drip client" do
+    # `Plug.Test` cannot time out (its read_body is a binary part), so this is the one place the
+    # deadline is measured: a real Bandit listener, a client that sends its headers and a tenth
+    # of its declared body and then nothing. The server's answer is 408, and WHEN it comes is
+    # the option -- measured at two values so the number is the option's and not the adapter's
+    # default (15,000 ms, which nobody had chosen for two releases).
+    defp drip(port, declared, sent, wait_ms) do
+      {:ok, sock} =
+        :gen_tcp.connect(
+          ~c"127.0.0.1",
+          port,
+          [:binary, active: false, packet: :raw],
+          @connect_ms
+        )
+
+      head = req("POST", "", declared: declared)
+      :ok = :gen_tcp.send(sock, head <> sent)
+      {us, result} = :timer.tc(fn -> :gen_tcp.recv(sock, 0, wait_ms) end)
+      :gen_tcp.close(sock)
+      {div(us, 1000), result}
+    end
+
+    test "init/1 takes read_timeout: and refuses a value that is not a positive integer" do
+      assert %{read_timeout: 250} =
+               HTTP.init(
+                 catalog: Catalog,
+                 dispatch: fn _n, a, _o -> {:ok, a} end,
+                 authorize: fn _conn -> :ok end,
+                 allowed_origins: :any,
+                 read_timeout: 250
+               )
+
+      for bad <- [0, -1, 1.5, "250", :infinity] do
+        assert_raise ArgumentError, ~r/read_timeout/, fn ->
+          HTTP.init(
+            catalog: Catalog,
+            dispatch: fn _n, a, _o -> {:ok, a} end,
+            authorize: fn _conn -> :ok end,
+            allowed_origins: :any,
+            read_timeout: bad
+          )
+        end
+      end
+    end
+
+    test "a drip client is answered 408 at the deadline set, at two values" do
+      body = call_json(1, 200)
+      partial = binary_part(body, 0, 20)
+
+      {ms_short, {:ok, bytes_short}} =
+        drip(listen(read_timeout: 300), byte_size(body), partial, 5_000)
+
+      assert bytes_short =~ "HTTP/1.1 408"
+
+      assert ms_short >= 300 and ms_short < 1_500,
+             "408 came at #{ms_short} ms for a 300 ms deadline"
+
+      {ms_long, {:ok, bytes_long}} =
+        drip(listen(read_timeout: 1_500), byte_size(body), partial, 5_000)
+
+      assert bytes_long =~ "HTTP/1.1 408"
+
+      assert ms_long >= 1_500 and ms_long < 3_000,
+             "408 came at #{ms_long} ms for a 1,500 ms deadline"
+    end
+
+    test "the default is the stated one, and a drip client under it is not answered inside a second" do
+      assert HTTP.read_timeout_default() == 15_000
+      body = call_json(1, 200)
+      {_ms, result} = drip(listen([]), byte_size(body), binary_part(body, 0, 20), 1_000)
+      assert result == {:error, :timeout}
+    end
+  end
 end
