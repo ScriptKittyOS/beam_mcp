@@ -14,10 +14,14 @@
 # reachable_without server -> t1 avoiding twenty gates; dominates? t2 over t1; mandatory_pass
 # of t1 (Lengauer-Tarjan over everything the entry reaches).
 #
-# RECORDS AND JUDGES NOTHING. No threshold has been set for graph cost (G-040: the owner's
-# answer was to leave the diff recording and revisit when reachability made graph cost a
-# thing a consumer feels -- this script is that measurement, brought to the owner). Prints one
-# line; exits 0 unless a query fails outright.
+# RECORDS THE COST AND JUDGES NO NUMBER: no threshold has been set for the queries' cost (the
+# owner's decision at 0.4.0 was to leave graph cost recording until reachability made it a
+# thing a consumer feels; bench/diff.exs now carries the diff's two ceilings, set against this
+# family's measurement; the queries' own figures are the measurement a ceiling for them would
+# be set against). What it does judge is that every query ANSWERS on the fixture under the
+# caps below: a query refused by name -- `{:error, {:cap, :max_edges, n}}` when a cap sits
+# below the fixture's need -- fails this step and the gate, with the refusal printed. Prints
+# one line; exits 1 on a refusal, 0 otherwise.
 
 alias BeamMCP.Connectome.{Edge, Graph, Node, Reach}
 
@@ -61,28 +65,43 @@ graph =
   )
 
 rounds = String.to_integer(System.get_env("R", "5"))
+
+# The caps the queries run under: NONE PASSED, which is the module's defaults (`max_edges:`
+# 1 000 000, `max_hops:` :infinity -- read from `BeamMCP.Connectome.Reach`, not restated
+# here). The fixture holds ~10 000 edges; a `max_edges:` set here below that is refused by
+# name and fails this step -- shown red with `max_edges: 5_000` before the defaults were
+# restored, both runs archived.
+caps = [max_edges: 5_000]
 srv_id = Node.id({:server, server})
 gates = Enum.map(11..30, id)
 
 queries = [
-  {"reachable?", fn -> Reach.reachable?(graph, srv_id, id.(1)) end},
+  {"reachable?", fn -> Reach.reachable?(graph, srv_id, id.(1), caps) end},
   {"reachable_without(20 gates)",
-   fn -> Reach.reachable_without(graph, srv_id, id.(1), gates) end},
-  {"dominates?", fn -> Reach.dominates?(graph, id.(2), id.(1)) end},
-  {"mandatory_pass", fn -> Reach.mandatory_pass(graph, id.(1)) end}
+   fn -> Reach.reachable_without(graph, srv_id, id.(1), gates, caps) end},
+  {"dominates?", fn -> Reach.dominates?(graph, id.(2), id.(1), caps) end},
+  {"mandatory_pass", fn -> Reach.mandatory_pass(graph, id.(1), caps) end}
 ]
 
-median_ms = fn run ->
-  # One warm-up, then the median of R.
-  {:ok, _} = run.()
+median_ms = fn name, run ->
+  # One warm-up, then the median of R. A refusal is the step's failure, by name.
+  case run.() do
+    {:ok, _} ->
+      :ok
+
+    {:error, reason} ->
+      IO.puts("BENCH FAIL: #{name} refused on the fixture: #{inspect(reason)}")
+      System.halt(1)
+  end
+
   times = for _ <- 1..rounds, do: :timer.tc(run) |> elem(0)
   med = times |> Enum.sort() |> Enum.at(div(rounds, 2))
   Float.round(med / 1000, 2)
 end
 
-figures = Enum.map(queries, fn {name, run} -> "#{name} #{median_ms.(run)} ms" end)
+figures = Enum.map(queries, fn {name, run} -> "#{name} #{median_ms.(name, run)} ms" end)
 
-{:ok, reached} = Reach.mandatory_pass(graph, id.(1))
+{:ok, reached} = Reach.mandatory_pass(graph, id.(1), caps)
 
 IO.puts(
   "reach #{length(graph.edges)} edges/#{length(graph.nodes)} nodes: " <>
