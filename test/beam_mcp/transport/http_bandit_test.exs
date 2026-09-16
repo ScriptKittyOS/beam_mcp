@@ -739,7 +739,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
                  read_timeout: 250
                )
 
-      for bad <- [0, -1, 1.5, "250", :infinity] do
+      for bad <- [0, -1, 1.5, "250", :infinity, nil] do
         assert_raise ArgumentError, ~r/read_timeout/, fn ->
           HTTP.init(
             catalog: Catalog,
@@ -771,6 +771,69 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
       assert ms_long >= 1_500 and ms_long < 3_000,
              "408 came at #{ms_long} ms for a 1,500 ms deadline"
+    end
+
+    # A chunked drip: headers with transfer-encoding: chunked, then one one-byte chunk every
+    # `every_ms` for `count` chunks, then nothing. Bandit's own :read_timeout is a per-read clock
+    # that every chunk resets; the deadline this package promises is the whole body's.
+    defp chunked_drip(port, count, every_ms, wait_ms) do
+      {:ok, sock} =
+        :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false, packet: :raw], @connect_ms)
+
+      head =
+        "POST /mcp HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n" <>
+          "transfer-encoding: chunked\r\nmcp-protocol-version: #{@modern}\r\n" <>
+          "mcp-method: tools/call\r\nmcp-name: echo\r\n\r\n"
+
+      started = System.monotonic_time(:millisecond)
+      :ok = :gen_tcp.send(sock, head)
+
+      for _ <- 1..count do
+        Process.sleep(every_ms)
+        :gen_tcp.send(sock, "1\r\nx\r\n")
+      end
+
+      result = :gen_tcp.recv(sock, 0, wait_ms)
+      elapsed = System.monotonic_time(:millisecond) - started
+      :gen_tcp.close(sock)
+      {elapsed, result}
+    end
+
+    test "the deadline is the whole body's whatever the transfer coding: a chunked drip that resets the adapter's clock is still 408 at the deadline" do
+      # Ten one-byte chunks every 200 ms under a 300 ms deadline: each chunk resets Bandit's
+      # per-read timer, so under the adapter's clock this client is served; under a whole-body
+      # deadline it is refused at 300 ms from its headers.
+      {elapsed, result} = chunked_drip(listen(read_timeout: 300), 10, 200, 5_000)
+      assert {:ok, bytes} = result
+      assert bytes =~ "HTTP/1.1 408"
+      assert elapsed >= 300 and elapsed < 1_500, "408 came at #{elapsed} ms for a 300 ms deadline"
+    end
+
+    test "a body over the adapter's read length and under the cap is one deadline, not two" do
+      # Bandit reads at most 1,000,000 bytes per socket read; a 1,048,576-byte body is two reads.
+      # Under the adapter's per-read clock a client that sends 999,999 bytes at once and the
+      # millionth byte just before the first deadline gets a second full deadline for the rest.
+      body = call_json(1, 1_048_576 - byte_size(call_json(1, 0)))
+      assert byte_size(body) == 1_048_576
+      port = listen(read_timeout: 1_000)
+
+      {:ok, sock} =
+        :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false, packet: :raw], @connect_ms)
+
+      started = System.monotonic_time(:millisecond)
+      :ok = :gen_tcp.send(sock, req("POST", "", declared: byte_size(body)))
+      Process.sleep(100)
+      :ok = :gen_tcp.send(sock, binary_part(body, 0, 999_999))
+      Process.sleep(800)
+      :ok = :gen_tcp.send(sock, binary_part(body, 999_999, 1))
+      result = :gen_tcp.recv(sock, 0, 5_000)
+      elapsed = System.monotonic_time(:millisecond) - started
+      :gen_tcp.close(sock)
+      assert {:ok, bytes} = result
+      assert bytes =~ "HTTP/1.1 408"
+
+      assert elapsed >= 1_000 and elapsed < 1_600,
+             "408 came at #{elapsed} ms for a 1,000 ms deadline"
     end
 
     test "the default is the stated one, and a drip client under it is not answered inside a second" do
