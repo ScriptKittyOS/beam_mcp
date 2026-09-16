@@ -102,12 +102,16 @@ defmodule BeamMCP.WillNotImplementTest do
   test "the page's placement sentence names every row exactly once" do
     # "for entries 1, 4, 7, 11 and 12; ... for entries 2 and 3; ... for entries 9, 5, 8 and 10;
     # and for entry 6" -- every row has an owner to point a request at, and none has two.
-    [sentence | _] = String.split(page(), "Such a request is answered", parts: 2)
-    # Anchored on words, not on a line break: the paragraph may be reflowed.
+    # The page's whitespace is folded first, so the paragraph may be reflowed anywhere -- the
+    # anchor phrase, a number list, "entry 6" -- and the scan below still reads it whole
+    # (`rows/1` reads the raw page: its `^| n |` anchors need the newlines).
+    folded = String.replace(page(), ~r/\s+/u, " ")
+    [sentence | _] = String.split(folded, "Such a request is answered", parts: 2)
     [_, sentence] = String.split(sentence, "request to cross one of these lines", parts: 2)
 
-    # `u`: the en dash is three bytes, and without it the class consumes one of them.
-    refute sentence =~ ~r/\d[-–]\d/u,
+    # `u`: the en dash is three bytes, and without it the class consumes one of them. A
+    # range in any glyph, spaced or not, or worded, is refused by name rather than read.
+    refute sentence =~ ~r/\d\s*[-–—]\s*\d|\d (?:to|through) \d/u,
            "the placement sentence writes a range; list each entry so the census can read it"
 
     placed =

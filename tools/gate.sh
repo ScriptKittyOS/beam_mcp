@@ -112,7 +112,7 @@ step "optional deps" bash tools/probe_optional_deps.sh
 # small, on the diff's declared side with the server wired in -- and judges no number: it is
 # the measurement graph cost is decided against. It fails when a query is refused on the
 # fixture, so a cap lowered below the fixture's need turns this step red by name. The three
-# scripts are named here; a fourth file under bench/, if tracked, would be format-checked by
+# scripts are named here; a fourth script under bench/, if tracked, would be format-checked by
 # the format step above (the tracked set) and not run -- the limit of this step, stated rather
 # than hidden. Their one-line figures are kept in the note, because a pass that hides its
 # number is a number nobody can compare later.
