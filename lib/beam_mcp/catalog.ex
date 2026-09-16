@@ -69,9 +69,8 @@ defmodule BeamMCP.Catalog do
   """
 
   @typedoc """
-  What a host offers. Every key is required. `prompts` is typed as a generic list because the
-  server does not read it yet and no code enforces a shape -- the connectome builder reads a
-  name from each entry and enumerates the rest, which is a reader, not a contract.
+  What a host offers. Every key is required, every entry a struct of its key's kind, and
+  `validate/1` holds the shape at `BeamMCP.Server.new/1`.
   """
   @type t :: %{
           required(:tools) => [BeamMCP.ToolSpec.t()],

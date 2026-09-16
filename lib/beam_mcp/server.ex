@@ -586,7 +586,7 @@ defmodule BeamMCP.Server do
         error(id, -32_602, "Invalid params: unknown prompt #{name}", %{"name" => name})
 
       {:invalid, reason} ->
-        error(id, -32_602, "Invalid params: #{reason}")
+        error(id, -32_602, "Invalid params: #{reason}", %{"name" => name, "reason" => reason})
     end
   end
 
