@@ -26,6 +26,27 @@ defmodule BeamMCP.LivebookTest do
     |> Enum.map(fn [_, code] -> code end)
   end
 
+  describe "the Neo4j cell" do
+    # The round-trip the issue asked of a Cypher exporter, made of the idiom instead: the
+    # cell's two statements name the export's `nodes` and `edges` arrays and the fields the
+    # canonical bytes carry, and the counts it reports are the export's own.
+    test "loads the export's nodes and edges by the fields the canonical bytes carry, and counts what the export counts" do
+      livemd = File.read!(Path.join(@root, "livebooks/connectome.livemd"))
+      [cell] = Enum.filter(cells(livemd), &String.contains?(&1, "apoc.load.json"))
+      assert cell =~ "UNWIND value.nodes AS n"
+      assert cell =~ "MERGE (v:Node {id: n.id})"
+      assert cell =~ "UNWIND value.edges AS e"
+      assert cell =~ "MATCH (a:Node {id: e.from}), (b:Node {id: e.to})"
+      assert cell =~ ~S|length(declared["nodes"])|
+      assert cell =~ ~S|length(declared["edges"])|
+      # The counts are the export's: the tracked declared export has these many.
+      declared = Jason.decode!(File.read!(Path.join(@root, "livebooks/exports/fx.declared.json")))
+      assert declared["nodes"] != [] and declared["edges"] != []
+      for field <- ~w(id kind level labels), do: assert(cell =~ "n.#{field}")
+      for field <- ~w(from to kind provenance sign), do: assert(cell =~ "e.#{field}")
+    end
+  end
+
   describe "the exports" do
     test "every tracked export is what the package produces from the fixtures, and nothing else is tracked there" do
       expected = Fixture.exports()

@@ -247,6 +247,40 @@ Kino.DataTable.new(
 )
 ```
 
+## Into Neo4j, without a fourth exporter
+
+The package stops at canonical JSON: the three renderings it carries (canonical JSON, DOT,
+GraphML) are already the largest surface no hash covers, and a Cypher exporter would be a
+fourth place for the next escaping defect, verifiable by nobody against the hash. A Neo4j
+user loads the canonical bytes directly with APOC's JSON loader -- one statement over the
+`nodes` array and one over `edges`, each node keyed by its `id`, each edge by the
+`from`/`to` ids the bytes already carry. This cell builds those two statements from the
+export it read above; it does not run them (there is no Neo4j here), so it shows the
+statements and the node and edge counts they would load, which are the export's own.
+
+```elixir
+cypher_nodes = """
+CALL apoc.load.json($url) YIELD value
+UNWIND value.nodes AS n
+MERGE (v:Node {id: n.id})
+SET v.kind = n.kind, v.level = n.level, v.labels = apoc.convert.toJson(n.labels)
+"""
+
+cypher_edges = """
+CALL apoc.load.json($url) YIELD value
+UNWIND value.edges AS e
+MATCH (a:Node {id: e.from}), (b:Node {id: e.to})
+MERGE (a)-[r:EDGE {kind: e.kind, provenance: e.provenance}]->(b)
+SET r.sign = e.sign
+"""
+
+%{
+  statements: [cypher_nodes, cypher_edges],
+  nodes_to_load: length(declared["nodes"]),
+  edges_to_load: length(declared["edges"])
+}
+```
+
 ## What this notebook does not do
 
 It renders what an export says and never what a renderer might guess: no layout hint, no

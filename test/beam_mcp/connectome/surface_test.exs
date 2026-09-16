@@ -11,9 +11,13 @@ defmodule BeamMCP.Connectome.SurfaceTest do
   """
   use ExUnit.Case, async: false
 
-  alias BeamMCP.Connectome.{Canonical, Declared, Diff, Observed, Surface}
-  alias BeamMCP.Fixture.Declared, as: Fx
   alias BeamMCP.{Catalog, ResourceSpec, Server, ToolSpec}
+  alias BeamMCP.Connectome.{Canonical, Declared, Diff, Observed, Surface}
+  alias BeamMCP.Fixture.ConnectomeTool
+  alias BeamMCP.Fixture.Declared, as: Fx
+
+  # The one tool, as the moduledoc tells a host to write it: the package holds none (the
+  # will-not-implement page's entry 11), so the spec lives on the host's side, in a fixture.
 
   @modules [Fx.Alpha, Fx.Beta, Fx.Gamma, Fx.MacroOnly, Fx.Dyn, Fx.Catalog]
   @declared [
@@ -33,12 +37,11 @@ defmodule BeamMCP.Connectome.SurfaceTest do
   # A collector with a few observed calls, stopped after the test.
   defp collector(context) do
     name = Module.concat(__MODULE__, :"c#{System.unique_integer([:positive])}")
-    {:ok, pid} = Observed.start_link(name: name)
+    start_supervised!({Observed, name: name}, id: name)
 
     for t <- [:echo, :echo, :write],
-        do: Observed.observe(name, {:tool, "fx", t}, {:module, Fx.Alpha}, :invoke, 3)
+        do: Observed.observe(name, {:server, "fx"}, {:tool, "fx", t}, :invoke, 3)
 
-    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
     Map.put(context, :collector, name)
   end
 
@@ -115,13 +118,25 @@ defmodule BeamMCP.Connectome.SurfaceTest do
   end
 
   describe "the tool" do
-    test "is one :observe read-only ToolSpec whose schema admits exactly the three graph names" do
+    test "the spec the moduledoc gives a host is one :observe read-only ToolSpec admitting exactly the three graph names, and lib/ holds none" do
       assert %ToolSpec{name: :connectome, command_class: :observe, mode: :read_only} =
-               tool = Surface.tool()
+               tool = ConnectomeTool.spec()
 
       assert tool.input_schema["properties"]["graph"]["enum"] == ~w(declared observed diff)
       assert tool.input_schema["required"] == ["graph"]
       assert tool.input_schema["additionalProperties"] == false
+      refute function_exported?(Surface, :tool, 0)
+      # The moduledoc's copy is this spec, field for field.
+      {:docs_v1, _, _, _, %{"en" => doc}, _, _} = Code.fetch_docs(Surface)
+
+      for line <- [
+            "name: :connectome",
+            "command_class: :observe",
+            "mode: :read_only",
+            ~S|"required" => ["graph"]|,
+            ~S|"additionalProperties" => false|
+          ],
+          do: assert(doc =~ line)
     end
 
     test "call/2 answers the graph's name, its bytes verbatim and their sha256", %{collector: c} do
@@ -164,7 +179,7 @@ defmodule BeamMCP.Connectome.SurfaceTest do
       @impl true
       def capabilities do
         %{
-          tools: [Surface.tool()],
+          tools: [ConnectomeTool.spec()],
           resources: Surface.resources(),
           prompts: []
         }
@@ -186,8 +201,7 @@ defmodule BeamMCP.Connectome.SurfaceTest do
     end
 
     setup do
-      {:ok, pid} = Observed.start_link(name: Host.collector())
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      start_supervised!({Observed, name: Host.collector()}, id: Host.collector())
       :ok
     end
 

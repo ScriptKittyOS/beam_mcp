@@ -164,6 +164,11 @@ or U+FFFF — which the canonical bytes do carry, is refused by `to_graphml/1` a
 `{:not_xml, id, codepoint}` rather than written into a document every conforming parser
 rejects; no character reference can carry it either.
 
+There is no Cypher export, on purpose: the canonical bytes load into Neo4j as they are, with
+APOC's JSON loader over the `nodes` array (`MERGE` on `id`) and the `edges` array (`MATCH`
+the two ids, `MERGE` the relationship) — two statements the Livebook shows — and a fourth
+rendering would be one more surface no hash covers.
+
 The exports' exact bytes are not specified by this page. A label value that is not a string
 is written as its rule-8 JSON text in both, so the string `"true"` and the boolean `true`
 read the same there; everything else — headers, indentation, attribute order, DOT's own

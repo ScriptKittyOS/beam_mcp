@@ -11,6 +11,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the connectome on the wire, as the host chooses; multi-round-trip requests named out
+
+- **`BeamMCP.Connectome.Surface`**: three read-only resources — `connectome://declared`,
+  `connectome://observed`, `connectome://diff` — for a host to put in its own catalog, and
+  `call/2` for the one `:observe` tool a host that exposes tools only writes itself (the
+  package holds no tool, by the will-not-implement page's entry 11; the spec to copy is in the
+  moduledoc). Each answers the canonical bytes of the graph, **byte-identical
+  to the file export** (`BeamMCP.Connectome.Canonical.encode/1`; the diff record
+  `BeamMCP.Connectome.Diff.encode/1`), and nothing
+  else; the tool carries the bytes verbatim under `bytes` in its structured content with their
+  SHA-256 beside them, so a client verifies without re-encoding (its text content is the
+  server's rendering of that map, as for every tool). The host's `read_resource/1` and dispatch
+  delegate to `read/2` and `call/2` with `declared:` (the builder's options), `observed:` (the
+  collector's name) and `window:` (the consumer's map); a missing one is refused by name, a
+  collector not started is `:not_started`, a build refusal is the builder's verbatim. Read-only
+  by construction and by test: the collector's rows and the package's persistent terms are
+  hashed before and after and held equal. **Nothing else on the wire moves:** a recording of
+  `server/discover`, `tools/list`, `resources/list`, `resources/templates/list` and
+  `prompts/list`, on the core and through the HTTP transport, taken before this change and
+  kept in the tree, is what the same catalog still answers, and the catalog with the entries
+  added answers that plus exactly the entries — `server/discover` byte-identical, no capability
+  claimed (`connectome://` is a URI scheme, served by the resources primitive). Pagination of
+  a large graph's bytes and subscriptions on `connectome://observed` are not here.
+- **No Cypher exporter, on purpose.** The canonical bytes load into Neo4j with APOC's JSON
+  loader — two statements over `nodes` and `edges`, shown in the Livebook and named on the
+  canonical page — and a fourth rendering would be one more surface no hash covers.
+- **Multi-round-trip requests are out, by name** (`docs/will-not-implement.md`, entry 12; the
+  `BeamMCP.Server` moduledoc): every request is answered completely or refused; the one
+  `resultType` written is `"complete"`; `inputResponses` and `requestState` are read nowhere,
+  and a request carrying them is served as if it carried neither. A census holds it.
+
 ### Added — the prompts primitive, on the tools' own validation path
 
 - **`prompts/list` and `prompts/get`**, the two request methods the `2026-07-28` schema
