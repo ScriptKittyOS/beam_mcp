@@ -114,6 +114,11 @@ defmodule BeamMCP.ReadmeClaimsTest do
       # and it is the difference between demonstrating a fix and pinning it.
       files = Mix.Project.config()[:package][:files]
 
+      # The split census holds the README to the modules compiled from lib/; that set is the
+      # consumer's only while the whole of lib/ ships. A narrowed stanza would leave the census
+      # green over modules a consumer never gets (a review lane's stated slip).
+      assert "lib" in files, "lib/ is not in the Hex files list: #{inspect(files)}"
+
       assert "CHANGELOG.md" in files,
              "the changelog is the only document explaining why a version changed, and " <>
                "without this it does not ship -- no release of this package before 0.2.1 " <>

@@ -9,8 +9,8 @@ defmodule BeamMCP.ReadmeSplitCensusTest do
   The population is derived from the README: the section "What this package is, and is not"
   is cut into its four paragraphs by their bold leads, and every `BeamMCP.…` name in backticks
   in each paragraph is a claim about the tree -- the bare name, a struct literal
-  (`%BeamMCP.X{}`), a function or callback reference (`BeamMCP.X.f/1`), with or without an
-  `Elixir.` prefix; a name outside backticks or with a lower-case segment is not a module
+  (`%BeamMCP.X{}`), a function, callback or type reference (`BeamMCP.X.f/1`, `c:BeamMCP.X.f/1`,
+  `t:BeamMCP.X.t/0`), with or without an `Elixir.` prefix; a name outside backticks or with a lower-case segment is not a module
   reference in this README's idiom and is not read, which the docs census shares. A module
   named under *shipping now* must be among the modules compiled from `lib/`; a module named
   under any of the other three must not be -- a name that ships under "decided and not built"
@@ -49,7 +49,7 @@ defmodule BeamMCP.ReadmeSplitCensusTest do
   end
 
   def modules(paragraph) do
-    ~r/`%?(?:Elixir\.)?(BeamMCP(?:\.[A-Z]\w*)+)(?:\{\}|\.[a-z_]\w*[?!]?\/\d+)?`/
+    ~r/`(?:[ct]:)?%?(?:Elixir\.)?(BeamMCP(?:\.[A-Z]\w*)+)(?:\{\}|\.[a-z_]\w*[?!]?\/\d+)?`/
     |> Regex.scan(paragraph, capture: :all_but_first)
     |> List.flatten()
     |> Enum.uniq()

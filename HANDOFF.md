@@ -39,9 +39,10 @@ happened.
   on the fixture fails the step by name), docs, reuse, licence files, publication, messages.
   **11 properties, 602 tests, 0 failures**: 599 at the head 018 opened on, plus the three of
   the README split census.
-- The README's four-way split is held to the built application by census: every module named
-  under *shipping now* is in the `.app`'s module list, every module named under the other
-  three paragraphs is not.
+- The README's four-way split is held by census to the modules compiled from `lib/` (the
+  beams whose source is under `lib/`, not the test build's `.app`, which also lists
+  `test/support`): every module named under *shipping now* is among them, every module named
+  under the other three paragraphs is not.
 
 ## What is next
 

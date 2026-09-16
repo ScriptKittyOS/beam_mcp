@@ -297,14 +297,15 @@ specification does not define; the census under `test/beam_mcp/boundary/` holds 
 
 ### Added — the boundary, written down and held to the tests
 
-- **`docs/will-not-implement.md`**: eleven things this package will never do — populate a sign,
-  hold a key, make a signature, decide authority, put a payload byte in the observed graph,
-  claim a capability the specification does not define, issue or honour a session identifier,
-  carry OAuth, be a client, enumerate all paths or match motifs, hold a tool, a domain or a
-  catalog — each with its reason in a line and the test that enforces it, by path and by name.
-  The tests are the proof; the page is the contract. The README's *Deliberately out* paragraph
-  points at it.
-- **Eleven censuses under `test/beam_mcp/boundary/`** put a test behind the six entries that had
+- **`docs/will-not-implement.md`**: eleven things this package will never do (a twelfth, the
+  multi-round-trip request, joined them in the connectome entry above) — populate a sign, hold a
+  key, make a signature, decide authority, put a payload byte in the observed graph, claim a
+  capability the specification does not define, issue or honour a session identifier, carry
+  OAuth, be a client, enumerate all paths or match motifs, hold a tool, a domain or a catalog —
+  each with its reason in a line and the test that enforces it, by path and by name. The tests
+  are the proof; the page is the contract. The README's *Deliberately out* paragraph points at
+  it.
+- **Eleven censuses under `test/beam_mcp/boundary/`** (the twelfth is the connectome entry's) put a test behind the six entries that had
   rested on reading (no key material and no `:crypto` call but `hash/2`; no signing or MAC
   primitive and no `sign` function; the advertised capability keys a subset of each revision's
   `ServerCapabilities`; no `Mcp-Session-Id` emitted, honoured or read; no OAuth, no client

@@ -24,7 +24,7 @@ Neither may drift from the other.
 ## How the censuses read the tree
 
 A **census** is a test over the source rather than over behaviour. The censuses under
-`test/beam_mcp/boundary/` — entries 2, 3, 4, 6, 7, 8, 9, 10 and 11 — share one reader
+`test/beam_mcp/boundary/` — entries 2, 3, 4, 6, 7, 8, 9, 10, 11 and 12 — share one reader
 (`test/support/beam_mcp/boundary.ex`): every non-comment line of every `lib/**/*.ex` file, the
 same files `mix compile` reads, so an untracked module is seen; doc strings are read too, so a
 census that must allow prose says so by pattern. That `lib/**/*.ex` is the whole application is
