@@ -67,9 +67,42 @@ defmodule BeamMCP.Conformance.Catalog do
           description: "The suite's parameterised resource."
         }
       ],
-      prompts: []
+      # The suite's diagnostic prompts, called BY NAME: a simple one and one with two
+      # required arguments. The ones whose content this package does not emit (an embedded
+      # resource, an image) and the MRTR one are NOT here, and their scenarios stay baselined.
+      prompts: [
+        %BeamMCP.PromptSpec{
+          name: "test_simple_prompt",
+          description: "The suite's simple prompt."
+        },
+        %BeamMCP.PromptSpec{
+          name: "test_prompt_with_arguments",
+          description: "The suite's parameterised prompt.",
+          arguments: [
+            %BeamMCP.PromptArgument{
+              name: "arg1",
+              description: "First test argument",
+              required: true
+            },
+            %BeamMCP.PromptArgument{
+              name: "arg2",
+              description: "Second test argument",
+              required: true
+            }
+          ]
+        }
+      ]
     }
   end
+
+  @impl true
+  def get_prompt("test_simple_prompt", _args),
+    do: {:ok, %{messages: [%{role: :user, text: "This is a simple prompt for testing."}]}}
+
+  def get_prompt("test_prompt_with_arguments", %{arg1: a, arg2: b}),
+    do:
+      {:ok,
+       %{messages: [%{role: :user, text: "Prompt with arguments: arg1='#{a}', arg2='#{b}'"}]}}
 
   @impl true
   def read_resource("test://static-text"),

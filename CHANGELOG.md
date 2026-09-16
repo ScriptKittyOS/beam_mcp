@@ -29,7 +29,10 @@ All notable changes to this project are documented here. The format follows
   `-32603` by name. Messages are `user` or `assistant` with text content only, as for tools.
   `prompts/list` is paginated by `BeamMCP.Cursor` with `prompts_ttl_ms:` /
   `prompts_cache_scope:` (defaults `0` / `"private"`); `prompts/get` is not cacheable. Both
-  eras serve both methods.
+  eras serve both methods. The official conformance suite's `prompts-list`,
+  `prompts-get-simple`, `prompts-get-with-args` and `caching` scenarios pass against the
+  harness catalog's two text-only diagnostic prompts and leave the baseline; the
+  `2026-07-28` suite row is 16 / 37 (12 / 37 after the resources entry below).
 - **How to tell whether you are affected:** if your catalog's `prompts` list carried anything
   other than `%BeamMCP.PromptSpec{}` structs — a map with a `"name"`, which the declared
   connectome read as a node name — `BeamMCP.Server.new/1` now refuses the catalog at startup,
