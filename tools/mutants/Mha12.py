@@ -12,7 +12,8 @@ old = """      other ->
               "the value names algorithm #{inspect(other)} and the option says #{inspect(algorithm)}"
 """
 new = """      _other ->
-        :ok"""
+        :ok
+"""
 assert s.count(old) == 1, "anchor not found once: %d" % s.count(old)
 s = s.replace(old, new)
 io.open(p, "w", encoding="utf-8").write(s)
