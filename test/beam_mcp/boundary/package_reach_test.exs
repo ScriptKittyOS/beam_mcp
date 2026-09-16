@@ -91,6 +91,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :erlang => [
       atom_to_binary: 1,
       binary_to_atom: 1,
+      binary_part: 3,
       binary_to_integer: 1,
       byte_size: 1,
       demonitor: 2,

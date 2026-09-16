@@ -84,10 +84,13 @@ All notable changes to this project are documented here. The format follows
   with no bound** — a lane sent 64 MiB on one and it was read whole; now every header line is
   read under the line bound, and past it the block and its declared body are drained. **And the
   line itself was held as a list of one-byte binaries** — 46–67 MiB of heap for a 1 MiB line
-  (measured); now the line is one off-heap binary and the loop retains none of it. **And the
-  line cap admits exactly 1 MiB:** a line of 1,048,576 bytes was refused as exceeding a bound it
-  met, one byte early against the HTTP body and the legacy frame; now the byte past the cap is
-  the refusal on all three. A client that sent well-formed lines under the cap sees no change.
+  (measured); now the line is one off-heap binary and the loop retains none of it — and the
+  sampler that pinned it found a second forty: the legacy `Content-Length` check downcased the
+  whole line to read a fifteen-byte prefix, 40 MiB of heap per 1 MiB line; now the prefix alone
+  (0 MiB sampled). **And the line cap admits exactly 1 MiB:** a line of 1,048,576 bytes was
+  refused as exceeding a bound it met, one byte early against the HTTP body and the legacy
+  frame; now the byte past the cap is the refusal on all three. A client that sent well-formed
+  lines under the cap sees no change.
 
 ## [0.5.0] — 2026-09-16
 
