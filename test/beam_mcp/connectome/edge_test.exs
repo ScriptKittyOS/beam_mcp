@@ -95,7 +95,7 @@ defmodule BeamMCP.Connectome.EdgeTest do
     end
   end
 
-  describe "the sign vocabulary (016d)" do
+  describe "the sign vocabulary" do
     # :unset -- no sign has been supplied to this package -- is the default and the only value
     # the package writes. The four others are a consumer's: :allow, :deny, :hold, and :ungoverned,
     # the affirmative case that a consumer looked and no gate applies. :unknown is not a sign.

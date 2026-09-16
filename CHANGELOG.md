@@ -11,30 +11,45 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Everything since `0.4.0`, newest entry first. **What moved on the wire in this release**, each
+in its own entry below: three resources methods, two prompts methods and one pagination cursor
+added; `server/discover`'s result filled to the `2026-07-28` `DiscoverResult` and a
+transport's advertised revisions narrowed to what it serves; `Mcp-Name` required on
+`resources/read` and `prompts/get` over HTTP; a tuple error reason encoded as an array and
+`-32022`'s `data.requested` sent as a string; and one break on the wire — the request `_meta`
+read at `params._meta` and refused at the top level. The sign-vocabulary break is in the
+exported bytes, not on the wire; the two catalog breaks are in the host contract. **The
+connectome surface moved nothing:** the five advertising methods were recorded on the core and
+through the HTTP transport before `BeamMCP.Connectome.Surface` existed
+(`test/fixtures/wire/pre-017.json`), and `test/beam_mcp/wire_recording_test.exs` holds the
+same catalog to that recording and the catalog with the surface's entries to the recording
+plus exactly those entries, `server/discover` identical. No capability is claimed that the
+specification does not define; the census under `test/beam_mcp/boundary/` holds that.
+
 ### Added — the connectome on the wire, as the host chooses; multi-round-trip requests named out
 
 - **`BeamMCP.Connectome.Surface`**: three read-only resources — `connectome://declared`,
   `connectome://observed`, `connectome://diff` — for a host to put in its own catalog, and
-  `call/2` for the one `:observe` tool a host that exposes tools only writes itself (the
-  package holds no tool, by the will-not-implement page's entry 11; the spec to copy is in the
-  moduledoc). Each answers the canonical bytes of the graph, **byte-identical
-  to the file export** (`BeamMCP.Connectome.Canonical.encode/1`; the diff record
-  `BeamMCP.Connectome.Diff.encode/1`), and nothing
-  else; the tool carries the bytes verbatim under `bytes` in its structured content with their
-  SHA-256 beside them, so a client verifies without re-encoding (its text content is the
-  server's rendering of that map, as for every tool). The host's `read_resource/1` and dispatch
-  delegate to `read/2` and `call/2` with `declared:` (the builder's options), `observed:` (the
-  collector's name) and `window:` (the consumer's map); a missing one is refused by name, a
-  collector not started is `:not_started`, a build refusal is the builder's verbatim. Read-only
-  by construction and by test: the collector's rows and the package's persistent terms are
-  compared before and after and held equal (the tool's own call is a dispatch, which a
-  running collector records like any other). **Nothing else on the wire moves:** a recording of
-  `server/discover`, `tools/list`, `resources/list`, `resources/templates/list` and
-  `prompts/list`, on the core and through the HTTP transport, taken before this change and
-  kept in the tree, is what the same catalog still answers, and the catalog with the entries
-  added answers that plus exactly the entries — `server/discover` identical as decoded JSON, no capability
-  claimed (`connectome://` is a URI scheme, served by the resources primitive). Pagination of
-  a large graph's bytes and subscriptions on `connectome://observed` are not here.
+  `call/2` for the one `:observe` tool a host that exposes tools only writes itself (the package
+  holds no tool, by the will-not-implement page's entry 11; the spec to copy is in the
+  moduledoc). Each answers the canonical bytes of the graph, **byte-identical to the file
+  export** (`BeamMCP.Connectome.Canonical.encode/1`; the diff record
+  `BeamMCP.Connectome.Diff.encode/1`), and nothing else; the tool carries the bytes verbatim
+  under `bytes` in its structured content with their SHA-256 beside them, so a client verifies
+  without re-encoding (its text content is the server's rendering of that map, as for every
+  tool). The host's `read_resource/1` and dispatch delegate to `read/2` and `call/2` with
+  `declared:` (the builder's options), `observed:` (the collector's name) and `window:` (the
+  consumer's map); a missing one is refused by name, a collector not started is `:not_started`,
+  a build refusal is the builder's verbatim. Read-only by construction and by test: the
+  collector's rows and the package's persistent terms are compared before and after and held
+  equal (the tool's own call is a dispatch, which a running collector records like any other).
+  **Nothing else on the wire moves:** a recording of `server/discover`, `tools/list`,
+  `resources/list`, `resources/templates/list` and `prompts/list`, on the core and through the
+  HTTP transport, taken before this change and kept in the tree, is what the same catalog still
+  answers, and the catalog with the entries added answers that plus exactly the entries —
+  `server/discover` identical as decoded JSON, no capability claimed (`connectome://` is a URI
+  scheme, served by the resources primitive). Pagination of a large graph's bytes and
+  subscriptions on `connectome://observed` are not here.
 - **No Cypher exporter, on purpose.** The canonical bytes load into Neo4j with APOC's JSON
   loader — two statements over `nodes` and `edges`, shown in the Livebook and named on the
   canonical page — and a fourth rendering would be one more surface no hash covers.
@@ -101,18 +116,18 @@ All notable changes to this project are documented here. The format follows
   with each relative link resolved to the package preview
   (`repo.hex.pm/preview/beam_mcp/<version>/<path>`), which serves the tarball's own files (a
   probe of `mix.exs` there answers 200) — so every `docs/` link on 0.4.0's page was a 404
-  (measured); a consumer with the package on disk (`deps/beam_mcp/` after `mix deps.get`)
-  had the same dead paths. On hexdocs the links were already rewritten to the rendered pages
-  and are unchanged. Now the pages are in the tarball at `docs/*.md`, so both the hex.pm
-  render and the on-disk package resolve them, and a test holds it against the **built**
-  tarball rather than the `files:` stanza: every file reachable by a relative link (inline,
-  reference-style or an HTML `href`) from the README or CHANGELOG, every tracked page under
-  `docs/`, and every ExDoc extra must be in what `mix hex.build` produces. The tarball grows
-  by the six pages over 0.4.0's 21 entries (the modules other entries of this release add —
-  the reach module, the resources primitive's two, the cursor codec — ship beside them; a
-  running total is not stated, nor a byte count: this file ships in the tarball, and any
-  number written here that depends on the release's final contents moves with them). No
-  other entry is added or removed by this change.
+  (measured); a consumer with the package on disk (`deps/beam_mcp/` after `mix deps.get`) had
+  the same dead paths. On hexdocs the links were already rewritten to the rendered pages and are
+  unchanged. Now the pages are in the tarball at `docs/*.md`, so both the hex.pm render and the
+  on-disk package resolve them, and a test holds it against the **built** tarball rather than
+  the `files:` stanza: every file reachable by a relative link (inline, reference-style or an
+  HTML `href`) from the README or CHANGELOG, every tracked page under `docs/`, and every ExDoc
+  extra must be in what `mix hex.build` produces. The tarball grows by the six pages over
+  0.4.0's 21 entries (the modules other entries of this release add — the reach module, the
+  resources primitive's two, the cursor codec, the prompts primitive's two and the connectome
+  surface, seven — ship beside them, and the count of them was taken from the built tarball at
+  the release, not from this file's history; no byte count is stated: this file ships in the
+  tarball). No other entry is added or removed by this change.
 
 ### Added — the resources primitive, and one pagination codec
 
@@ -142,13 +157,12 @@ All notable changes to this project are documented here. The format follows
   against the harness catalog's three diagnostic resources and leave the baseline; the
   `2026-07-28` suite row is 12 / 37 (7 / 37 when the conformance entry below was written).
 - **`BeamMCP.Cursor`, the pagination codec every paginated list shares.** Opaque (a client
-  passes it back unchanged), stable (one position, one byte string), URL-safe, typed by its
-  list (a cursor from another list is refused by name as invalid params), and **keyed on the
-  item's canonical key rather than an offset**, so a list that changes between two pages
-  never skips an item that was there before and is there still; `nextCursor` is present
-  exactly when more remains. The page size is `BeamMCP.Server.new/1`'s `page_size:` (default
-  50).
-  Both resource lists use it; `tools/list` does not yet.
+  passes it back unchanged), stable (one position, one byte string), URL-safe, typed by its list
+  (a cursor from another list is refused by name as invalid params), and **keyed on the item's
+  canonical key rather than an offset**, so a list that changes between two pages never skips an
+  item that was there before and is there still; `nextCursor` is present exactly when more
+  remains. The page size is `BeamMCP.Server.new/1`'s `page_size:` (default 50). Both resource
+  lists use it; `tools/list` does not yet.
 - **How to tell whether you are affected:** if your catalog's `resources` list carried
   anything other than the two structs — a map with a `"uri"`, say, which the declared
   connectome read as a node name — `BeamMCP.Server.new/1` now refuses the catalog at startup,
@@ -227,11 +241,12 @@ All notable changes to this project are documented here. The format follows
   signs, so the word had to be the narrow true one. `BeamMCP.Connectome.Edge.check/1` refuses
   `:unknown` by name.
 - **`:ungoverned` is a fifth value, a consumer's:** a consumer looked and no gate applies to
-  this edge. The package never treats it as suppression — the diff records the edge exactly
-  as any other (a sign appears in the diff record only in a changed-sign entry; every sign is
-  in the graph's bytes), and a census holds that no code line filters, hides or downgrades an
-  edge by its sign. The bytes carry no field saying which consumer wrote a sign or when. The sign is orthogonal to drift: an observed edge nobody declared is
-  `observed_but_undeclared` whatever its sign.
+  this edge. The package never treats it as suppression — the diff records the edge exactly as
+  any other (a sign appears in the diff record only in a changed-sign entry; every sign is in
+  the graph's bytes), and a census holds that no code line filters, hides or downgrades an edge
+  by its sign. The bytes carry no field saying which consumer wrote a sign or when. The sign is
+  orthogonal to drift: an observed edge nobody declared is `observed_but_undeclared` whatever
+  its sign.
 - **Changed-sign is two authorities disagreeing.** A label in both graphs is `changed_sign`
   when both signs are supplied — neither `:unset` — and they differ; held over all
   twenty-five pairs. `:ungoverned` against `:deny` is a finding; `:unset` against
@@ -244,10 +259,10 @@ All notable changes to this project are documented here. The format follows
   one-sided cases stay out of the classes; they are counts.
 - **`schema_version` is `2`** on the graph's bytes (the vocabulary the sign field is read
   against) and, on its own axis, `2` on the diff record (its semantics: changed-sign by name,
-  two counts added). Published 0.4.0
-  bytes at `1` stay exactly as they were and their hashes stay verifiable; the version tells
-  a verifier which vocabulary applies (`docs/connectome-canonical.md`, *Versions*).
-  `BeamMCP.Connectome.Graph.new/1` refuses any version but `2`.
+  two counts added). Published 0.4.0 bytes at `1` stay exactly as they were and their hashes
+  stay verifiable; the version tells a verifier which vocabulary applies
+  (`docs/connectome-canonical.md`, *Versions*). `BeamMCP.Connectome.Graph.new/1` refuses any
+  version but `2`.
 - **How to tell whether you are affected:** if any code of yours pattern-matches, compares
   against, or *writes* `:unknown` into an edge's `sign` — a comparison never holds again
   rather than failing; a write is refused by `BeamMCP.Connectome.Graph.new/1` — reads
@@ -280,31 +295,31 @@ All notable changes to this project are documented here. The format follows
 
 ### Added — the boundary, written down and held to the tests
 
-- **`docs/will-not-implement.md`**: eleven things this package will never do — populate a
-  sign, hold a key, make a signature, decide authority, put a payload byte in the observed
-  graph, claim a capability the specification does not define, issue or honour a session
-  identifier, carry OAuth, be a client, enumerate all paths or match motifs, hold a tool, a
-  domain or a catalog — each
-  with its reason in a line and the test that enforces it, by path and by name. The tests are
-  the proof; the page is the contract. The README's *Deliberately out* paragraph points at it.
+- **`docs/will-not-implement.md`**: eleven things this package will never do — populate a sign,
+  hold a key, make a signature, decide authority, put a payload byte in the observed graph,
+  claim a capability the specification does not define, issue or honour a session identifier,
+  carry OAuth, be a client, enumerate all paths or match motifs, hold a tool, a domain or a
+  catalog — each with its reason in a line and the test that enforces it, by path and by name.
+  The tests are the proof; the page is the contract. The README's *Deliberately out* paragraph
+  points at it.
 - **Eleven censuses under `test/beam_mcp/boundary/`** put a test behind the six entries that had
   rested on reading (no key material and no `:crypto` call but `hash/2`; no signing or MAC
   primitive and no `sign` function; the advertised capability keys a subset of each revision's
   `ServerCapabilities`; no `Mcp-Session-Id` emitted, honoured or read; no OAuth, no client
-  module, no outbound connection, `initialize` only ever received), one behind the thesis
-  (no module under `lib/` implements `BeamMCP.Catalog`, none builds a tool), one behind the
-  acts of authority in the spellings code uses (`risk_tier`, `approved`, `masked`), one behind
-  the reach refusals (`all_paths` defined once, as the refusal; no motif matcher), one
-  behind the reader itself (nothing compiles into the application from outside `lib/`, in the
-  source and in the built artefact), one behind every other census (no code evaluated and no
-  module, function or atom built at runtime, by name), and **one over the artefact itself**:
-  `:xref` over the compiled beams pins exactly the modules the package calls, the functions it
-  calls on the modules that could reach code, secrets, the OS or another node, and the one atom
-  it makes from a binary — a call under any spelling resolves to the same edge, so a new
-  library, evaluator, socket, shell, remote spawn, key store or environment read fails until it
-  is named. One reader over `lib/**/*.ex` for the text censuses; the tool-construction census
-  reads the compiled forms, where the struct's atom may occur only in a map pattern. Each was shown red by a planted
-  violation. `Plug.Crypto`, in the lock file through `plug`, is barred by name.
+  module, no outbound connection, `initialize` only ever received), one behind the thesis (no
+  module under `lib/` implements `BeamMCP.Catalog`, none builds a tool), one behind the acts of
+  authority in the spellings code uses (`risk_tier`, `approved`, `masked`), one behind the reach
+  refusals (`all_paths` defined once, as the refusal; no motif matcher), one behind the reader
+  itself (nothing compiles into the application from outside `lib/`, in the source and in the
+  built artefact), one behind every other census (no code evaluated and no module, function or
+  atom built at runtime, by name), and **one over the artefact itself**: `:xref` over the
+  compiled beams pins exactly the modules the package calls, the functions it calls on the
+  modules that could reach code, secrets, the OS or another node, and the one atom it makes from
+  a binary — a call under any spelling resolves to the same edge, so a new library, evaluator,
+  socket, shell, remote spawn, key store or environment read fails until it is named. One reader
+  over `lib/**/*.ex` for the text censuses; the tool-construction census reads the compiled
+  forms, where the struct's atom may occur only in a map pattern. Each was shown red by a
+  planted violation. `Plug.Crypto`, in the lock file through `plug`, is barred by name.
 - **A README pin repaired, test-only**: "the observed graph carries edge identity only, never
   a payload byte" sent its marker to a tool with no schema, where argument normalisation
   dropped it before dispatch — the assertion held nothing. It now uses the catalog whose tool
