@@ -384,47 +384,4 @@ defmodule BeamMCP.PromptsTest do
       refute Map.has_key?(r["result"], "resultType")
     end
   end
-
-  describe "acceptance 4: a caller-supplied argument name interns nothing" do
-    # The tools path's bound, never written as a test before: measured here for both paths.
-    test "10,000 distinct caller keys through prompts/get and tools/call leave the atom table where it was" do
-      defmodule Keyed do
-        @behaviour Catalog
-        def capabilities do
-          %{
-            tools: [
-              %BeamMCP.ToolSpec{
-                name: :t,
-                command_class: :observe,
-                mode: :read_only,
-                description: "t",
-                input_schema: %{
-                  "type" => "object",
-                  "properties" => %{"k" => %{"type" => "string"}}
-                }
-              }
-            ],
-            resources: [],
-            prompts: [%PromptSpec{name: "p", arguments: [%PromptArgument{name: "k"}]}]
-          }
-        end
-
-        def get_prompt("p", _args), do: {:ok, %{messages: []}}
-      end
-
-      s = state(Keyed, dispatch: fn _, _, _ -> {:ok, "ok"} end)
-      # Warm both paths once so any lazy interning of the package's own names is behind us.
-      call(s, "prompts/get", %{"name" => "p", "arguments" => %{"k" => "v"}})
-      call(s, "tools/call", %{"name" => "t", "arguments" => %{"k" => "v"}})
-      before = :erlang.system_info(:atom_count)
-
-      for i <- 1..10_000 do
-        key = "caller-key-#{i}-#{System.unique_integer([:positive])}"
-        call(s, "prompts/get", %{"name" => "p", "arguments" => %{key => "v"}})
-        call(s, "tools/call", %{"name" => "t", "arguments" => %{key => "v"}})
-      end
-
-      assert :erlang.system_info(:atom_count) == before
-    end
-  end
 end

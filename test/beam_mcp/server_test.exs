@@ -115,7 +115,8 @@ defmodule BeamMCP.ServerTest do
 
     assert response["result"]["capabilities"] == %{
              "tools" => %{"listChanged" => false},
-             "resources" => %{"listChanged" => false, "subscribe" => false}
+             "resources" => %{"listChanged" => false, "subscribe" => false},
+             "prompts" => %{"listChanged" => false}
            }
 
     assert response["result"]["serverInfo"]["name"] == "beam_mcp"

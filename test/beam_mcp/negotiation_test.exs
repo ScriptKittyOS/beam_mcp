@@ -110,7 +110,8 @@ defmodule BeamMCP.NegotiationTest do
 
       assert r["capabilities"] == %{
                "tools" => %{"listChanged" => false},
-               "resources" => %{"listChanged" => false, "subscribe" => false}
+               "resources" => %{"listChanged" => false, "subscribe" => false},
+               "prompts" => %{"listChanged" => false}
              }
 
       assert r["resultType"] == "complete"

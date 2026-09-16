@@ -37,10 +37,12 @@ Injection without a specification is a claim with nothing behind it, so both are
 structs; `resources` holds `BeamMCP.ResourceSpec` and `BeamMCP.ResourceTemplateSpec` structs
 — one list, two kinds, no `uri` or `uri_template` twice — and a catalog that lists either
 also exports `read_resource/1`;
-`prompts` may be empty and nothing reads it yet.
+`prompts` holds `BeamMCP.PromptSpec` structs, each with its `BeamMCP.PromptArgument` list,
+and a catalog that lists a prompt exports `get_prompt/2`.
 **An absent key is a malformed catalog, not an empty one**, and `BeamMCP.Server.new/1`
-refuses it at startup rather than at the first request — as it refuses a `resources` entry
-that is neither struct, a repeated key, and a listed resource or template with no reader.
+refuses it at startup rather than at the first request — as it refuses a `resources` or
+`prompts` entry that is not its struct, a repeated key, and a listed resource, template or
+prompt with no reader.
 
 ```elixir
 defmodule MyApp.Catalog do
@@ -53,7 +55,13 @@ defmodule MyApp.Catalog do
         %BeamMCP.ResourceSpec{uri: "weather://places", name: "places", mime_type: "text/plain"},
         %BeamMCP.ResourceTemplateSpec{uri_template: "weather://place/{name}", name: "place"}
       ],
-      prompts: [],
+      prompts: [
+        %BeamMCP.PromptSpec{
+          name: "forecast",
+          description: "Ask for a forecast.",
+          arguments: [%BeamMCP.PromptArgument{name: "place", required: true}]
+        }
+      ],
       tools: [
       %BeamMCP.ToolSpec{
         name: :get_weather,
@@ -74,6 +82,10 @@ defmodule MyApp.Catalog do
   @impl true
   def read_resource("weather://places"), do: {:ok, [%{uri: "weather://places", text: "Oslo\nLima"}]}
   def read_resource("weather://place/" <> name), do: {:ok, [%{uri: "weather://place/#{name}", text: "12°C"}]}
+
+  @impl true
+  def get_prompt("forecast", %{place: place}),
+    do: {:ok, %{messages: [%{role: :user, text: "What is the forecast for #{place}?"}]}}
 end
 ```
 
@@ -95,6 +107,22 @@ refused by name. `ttlMs` and `cacheScope` on the three results are `resources_tt
 `resources_cache_scope:`, defaulting to `0` and `"private"` for the reasons the tools pair
 does. The server sends no notifications: `resources` is advertised with `listChanged: false`
 and `subscribe: false`.
+
+**Prompts take the tools' own validation path.** `prompts/list` serves what `capabilities/0`
+names, sorted by name and paginated by the same cursor; `prompts/get` renders only a prompt
+the list names — an unknown name is `-32602` with the name as data, before the reader runs —
+and its arguments are validated by the tools validator over a JSON Schema derived from the
+declared argument list (`BeamMCP.PromptSpec.argument_schema/1`: one `string` property per
+argument, `required` from the flags, nothing undeclared admitted), then handed to
+`get_prompt/2` keyed by the declared names, as a tool's arguments reach its dispatch. One
+validator, one normaliser, two callers; a caller's argument name becomes an atom on neither
+path, measured over 10,000 distinct keys. The reader answers `{:ok, %{messages: [%{role:
+:user | :assistant, text: ...}], description: ...}}` — text content only, as for tools — or
+`{:error, reason}`, carried as `-32602` with the reason as data. `prompts/list` carries
+`prompts_ttl_ms:` / `prompts_cache_scope:` (defaults `0` / `"private"`); `prompts/get` is
+not cacheable and carries neither. `prompts` is advertised with `listChanged: false`;
+`completion/complete` belongs to the separate `completions` capability, which this package
+does not advertise.
 
 **The dispatch callback** — the host does the work.
 
@@ -350,8 +378,8 @@ one legacy revision.
 | result envelope | `resultType` and `_meta` `serverInfo` | neither; both are `2026-07-28` additions |
 
 `server/discover`, `tools/list`, `resources/list`, `resources/templates/list`, `resources/read`,
-`tools/call`, `shutdown`, `exit` at both eras; `initialize` and `notifications/initialized` at
-legacy only.
+`prompts/list`, `prompts/get`, `tools/call`, `shutdown`, `exit` at both eras; `initialize` and
+`notifications/initialized` at legacy only.
 
 **A revision, not a carrier, decides the semantics.** `params._meta` — the request's `_meta`
 lives inside `params`, the schema's one position; a `_meta` at the top level of the request is

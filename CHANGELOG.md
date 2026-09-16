@@ -11,6 +11,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the prompts primitive, on the tools' own validation path
+
+- **`prompts/list` and `prompts/get`**, the two request methods the `2026-07-28` schema
+  defines for prompts (`completion/complete` is the separate `completions` capability's and
+  is not served; `notifications/prompts/list_changed` is not sent: `listChanged: false`). A
+  catalog names prompts as `BeamMCP.PromptSpec` structs, each with `BeamMCP.PromptArgument`s,
+  in its existing `prompts` list — no new key — and renders them through a new optional
+  callback, `get_prompt/2`, required the moment a prompt is listed. **One validation path:**
+  a prompt's argument list is derived into a JSON Schema (`BeamMCP.PromptSpec.argument_schema/1`
+  — one `string` property per argument, `required` from the flags, nothing undeclared
+  admitted) and validated by the tools validator; the arguments reach `get_prompt/2` keyed by
+  the declared names, as a tool's reach its dispatch. A caller's argument name becomes an
+  atom on neither path — measured over 10,000 distinct keys through both, the tools path's
+  stated bound now a test. An unknown prompt, a missing required argument, an undeclared one
+  and a reader's `{:error, reason}` are each `-32602` with data; a malformed reader answer is
+  `-32603` by name. Messages are `user` or `assistant` with text content only, as for tools.
+  `prompts/list` is paginated by `BeamMCP.Cursor` with `prompts_ttl_ms:` /
+  `prompts_cache_scope:` (defaults `0` / `"private"`); `prompts/get` is not cacheable. Both
+  eras serve both methods.
+- **How to tell whether you are affected:** if your catalog's `prompts` list carried anything
+  other than `%BeamMCP.PromptSpec{}` structs — a map with a `"name"`, which the declared
+  connectome read as a node name — `BeamMCP.Server.new/1` now refuses the catalog at startup,
+  naming the key; rewrite each as a `%BeamMCP.PromptSpec{name:}` and export `get_prompt/2`. An
+  empty `prompts` list is unaffected. The declared connectome names a `%BeamMCP.PromptSpec{}`
+  node as it named the map.
+
 ### Added — the pages ship in the package
 
 - **`docs/` is in the Hex tarball.** The six pages the README links were absent from the

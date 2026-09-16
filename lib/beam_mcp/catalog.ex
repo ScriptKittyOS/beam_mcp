@@ -15,14 +15,13 @@ defmodule BeamMCP.Catalog do
       %{
         tools: [BeamMCP.ToolSpec.t()],
         resources: [BeamMCP.ResourceSpec.t() | BeamMCP.ResourceTemplateSpec.t()],
-        prompts: []
+        prompts: [BeamMCP.PromptSpec.t()]
       }
 
   Every key is **required and may be empty**. `resources` holds both resources and resource
   templates -- one list, two structs -- so that serving templates added a reader rather than
   a key, and every host that had written `capabilities/0` with an empty list kept working.
-  `prompts` is not yet read by the server; the declared-connectome builder reads a `:name`
-  from each entry to name a node and enumerates the rest as unreadable.
+  `prompts` holds `BeamMCP.PromptSpec` structs, read by `prompts/list` and `prompts/get`.
 
   A key that is absent is a malformed catalog, not an empty one — the two are different claims
   and only one of them is checkable.
@@ -45,6 +44,20 @@ defmodule BeamMCP.Catalog do
   the client as the revision's not-found code (`-32602` under 2026-07-28, `-32002` under
   2025-11-25) carrying the reason as data.
 
+  ## Prompts: the same shape, and the tools' own validator
+
+  `prompts/1` is the single reader: `prompts/list` advertises what it returns, and
+  `prompts/get` renders only a prompt it names, through the catalog's `get_prompt/2`. A
+  prompt's argument list is derived into a JSON Schema (`BeamMCP.PromptSpec.argument_schema/1`)
+  and validated by the tools validator before the reader runs, so a prompt argument and a
+  tool argument go through one path, and a caller's argument name never becomes an atom.
+  `get_prompt/2` receives the arguments keyed by the **declared** names as atoms, as a tool
+  dispatch does, and answers `{:ok, %{messages: [...], description: ...}}` -- each message
+  `%{role: :user | :assistant, text: String.t()}`, `description` optional -- or
+  `{:error, reason}`, which reaches the client as `-32602` carrying the reason as data. A
+  catalog that lists a prompt must export `get_prompt/2` and must not name a prompt, or an
+  argument within one, twice; `validate/1` refuses each.
+
   ## Why `capabilities/0` and not `BeamMCP.ToolCatalog.all/0`
 
   This behaviour replaces `BeamMCP.ToolCatalog`, whose callback was `BeamMCP.ToolCatalog.all/0`,
@@ -63,7 +76,7 @@ defmodule BeamMCP.Catalog do
   @type t :: %{
           required(:tools) => [BeamMCP.ToolSpec.t()],
           required(:resources) => [BeamMCP.ResourceSpec.t() | BeamMCP.ResourceTemplateSpec.t()],
-          required(:prompts) => list()
+          required(:prompts) => [BeamMCP.PromptSpec.t()]
         }
 
   @typedoc """
@@ -92,7 +105,27 @@ defmodule BeamMCP.Catalog do
   """
   @callback read_resource(uri :: String.t()) :: {:ok, [contents()]} | {:error, term()}
 
-  @optional_callbacks read_resource: 1
+  @typedoc """
+  A rendered prompt, as the catalog's reader returns it: the messages in order, each a role
+  and its text (this package emits text content only, as it does for tools), and an
+  optional description.
+  """
+  @type rendered :: %{
+          required(:messages) => [
+            %{required(:role) => :user | :assistant, required(:text) => String.t()}
+          ],
+          optional(:description) => String.t() | nil
+        }
+
+  @doc """
+  Renders a prompt the catalog lists, with its arguments validated and keyed by the declared
+  names. Required when `capabilities/0` names any prompt; `validate/1` refuses a catalog that
+  lists one without it.
+  """
+  @callback get_prompt(name :: String.t(), arguments :: map()) ::
+              {:ok, rendered()} | {:error, term()}
+
+  @optional_callbacks read_resource: 1, get_prompt: 2
 
   @required_keys [:tools, :resources, :prompts]
 
@@ -179,6 +212,19 @@ defmodule BeamMCP.Catalog do
 
     Enum.find(expressions, &(not Regex.match?(@claimed, &1))) ||
       if String.contains?(literal, ["{", "}"]), do: "a brace outside any expression"
+  end
+
+  @doc """
+  The prompts a catalog offers, sorted by `name`. The single reader for `prompts/list` and
+  for `prompts/get`.
+  """
+  @spec prompts(module()) :: [BeamMCP.PromptSpec.t()]
+  def prompts(catalog), do: Enum.sort_by(catalog.capabilities().prompts, & &1.name)
+
+  @doc "Finds the spec a prompt name refers to, or `:error` -- through `prompts/1`."
+  @spec fetch_prompt(module(), String.t()) :: {:ok, BeamMCP.PromptSpec.t()} | :error
+  def fetch_prompt(catalog, name) when is_binary(name) do
+    Enum.find_value(prompts(catalog), :error, &if(&1.name == name, do: {:ok, &1}))
   end
 
   @doc """
@@ -273,9 +319,53 @@ defmodule BeamMCP.Catalog do
       not is_list(caps.resources) ->
         {:error, "#{inspect(catalog)}.capabilities/0's :resources must be a list"}
 
+      not is_list(caps.prompts) ->
+        {:error, "#{inspect(catalog)}.capabilities/0's :prompts must be a list"}
+
       true ->
-        validate_resources(catalog, caps.resources)
+        with :ok <- validate_resources(catalog, caps.resources),
+             do: validate_prompts(catalog, caps.prompts)
     end
+  end
+
+  # The prompts list: PromptSpec structs only; a reader once anything is listed; no prompt
+  # named twice, no argument named twice within a prompt.
+  defp validate_prompts(catalog, prompts) do
+    cond do
+      not Enum.all?(prompts, &match?(%BeamMCP.PromptSpec{}, &1)) ->
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's :prompts must all be %BeamMCP.PromptSpec{}"}
+
+      prompts != [] and not function_exported?(catalog, :get_prompt, 2) ->
+        {:error,
+         "#{inspect(catalog)} lists a prompt and does not export get_prompt/2, " <>
+           "so what it advertises could not be rendered"}
+
+      repeated(Enum.map(prompts, & &1.name)) != nil ->
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's :prompts names " <>
+           "#{inspect(repeated(Enum.map(prompts, & &1.name)))} more than once; the list is paged by name"}
+
+      repeated_argument(prompts) != nil ->
+        {prompt, argument} = repeated_argument(prompts)
+
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's prompt #{inspect(prompt)} names the argument " <>
+           "#{inspect(argument)} more than once"}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp repeated(names) do
+    names |> Enum.frequencies() |> Enum.find_value(fn {name, n} -> if n > 1, do: name end)
+  end
+
+  defp repeated_argument(prompts) do
+    Enum.find_value(prompts, fn %BeamMCP.PromptSpec{name: name, arguments: args} ->
+      if r = repeated(Enum.map(args, & &1.name)), do: {name, r}
+    end)
   end
 
   # The resources list: two structs only; a reader once anything is listed; no key twice.
