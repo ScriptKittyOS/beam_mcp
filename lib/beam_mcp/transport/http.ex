@@ -51,12 +51,16 @@ if Code.ensure_loaded?(Plug) do
         called **after** the body is read and **before** it is decoded. The second argument is
         the request body exactly as received. Whatever it returns as a reason goes to the log,
         never to the caller.
-      * `:read_timeout` — positive integer, milliseconds, default `#{15_000}`. The whole-body
-        deadline: a client that has sent its headers and then drips the body is answered `408`
-        when it lapses, however many bytes arrived. A DoS control, and the host's to set: longer
-        behind a slow link, shorter facing the open internet. The default is a chosen number
-        with its reasoning beside the constant, not the adapter's default (which it was, unstated,
-        for two releases).
+      * `:read_timeout` — positive integer, milliseconds, default `#{15_000}`. One whole-body
+        deadline, this package's own: the body is read in pieces against one clock, each read
+        given what remains, so a client that has sent its headers and then drips the body is
+        answered `408` when it lapses, however many bytes arrived and however the adapter splits
+        the reads. A body must declare its length — `transfer-encoding: chunked` is refused with
+        `411` before the read, since a chunked body is read chunk by chunk on a per-chunk clock
+        that no deadline above it can bound. A DoS control, and the host's to set: longer behind
+        a slow link, shorter facing the open internet. The default is a chosen number with its
+        reasoning beside the constant, not the adapter's default (which it was, unstated, for
+        two releases).
 
     The bytes are the ones the client sent, not a re-encoding of them. A signature covers
     bytes, so handing a hook `Jason.encode!(Jason.decode!(body))` would break every correct
@@ -134,13 +138,16 @@ if Code.ensure_loaded?(Plug) do
     # value in force was Bandit's default for such a call -- 15,000 ms -- which the README
     # called "inherited from the server". It was not a server setting and nobody had chosen
     # it (a review lane read Bandit and ThousandIsland and found no knob). The number is kept,
-    # and it is now chosen: 15 s is long enough that a legitimate 1 MiB body arrives on any
-    # link this package has been measured on, and short enough that a drip attack costs the
-    # host at most the body cap per connection for fifteen seconds -- a legitimate request was
-    # served in under 0.01 s with 12,000 drip clients in flight against it (2026-09-07). It is
-    # a DoS control, and the host's: a host behind a slow link raises it, a host facing the
-    # open internet lowers it, through `read_timeout:`. `Plug.Test` never times out, so the
-    # deadline is measured against a real listener (`http_bandit_test.exs`).
+    # and it is now chosen. What 15 s means is arithmetic, not a link measurement (every
+    # measurement this package has is on loopback): a body at the 1,048,576-byte cap under a
+    # 15,000 ms whole-body deadline needs 69.9 KiB/s (~573 kbit/s) sustained, below which a
+    # legitimate maximum-size request is answered 408; and a drip attack costs the host at most
+    # the body cap per connection for fifteen seconds -- a legitimate request was served in
+    # under 0.01 s while 12,000 drip connections had been opened against it (2026-09-07;
+    # cumulative opens with attrition under way, not a steady state). It is a DoS control, and
+    # the host's: a host behind a slow link raises it, a host facing the open internet lowers
+    # it, through `read_timeout:`. `Plug.Test` never times out, so the deadline is measured
+    # against a real listener (`http_bandit_test.exs`).
     @read_timeout_default 15_000
     @method_not_found "Method not found:"
 
@@ -365,6 +372,7 @@ if Code.ensure_loaded?(Plug) do
       result =
         with {:ok, conn} <- check_origin(conn, opts.allowed_origins),
              {:ok, conn} <- check_method(conn),
+             {:ok, conn} <- check_length_declared(conn),
              {:ok, conn} <- authorize(conn, opts.authorize) do
           read_body_bounded(conn, opts.read_timeout)
         end
@@ -498,6 +506,28 @@ if Code.ensure_loaded?(Plug) do
        error(nil, -32_600, "Method not allowed: #{conn.method}; use POST")}
     end
 
+    # A body must declare its length. An MCP request is one complete JSON message under a 1 MiB
+    # cap, and a chunked transfer coding buys it nothing -- while it defeats every whole-body
+    # bound: the adapter reads a chunked body chunk by chunk, each chunk on its own clock, and
+    # gathers chunks until the length asked for is filled, so a client sending one byte per
+    # chunk resets the deadline with every byte (measured: served after 43 s under a 15 s
+    # deadline). Refused before the body is read, with 411, so the bound below is the whole
+    # body's for every request that gets to it.
+    defp check_length_declared(conn) do
+      case get_req_header(conn, "transfer-encoding") do
+        [] ->
+          {:ok, conn}
+
+        _chunked ->
+          {:refused, conn, 411,
+           error(
+             nil,
+             -32_600,
+             "Request body must declare its length: transfer-encoding is refused"
+           )}
+      end
+    end
+
     # The host decides who may call. What it returns MUST NOT reach the caller: an earlier
     # version interpolated `inspect(reason)` into the 403 body, and a lane recovered a planted
     # bearer token and database URL from it -- pre-authentication, on the one branch that is
@@ -542,23 +572,57 @@ if Code.ensure_loaded?(Plug) do
     @spec read_timeout_default() :: pos_integer()
     def read_timeout_default, do: @read_timeout_default
 
+    # THE WHOLE-BODY DEADLINE IS THIS PACKAGE'S, NOT THE ADAPTER'S. `read_body/2`'s
+    # `:read_timeout` is a per-read clock, and a body over the adapter's read length is two
+    # reads -- a 1,048,576-byte body got up to two full deadlines (measured 1,909 ms for
+    # 1,000). So the body is read in pieces against one monotonic deadline: each read is given
+    # what remains of it, and a read that outlives it is answered 408 here, with the same
+    # error object every refusal carries, the connection closed as for every refusal in front
+    # of the decode. The reads sum to at most the cap: the server reads exactly the cap and no
+    # more before a 413, as the README measures.
+    @read_piece 65_536
+
     defp read_body_bounded(conn, read_timeout) do
-      case read_body(conn, length: @max_body_bytes, read_timeout: read_timeout) do
-        {:ok, body, conn} ->
-          {:ok, body, conn}
+      deadline = System.monotonic_time(:millisecond) + read_timeout
+      read_by_deadline(conn, deadline, read_timeout, [], 0)
+    end
 
-        # No `close_after/1` here any more, and that is not a behaviour change: this refusal
-        # goes out through `before_body/2`, which closes on every refusal in front of the
-        # decode. A second copy of the rule beside one of its seven sites is how the other six
-        # got missed.
-        {:more, _partial, conn} ->
-          {:refused, conn, 413,
-           error(nil, -32_600, "Request body exceeds #{@max_body_bytes} bytes")}
+    defp read_by_deadline(conn, deadline, read_timeout, acc, size) do
+      remaining = deadline - System.monotonic_time(:millisecond)
 
-        {:error, reason} ->
-          {:refused, conn, 400,
-           error(nil, -32_700, "Could not read request body: #{inspect(reason)}")}
+      if remaining <= 0 do
+        timed_out(conn, read_timeout)
+      else
+        length = min(@read_piece, @max_body_bytes - size)
+
+        try do
+          read_body(conn, length: length, read_length: length, read_timeout: remaining)
+        rescue
+          exception ->
+            if Plug.Exception.status(exception) == 408,
+              do: timed_out(conn, read_timeout),
+              else: reraise(exception, __STACKTRACE__)
+        else
+          {:ok, piece, conn} ->
+            {:ok, IO.iodata_to_binary([acc, piece]), conn}
+
+          {:more, piece, conn} when size + byte_size(piece) >= @max_body_bytes ->
+            {:refused, conn, 413,
+             error(nil, -32_600, "Request body exceeds #{@max_body_bytes} bytes")}
+
+          {:more, piece, conn} ->
+            read_by_deadline(conn, deadline, read_timeout, [acc, piece], size + byte_size(piece))
+
+          {:error, reason} ->
+            {:refused, conn, 400,
+             error(nil, -32_700, "Could not read request body: #{inspect(reason)}")}
+        end
       end
+    end
+
+    defp timed_out(conn, read_timeout) do
+      {:refused, conn, 408,
+       error(nil, -32_600, "Request body not received within #{read_timeout} ms")}
     end
 
     defp decode(conn, "") do

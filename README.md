@@ -235,7 +235,7 @@ Said plainly, because it is a real limitation and not a preference: **body-signa
 authentication is not possible in `authorize/1`.** The callback runs before the body is read and
 returns `:ok | {:error, reason}`, with no way to hand back the `conn` it read from. A host that
 reads the body there does not get an error — a small request appears to work because the body is
-already in the adapter's buffer, and a larger one hangs until the server's read timeout and then
+already in the adapter's buffer, and a larger one hangs until `read_timeout:` lapses and then
 returns `408` with the connection dead. Measured: 119 bytes `200`, 16 KiB and 200 KiB both `408`
 after 15.0 s. Today the workarounds are a plug in front of this one that reads the body and re-supplies it,
 or deciding in `dispatch/3`.
@@ -287,18 +287,24 @@ the connection is clean, and an ordinary response is possible.
   at one fixed buffer size — so there is no number to design against there, only the
   server-side constant above.
 - It is a time bound, and the bound is yours: `read_timeout:` (default 15,000 ms, a chosen
-  number with its reasoning beside the constant) is passed to `read_body/2` as its
-  whole-body deadline rather than a per-read reset, so a drip client is answered `408` when it
-  lapses —
-  measured at 300, 301, 327 ms for a 300 ms deadline and 1,500, 1,500, 1,501 ms for 1,500 ms,
-  through a real `Bandit` listener. For two releases this package passed none, and the value
-  in force was `Bandit`'s default for such a call, which the README called "inherited from the
-  server"; it was neither a server option nor a choice. That makes slow connections a **transient** rather than a hold:
-  they cost memory for at most the timeout, and a legitimate request was still served in under
-  0.01 s with 12,000 of them in flight.
-
+  number with its reasoning beside the constant) is one whole-body deadline — the body is read
+  in pieces against one clock, each read given what remains, so a drip client is answered `408`
+  when it lapses, however many bytes arrived and however the adapter splits the reads (a
+  cap-sized body is two adapter reads, and under the adapter's own per-read clock it got two
+  deadlines — measured, 1,909 ms for 1,000). Measured through a real `Bandit` listener: `408` at
+  300, 301, 327 ms for a 300 ms deadline and 1,500, 1,500, 1,501 ms for 1,500 ms. The `408` is
+  this package's refusal — the JSON-RPC error object every refusal carries, `connection: close`
+  as for every refusal issued before the body is read. A body must declare its length:
+  `transfer-encoding: chunked` is refused with `411` before the body is read, because the
+  adapter reads a chunked body chunk by chunk on a per-chunk clock and a client sending one byte
+  per chunk was served after 43 s under a 15 s deadline (measured) — an MCP request is one
+  complete JSON message under the cap, and a chunked body defeats every whole-body bound. For
+  two releases this package passed no deadline at all, and the value in force was `Bandit`'s
+  default for such a call, which the README called "inherited from the server"; it was neither a
+  server option nor a choice.
 - It does not bound **headers**. `@max_body_bytes` is a body limit; the number and size of
-  request headers are your HTTP server's settings, inherited the same way the read timeout is.
+  request headers are your HTTP server's settings, as the read timeout was until it became
+  `read_timeout:`.
 - It bounds **nesting** separately. A body under the cap can still nest half its bytes deep,
   and decoding one that did cost a 38 MiB heap for one request (measured); so every body, on
   both transports, is refused by name past 64 levels of nesting before the decoder runs

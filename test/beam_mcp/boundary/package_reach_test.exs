@@ -133,7 +133,8 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     ],
     :code => [get_object_code: 1],
     Code => [ensure_compiled: 1, ensure_loaded?: 1],
-    System => [convert_time_unit: 3],
+    # `monotonic_time/1` is the HTTP transport's whole-body deadline clock; a clock, not the environment.
+    System => [convert_time_unit: 3, monotonic_time: 1],
     :persistent_term => [erase: 1, get: 2, put: 2],
     Application => [load: 1, spec: 2],
     :application => [get_application: 1],
