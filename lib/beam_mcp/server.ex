@@ -42,6 +42,8 @@ defmodule BeamMCP.Server do
   """
 
   alias BeamMCP.Cursor
+  alias BeamMCP.PromptArgument
+  alias BeamMCP.PromptSpec
   alias BeamMCP.ResourceSpec
   alias BeamMCP.ResourceTemplateSpec
   alias BeamMCP.ToolSpec
@@ -62,12 +64,13 @@ defmodule BeamMCP.Server do
   # so the two eras cannot disagree, and every key of it is served by a clause below --
   # advertising a capability the server does not serve is the defect class this package
   # names on the transport side, and the capability census holds the keys to the schema's.
-  # `resources` is always present, as `tools` is: the three resource methods are always
+  # `resources` and `prompts` are always present, as `tools` is: their methods are always
   # served, and an empty catalog answers an empty list. Neither `listChanged` nor `subscribe`
   # is offered: the server sends no notifications.
   @capabilities %{
     "tools" => %{"listChanged" => false},
-    "resources" => %{"listChanged" => false, "subscribe" => false}
+    "resources" => %{"listChanged" => false, "subscribe" => false},
+    "prompts" => %{"listChanged" => false}
   }
   # Read from the application spec rather than restated here. A hardcoded copy beside the one
   # in mix.exs is a transcription defect waiting for the first release that updates one of them.
@@ -92,6 +95,8 @@ defmodule BeamMCP.Server do
           tools_ttl_ms: non_neg_integer(),
           resources_cache_scope: String.t(),
           resources_ttl_ms: non_neg_integer(),
+          prompts_cache_scope: String.t(),
+          prompts_ttl_ms: non_neg_integer(),
           page_size: pos_integer()
         }
 
@@ -111,6 +116,8 @@ defmodule BeamMCP.Server do
     tools_cache_scope: "a string",
     resources_ttl_ms: "a non-negative integer",
     resources_cache_scope: "a string",
+    prompts_ttl_ms: "a non-negative integer",
+    prompts_cache_scope: "a string",
     page_size: "a positive integer"
   ]
 
@@ -128,6 +135,8 @@ defmodule BeamMCP.Server do
   defp valid?(:tools_cache_scope, value), do: is_binary(value)
   defp valid?(:resources_ttl_ms, value), do: is_integer(value) and value >= 0
   defp valid?(:resources_cache_scope, value), do: is_binary(value)
+  defp valid?(:prompts_ttl_ms, value), do: is_integer(value) and value >= 0
+  defp valid?(:prompts_cache_scope, value), do: is_binary(value)
   defp valid?(:page_size, value), do: is_integer(value) and value > 0
 
   @spec new(keyword()) :: state()
@@ -158,6 +167,9 @@ defmodule BeamMCP.Server do
       # non-permissive defaults.
       resources_ttl_ms: Keyword.get(opts, :resources_ttl_ms, 0),
       resources_cache_scope: Keyword.get(opts, :resources_cache_scope, "private"),
+      # And for prompts/list (prompts/get is not cacheable: its result carries neither).
+      prompts_ttl_ms: Keyword.get(opts, :prompts_ttl_ms, 0),
+      prompts_cache_scope: Keyword.get(opts, :prompts_cache_scope, "private"),
       # The page size of every paginated list (`BeamMCP.Cursor`). The specification leaves
       # it to the server; a client walks `nextCursor` whatever it is.
       page_size: Keyword.get(opts, :page_size, @default_page_size)
@@ -353,32 +365,59 @@ defmodule BeamMCP.Server do
   # the key the cursor names, paged by the shared codec. A cursor from the other list, or from
   # anywhere else, is invalid params by name -- never a silently wrong page.
   def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/list"} = m) do
-    paginated(
-      state,
-      id,
-      m,
-      :resources,
-      "resources",
-      Catalog.resources(state.catalog),
-      & &1.uri,
-      &resource_definition/1
-    )
+    paginated(state, id, m, %{
+      kind: :resources,
+      key: "resources",
+      items: Catalog.resources(state.catalog),
+      key_fun: & &1.uri,
+      definition: &resource_definition/1,
+      cache: {state.resources_ttl_ms, state.resources_cache_scope}
+    })
+  end
+
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "prompts/list"} = m) do
+    paginated(state, id, m, %{
+      kind: :prompts,
+      key: "prompts",
+      items: Catalog.prompts(state.catalog),
+      key_fun: & &1.name,
+      definition: &prompt_definition/1,
+      cache: {state.prompts_ttl_ms, state.prompts_cache_scope}
+    })
+  end
+
+  # A prompt is rendered only for a name the same reader lists; its arguments go through the
+  # tools validator over the schema derived from the declared argument list, and reach the
+  # reader keyed by the declared names -- the one path a tool's arguments take.
+  def handle_message(
+        state,
+        %{"jsonrpc" => "2.0", "id" => id, "method" => "prompts/get", "params" => params}
+      ) do
+    case params do
+      %{"name" => name} when is_binary(name) ->
+        {state, get_prompt(state, id, name, Map.get(params, "arguments", %{}))}
+
+      _ ->
+        {state, error(id, -32_602, "Invalid params: prompts/get requires a string name")}
+    end
+  end
+
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "prompts/get"}) do
+    {state, error(id, -32_602, "Invalid params: prompts/get requires a string name")}
   end
 
   def handle_message(
         state,
         %{"jsonrpc" => "2.0", "id" => id, "method" => "resources/templates/list"} = m
       ) do
-    paginated(
-      state,
-      id,
-      m,
-      :resource_templates,
-      "resourceTemplates",
-      Catalog.templates(state.catalog),
-      & &1.uri_template,
-      &template_definition/1
-    )
+    paginated(state, id, m, %{
+      kind: :resource_templates,
+      key: "resourceTemplates",
+      items: Catalog.templates(state.catalog),
+      key_fun: & &1.uri_template,
+      definition: &template_definition/1,
+      cache: {state.resources_ttl_ms, state.resources_cache_scope}
+    })
   end
 
   # A read is served only for a uri the same reader lists or a listed template matches; the
@@ -453,17 +492,16 @@ defmodule BeamMCP.Server do
     {state, nil}
   end
 
-  defp paginated(state, id, message, kind, key, items, key_fun, definition) do
-    case position(kind, cursor_param(message)) do
+  # One paginated list: `list` names the kind (the cursor's), the result key, the sorted
+  # items, the key function, the per-item definition and the ttl/scope pair.
+  defp paginated(state, id, message, list) do
+    case position(list.kind, cursor_param(message)) do
       {:ok, position} ->
-        {page, next} = Cursor.page(kind, items, key_fun, position, state.page_size)
+        {page, next} = Cursor.page(list.kind, list.items, list.key_fun, position, state.page_size)
+        {ttl, scope} = list.cache
 
         payload =
-          %{
-            key => Enum.map(page, definition),
-            "ttlMs" => state.resources_ttl_ms,
-            "cacheScope" => state.resources_cache_scope
-          }
+          %{list.key => Enum.map(page, list.definition), "ttlMs" => ttl, "cacheScope" => scope}
           |> put_present("nextCursor", next)
 
         {state, result(id, payload)}
@@ -535,6 +573,110 @@ defmodule BeamMCP.Server do
       "Internal error: #{inspect(state.catalog)}.read_resource/1 answered #{inspect(other)}, " <>
         "not {:ok, contents} or {:error, reason}"
     )
+  end
+
+  defp get_prompt(state, id, name, arguments) do
+    catalog = state.catalog
+
+    with {:ok, %PromptSpec{} = spec} <- fetch_prompt(catalog, name),
+         {:ok, args} <- prompt_arguments(spec, arguments) do
+      answer_prompt(id, name, catalog, catalog.get_prompt(name, args))
+    else
+      {:unknown, name} ->
+        error(id, -32_602, "Invalid params: unknown prompt #{name}", %{"name" => name})
+
+      {:invalid, reason} ->
+        error(id, -32_602, "Invalid params: #{reason}")
+    end
+  end
+
+  defp fetch_prompt(catalog, name) do
+    case Catalog.fetch_prompt(catalog, name) do
+      {:ok, spec} -> {:ok, spec}
+      :error -> {:unknown, name}
+    end
+  end
+
+  # The tools path, exactly: the derived schema through Schema.validate/2, then the keys
+  # normalised to the DECLARED names -- a caller's key that is not declared was refused by
+  # the schema and never reaches String.to_atom/1.
+  defp prompt_arguments(%PromptSpec{} = spec, arguments) do
+    schema = PromptSpec.argument_schema(spec)
+
+    case Schema.validate(arguments, schema) do
+      :ok -> {:ok, normalize_arguments(arguments, schema)}
+      {:error, reason} -> {:invalid, "invalid arguments: #{reason}"}
+    end
+  end
+
+  defp answer_prompt(id, _name, _catalog, {:ok, %{messages: messages} = rendered})
+       when is_list(messages) do
+    case Enum.reduce_while(messages, {:ok, []}, &encode_message/2) do
+      {:ok, encoded} ->
+        result(
+          id,
+          put_present(
+            %{"messages" => Enum.reverse(encoded)},
+            "description",
+            rendered[:description]
+          )
+        )
+
+      {:error, defect} ->
+        error(id, -32_603, "Internal error: get_prompt/2 " <> defect)
+    end
+  end
+
+  defp answer_prompt(id, name, _catalog, {:error, reason}) do
+    error(id, -32_602, "Invalid params: prompt #{name} cannot be rendered", %{
+      "name" => name,
+      "reason" => to_json_value(reason)
+    })
+  end
+
+  defp answer_prompt(id, _name, catalog, other) do
+    error(
+      id,
+      -32_603,
+      "Internal error: #{inspect(catalog)}.get_prompt/2 answered #{inspect(other)}, " <>
+        "not {:ok, %{messages: ...}} or {:error, reason}"
+    )
+  end
+
+  # One message as the reader gives it, to the wire's PromptMessage: a role of the two the
+  # schema names, and text content.
+  defp encode_message(%{role: role, text: text}, {:ok, acc})
+       when role in [:user, :assistant] and is_binary(text) do
+    {:cont,
+     {:ok,
+      [
+        %{"role" => Atom.to_string(role), "content" => %{"type" => "text", "text" => text}}
+        | acc
+      ]}}
+  end
+
+  defp encode_message(message, _acc),
+    do:
+      {:halt,
+       {:error,
+        "returned a message without a role of :user or :assistant and a string :text: " <>
+          inspect(message)}}
+
+  defp prompt_definition(%PromptSpec{} = p) do
+    %{"name" => p.name}
+    |> put_present("title", p.title)
+    |> put_present("description", p.description)
+    |> put_present("icons", p.icons)
+    |> put_present(
+      "arguments",
+      if(p.arguments == [], do: nil, else: Enum.map(p.arguments, &argument_definition/1))
+    )
+  end
+
+  defp argument_definition(%PromptArgument{} = a) do
+    %{"name" => a.name, "required" => a.required}
+    |> put_present("title", a.title)
+    |> put_present("description", a.description)
   end
 
   # One contents item as the reader gives it, to the wire's shape: `text` as is, `blob` as

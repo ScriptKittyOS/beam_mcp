@@ -4,9 +4,8 @@
 defmodule BeamMCP.Fixture.Declared.Catalog do
   @moduledoc false
   # A catalog with two tools, one readable resource, one resource template (which the
-  # declared builder cannot name -- a template has no uri), one readable prompt, and one
-  # prompt entry no reader can name -- the builder must enumerate both, never drop either
-  # silently.
+  # declared builder cannot name -- a template has no uri, so the builder must enumerate it,
+  # never drop it silently) and one prompt.
   @behaviour BeamMCP.Catalog
 
   @impl true
@@ -30,9 +29,12 @@ defmodule BeamMCP.Fixture.Declared.Catalog do
         %BeamMCP.ResourceSpec{uri: "r://a", name: "a"},
         %BeamMCP.ResourceTemplateSpec{uri_template: "r://t/{x}", name: "t"}
       ],
-      prompts: [%{name: "greet"}, :opaque]
+      prompts: [%BeamMCP.PromptSpec{name: "greet"}]
     }
   end
+
+  @impl true
+  def get_prompt("greet", _args), do: {:ok, %{messages: [%{role: :user, text: "hi"}]}}
 
   @impl true
   def read_resource(uri), do: {:ok, [%{uri: uri, text: "fixture"}]}

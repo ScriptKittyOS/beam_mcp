@@ -125,8 +125,9 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       {:ok, %{graph: g, bound: bound}} = build()
 
       # A resource template has no uri, so this builder cannot name it: enumerated, no node.
+      # (Every other entry is a struct the catalog contract holds to a name, so a template is
+      # the one unreadable entry a valid catalog can carry.)
       assert bound.unreadable_catalog_entries == [
-               {:prompts, :opaque},
                {:resources, %BeamMCP.ResourceTemplateSpec{uri_template: "r://t/{x}", name: "t"}}
              ]
 
