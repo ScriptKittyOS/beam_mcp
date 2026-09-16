@@ -92,9 +92,11 @@ defmodule BeamMCP.WillNotImplementTest do
     word = Enum.at(@words, n - 1)
     assert word, "#{n} rows: more than this test spells; extend @words"
 
-    assert readme =~ "#{word} entries",
-           "the page has #{n} rows and the README does not say \"#{word} entries\" -- a row " <>
-             "was added or removed and the README's count did not move with it"
+    # The README's own idiom, on one line ("boundary — twelve entries,"); a reflow at the em
+    # dash goes red here and is fixed by keeping the phrase whole.
+    assert readme =~ "boundary — #{word} entries",
+           "the page has #{n} rows and the README does not say \"boundary — #{word} entries\" " <>
+             "-- a row was added or removed and the README's count did not move with it"
   end
 
   test "the page's placement sentence names every row exactly once" do
@@ -104,7 +106,8 @@ defmodule BeamMCP.WillNotImplementTest do
     # Anchored on words, not on a line break: the paragraph may be reflowed.
     [_, sentence] = String.split(sentence, "request to cross one of these lines", parts: 2)
 
-    refute sentence =~ ~r/\d[-–]\d/,
+    # `u`: the en dash is three bytes, and without it the class consumes one of them.
+    refute sentence =~ ~r/\d[-–]\d/u,
            "the placement sentence writes a range; list each entry so the census can read it"
 
     placed =

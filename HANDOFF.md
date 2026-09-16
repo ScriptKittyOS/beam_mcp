@@ -80,6 +80,10 @@ refused.
 
 - An Elixir script under `tools/` is parsed by the format step and run by nobody; a call into
   a module the package renamed is caught only when the script is next run by hand.
+- The censuses that read the built beams (`BeamMCP.Boundary.lib_modules/0`: the split census,
+  the package-reach census) read what the last compile left in the ebin; a beam outside Mix's
+  manifest whose source says `lib/` is counted until it is deleted. Not measured; stated on the
+  function.
 - The collector is node-wide: every dispatch on the node lands in its table, whatever the
   server. The Livebook's observed export is restricted to its server by id for that reason.
 - `readme_claims_test.exs` pins the claims listed in it and derives no claim set; the docs
