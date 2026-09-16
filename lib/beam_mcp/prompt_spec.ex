@@ -28,7 +28,8 @@ defmodule BeamMCP.PromptSpec do
   (`BeamMCP.Schema.validate/2`) runs, so a prompt argument and a tool argument go through
   one path. Every argument is a `string` property (the specification types `arguments` as
   an object of strings); `required` collects the flagged names; nothing undeclared is
-  admitted, which is also what keeps a caller's key from ever becoming an atom.
+  admitted. (That refusal is the first gate on a caller's key; what keeps one from ever
+  becoming an atom is the normaliser, which makes atoms of the declared names only.)
   """
   @spec argument_schema(t()) :: map()
   def argument_schema(%__MODULE__{arguments: arguments}) do
