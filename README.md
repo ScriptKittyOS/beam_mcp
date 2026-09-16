@@ -298,10 +298,13 @@ the connection is clean, and an ordinary response is possible.
   less than one frame, so every DATA frame, an empty one included, returns to this clock).
   Measured through a real `Bandit` listener: `408` at 300, 301, 327 ms for a 300 ms deadline
   and 1,500, 1,500, 1,501 ms for 1,500 ms; over HTTP/2 a twenty-frame drip answered at the
-  deadline. One residue is the adapter's, stated on the threat model's row: over HTTP/2 a
-  stream kept open by control frames alone (WINDOW_UPDATE, a HEADERS without END_STREAM) is
-  held past the deadline by the adapter's own wait, which nothing outside it can end —
-  thirteen bytes per window, nothing accumulated, and whatever body then comes is refused.
+  deadline. One residue is the adapter's, stated on the threat model's row with its cost: over
+  HTTP/2 a stream kept open by control frames alone (a WINDOW_UPDATE, or a HEADERS without
+  END_STREAM) is held past the deadline by the adapter's own wait, which nothing outside it
+  can end through an interface the adapter offers — one frame per deadline holds a stream
+  process indefinitely, whatever body then comes is refused, a WINDOW_UPDATE costs thirteen
+  bytes with nothing accumulated, and a HEADERS without END_STREAM writes a warning line per
+  frame to the host's log carrying the client's header bytes.
   The `408` is this package's refusal — the JSON-RPC error object
   every refusal carries, with `connection: close` over HTTP/1.1 as for every refusal issued
   before the body is read (over HTTP/2 the stream ends with the response; the header would be a

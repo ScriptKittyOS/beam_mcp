@@ -896,7 +896,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     test "over HTTP/2 an empty DATA frame returns to the deadline's clock like any other" do
       # The adapter's reader returns when the frames gathered EXCEED the length asked for; an
       # empty frame exceeds nothing, so under a length of zero a drip of empty frames held
-      # the read (2,021 ms for 300, a review lane) and grew its accumulator by one empty
+      # the read (2,321 ms for 300 in this slice's red; a review lane measured 2,021) and grew its accumulator by one empty
       # binary per frame. The length asked for is now below zero.
       body = call_json(1, 200)
       port = listen(read_timeout: 300)
@@ -912,6 +912,33 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
       assert elapsed >= 300 and elapsed < 1_000,
              "the answer came at #{elapsed} ms for a 300 ms deadline"
+    end
+
+    test "over HTTP/2 a stream kept open by HEADERS frames without END_STREAM is held the same way, and each frame is a warning line in the host's log" do
+      # The other control-frame hold, and the one that reaches the log: the adapter reads a
+      # HEADERS without END_STREAM as trailers, ignores it with a warning carrying the
+      # client's header bytes, and waits again. Recorded like the WINDOW_UPDATE hold.
+      body = call_json(1, 200)
+      port = listen(read_timeout: 300)
+      started = System.monotonic_time(:millisecond)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+
+      frames =
+        List.duplicate(&BeamMCP.H2C.headers(&1, [{"x-lane", "b"}]), 10) ++
+          [&BeamMCP.H2C.data(&1, body, true)]
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          drip_h2(sock, frames, 100)
+          {result, elapsed} = h2_answered_at(sock, started)
+          assert {:ok, headers, _body} = result
+          assert {":status", "408"} in headers
+          assert elapsed >= 1_000, "the hold ended at #{elapsed} ms: the adapter bounds it now"
+        end)
+
+      lines = log |> String.split("\n") |> Enum.filter(&(&1 =~ "Ignoring trailers"))
+      assert length(lines) == 10
+      assert Enum.all?(lines, &(&1 =~ "[warning]" and &1 =~ ~s({"x-lane", "b"})))
     end
 
     test "over HTTP/2 a body is refused at the frame that crosses the cap, not at the stream's end" do

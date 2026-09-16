@@ -75,9 +75,13 @@ if Code.ensure_loaded?(Plug) do
         answered `408` when it lapses, however many bytes arrived and however the adapter splits
         the reads (over HTTP/2 the adapter's reader is asked for less than one frame, so every
         DATA frame, an empty one included, returns to this clock; a stream kept open by control
-        frames alone — WINDOW_UPDATE, a HEADERS without END_STREAM — is held past the deadline
-        by the adapter's own wait, which nothing outside it can end: thirteen bytes per window,
-        nothing accumulated, and whatever body then comes is refused). A body must declare its
+        frames alone — a WINDOW_UPDATE, or a HEADERS without END_STREAM — is held past the
+        deadline by the adapter's own wait, which nothing outside it can end through an
+        interface the adapter offers: one frame per deadline holds a stream process
+        indefinitely, and whatever body then comes is refused; a WINDOW_UPDATE costs the client
+        thirteen bytes and the host nothing accumulated, a HEADERS without END_STREAM writes a
+        warning line per frame to the host's log carrying the client's header bytes — the
+        threat model states both). A body must declare its
         length — `transfer-encoding: chunked` is refused with `411` before the read, since a
         chunked body is read chunk by chunk on a per-chunk clock that no deadline above it can
         bound. The `408` is this Plug's
@@ -363,18 +367,20 @@ if Code.ensure_loaded?(Plug) do
     #         -- every refusal site in the module, to be placed against those steps
     #
     # A COUNT IS NOT A CHECK, and this comment says so because the first version of it got the
-    # count wrong. BOTH greps match this comment quoting them, which is a self-correction this
-    # repository has already recorded once and reproduced here. The second returns fourteen
-    # lines, of which three are not refusal sites at all: the quotation above, `handle/2`'s
+    # count wrong, and the second version went stale when a release added sites. BOTH greps
+    # match this comment quoting them, which is a self-correction this repository has already
+    # recorded once and reproduced here. The second returns twenty-two lines at the time of
+    # writing, of which three are not refusal sites at all: the quotation above, `handle/2`'s
     # `else` answering one, and the line just below that closes one. Read where each of the
     # rest lands; do not count them.
     #
-    # SEVEN refusal sites are at or before the body read: the Origin 403, the 405,
-    # `authorize/1`'s 500, its 403 and its contract-violation 403, and `read_body_bounded/1`'s
-    # own 413 and 400. Exactly one of the seven -- the 413 -- called `close_after/1` for
-    # itself; the other six did not. Fixing the named ones and leaving the rest is how the same
-    # header defect was found twice in this module already, so a step added to this function
-    # inherits the behaviour instead of needing a new finding.
+    # TEN refusal sites are at or before the body read: the Origin 400 (not UTF-8) and 403,
+    # the 405, the 411, `authorize/1`'s 500, its 403 and its contract-violation 403, and
+    # `read_body_bounded/2`'s own 400, 413 and 408. When this was derived there were seven,
+    # and exactly one of them -- the 413 -- called `close_after/1` for itself; the other six
+    # did not. Fixing the named ones and leaving the rest is how the same header defect was
+    # found twice in this module already, so a step added to this function inherits the
+    # behaviour instead of needing a new finding -- the 411 and the 408 did.
     #
     # `decode/2` and everything after it are on the far side: the body is read by then, the
     # connection is clean, and a refusal there keeps it. That is pinned in both directions.
@@ -588,8 +594,10 @@ if Code.ensure_loaded?(Plug) do
     # 1,000). So the body is read in pieces against one monotonic deadline: each read is given
     # what remains of it, and a read that outlives it is answered 408 here, with the same
     # error object every refusal carries, the connection closed as for every refusal in front
-    # of the decode. The reads sum to at most the cap: the server reads exactly the cap and no
-    # more before a 413, as the README measures.
+    # of the decode. The reads sum to at most the cap over HTTP/1: the server reads exactly
+    # the cap and no more before a 413, as the README measures. Over HTTP/2 the adapter hands
+    # whole frames, so the read is the cap plus the frame that crosses it -- at most 16 KiB,
+    # the adapter's frame size -- and the 413 comes at that frame.
     @read_piece 65_536
 
     defp read_body_bounded(conn, read_timeout) do
@@ -651,14 +659,22 @@ if Code.ensure_loaded?(Plug) do
     # accepted when the stream ends.
     #
     # What this cannot reach: a frame that carries no DATA. A WINDOW_UPDATE, or a HEADERS
-    # without END_STREAM, re-arms the adapter's own wait for the whole of what this call
-    # gave it, and that wait is a receive on the adapter's messages that nothing outside it
-    # can end -- the one lever left is the stream process itself, and ending it gives the
-    # client no answer at all (the adapter forgets the stream and drops its frames), which
-    # is declined. So a stream kept open by control frames alone is held by the adapter past
-    # the deadline: thirteen bytes per window, nothing accumulated, and whatever body comes
-    # is refused here, since the clock is read on return. The threat model states it as the
-    # adapter's, with a test that fails the day the adapter bounds it.
+    # without END_STREAM, re-arms the adapter's own wait for the whole of what this call gave
+    # it -- one such frame per deadline holds the stream indefinitely -- and that wait is a
+    # receive on the adapter's messages that nothing outside it can end through an interface
+    # the adapter offers. Two levers exist and both are declined: forging the adapter's own
+    # message into the stream process's mailbox couples this package to a private protocol
+    # that a release of the adapter can change silently; ending the stream process gives the
+    # client no answer at all (the adapter forgets the stream and drops its frames). So a
+    # stream kept open by control frames alone is held by the adapter past the deadline, and
+    # whatever body comes is refused here, since the clock is read on return. The cost
+    # differs by frame: a WINDOW_UPDATE is thirteen bytes and nothing accumulates; a HEADERS
+    # without END_STREAM -- a malformed request under RFC 9113, 8.1, which the adapter reads
+    # as trailers -- writes a warning line per frame to the host's log carrying the client's
+    # header bytes. The host's cost is one stream process held for as long as the frames
+    # keep coming, up to the adapter's streams-per-connection setting. The threat model
+    # states it as the adapter's, with tests that fail the day the adapter honours the
+    # deadline it is given.
     defp piece_length(true, size), do: min(@read_piece, @max_body_bytes - size)
     defp piece_length(false, _size), do: -1
 
