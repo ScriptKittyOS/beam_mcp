@@ -508,13 +508,19 @@ collector, the tracer and its stated threat model in
 
 **Shipping now.** The protocol core for `2026-07-28` and `2025-11-25`; the stdio and
 stateless Streamable HTTP transports; JSON Schema validation of tool arguments; the catalog
-contract — tools, resources and prompts declared by the host, tools dispatched through the
-host's function; the connectome spine above — declared, observed, canonical bytes, diff —
-with the Livebook that renders it; and reachability queries over a graph
-(`BeamMCP.Connectome.Reach`: can an entry reach an effect, can it do so without crossing a
-gate — with a witness path made of the graph's own edges — does a gate dominate an effect,
-and which nodes every path must cross; on OTP's `:digraph`, dominators by Lengauer–Tarjan,
-no new dependency; [`docs/connectome-reach.md`](docs/connectome-reach.md)).
+contract — tools, resources and prompts declared by the host (`BeamMCP.ToolSpec`,
+`BeamMCP.ResourceSpec` and `BeamMCP.ResourceTemplateSpec`, `BeamMCP.PromptSpec`), tools
+dispatched through the host's function, resources read and prompts rendered through its two
+optional callbacks, every list paginated by one keyset cursor (`BeamMCP.Cursor`); the
+connectome spine above — declared, observed, canonical bytes, diff — with the Livebook that
+renders it and the read-only surface a host puts on the wire (`BeamMCP.Connectome.Surface`);
+and reachability queries over a graph (`BeamMCP.Connectome.Reach`: can an entry reach an
+effect, can it do so without crossing a gate — with a witness path made of the graph's own
+edges — does a gate dominate an effect, and which nodes every path must cross; on OTP's
+`:digraph`, dominators by Lengauer–Tarjan, no new dependency;
+[`docs/connectome-reach.md`](docs/connectome-reach.md)). Every module named in this
+paragraph is held to the built application by a census, and every module named in the next
+two is held absent from it.
 
 **Decided and not built.** Settled by an owner decision, with no code behind it yet: a
 federation seam for merging graphs from several nodes; and effective connectivity, the
