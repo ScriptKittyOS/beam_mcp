@@ -343,6 +343,11 @@ defmodule BeamMCP.Catalog do
         {:error,
          "#{inspect(catalog)}.capabilities/0's :prompts must all be %BeamMCP.PromptSpec{}"}
 
+      loose_arguments(prompts) != nil ->
+        {:error,
+         "#{inspect(catalog)}.capabilities/0's prompt #{inspect(loose_arguments(prompts))} " <>
+           "must carry a list of %BeamMCP.PromptArgument{} as its arguments"}
+
       non_string_name(prompts) != nil ->
         {:error,
          "#{inspect(catalog)}.capabilities/0's :prompts carries the name " <>
@@ -372,6 +377,13 @@ defmodule BeamMCP.Catalog do
 
   defp repeated(names) do
     names |> Enum.frequencies() |> Enum.find_value(fn {name, n} -> if n > 1, do: name end)
+  end
+
+  # The first prompt whose arguments are not a list of PromptArguments, by name, or nil.
+  defp loose_arguments(prompts) do
+    Enum.find_value(prompts, fn %BeamMCP.PromptSpec{name: name, arguments: args} ->
+      unless is_list(args) and Enum.all?(args, &match?(%BeamMCP.PromptArgument{}, &1)), do: name
+    end)
   end
 
   # The first prompt or argument name that is not a string, or nil. An atom would be
