@@ -280,8 +280,10 @@ the connection is clean, and an ordinary response is possible.
   defaulting to 100 × 16,384 = **1,638,400**. Setting it is the host's capacity decision, and a
   number this package picked for you would be one it cannot keep.
 - It is not a ceiling on bytes read. What the **server** reads before refusing is the cap
-  itself: a declared 32 MiB body is refused after `read_body/2` returns a partial of exactly
-  **1,048,576 bytes**, constant across six socket-buffer settings and four runs. How much the
+  itself over HTTP/1: a declared 32 MiB body is refused after `read_body/2` returns a partial of exactly
+  **1,048,576 bytes**, constant across six socket-buffer settings and four runs (over HTTP/2 the
+  adapter hands whole frames, so the read is the cap plus the frame that crosses it, at most
+  16 KiB — the threat model's row). How much the
   **client** got onto the wire by then is a different quantity and not a property of this
   package — the same 24 measurements put it between 1.125 MiB and 7.438 MiB, varying run to run
   at one fixed buffer size — so there is no number to design against there, only the
