@@ -71,7 +71,7 @@ rounds = String.to_integer(System.get_env("R", "5"))
 # here). The fixture holds ~10 000 edges; a `max_edges:` set here below that is refused by
 # name and fails this step -- shown red with `max_edges: 5_000` before the defaults were
 # restored, both runs archived.
-caps = [max_edges: 5_000]
+caps = []
 srv_id = Node.id({:server, server})
 gates = Enum.map(11..30, id)
 
