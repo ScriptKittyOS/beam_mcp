@@ -24,7 +24,7 @@ defmodule BeamMCP.ThreatModelTest do
   import Plug.Test
   import Plug.Conn
 
-  alias BeamMCP.Transport.HTTP
+  alias BeamMCP.Transport.{HTTP, Stdio}
 
   @root Path.expand("../..", __DIR__)
   @page "docs/threat-model.md"
@@ -130,6 +130,40 @@ defmodule BeamMCP.ThreatModelTest do
       assert second["id"] == 2
     end
 
+    test "brackets inside a string are text, escaped quotes do not end the string, and siblings do not add up" do
+      max = BeamMCP.JSON.max_depth()
+      # Two hundred brackets inside a string value: depth one.
+      inside = ~s({"k":"#{String.duplicate("[", max * 3)}"})
+      assert {:ok, %{"k" => _}} = BeamMCP.JSON.decode(inside)
+      # An escaped quote inside the string, then brackets: still inside the string.
+      escaped = ~s({"k":"a\\"#{String.duplicate("[", max * 3)}"})
+      assert {:ok, %{"k" => _}} = BeamMCP.JSON.decode(escaped)
+      # A backslash before a bracket inside a string, as JSON allows only for a few escapes:
+      # Jason refuses it, and that is Jason's answer, not a nesting refusal.
+      assert {:error, %Jason.DecodeError{}} =
+               BeamMCP.JSON.decode(~s({"k":"\\[#{String.duplicate("[", max * 3)}"}))
+
+      # Many siblings at depth two: the closing bracket counts back down.
+      siblings = "[" <> Enum.map_join(1..(max * 3), ",", fn _ -> "[]" end) <> "]"
+      assert {:ok, list} = BeamMCP.JSON.decode(siblings)
+      assert length(list) == max * 3
+      # Exactly the bound, then one past it, on bare arrays.
+      assert {:ok, _} =
+               BeamMCP.JSON.decode(String.duplicate("[", max) <> String.duplicate("]", max))
+
+      assert {:error, {:nesting, depth, ^max}} =
+               BeamMCP.JSON.decode(
+                 String.duplicate("[", max + 1) <> String.duplicate("]", max + 1)
+               )
+
+      assert depth == max + 1
+      # Objects count the same as arrays.
+      assert {:error, {:nesting, _, ^max}} =
+               BeamMCP.JSON.decode(
+                 String.duplicate(~s({"a":), max + 1) <> "1" <> String.duplicate("}", max + 1)
+               )
+    end
+
     test "the bound is one number, read from one place, and it is the number the page states" do
       max = BeamMCP.JSON.max_depth()
       assert is_integer(max) and max > 0
@@ -144,7 +178,7 @@ defmodule BeamMCP.ThreatModelTest do
       assert length(cited) >= 6,
              "the page cites #{length(cited)} tests; it names a refusal per vector"
 
-      assert BeamMCP.Boundary.missing_citations(page(), @root) == []
+      assert BeamMCP.Boundary.citation_defects(page(), @root) == []
     end
   end
 
@@ -162,7 +196,7 @@ defmodule BeamMCP.ThreatModelTest do
     Process.group_leader(self(), device)
 
     try do
-      BeamMCP.Transport.Stdio.run(catalog: Catalog, dispatch: fn _n, a, _o -> {:ok, a} end)
+      Stdio.run(catalog: Catalog, dispatch: fn _n, a, _o -> {:ok, a} end)
     after
       Process.group_leader(self(), original)
     end

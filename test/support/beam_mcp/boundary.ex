@@ -91,25 +91,24 @@ defmodule BeamMCP.Boundary do
   end
 
   @doc "Every test the page cites exists, by path and by name; every citation names a test. Returns the defects."
-  def missing_citations(text, root) do
-    for {path, names} <- citations(text),
-        full = Path.join(root, path),
-        defect <-
-          (cond do
-             not File.exists?(full) ->
-               ["#{path} is not in the tree"]
+  def citation_defects(text, root) do
+    Enum.flat_map(citations(text), fn {path, names} -> citation_defect(path, names, root) end)
+  end
 
-             names == [] ->
-               ["#{path} is cited without a test name"]
+  defp citation_defect(path, names, root) do
+    full = Path.join(root, path)
 
-             true ->
-               source = File.read!(full)
+    cond do
+      not File.exists?(full) -> ["#{path} is not in the tree"]
+      names == [] -> ["#{path} is cited without a test name"]
+      true -> unnamed_tests(path, names, File.read!(full))
+    end
+  end
 
-               for n <- names,
-                   not String.contains?(source, ~s(test "#{n}")),
-                   do: "#{path} names no test #{inspect(n)}"
-           end),
-        do: defect
+  defp unnamed_tests(path, names, source) do
+    for n <- names,
+        not String.contains?(source, ~s(test "#{n}")),
+        do: "#{path} names no test #{inspect(n)}"
   end
 
   @doc "Every module the built application's `.app` file lists."

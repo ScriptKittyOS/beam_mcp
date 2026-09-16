@@ -524,14 +524,20 @@ if Code.ensure_loaded?(Plug) do
       {:refused, conn, 400, error(nil, -32_700, "Parse error: empty body")}
     end
 
+    # `BeamMCP.JSON.decode/1` bounds the nesting before the decoder runs; the body has been
+    # read in full by now (it is under the size cap), so this refusal keeps the connection.
     defp decode(conn, body) do
-      case Jason.decode(body) do
+      case BeamMCP.JSON.decode(body) do
         {:ok, %{} = message} ->
           {:ok, conn, message}
 
         {:ok, other} ->
           {:refused, conn, 400,
            error(nil, -32_600, "Expected a JSON object, got #{type_of(other)}")}
+
+        {:error, {:nesting, _depth, max}} ->
+          {:refused, conn, 400,
+           error(nil, -32_600, "Request body nests deeper than #{max} levels")}
 
         {:error, _} ->
           {:refused, conn, 400, error(nil, -32_700, "Parse error: body is not valid JSON")}

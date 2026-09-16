@@ -57,6 +57,18 @@ defmodule BeamMCP.Transport.Stdio do
           loop(next_state)
         end
 
+      {:error, {:nesting, _depth, max}} ->
+        write_message(%{
+          "jsonrpc" => "2.0",
+          "id" => nil,
+          "error" => %{
+            "code" => -32_600,
+            "message" => "Request body nests deeper than #{max} levels"
+          }
+        })
+
+        loop(state)
+
       {:error, reason} ->
         write_message(%{
           "jsonrpc" => "2.0",
@@ -115,12 +127,9 @@ defmodule BeamMCP.Transport.Stdio do
     end
   end
 
-  defp decode(body) do
-    case Jason.decode(body) do
-      {:ok, decoded} -> {:ok, decoded}
-      {:error, _} = error -> error
-    end
-  end
+  # `BeamMCP.JSON.decode/1` bounds the nesting before the decoder runs (the line is already
+  # under the frame bound, so the refusal costs the scan and nothing else).
+  defp decode(body), do: BeamMCP.JSON.decode(body)
 
   defp content_length_header?(line) do
     line |> String.downcase() |> String.starts_with?("content-length:")
