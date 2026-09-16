@@ -165,6 +165,20 @@ defmodule BeamMCP.Connectome.SurfaceTest do
       assert {:ok, [%{text: text}]} = Surface.read("connectome://observed", opts)
       assert text =~ ~s("algorithm":"sha384")
 
+      # The diff path too: a plant that encoded and hashed the record under the default while
+      # keying the hex sha384 survived every test -- a hash under one name beside bytes naming
+      # another, the thing the member exists to prevent.
+      diff_opts = Keyword.put(opts, :window, @window)
+
+      assert {:ok, %{graph: "diff", bytes: diff_bytes, sha384: diff_hex} = diff_result} =
+               Surface.call(%{graph: "diff"}, diff_opts)
+
+      refute Map.has_key?(diff_result, :sha256)
+      assert String.starts_with?(diff_bytes, ~s({"algorithm":"sha384",))
+      assert diff_hex == Base.encode16(:crypto.hash(:sha384, diff_bytes), case: :lower)
+      assert {:ok, [%{text: diff_text}]} = Surface.read("connectome://diff", diff_opts)
+      assert diff_text == diff_bytes
+
       assert_raise ArgumentError, ~r/algorithm/, fn ->
         Surface.call(%{graph: "declared"}, Keyword.put(opts, :algorithm, :md5))
       end

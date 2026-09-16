@@ -653,7 +653,22 @@ defmodule BeamMCP.Connectome.CanonicalTest do
     test "an algorithm outside the list is refused at the option by name, before any byte is written" do
       g = golden_graph()
 
-      for bad <- [:md5, :sha1, :sha, "sha256", :sha3_256, nil, 256] do
+      # The domain is exactly algorithms/0: every other spelling of the three names is
+      # refused too -- a string, an uppercase atom, a charlist -- since a plant that admitted
+      # the string "sha384" survived a list that refused "sha256" alone.
+      other_spellings =
+        Enum.flat_map(Canonical.algorithms(), fn a ->
+          name = Atom.to_string(a)
+
+          [
+            name,
+            String.to_atom(String.upcase(name)),
+            String.to_charlist(name),
+            "SHA-" <> String.trim_leading(name, "sha")
+          ]
+        end)
+
+      for bad <- [:md5, :sha1, :sha, :sha3_256, :sha512_256, nil, 256, true] ++ other_spellings do
         e = assert_raise ArgumentError, fn -> Canonical.encode(g, algorithm: bad) end
         assert e.message =~ "algorithm"
         assert e.message =~ inspect(bad)
@@ -663,6 +678,30 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       end
 
       assert_raise ArgumentError, ~r/option/, fn -> Canonical.encode(g, digest: :sha384) end
+      # Given twice is refused by that name, not as an unknown key.
+      e =
+        assert_raise ArgumentError, fn ->
+          Canonical.encode(g, algorithm: :sha512, algorithm: :sha256)
+        end
+
+      assert e.message =~ "twice"
+      # Not a keyword list at all: refused by name, as Graph.new/1 refuses a non-keyword.
+      for bad <- [%{algorithm: :sha256}, nil, [:sha384], "sha384"] do
+        e = assert_raise ArgumentError, fn -> Canonical.encode(g, bad) end
+        assert e.message =~ "keyword"
+      end
+
+      # A value that names an algorithm the option disagrees with is refused: the one path
+      # where bytes could name a digest they were not hashed with.
+      e =
+        assert_raise ArgumentError, fn ->
+          Canonical.hash_value(%{"algorithm" => "sha384", "a" => 1}, algorithm: :sha256)
+        end
+
+      assert e.message =~ "sha384" and e.message =~ "sha256"
+      assert_raise ArgumentError, fn -> Canonical.hash_value(%{algorithm: :sha512}) end
+      assert {:ok, _} = Canonical.hash_value(%{algorithm: :sha384, a: 1}, algorithm: :sha384)
+      assert {:ok, _} = Canonical.hash_value(%{"algorithm" => "sha384"}, algorithm: :sha384)
     end
 
     test "the .app the build writes depends on crypto, so a release without plug and bandit still hashes" do
@@ -672,6 +711,14 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       # from the .app, not from mix.exs, as the tools pin is.
       assert :crypto in Application.spec(:beam_mcp, :applications)
       refute :crypto in (Application.spec(:beam_mcp, :optional_applications) || [])
+    end
+
+    test "to_json/2 takes the algorithm, so a file export can match a resource served under it" do
+      g = golden_graph()
+      assert Canonical.to_json!(g) == Canonical.encode!(g)
+      assert Canonical.to_json!(g, algorithm: :sha384) == Canonical.encode!(g, algorithm: :sha384)
+      assert {:ok, bytes} = Canonical.to_json(g, algorithm: :sha512)
+      assert bytes =~ ~s("algorithm":"sha512")
     end
 
     test "hash_value/2 takes the algorithm too, over the same bytes" do
@@ -698,6 +745,20 @@ defmodule BeamMCP.Connectome.CanonicalTest do
                String.trim(File.read!(Path.join(@fixtures, "golden.sha256")))
 
       assert verifier_algorithm(Canonical.encode!(golden_graph(), algorithm: :sha384)) == :sha384
+      # And what the page calls malformed, the verifier refuses: a 2 with a member, a 3
+      # without one, a 4, an unknown name.
+      with_member = ~s({"schema_version":2,"algorithm":"sha256",)
+
+      assert verifier_algorithm(String.replace(v2, ~s({"schema_version":2,), with_member)) ==
+               :malformed
+
+      assert verifier_algorithm(String.replace(v3, ~s("algorithm":"sha256",), "")) == :malformed
+
+      assert verifier_algorithm(
+               String.replace(v3, ~s("schema_version":3), ~s("schema_version":4))
+             ) == :malformed
+
+      assert verifier_algorithm(String.replace(v3, "sha256", "sha3-256")) == :malformed
 
       # And the package itself no longer writes 2: a graph carrying it is refused, not translated.
       assert {:error, {:invalid, :schema_version, 2}} =
@@ -992,17 +1053,17 @@ defmodule BeamMCP.Connectome.CanonicalTest do
     end
   end
 
-  # What the migration note tells a verifier to do, in a dozen lines: read the version, then
-  # the algorithm the bytes name -- SHA-256 when they name none, below 3.
+  # What the migration note tells a verifier to do, in a dozen lines, on the page's terms:
+  # the members are in a fixed order, so the version and the algorithm are read from the
+  # prefix, not from a decoded map; below 3 the digest is SHA-256 and a member is malformed;
+  # at 3 the member is the second and names one of the three; above 3 is refused.
   defp verifier_algorithm(bytes) do
-    %{"schema_version" => version} = record = Jason.decode!(bytes)
+    prefix = ~r/^\{"schema_version":(\d+),(?:"algorithm":"(sha256|sha384|sha512)",)?"nodes":/
 
-    case {version, record["algorithm"]} do
-      {v, nil} when v < 3 ->
-        :sha256
-
-      {v, name} when v >= 3 and name in ["sha256", "sha384", "sha512"] ->
-        String.to_existing_atom(name)
+    case Regex.run(prefix, bytes) do
+      [_, v] when v in ["1", "2"] -> :sha256
+      [_, "3", name] -> String.to_existing_atom(name)
+      _ -> :malformed
     end
   end
 
