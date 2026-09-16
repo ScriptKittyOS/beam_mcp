@@ -97,11 +97,13 @@ defmodule BeamMCP.Transport.Stdio do
   defp refusal({:duplicate_key, key}),
     do: error(nil, -32_600, "Request body repeats a key: duplicate key #{inspect(key)}")
 
+  # A size refusal is -32600, as the HTTP transport's is: one vector, one code on every
+  # transport. Only bytes that are not JSON are a parse error.
   defp refusal(:frame_too_large),
-    do: error(nil, -32_700, "Parse error: line exceeds #{@max_line_bytes} bytes")
+    do: error(nil, -32_600, "Request line exceeds #{@max_line_bytes} bytes")
 
   defp refusal(:declared_frame_too_large),
-    do: error(nil, -32_700, "Parse error: frame exceeds #{@max_body_bytes} bytes")
+    do: error(nil, -32_600, "Request frame exceeds #{@max_body_bytes} bytes")
 
   defp refusal(reason) when reason in [:invalid_content_length, :missing_content_length],
     do: error(nil, -32_700, "Parse error: #{reason}")
@@ -138,29 +140,30 @@ defmodule BeamMCP.Transport.Stdio do
     end
   end
 
-  # Reads one newline-terminated line, refusing to allocate past @max_line_bytes.
-  # The cap has to bound the read, not merely inspect its result.
-  defp read_line_bounded(acc \\ [], size \\ 0)
+  # Reads one newline-terminated line, refusing to allocate past @max_line_bytes. The cap has
+  # to bound the read, not merely inspect its result. The line is built as one binary -- the
+  # runtime's append optimisation keeps that near a byte per byte -- where a list of one-byte
+  # binaries cost the loop ~40 bytes of heap per byte of line (a review lane measured 46-67
+  # MiB for a 1 MiB line).
+  defp read_line_bounded(acc \\ <<>>)
 
   # A line of exactly the bound is admitted; the byte past it is the refusal, so "exceeds"
-  # is true of every line refused (until 0.6.0 the boundary byte itself was refused).
-  defp read_line_bounded(_acc, size) when size > @max_line_bytes do
+  # is true of every line refused (until this change the boundary byte itself was refused).
+  defp read_line_bounded(acc) when byte_size(acc) > @max_line_bytes do
     drain_line()
     {:error, :frame_too_large}
   end
 
-  defp read_line_bounded(acc, size) do
+  defp read_line_bounded(acc) do
     case IO.binread(:stdio, 1) do
-      :eof when acc == [] -> :eof
-      :eof -> {:ok_line, acc |> Enum.reverse() |> IO.iodata_to_binary()}
+      :eof when acc == <<>> -> :eof
+      :eof -> {:ok_line, acc}
       {:error, reason} -> {:error, reason}
-      "\n" -> {:ok_line, acc |> Enum.reverse() |> IO.iodata_to_binary()}
-      byte -> read_line_bounded([byte | acc], size + 1)
+      "\n" -> {:ok_line, acc}
+      byte -> read_line_bounded(acc <> byte)
     end
   end
 
-  # `BeamMCP.JSON.decode/1` bounds the nesting before the decoder runs (the line is already
-  # under the frame bound, so the refusal costs the scan and nothing else).
   # The rest of an over-long line, read byte by byte to its newline (or EOF) and dropped:
   # nothing of it is buffered, and nothing of it is read as the next frame.
   defp drain_line do
@@ -181,24 +184,41 @@ defmodule BeamMCP.Transport.Stdio do
   # Legacy LSP-style framing, retained for callers written against the old behaviour.
   # A declared length over the cap is refused by name -- and its body is read and dropped in
   # chunks, never buffered, so that nothing of it is read as the next frame: a lane put a
-  # `tools/call` inside such a body and saw it dispatched.
+  # `tools/call` inside such a body and saw it dispatched. A header line over the line bound
+  # is refused the same way, the block's remaining headers and the declared body drained.
   defp read_legacy_framed(first_line) do
-    with {:ok, length} <- parse_content_length(first_line),
-         :ok <- skip_remaining_headers(),
-         {:ok, body} <- read_body(length) do
-      decode(body)
-    else
-      {:error, {:declared_frame_too_large, length}} ->
-        skip_remaining_headers()
-        drain_bytes(length)
-        {:error, :declared_frame_too_large}
+    case parse_content_length(first_line) do
+      {:ok, length} ->
+        read_legacy_block(length)
 
-      {:error, :unexpected_eof} ->
-        :eof
+      {:error, {:declared_frame_too_large, length}} ->
+        drain_frame(length, :declared_frame_too_large)
 
       {:error, _} = error ->
         error
     end
+  end
+
+  defp read_legacy_block(length) do
+    case skip_remaining_headers() do
+      :ok -> read_legacy_body(length)
+      {:error, :frame_too_large} -> drain_frame(length, :frame_too_large)
+      {:error, _} = error -> error
+    end
+  end
+
+  defp read_legacy_body(length) do
+    case read_body(length) do
+      {:ok, body} -> decode(body)
+      {:error, :unexpected_eof} -> :eof
+      {:error, _} = error -> error
+    end
+  end
+
+  defp drain_frame(length, reason) do
+    _ = skip_remaining_headers()
+    drain_bytes(length)
+    {:error, reason}
   end
 
   @drain_chunk 65_536
@@ -213,11 +233,13 @@ defmodule BeamMCP.Transport.Stdio do
     end
   end
 
+  # Every header line of the block is read under the same bound as the first: a lane sent
+  # 64 MiB on one of them and it was read whole.
   defp skip_remaining_headers do
-    case IO.binread(:stdio, :line) do
+    case read_line_bounded() do
       :eof -> :ok
       {:error, reason} -> {:error, reason}
-      line -> if String.trim(line) == "", do: :ok, else: skip_remaining_headers()
+      {:ok_line, line} -> if String.trim(line) == "", do: :ok, else: skip_remaining_headers()
     end
   end
 

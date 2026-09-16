@@ -110,8 +110,9 @@ defmodule BeamMCP.Transport.StdioTest do
 
     [first | rest] = out |> String.split("\n", trim: true) |> Enum.map(&Jason.decode!/1)
 
-    assert first["error"]["code"] == -32_700
-    assert first["error"]["message"] == "Parse error: line exceeds 1048576 bytes"
+    # -32600, as the HTTP transport's 413 carries: a size bound is not a parse error.
+    assert first["error"]["code"] == -32_600
+    assert first["error"]["message"] == "Request line exceeds 1048576 bytes"
 
     # Until 0.6.0 this test asserted the opposite of the next line, and said why: after
     # refusing the oversized frame the loop resumed mid-line, so the remainder was read as a

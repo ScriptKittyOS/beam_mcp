@@ -96,7 +96,16 @@ defmodule BeamMCP.Boundary do
     |> Enum.reverse()
   end
 
-  @doc "Every test the page cites exists, by path and by name; every citation names a test. Returns the defects."
+  @doc """
+  Every test the page cites exists, by path and by name, and is live; every citation names a
+  test. Returns the defects. Liveness is ExUnit's answer, not a text reader's: the cited file's
+  first `defmodule` is loaded (required from the path if the suite has not loaded it) and the
+  test list ExUnit generates on it read -- a test is live when it is there and carries no `skip` tag,
+  which is where `@tag`, `@describetag` and `@moduletag` all end up, in every spelling. A
+  commented-out test, or a `test "..."` inside a string, is not in that list. What this does
+  not see: an `--exclude` at the runner (`test/test_helper.exs` excludes `:hot_reload` under
+  cover), which is the runner's, not the module's.
+  """
   def citation_defects(text, root) do
     Enum.flat_map(citations(text), fn {path, names} -> citation_defect(path, names, root) end)
   end
@@ -107,56 +116,35 @@ defmodule BeamMCP.Boundary do
     cond do
       not File.exists?(full) -> ["#{path} is not in the tree"]
       names == [] -> ["#{path} is cited without a test name"]
-      true -> unnamed_tests(path, names, File.read!(full))
+      true -> unnamed_tests(path, names, live_tests(full))
     end
   end
 
-  @skip_module ~r/^\s*@moduletag\b.*\bskip\b/
-  @skip_tag ~r/^\s*@(?:tag|describetag)\b.*\bskip\b/
-  @attribute_or_blank ~r/^\s*(?:@(?:tag|describetag)\b.*)?$/
-
-  # A cited test is a live one: a `test "name"` line that is not commented out and not skipped
-  # -- a citation of a test that never runs would read as coverage. Skipped means a `@tag` or
-  # `@describetag` naming skip in any of ExUnit's spellings (`:skip`, `skip: true`, `skip:
-  # "why"`) among the attribute lines above the test, blank lines between allowed, or a
-  # `@moduletag` naming skip above the file's first test. What the reader does not see: an
-  # `--exclude` at the runner.
-  defp unnamed_tests(path, names, source) do
-    lines = String.split(source, "\n")
-
-    live =
-      if module_skipped?(lines) do
-        []
-      else
-        lines
-        |> Enum.with_index()
-        |> Enum.filter(fn {line, i} ->
-          Regex.match?(~r/^\s*(?:property|test) "/, line) and not skipped?(lines, i)
-        end)
-        |> Enum.map(&elem(&1, 0))
-      end
-
-    for n <- names,
-        not Enum.any?(live, &String.contains?(&1, ~s(test "#{n}"))),
-        do: "#{path} names no test #{inspect(n)}"
+  defp unnamed_tests(path, names, live) do
+    for n <- names, not MapSet.member?(live, n), do: "#{path} names no live test #{inspect(n)}"
   end
 
-  # A `@moduletag` naming skip above the file's first test skips them all; one below the first
-  # test is not read (a test file that writes a fixture file carries the words in a heredoc).
-  defp module_skipped?(lines) do
-    lines
-    |> Enum.take_while(&(not Regex.match?(~r/^\s*(?:property|test) "/, &1)))
-    |> Enum.any?(&Regex.match?(@skip_module, &1))
+  # The names of the file's live tests, without the "test " / "property " prefix ExUnit adds.
+  defp live_tests(full) do
+    source = File.read!(full)
+    [_, module_name] = Regex.run(~r/^defmodule\s+([A-Z][\w.]*)/m, source)
+    module = Module.concat([module_name])
+    Code.ensure_loaded?(module) or Code.require_file(full)
+
+    # A skip tag is any truthy value: `:skip` is `skip: true`, `skip: "why"` is a string. The
+    # name ExUnit holds is "test <describe> <name>"; the page cites the bare name.
+    for %ExUnit.Test{name: name, tags: tags} <- module.__ex_unit__().tests,
+        !Map.get(tags, :skip, false),
+        into: MapSet.new() do
+      name
+      |> Atom.to_string()
+      |> String.replace(~r/^(?:test|property) /, "")
+      |> String.replace_prefix(describe_prefix(tags), "")
+    end
   end
 
-  # Walk up from the test line over attribute and blank lines; any of them naming skip skips it.
-  defp skipped?(lines, i) do
-    lines
-    |> Enum.slice(0, i)
-    |> Enum.reverse()
-    |> Enum.take_while(&Regex.match?(@attribute_or_blank, &1))
-    |> Enum.any?(&Regex.match?(@skip_tag, &1))
-  end
+  defp describe_prefix(%{describe: describe}) when is_binary(describe), do: describe <> " "
+  defp describe_prefix(_), do: ""
 
   @doc "Every module the built application's `.app` file lists."
   def app_modules do

@@ -70,19 +70,24 @@ All notable changes to this project are documented here. The format follows
   `-32600 Expected a JSON object, got a string` and the like, as over HTTP. **A parse error
   carried `data: inspect(reason)`** — the decoder's struct, with the client's own bytes in it,
   up to `inspect`'s printable limit; now every refusal names its cause in the message and
-  carries no data (`-32700 Parse error: body is not valid JSON`; `Parse error: line exceeds
-  1048576 bytes`). **The tail of an over-long line was read as the next frames** — refused once
-  at the bound, then the remainder decoded as a fresh message and refused again, and a test
-  recorded that as observed; now the rest of the line is drained to its newline, byte by byte
-  and never buffered, so the refusal is one line and the tail is nobody's frame. **A legacy
-  `Content-Length` frame declaring more than the cap** was refused and its body left on the
-  pipe, so a request inside that body was read as the next frame and dispatched (a
-  consumer-parse-back lane put a `tools/call` there and watched it answer); now the declared
-  body is drained in chunks, never buffered, and the refusal names the frame: `Parse error:
-  frame exceeds 1048576 bytes`. **And the line cap admits exactly 1 MiB:** a line of 1,048,576
-  bytes was refused as exceeding a bound it met, one byte early against the HTTP body and the
-  legacy frame; now the byte past the cap is the refusal on all three. A client that sent
-  well-formed lines under the cap sees no change.
+  carries no data (`-32700 Parse error: body is not valid JSON`; a size refusal `-32600 Request
+  line exceeds 1048576 bytes`, the code the HTTP transport's `413` carries, so one vector has
+  one code on every transport — it was `-32700` on stdio). **The tail of an over-long line was
+  read as the next frames** — refused once at the bound, then the remainder decoded as a fresh
+  message and refused again, and a test recorded that as observed; now the rest of the line is
+  drained to its newline, byte by byte and never buffered, so the refusal is one line and the
+  tail is nobody's frame. **A legacy `Content-Length` frame declaring more than the cap** was
+  refused and its body left on the pipe, so a request inside that body was read as the next
+  frame and dispatched (a consumer-parse-back lane put a `tools/call` there and watched it
+  answer); now the declared body is drained in chunks, never buffered, and the refusal names the
+  frame: `-32600 Request frame exceeds 1048576 bytes`. **A header line of that block was read
+  with no bound** — a lane sent 64 MiB on one and it was read whole; now every header line is
+  read under the line bound, and past it the block and its declared body are drained. **And the
+  line itself was held as a list of one-byte binaries** — 46–67 MiB of heap for a 1 MiB line
+  (measured); now the line is one off-heap binary and the loop retains none of it. **And the
+  line cap admits exactly 1 MiB:** a line of 1,048,576 bytes was refused as exceeding a bound it
+  met, one byte early against the HTTP body and the legacy frame; now the byte past the cap is
+  the refusal on all three. A client that sent well-formed lines under the cap sees no change.
 
 ## [0.5.0] — 2026-09-16
 
