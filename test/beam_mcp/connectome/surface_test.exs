@@ -56,6 +56,16 @@ defmodule BeamMCP.Connectome.SurfaceTest do
 
       assert Enum.all?(specs, &match?(%ResourceSpec{mime_type: "application/json"}, &1))
       assert Enum.all?(specs, &(is_binary(&1.description) and &1.description != ""))
+
+      assert Enum.map(specs, &{&1.name, &1.title}) == [
+               {"connectome-declared", "Declared connectome"},
+               {"connectome-diff", "Connectome diff"},
+               {"connectome-observed", "Observed connectome"}
+             ]
+
+      # Each description names the page that owns the bytes.
+      assert Enum.map(specs, & &1.description)
+             |> Enum.all?(&(&1 =~ ~r/docs\/connectome-(canonical|diff|observed)\.md/))
     end
 
     test "connectome://declared answers the canonical bytes, byte-identical to the tracked file export" do

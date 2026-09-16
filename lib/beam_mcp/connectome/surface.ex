@@ -63,8 +63,8 @@ defmodule BeamMCP.Connectome.Surface do
   graph carries the tool's own edge (the resource path is not a dispatch and adds nothing);
   a host whose `declared:` names its own catalog has that edge declared too, so it lands as
   a matched edge, not as drift. Pagination of a large graph's bytes and subscriptions on
-  `connectome://observed` are out of this module (the latter awaits the subscriptions
-  decision).
+  `connectome://observed` are out of this module (the server sends no notifications: the
+  capability is advertised with `subscribe: false`).
   """
 
   alias BeamMCP.Connectome.{Canonical, Declared, Diff, Observed}

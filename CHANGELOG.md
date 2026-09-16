@@ -43,6 +43,15 @@ All notable changes to this project are documented here. The format follows
   `resultType` written is `"complete"`; `inputResponses` and `requestState` are read nowhere,
   and a request carrying them is served as if it carried neither. A census holds it.
 
+### Fixed — `Mcp-Name` on `resources/read` and `prompts/get` over HTTP
+
+- The routing table requires `Mcp-Name` on three methods — `tools/call` (`params.name`),
+  `resources/read` (`params.uri`), `prompts/get` (`params.name`) — and the transport checked
+  it on the first alone, from the day that was the only one served; the other two answered
+  `200` without the header. Now all three require it and hold it to the body (`400`,
+  `-32020` on a mismatch, as for `tools/call`). Found by a review lane; a client that already
+  sends the header sees no change.
+
 ### Added — the prompts primitive, on the tools' own validation path
 
 - **`prompts/list` and `prompts/get`**, the two request methods the `2026-07-28` schema

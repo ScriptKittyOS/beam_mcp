@@ -42,8 +42,12 @@ defmodule BeamMCP.LivebookTest do
       # The counts are the export's: the tracked declared export has these many.
       declared = Jason.decode!(File.read!(Path.join(@root, "livebooks/exports/fx.declared.json")))
       assert declared["nodes"] != [] and declared["edges"] != []
-      for field <- ~w(id kind level labels), do: assert(cell =~ "n.#{field}")
-      for field <- ~w(from to kind provenance sign), do: assert(cell =~ "e.#{field}")
+      # The field lists are the export's own keys, so a field added to the canonical schema
+      # flags the cell.
+      node_fields = declared["nodes"] |> hd() |> Map.keys()
+      edge_fields = declared["edges"] |> hd() |> Map.keys()
+      for field <- node_fields, do: assert(cell =~ "n.#{field}", "node field #{field}")
+      for field <- edge_fields, do: assert(cell =~ "e.#{field}", "edge field #{field}")
     end
   end
 
