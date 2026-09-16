@@ -98,7 +98,10 @@ defmodule BeamMCP.Transport.StdioTest do
 
     [err, ok] = out |> String.split("\n", trim: true) |> Enum.map(&Jason.decode!/1)
     assert err["error"]["code"] == -32_700
-    assert err["error"]["message"] == "Parse error"
+    assert err["error"]["message"] == "Parse error: body is not valid JSON"
+    # Until 0.6.0 the error carried `data: inspect(reason)` -- the decoder's struct, with the
+    # client's own bytes in it. A refusal names its cause and carries nothing back.
+    refute Map.has_key?(err["error"], "data")
     assert ok["id"] == 2
   end
 
@@ -108,14 +111,14 @@ defmodule BeamMCP.Transport.StdioTest do
     [first | rest] = out |> String.split("\n", trim: true) |> Enum.map(&Jason.decode!/1)
 
     assert first["error"]["code"] == -32_700
-    assert first["error"]["data"] =~ "frame_too_large"
+    assert first["error"]["message"] == "Parse error: line exceeds 1048576 bytes"
 
-    # Observed, and asserted so it is not mistaken for a clean refusal: after refusing the
-    # oversized frame the loop resumes mid-line, so the remainder is read as a fresh message
-    # and produces a second parse error. The bound holds -- nothing beyond it is buffered --
-    # but the reader does not resynchronise to the next newline.
-    assert length(rest) == 1
-    assert hd(rest)["error"]["code"] == -32_700
+    # Until 0.6.0 this test asserted the opposite of the next line, and said why: after
+    # refusing the oversized frame the loop resumed mid-line, so the remainder was read as a
+    # fresh message and produced a second parse error. Now the rest of the line is drained to
+    # its newline, byte by byte and never buffered, so the refusal is one line and the tail is
+    # nobody's frame.
+    assert rest == []
   end
 
   test "EOF ends the loop without a response" do

@@ -17,32 +17,65 @@ All notable changes to this project are documented here. The format follows
   the wire for nothing, the node for everything by physics, this package for holding no tool,
   key, signature, session, authority or client — and the wire vector by vector, each
   **refused**, **bounded** or **delegated** to the HTTP server or the host by decision, with the
-  test that enforces it by path and by name and the OWASP id it answers to (the December 2025
-  Top 10 for Agentic Applications; the 2025 LLM Top 10, by edition). It extends the tracer's
-  threat model shipped in 0.4.0 rather than replacing it: an adversary executing code inside the
-  same node stays out of scope, now for every module, with the reason; prompt injection through
-  tool results is the host's (LLM01:2025) — this package carries bytes and never reads them. A
-  federation section states the trust domains a merge would cross — attribution, identity,
-  signs, integrity in transit, the peer as a client — so the seam is designed against them.
-  Where the Plug goes in a host's pipeline: ahead of `Plug.Parsers`, or its path excluded —
-  behind the parsers every request is `-32700 Parse error: empty body` (measured). A census
-  holds every citation on the page to a test in the tree, the discipline the will-not-implement
-  page is held by.
+  test that enforces it by path and by name and the OWASP entry it answers to (the *OWASP Top 10
+  for Agentic Applications for 2026*, published 2025-12-09; the 2025 LLM Top 10, by edition —
+  read from the source). It extends the tracer's threat model shipped in 0.4.0 rather than
+  replacing it: an adversary executing code inside the same node stays out of scope, now for
+  every module, with the reason; prompt injection through tool results is the host's
+  (LLM01:2025) — this package carries bytes and never reads them. A federation section states
+  the trust domains a merge would cross — attribution, identity, signs, integrity in transit,
+  the peer as a client — so the seam is designed against them. Where the Plug goes in a host's
+  pipeline: ahead of `Plug.Parsers`, or its path excluded — behind the parsers every request is
+  `-32700 Parse error: empty body` (measured). A census holds every citation on the page to a
+  test in the tree, the discipline the will-not-implement page is held by. Two things the page
+  corrects in the README on the way: the body read's 15,000 ms is `Bandit`'s default for a
+  `read_body/2` call that passes no timeout — which is what this package passes — and not a
+  server option a host can set; and the 12,000-in-flight measurement is dated to its record
+  (2026-09-07).
 - **JSON nesting is bounded before the decoder runs, on both transports.** The 1 MiB body cap
   bounds how deep a body can nest but not what decoding it costs: a 1 MiB body nested 524,288
   levels deep was decoded in full — 79–96 ms and a 38 MiB heap for one request, about 36× the
-  body — and refused only afterwards by its shape, so the per-request figure the README rests on
-  was the body's size only until a client nested it. `BeamMCP.JSON.decode/1`, the one place the
-  wire's JSON is now read, walks the bytes once — brackets outside strings, escapes honoured —
+  body — and refused only afterwards by its shape. `BeamMCP.JSON.decode/1`, now the one place
+  the wire's JSON is read, walks the bytes once — brackets outside strings, escapes honoured —
   and refuses a body nesting past **64 levels** with `-32600` "Request body nests deeper than 64
-  levels" (`400` over HTTP with the connection kept, since the body was read; the same error
-  object on stdio), building nothing: the worst body under the cap is refused in microseconds,
-  and the walk costs a request-sized body nothing measurable and a 1 MiB well-formed one +1.7
-  ms. Sixty-four levels: a request is three deep before the host's data begins, and nothing in
-  the conformance suite or this package's tests comes near it; the number is a constant, for the
-  reason the body cap is. **How to tell whether you are affected:** only a client sending a body
-  nested past 64 levels sees a change, and it now gets `-32600` naming the depth instead of a
-  decoded-then-refused request; no field, method or capability moves.
+  levels" (`400` over HTTP with the connection kept, since the body was read; the same object on
+  stdio), building nothing: the worst body under the cap is refused in microseconds. Sixty-four:
+  a request is three levels deep before the host's data begins, and nothing in the conformance
+  suite or this package's tests comes near it; the number is a constant, for the reason the body
+  cap is, and it is pinned by bytes (64 admitted, 65 refused, as literals) after a review lane
+  moved the constant to 8 and the suite stayed green.
+- **A repeated key in the body is refused, on both transports.** Jason keeps the first of two
+  equal keys; most other parsers keep the last, so a hop in front of this server that routed
+  on the last `"name"` while this server executed the first was two sources of truth inside
+  one body — the disagreement the header–body match exists to close, reopened (found by a
+  review lane driving the wire). Now a body that repeats a key in any object, at any depth, is
+  `-32600` "Request body repeats a key: duplicate key \"name\"" (`400` over HTTP). The repeat
+  is found in the decoded objects, not the bytes, so `"a"` and `"\u0061"` are one key as every
+  decoder reads them. What the bounded decode costs against the decoder alone, by shape: a
+  request-sized body 2 µs → 4 µs; a 1 MiB body that is one string 2.0 → 4.0 ms; key-dense
+  bodies of 600–900 KB 17–21 → 42–45 ms — the ordered-object decode and a second walk,
+  the price of comparing keys after unescaping. **How to tell whether you are affected:** a client
+  that nests a body past 64 levels or repeats a key in an object now gets `-32600` naming the
+  cause; no field, method or capability moves.
+
+### Fixed — the stdio loop under a hostile line or a host fault
+
+- Four things the threat model's rows claimed transport-wide and a review lane measured false on
+  stdio, each red first. **A host fault ended the loop:** a dispatch function, catalog or hook
+  that raised, threw or exited took `BeamMCP.Transport.Stdio.run/1` down with nothing written,
+  and every request queued behind it was never answered; now it is answered `-32603 Internal
+  error` with the request's id, the log line carries arities and never arguments, and the loop
+  goes on — as the HTTP transport has always answered `500`. **A line that was JSON but not an
+  object got silence** (a string, a number, `null`, `true` were served as notifications); now
+  `-32600 Expected a JSON object, got a string` and the like, as over HTTP. **A parse error
+  carried `data: inspect(reason)`** — the decoder's struct, with the client's own bytes in it,
+  up to `inspect`'s printable limit; now every refusal names its cause in the message and
+  carries no data (`-32700 Parse error: body is not valid JSON`; `Parse error: line exceeds
+  1048576 bytes`). **The tail of an over-long line was read as the next frames** — refused once
+  at the bound, then the remainder decoded as a fresh message and refused again, and a test
+  recorded that as observed; now the rest of the line is drained to its newline, byte by byte
+  and never buffered, so the refusal is one line and the tail is nobody's frame. A client that
+  sent well-formed lines sees no change.
 
 ## [0.5.0] — 2026-09-16
 

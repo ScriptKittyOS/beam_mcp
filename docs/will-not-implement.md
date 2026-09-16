@@ -61,7 +61,7 @@ OTP the gate runs; an older OTP without a `json` module reads one fewer. The pop
 regenerated on a one-second mtime and can miss a module compiled in the same second. A new
 library, an evaluator, a socket, a shell, a spawn to another node, a key store, an environment
 read, a file read or an atom decoded from the wire fails here until it is named:
-`test/beam_mcp/boundary/package_reach_test.exs` "the modules the package calls are exactly the listed ones" "on the modules that could reach code, names, secrets, the OS or another node, the functions called are exactly the listed ones" "the one atom made from a binary is made in Server.declared_atoms/1" "every atom in the compiled forms that names a module is a called module or one of the eight named as data".
+`test/beam_mcp/boundary/package_reach_test.exs` "the modules the package calls are exactly the listed ones" "on the modules that could reach code, names, secrets, the OS or another node, the functions called are exactly the listed ones" "the one atom made from a binary is made in Server.declared_atoms/1" "every atom in the compiled forms that names a module is a called module or one of the nine named as data".
 What runs at *compile time* — a module body, an attribute's expression — leaves no call in the
 beam and is outside every artefact census; the text holds that line instead, by name. **The
 census's patterns are the list**; this paragraph names their classes, not their spellings. The

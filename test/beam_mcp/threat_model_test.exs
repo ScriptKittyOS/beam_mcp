@@ -211,6 +211,9 @@ defmodule BeamMCP.ThreatModelTest do
                BeamMCP.JSON.decode(~s({"x":{"a":1},"y":{"a":2}}))
 
       assert {:ok, [%{"a" => 1}, %{"a" => 2}]} = BeamMCP.JSON.decode(~s([{"a":1},{"a":2}]))
+      # A key is compared after unescaping, as every decoder compares it: "\u0061" is "a".
+      # That is why the repeat is found in the decoded objects and not in the bytes.
+      assert {:error, {:duplicate_key, "a"}} = BeamMCP.JSON.decode(~s({"a":1,"\\u0061":2}))
     end
   end
 
