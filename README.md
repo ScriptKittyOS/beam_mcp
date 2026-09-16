@@ -483,10 +483,11 @@ writes itself (the package holds no tool; the spec to copy is in the moduledoc);
 the canonical bytes, byte-identical to the file export (the tool carries them verbatim under
 `bytes` with their SHA-256 beside), and nothing else. The host's `read_resource/1` and
 dispatch delegate to `read/2` and `call/2` with the builder's options, the collector's name
-and the consumer's window. Read-only by
-construction and by test: the package's state is hashed before and after a call. Nothing
-else on the wire moves when a host adds them — a recording of the five advertising methods
-on both transports, before and after, differs by exactly the entries.
+and the consumer's window. Read-only by construction and by test: the package's state is
+compared term for term before and after a call (the tool's own call is a dispatch, which a
+running collector records like any other — the moduledoc says so). Nothing else on the wire
+moves when a host adds them — a recording of the five advertising methods on both
+transports, before and after, differs by exactly the entries.
 
 **What it never does.** It populates no sign — `:allow`, `:deny`, `:hold` and `:ungoverned` are
 a consumer's to write, and the package writes only `:unset` — signs no finding, holds no key and decides

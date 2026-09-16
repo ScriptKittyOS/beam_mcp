@@ -27,11 +27,12 @@ All notable changes to this project are documented here. The format follows
   collector's name) and `window:` (the consumer's map); a missing one is refused by name, a
   collector not started is `:not_started`, a build refusal is the builder's verbatim. Read-only
   by construction and by test: the collector's rows and the package's persistent terms are
-  hashed before and after and held equal. **Nothing else on the wire moves:** a recording of
+  compared before and after and held equal (the tool's own call is a dispatch, which a
+  running collector records like any other). **Nothing else on the wire moves:** a recording of
   `server/discover`, `tools/list`, `resources/list`, `resources/templates/list` and
   `prompts/list`, on the core and through the HTTP transport, taken before this change and
   kept in the tree, is what the same catalog still answers, and the catalog with the entries
-  added answers that plus exactly the entries — `server/discover` byte-identical, no capability
+  added answers that plus exactly the entries — `server/discover` identical as decoded JSON, no capability
   claimed (`connectome://` is a URI scheme, served by the resources primitive). Pagination of
   a large graph's bytes and subscriptions on `connectome://observed` are not here.
 - **No Cypher exporter, on purpose.** The canonical bytes load into Neo4j with APOC's JSON

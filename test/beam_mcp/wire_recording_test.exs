@@ -8,7 +8,8 @@ defmodule BeamMCP.WireRecordingTest do
   fixture catalog on the tree before `BeamMCP.Connectome.Surface` existed. This file holds
   that the same catalog still answers exactly that, and that the catalog with the surface's
   entries added answers exactly that plus the entries -- nothing else on the wire moved, and
-  `server/discover` is byte-identical: no capability was claimed for a graph.
+  `server/discover` is identical (as decoded JSON: the recording holds the decoded responses,
+  and the encoder is deterministic): no capability was claimed for a graph.
   """
   use ExUnit.Case, async: true
 
@@ -38,7 +39,7 @@ defmodule BeamMCP.WireRecordingTest do
     def get_prompt(name, args), do: Fixture.get_prompt(name, args)
   end
 
-  test "the fixture catalog still answers the pre-slice recording, byte for byte" do
+  test "the fixture catalog still answers the pre-slice recording, identical as decoded JSON" do
     assert Recorder.record(Fixture, server_name: "fixture") == Jason.decode!(File.read!(@pre))
   end
 

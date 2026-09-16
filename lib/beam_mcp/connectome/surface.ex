@@ -33,7 +33,7 @@ defmodule BeamMCP.Connectome.Surface do
   `BeamMCP.Connectome.Canonical.encode/1` writes for the graph (`docs/connectome-canonical.md`);
   `connectome://diff` answers exactly `BeamMCP.Connectome.Diff.encode/1` of the record
   (`docs/connectome-diff.md`). A consumer who has the file has the resource, byte for byte, and
-  the hash on the page verifies either. The tool answers the same bytes as the value of
+  the hash rule the canonical page defines verifies either. The tool answers the same bytes as the value of
   `bytes` in its structured content, with their SHA-256 beside them, so a client verifies
   without re-encoding; the tool result's text content is the server's rendering of that map,
   as for every tool, and is not the bytes.
@@ -56,10 +56,15 @@ defmodule BeamMCP.Connectome.Surface do
   ## Read-only, by construction and by test
 
   `read/2` and `call/2` build a graph, encode it and return; they write nothing -- not to the
-  collector's table, not to the tracer's persistent terms, not to the disk. A test hashes the
-  package's state before and after and holds them equal. Pagination of a large graph's bytes
-  and subscriptions on `connectome://observed` are out of this module (the latter awaits the
-  subscriptions decision).
+  collector's table, not to the tracer's persistent terms, not to the disk. A test compares
+  the package's state before and after, term for term, and holds it equal. One consequence
+  a host should expect: the *tool's* call is a dispatch like any other, and a running
+  collector records every dispatch, so after the first `tools/call` of the tool the observed
+  graph carries the tool's own edge (the resource path is not a dispatch and adds nothing);
+  a host whose `declared:` names its own catalog has that edge declared too, so it lands as
+  a matched edge, not as drift. Pagination of a large graph's bytes and subscriptions on
+  `connectome://observed` are out of this module (the latter awaits the subscriptions
+  decision).
   """
 
   alias BeamMCP.Connectome.{Canonical, Declared, Diff, Observed}
