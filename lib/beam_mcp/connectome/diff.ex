@@ -243,8 +243,10 @@ defmodule BeamMCP.Connectome.Diff do
   @doc "`hash/2`, raising."
   @spec hash!(t(), keyword()) :: binary()
   def hash!(%__MODULE__{} = diff, opts \\ []) do
-    algorithm = Canonical.algorithm!(opts)
-    Canonical.hash_value!(with_algorithm(diff, algorithm: algorithm), algorithm: algorithm)
+    case hash(diff, opts) do
+      {:ok, hash} -> hash
+      {:error, reason} -> raise ArgumentError, "hash: #{inspect(reason)}"
+    end
   end
 
   @doc "The hash as lowercase hexadecimal, the form the page writes it in."
