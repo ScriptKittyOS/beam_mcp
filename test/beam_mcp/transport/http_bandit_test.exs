@@ -760,6 +760,11 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
         drip(listen(read_timeout: 300), byte_size(body), partial, 5_000)
 
       assert bytes_short =~ "HTTP/1.1 408"
+      # This package's refusal, not the adapter's bare 408: the JSON-RPC error object every
+      # refusal carries, and the connection closed as for every refusal before the body is read.
+      assert bytes_short =~ "connection: close"
+      assert bytes_short =~ ~s("code":-32600)
+      assert bytes_short =~ "not received within 300 ms"
 
       assert ms_short >= 300 and ms_short < 1_500,
              "408 came at #{ms_short} ms for a 300 ms deadline"
@@ -800,9 +805,13 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
     end
 
     test "a body over the adapter's read length and under the cap is one deadline, not two" do
-      # Bandit reads at most 1,000,000 bytes per socket read; a 1,048,576-byte body is two reads.
-      # Under the adapter's per-read clock a client that sends 999,999 bytes at once and the
-      # millionth byte just before the first deadline gets a second full deadline for the rest.
+      # The transport reads the body in 65,536-byte pieces, each read given what remains of ONE
+      # deadline. Under a per-read clock a client that completes a piece just before the deadline
+      # buys a fresh one for the next piece (measured before this: 1,909 ms for 1,000). A
+      # partial arrival does not reset a socket read's clock, so the sends land exactly on the
+      # piece boundaries: fourteen pieces at once, the fifteenth at 800 ms, then nothing (the
+      # sixteenth never comes).
+      piece = 65_536
       body = call_json(1, 1_048_576 - byte_size(call_json(1, 0)))
       assert byte_size(body) == 1_048_576
       port = listen(read_timeout: 1_000)
@@ -813,9 +822,9 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       started = System.monotonic_time(:millisecond)
       :ok = :gen_tcp.send(sock, req("POST", "", declared: byte_size(body)))
       Process.sleep(100)
-      :ok = :gen_tcp.send(sock, binary_part(body, 0, 999_999))
-      Process.sleep(800)
-      :ok = :gen_tcp.send(sock, binary_part(body, 999_999, 1))
+      :ok = :gen_tcp.send(sock, binary_part(body, 0, piece * 14))
+      Process.sleep(700)
+      :ok = :gen_tcp.send(sock, binary_part(body, piece * 14, piece))
       result = :gen_tcp.recv(sock, 0, 5_000)
       elapsed = System.monotonic_time(:millisecond) - started
       :gen_tcp.close(sock)
