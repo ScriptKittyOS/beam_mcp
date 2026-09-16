@@ -79,9 +79,15 @@ defmodule BeamMCP.Boundary do
         do: {path, names}
   end
 
+  # The scan starts at the line's first backtick path: a table row's prose column may carry
+  # quotes of its own -- a wire message in backticks, an escaped `\"` -- and read from the
+  # start of the line those pair up wrongly and swallow the path (a lane found a row whose
+  # three citations the reader returned as none). A name may not contain a quote.
   defp cite_line(line) do
+    [_prose, from_path] = Regex.split(~r/(?=`test\/[^`]+_test\.exs`)/, line, parts: 2)
+
     ~r/`(test\/[^`]+_test\.exs)`|"([^"]+)"/
-    |> Regex.scan(line)
+    |> Regex.scan(from_path)
     |> Enum.reduce([], fn
       [_, path], acc when path != "" -> [{path, []} | acc]
       [_, "", name], [{path, names} | rest] -> [{path, names ++ [name]} | rest]
@@ -105,10 +111,26 @@ defmodule BeamMCP.Boundary do
     end
   end
 
+  # A cited test is a live one: a `test "name"` line that is not commented out and not under
+  # a `@tag :skip` -- a citation of a test that never runs would read as coverage.
   defp unnamed_tests(path, names, source) do
+    lines = String.split(source, "\n")
+
+    live =
+      lines
+      |> Enum.with_index()
+      |> Enum.filter(fn {line, i} ->
+        Regex.match?(~r/^\s*(?:property|test) "/, line) and not skipped?(lines, i)
+      end)
+      |> Enum.map(&elem(&1, 0))
+
     for n <- names,
-        not String.contains?(source, ~s(test "#{n}")),
+        not Enum.any?(live, &String.contains?(&1, ~s(test "#{n}"))),
         do: "#{path} names no test #{inspect(n)}"
+  end
+
+  defp skipped?(lines, i) do
+    i > 0 and Regex.match?(~r/^\s*@tag :skip\b/, Enum.at(lines, i - 1))
   end
 
   @doc "Every module the built application's `.app` file lists."

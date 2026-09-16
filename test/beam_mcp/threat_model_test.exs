@@ -301,11 +301,7 @@ defmodule BeamMCP.ThreatModelTest do
       rows =
         page()
         |> String.split("\n")
-        |> Enum.filter(&String.starts_with?(&1, "| **"))
-        |> Enum.filter(fn row ->
-          [_, _vector, posture | _] = String.split(row, "|")
-          posture =~ "REFUSED" or posture =~ "BOUNDED"
-        end)
+        |> Enum.filter(&wire_row?/1)
 
       assert length(rows) >= 10
 
@@ -383,6 +379,15 @@ defmodule BeamMCP.ThreatModelTest do
     path = Path.join(@root, @page)
     assert File.exists?(path), "#{@page} is not in the tree"
     File.read!(path)
+  end
+
+  # A row of the wire table whose posture column says REFUSED or BOUNDED (the trust table's
+  # rows start the same way; their second column is not a posture).
+  defp wire_row?(line) do
+    case String.split(line, "|") do
+      ["", " **" <> _, posture | _] -> posture =~ "REFUSED" or posture =~ "BOUNDED"
+      _ -> false
+    end
   end
 
   defp lines(output), do: output |> String.split("\n", trim: true) |> Enum.map(&Jason.decode!/1)

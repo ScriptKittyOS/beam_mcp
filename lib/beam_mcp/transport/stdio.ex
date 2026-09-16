@@ -100,6 +100,9 @@ defmodule BeamMCP.Transport.Stdio do
   defp refusal(:frame_too_large),
     do: error(nil, -32_700, "Parse error: line exceeds #{@max_line_bytes} bytes")
 
+  defp refusal(:declared_frame_too_large),
+    do: error(nil, -32_700, "Parse error: frame exceeds #{@max_body_bytes} bytes")
+
   defp refusal(reason) when reason in [:invalid_content_length, :missing_content_length],
     do: error(nil, -32_700, "Parse error: #{reason}")
 
@@ -139,7 +142,9 @@ defmodule BeamMCP.Transport.Stdio do
   # The cap has to bound the read, not merely inspect its result.
   defp read_line_bounded(acc \\ [], size \\ 0)
 
-  defp read_line_bounded(_acc, size) when size >= @max_line_bytes do
+  # A line of exactly the bound is admitted; the byte past it is the refusal, so "exceeds"
+  # is true of every line refused (until 0.6.0 the boundary byte itself was refused).
+  defp read_line_bounded(_acc, size) when size > @max_line_bytes do
     drain_line()
     {:error, :frame_too_large}
   end
@@ -174,14 +179,37 @@ defmodule BeamMCP.Transport.Stdio do
   end
 
   # Legacy LSP-style framing, retained for callers written against the old behaviour.
+  # A declared length over the cap is refused by name -- and its body is read and dropped in
+  # chunks, never buffered, so that nothing of it is read as the next frame: a lane put a
+  # `tools/call` inside such a body and saw it dispatched.
   defp read_legacy_framed(first_line) do
     with {:ok, length} <- parse_content_length(first_line),
          :ok <- skip_remaining_headers(),
          {:ok, body} <- read_body(length) do
       decode(body)
     else
-      {:error, :unexpected_eof} -> :eof
-      {:error, _} = error -> error
+      {:error, {:declared_frame_too_large, length}} ->
+        skip_remaining_headers()
+        drain_bytes(length)
+        {:error, :declared_frame_too_large}
+
+      {:error, :unexpected_eof} ->
+        :eof
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @drain_chunk 65_536
+
+  defp drain_bytes(0), do: :ok
+
+  defp drain_bytes(remaining) do
+    case IO.binread(:stdio, min(remaining, @drain_chunk)) do
+      :eof -> :ok
+      {:error, _} -> :ok
+      chunk -> drain_bytes(remaining - byte_size(chunk))
     end
   end
 
@@ -197,9 +225,14 @@ defmodule BeamMCP.Transport.Stdio do
     case String.split(line, ":", parts: 2) do
       [_name, value] ->
         case Integer.parse(String.trim(value)) do
-          {length, ""} when length >= 0 and length <= @max_body_bytes -> {:ok, length}
-          {length, ""} when length > @max_body_bytes -> {:error, :frame_too_large}
-          _ -> {:error, :invalid_content_length}
+          {length, ""} when length >= 0 and length <= @max_body_bytes ->
+            {:ok, length}
+
+          {length, ""} when length > @max_body_bytes ->
+            {:error, {:declared_frame_too_large, length}}
+
+          _ ->
+            {:error, :invalid_content_length}
         end
 
       _ ->

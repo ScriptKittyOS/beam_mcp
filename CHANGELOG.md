@@ -74,8 +74,15 @@ All notable changes to this project are documented here. The format follows
   1048576 bytes`). **The tail of an over-long line was read as the next frames** — refused once
   at the bound, then the remainder decoded as a fresh message and refused again, and a test
   recorded that as observed; now the rest of the line is drained to its newline, byte by byte
-  and never buffered, so the refusal is one line and the tail is nobody's frame. A client that
-  sent well-formed lines sees no change.
+  and never buffered, so the refusal is one line and the tail is nobody's frame. **A legacy
+  `Content-Length` frame declaring more than the cap** was refused and its body left on the
+  pipe, so a request inside that body was read as the next frame and dispatched (a
+  consumer-parse-back lane put a `tools/call` there and watched it answer); now the declared
+  body is drained in chunks, never buffered, and the refusal names the frame: `Parse error:
+  frame exceeds 1048576 bytes`. **And the line cap admits exactly 1 MiB:** a line of 1,048,576
+  bytes was refused as exceeding a bound it met, one byte early against the HTTP body and the
+  legacy frame; now the byte past the cap is the refusal on all three. A client that sent
+  well-formed lines under the cap sees no change.
 
 ## [0.5.0] — 2026-09-16
 
