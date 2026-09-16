@@ -112,8 +112,9 @@ defmodule BeamMCP.Connectome.SurfaceTest do
       assert {:error, {:unknown_uri, "connectome://reach"}} =
                Surface.read("connectome://reach", declared: @declared)
 
-      # A build refusal is the builder's, verbatim.
-      assert {:error, _} = Surface.read("connectome://declared", declared: [server: "fx"])
+      # A build refusal is the builder's, verbatim: the same term Declared.build/1 answers.
+      {:error, reason} = Declared.build(server: "fx")
+      assert {:error, ^reason} = Surface.read("connectome://declared", declared: [server: "fx"])
     end
   end
 
@@ -265,6 +266,29 @@ defmodule BeamMCP.Connectome.SurfaceTest do
         ]
 
       assert r["isError"] == true
+    end
+
+    # The tool's own call is a dispatch, and a running collector records every dispatch: after
+    # one tools/call connectome the observed graph carries the connectome tool's edge (a review
+    # lane measured it). The resource path is not a dispatch and adds nothing. Stated in the
+    # moduledoc; pinned here so the consequence is a fact and not a surprise.
+    test "the tool observes itself through the collector; the resource path does not" do
+      s =
+        Server.new(
+          catalog: Host,
+          dispatch: fn :connectome, args, _ -> Surface.call(args, observed: Host.collector()) end
+        )
+
+      before = Observed.rows(Host.collector())
+      call(s, "resources/read", %{"uri" => "connectome://observed"})
+      assert Observed.rows(Host.collector()) == before
+      call(s, "tools/call", %{"name" => "connectome", "arguments" => %{"graph" => "observed"}})
+      rows = Observed.rows(Host.collector())
+
+      assert Enum.any?(rows, fn
+               {{{:server, _}, {:tool, _, :connectome}, :invoke}, _, _, _} -> true
+               _ -> false
+             end)
     end
 
     test "server/discover claims no capability for it" do
