@@ -39,16 +39,74 @@ defmodule BeamMCP.JSON do
   def max_depth, do: @max_depth
 
   @doc """
-  Decodes a JSON body after bounding its nesting. `{:error, {:nesting, depth, max}}` names
-  the first depth past the bound, before a byte is decoded; every other error is Jason's.
+  Decodes a JSON body after bounding its nesting and refusing a repeated key.
+  `{:error, {:nesting, depth, max}}` names the first depth past the bound, before a byte is
+  decoded; `{:error, {:duplicate_key, key}}` names the first key an object repeats, at any
+  depth; every other error is Jason's.
+
+  Repeated keys are refused rather than resolved because two parsers resolve them two ways:
+  Jason keeps the first, most others the last. A hop in front of this server that routes on
+  the last `"name"` while this server executes the first is two sources of truth inside one
+  body — the disagreement the header–body match exists to close. Jason is asked for ordered
+  objects, which keep every pair, so the repeat is visible; the objects are then read once
+  into maps, which is what every caller expects. The repeat is found in the decoded objects
+  and not in the bytes on purpose: a key is compared after unescaping, as every decoder
+  compares it — `"a"` and `"\\u0061"` are one key — and a byte walk that compared raw keys
+  would miss exactly the pair a hop in front would merge. What that costs, per shape, is
+  measured on `docs/threat-model.md`: a request-sized body twice a 2 µs decode; a 1 MiB body
+  1.0–2.6× the decoder's own time, the key-dense shapes at the top of that band.
   """
   @spec decode(binary()) ::
           {:ok, term()}
-          | {:error, {:nesting, pos_integer(), pos_integer()} | struct()}
+          | {:error,
+             {:nesting, pos_integer(), pos_integer()} | {:duplicate_key, String.t()} | struct()}
   def decode(body) when is_binary(body) do
-    case nesting(body, 0, @max_depth) do
-      :ok -> Jason.decode(body)
-      {:too_deep, depth} -> {:error, {:nesting, depth, @max_depth}}
+    with :ok <- bound(nesting(body, 0, @max_depth)),
+         {:ok, ordered} <- Jason.decode(body, objects: :ordered_objects) do
+      maps(ordered)
+    end
+  end
+
+  @doc "The type of a decoded value that is not an object, for a refusal that names it."
+  @spec type_of(term()) :: String.t()
+  def type_of(v) when is_list(v), do: "an array"
+  def type_of(v) when is_binary(v), do: "a string"
+  def type_of(v) when is_number(v), do: "a number"
+  def type_of(nil), do: "null"
+  def type_of(_), do: "a scalar"
+
+  defp bound(:ok), do: :ok
+  defp bound({:too_deep, depth}), do: {:error, {:nesting, depth, @max_depth}}
+
+  # Ordered objects to maps, refusing the first repeated key met. The key set per object is
+  # the map being built: equal keys in different objects are two keys.
+  defp maps(%Jason.OrderedObject{values: pairs}) do
+    Enum.reduce_while(pairs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      if Map.has_key?(acc, key),
+        do: {:halt, {:error, {:duplicate_key, key}}},
+        else: put(acc, key, value)
+    end)
+  end
+
+  defp maps(list) when is_list(list) do
+    Enum.reduce_while(list, {:ok, []}, fn value, {:ok, acc} ->
+      case maps(value) do
+        {:ok, v} -> {:cont, {:ok, [v | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, reversed} -> {:ok, Enum.reverse(reversed)}
+      error -> error
+    end
+  end
+
+  defp maps(scalar), do: {:ok, scalar}
+
+  defp put(acc, key, value) do
+    case maps(value) do
+      {:ok, v} -> {:cont, {:ok, Map.put(acc, key, v)}}
+      error -> {:halt, error}
     end
   end
 

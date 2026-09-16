@@ -533,11 +533,15 @@ if Code.ensure_loaded?(Plug) do
 
         {:ok, other} ->
           {:refused, conn, 400,
-           error(nil, -32_600, "Expected a JSON object, got #{type_of(other)}")}
+           error(nil, -32_600, "Expected a JSON object, got #{BeamMCP.JSON.type_of(other)}")}
 
         {:error, {:nesting, _depth, max}} ->
           {:refused, conn, 400,
            error(nil, -32_600, "Request body nests deeper than #{max} levels")}
+
+        {:error, {:duplicate_key, key}} ->
+          {:refused, conn, 400,
+           error(nil, -32_600, "Request body repeats a key: duplicate key #{inspect(key)}")}
 
         {:error, _} ->
           {:refused, conn, 400, error(nil, -32_700, "Parse error: body is not valid JSON")}
@@ -1295,11 +1299,5 @@ if Code.ensure_loaded?(Plug) do
     defp error(id, code, message) do
       %{"jsonrpc" => "2.0", "id" => id, "error" => %{"code" => code, "message" => message}}
     end
-
-    defp type_of(v) when is_list(v), do: "an array"
-    defp type_of(v) when is_binary(v), do: "a string"
-    defp type_of(v) when is_number(v), do: "a number"
-    defp type_of(nil), do: "null"
-    defp type_of(_), do: "a scalar"
   end
 end

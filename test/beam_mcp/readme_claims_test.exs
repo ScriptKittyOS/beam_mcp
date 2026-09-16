@@ -436,7 +436,12 @@ defmodule BeamMCP.ReadmeClaimsTest do
       claims("constant across six socket-buffer settings and four runs")
       claims("num_acceptors * num_connections")
       claims("1,638,400")
-      claims("15,000 ms under `Bandit`")
+      # Once "inherits from the server -- 15,000 ms under Bandit"; a review lane read Bandit and
+      # ThousandIsland and found no server option for the body read: the 15,000 ms is Bandit's
+      # default for a read_body/2 call that passes none, which is what this package passes.
+      claims("`Bandit`'s default for a")
+      claims("15,000 ms")
+      claims("not a server option a host can set")
       claims("whole-body deadline rather than a per-read reset")
       claims("It does not bound **headers**")
     end

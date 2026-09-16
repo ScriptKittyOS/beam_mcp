@@ -29,6 +29,12 @@ defmodule BeamMCP.Transport.Stdio do
 
   alias BeamMCP.Server
 
+  require Logger
+
+  # One line, and one legacy Content-Length frame, are each bounded at 1 MiB, as the HTTP body is.
+  @max_line_bytes 1_048_576
+  @max_body_bytes 1_048_576
+
   @doc """
   Runs the read/answer loop on standard input and output until end of input.
 
@@ -44,8 +50,8 @@ defmodule BeamMCP.Transport.Stdio do
       :eof ->
         :ok
 
-      {:ok, message} ->
-        {next_state, response} = Server.handle_message(state, message)
+      {:ok, %{} = message} ->
+        {next_state, response} = answer(state, message)
 
         if response do
           write_message(response)
@@ -57,28 +63,50 @@ defmodule BeamMCP.Transport.Stdio do
           loop(next_state)
         end
 
-      {:error, {:nesting, _depth, max}} ->
-        write_message(%{
-          "jsonrpc" => "2.0",
-          "id" => nil,
-          "error" => %{
-            "code" => -32_600,
-            "message" => "Request body nests deeper than #{max} levels"
-          }
-        })
+      {:ok, other} ->
+        write_message(
+          error(nil, -32_600, "Expected a JSON object, got #{BeamMCP.JSON.type_of(other)}")
+        )
 
         loop(state)
 
       {:error, reason} ->
-        write_message(%{
-          "jsonrpc" => "2.0",
-          "id" => nil,
-          "error" => %{"code" => -32_700, "message" => "Parse error", "data" => inspect(reason)}
-        })
-
+        write_message(refusal(reason))
         loop(state)
     end
   end
+
+  # A host fault -- the catalog, the dispatch function or a hook raising, throwing or exiting
+  # -- is answered -32603 with the request's id and the loop goes on, as the HTTP transport
+  # answers it 500: a fault in one request is not the end of the pipe. The log line carries
+  # arities, never arguments (the same frames the :telemetry exception event carries).
+  defp answer(state, message) do
+    Server.handle_message(state, message)
+  catch
+    kind, reason ->
+      Logger.error(Exception.format(kind, reason, BeamMCP.Stacktrace.arities(__STACKTRACE__)))
+      {state, error(Map.get(message, "id"), -32_603, "Internal error")}
+  end
+
+  # Every refusal names its cause in the message and carries no data: an inspected term
+  # would carry the client's own bytes back to it (a parse error's token) or an internal
+  # atom, and neither is the client's business.
+  defp refusal({:nesting, _depth, max}),
+    do: error(nil, -32_600, "Request body nests deeper than #{max} levels")
+
+  defp refusal({:duplicate_key, key}),
+    do: error(nil, -32_600, "Request body repeats a key: duplicate key #{inspect(key)}")
+
+  defp refusal(:frame_too_large),
+    do: error(nil, -32_700, "Parse error: line exceeds #{@max_line_bytes} bytes")
+
+  defp refusal(reason) when reason in [:invalid_content_length, :missing_content_length],
+    do: error(nil, -32_700, "Parse error: #{reason}")
+
+  defp refusal(_decode_error), do: error(nil, -32_700, "Parse error: body is not valid JSON")
+
+  defp error(id, code, message),
+    do: %{"jsonrpc" => "2.0", "id" => id, "error" => %{"code" => code, "message" => message}}
 
   # MCP stdio framing is newline-delimited JSON-RPC. The spec at 2024-11-05 and every
   # revision since, including both revisions this server speaks:
@@ -88,9 +116,6 @@ defmodule BeamMCP.Transport.Stdio do
   # This previously implemented LSP framing (Content-Length headers), so no conformant
   # MCP client could complete a handshake. Content-Length is still accepted on read so
   # existing callers keep working, but responses are always newline-delimited.
-  @max_line_bytes 1_048_576
-  @max_body_bytes 1_048_576
-
   defp read_message do
     case read_line_bounded() do
       :eof ->
@@ -114,8 +139,10 @@ defmodule BeamMCP.Transport.Stdio do
   # The cap has to bound the read, not merely inspect its result.
   defp read_line_bounded(acc \\ [], size \\ 0)
 
-  defp read_line_bounded(_acc, size) when size >= @max_line_bytes,
-    do: {:error, :frame_too_large}
+  defp read_line_bounded(_acc, size) when size >= @max_line_bytes do
+    drain_line()
+    {:error, :frame_too_large}
+  end
 
   defp read_line_bounded(acc, size) do
     case IO.binread(:stdio, 1) do
@@ -129,6 +156,17 @@ defmodule BeamMCP.Transport.Stdio do
 
   # `BeamMCP.JSON.decode/1` bounds the nesting before the decoder runs (the line is already
   # under the frame bound, so the refusal costs the scan and nothing else).
+  # The rest of an over-long line, read byte by byte to its newline (or EOF) and dropped:
+  # nothing of it is buffered, and nothing of it is read as the next frame.
+  defp drain_line do
+    case IO.binread(:stdio, 1) do
+      :eof -> :ok
+      {:error, _} -> :ok
+      "\n" -> :ok
+      _ -> drain_line()
+    end
+  end
+
   defp decode(body), do: BeamMCP.JSON.decode(body)
 
   defp content_length_header?(line) do
