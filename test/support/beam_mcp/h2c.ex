@@ -40,76 +40,61 @@ defmodule BeamMCP.H2C do
   def close(sock), do: :gen_tcp.close(sock)
 
   def response(sock, timeout_ms) do
-    deadline = System.monotonic_time(:millisecond) + timeout_ms
-    read_frames(sock, deadline, <<>>, nil, <<>>)
+    state = %{sock: sock, deadline: System.monotonic_time(:millisecond) + timeout_ms}
+    read_frames(state, <<>>, nil, <<>>)
   end
 
-  defp read_frames(sock, deadline, buffer, headers, body) do
+  defp read_frames(state, buffer, headers, body) do
     case parse(buffer) do
       {:frame, type, flags, stream, payload, rest} ->
-        handle(sock, deadline, rest, headers, body, type, flags, stream, payload)
+        handle({type, flags, stream}, payload, state, rest, headers, body)
 
       :more ->
-        remaining = deadline - System.monotonic_time(:millisecond)
+        recv_more(state, buffer, headers, body)
+    end
+  end
 
-        if remaining <= 0 do
-          :timeout
-        else
-          case :gen_tcp.recv(sock, 0, remaining) do
-            {:ok, bytes} -> read_frames(sock, deadline, buffer <> bytes, headers, body)
-            {:error, :timeout} -> :timeout
-            {:error, :closed} -> if headers, do: {:ok, headers, body}, else: {:closed, body}
-          end
-        end
+  defp recv_more(%{sock: sock, deadline: deadline} = state, buffer, headers, body) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    case remaining > 0 and :gen_tcp.recv(sock, 0, remaining) do
+      {:ok, bytes} -> read_frames(state, buffer <> bytes, headers, body)
+      {:error, :closed} when headers != nil -> {:ok, headers, body}
+      {:error, :closed} -> {:closed, body}
+      _ -> :timeout
     end
   end
 
   # SETTINGS from the server are acknowledged; PING answered; everything on stream 0 else
   # ignored. On our stream: HEADERS is the response head, DATA its body, END_STREAM the end.
-  defp handle(sock, deadline, rest, headers, body, 0x4, 0x0, 0, _payload) do
-    :ok = :gen_tcp.send(sock, frame(0x4, 0x1, 0, <<>>))
-    read_frames(sock, deadline, rest, headers, body)
+  defp handle({0x4, 0x0, 0}, _payload, state, rest, headers, body) do
+    :ok = :gen_tcp.send(state.sock, frame(0x4, 0x1, 0, <<>>))
+    read_frames(state, rest, headers, body)
   end
 
-  defp handle(sock, deadline, rest, headers, body, 0x6, 0x0, 0, payload) do
-    :ok = :gen_tcp.send(sock, frame(0x6, 0x1, 0, payload))
-    read_frames(sock, deadline, rest, headers, body)
+  defp handle({0x6, 0x0, 0}, payload, state, rest, headers, body) do
+    :ok = :gen_tcp.send(state.sock, frame(0x6, 0x1, 0, payload))
+    read_frames(state, rest, headers, body)
   end
 
-  defp handle(_sock, _deadline, _rest, _headers, _body, 0x3, _flags, @stream, <<code::32>>),
+  defp handle({0x3, _flags, @stream}, <<code::32>>, _state, _rest, _headers, _body),
     do: {:rst, code}
 
-  defp handle(
-         _sock,
-         _deadline,
-         _rest,
-         _headers,
-         _body,
-         0x7,
-         _flags,
-         0,
-         <<_::32, code::32, _::binary>>
-       ),
-       do: {:goaway, code}
+  defp handle({0x7, _flags, 0}, <<_::32, code::32, _::binary>>, _state, _rest, _headers, _body),
+    do: {:goaway, code}
 
-  defp handle(sock, deadline, rest, _headers, body, 0x1, flags, @stream, payload) do
+  defp handle({0x1, flags, @stream}, payload, state, rest, _headers, body) do
     block = strip_padding_and_priority(payload, flags)
-
-    if end_stream?(flags),
-      do: {:ok, block, body},
-      else: read_frames(sock, deadline, rest, block, body)
+    if end_stream?(flags), do: {:ok, block, body}, else: read_frames(state, rest, block, body)
   end
 
-  defp handle(sock, deadline, rest, headers, body, 0x0, flags, @stream, payload) do
+  defp handle({0x0, flags, @stream}, payload, state, rest, headers, body) do
     body = body <> strip_padding(payload, flags)
-
-    if end_stream?(flags),
-      do: {:ok, headers, body},
-      else: read_frames(sock, deadline, rest, headers, body)
+    if end_stream?(flags), do: {:ok, headers, body}, else: read_frames(state, rest, headers, body)
   end
 
-  defp handle(sock, deadline, rest, headers, body, _type, _flags, _stream, _payload),
-    do: read_frames(sock, deadline, rest, headers, body)
+  defp handle(_frame, _payload, state, rest, headers, body),
+    do: read_frames(state, rest, headers, body)
 
   defp end_stream?(flags), do: (flags &&& 0x1) == 0x1
 

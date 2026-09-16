@@ -889,8 +889,12 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # stream reset instead of the 403.
       port = listen(allowed_origins: ["https://app.example.com"])
 
+      # Pseudo-headers first: a regular header ahead of them is the client's protocol error.
       sock =
-        BeamMCP.H2C.open(port, [{"origin", "https://evil.example"} | h2_headers(byte_size(body))])
+        BeamMCP.H2C.open(
+          port,
+          h2_headers(byte_size(body)) ++ [{"origin", "https://evil.example"}]
+        )
 
       assert {:ok, _headers, refusal} = BeamMCP.H2C.response(sock, 5_000)
       assert refusal =~ "Origin not allowed"
@@ -899,6 +903,9 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
 
     test "the default is the stated one, and a drip client under it is not answered inside a second" do
       assert HTTP.read_timeout_default() == 15_000
+      # The moduledoc's entry renders the constant, not a literal beside it.
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(HTTP)
+      assert moduledoc =~ "default `#{HTTP.read_timeout_default()}`"
       body = call_json(1, 200)
       {_ms, result} = drip(listen([]), byte_size(body), binary_part(body, 0, 20), 1_000)
       assert result == {:error, :timeout}

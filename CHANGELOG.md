@@ -13,28 +13,39 @@ All notable changes to this project are documented here. The format follows
 
 ### Added — the HTTP body read deadline is the Plug's option, and its default is a chosen number
 
-- **`read_timeout:` on `BeamMCP.Transport.HTTP`** — one whole-body deadline, this package's own.
-  The body is read in pieces against one monotonic clock, each read given what remains, so a
-  client that has sent its headers and then drips the body is answered `408` when it lapses,
-  however many bytes arrived and however the adapter splits the reads; the `408` is this
-  package's JSON-RPC refusal with `connection: close`, as every refusal issued before the body
-  is read. Measured through a real `Bandit` listener: `408` at 300, 301, 327 ms for a 300 ms
-  deadline and 1,500, 1,500, 1,501 ms for 1,500 ms. The default is 15,000 ms — the number the
-  transport has been running under — but chosen now, with its reasoning beside the constant: for
-  two releases this package passed no `:read_timeout` and the value in force was `Bandit`'s
-  default for such a call, which the README called "inherited from the server"; a review lane
-  read `Bandit` and `ThousandIsland` and found no server option for the body read, so nobody had
-  chosen it and no host could change it. And the adapter's `:read_timeout` is a per-read clock,
-  not a whole-body one: a cap-sized body is two reads and got two deadlines (1,909 ms for 1,000,
-  measured), and a chunked body is read chunk by chunk, each on its own clock — a client sending
-  one byte per chunk was served after 43 s under the 15 s default. So **`transfer-encoding:
-  chunked` is refused with `411` before the body is read**: an MCP request is one complete JSON
-  message under a 1 MiB cap, and a chunked body defeats every whole-body bound. A value that is
-  not a positive integer is refused at `init/1` by name. The threat model's slow-client row
-  moves from delegated to bounded, with the tests, and a row for the undeclared length joins it.
-  **How to tell whether you are affected:** a host that passes nothing sees the same 15 s it
-  always had, now enforced as one deadline; a client that sent a chunked body — no MCP client
-  this package has been run against does — now gets `411` and sends a `Content-Length` instead.
+- **`read_timeout:` on `BeamMCP.Transport.HTTP`** — one whole-body deadline, this package's
+  own. The body is read in pieces against one monotonic clock, each read given what remains, so
+  a client that has sent its headers and then drips the body is answered `408` when it lapses,
+  however many bytes arrived and however the adapter splits the reads. Measured through a real
+  `Bandit` listener: `408` at 300, 301, 327 ms for a 300 ms deadline and 1,500, 1,500, 1,501 ms
+  for 1,500 ms. The default is 15,000 ms — the number the transport has been running under —
+  but chosen now, with its reasoning beside the constant: for two releases this package passed
+  no `:read_timeout` and the value in force was `Bandit`'s default for such a call, which the
+  README called "inherited from the server"; a review lane read `Bandit` and `ThousandIsland`
+  and found no server option for the body read, so nobody had chosen it and no host could
+  change it. And the adapter's `:read_timeout` is a per-read clock, not a whole-body one —
+  three ways, each measured by a lane and each closed: a cap-sized body is two reads and got
+  two deadlines (1,909 ms for 1,000); a chunked body is read chunk by chunk, each on its own
+  clock, and a client sending one byte per chunk was served after 43 s under the 15 s default —
+  so **`transfer-encoding: chunked` is refused with `411` before the body is read** (an MCP
+  request is one complete JSON message under a 1 MiB cap; no MCP client this package has been
+  run against sends one); and over HTTP/2, which `Bandit` serves on the same listener, the
+  reader gathers DATA frames on a per-frame clock and a one-byte-per-frame drip of a valid call
+  was served after 20 s under a 300 ms deadline — now the reader is asked for one frame at a
+  time, so every frame returns to the deadline's clock. Over HTTP/2 every refusal issued before
+  the body is read had carried `connection: close`, a malformed response there (RFC 9113), and
+  an HTTP/2 client saw a stream reset in place of the `403`, `405`, `413`; the header is
+  HTTP/1.1's now and the refusal arrives. A value that is not a positive integer is refused at
+  `init/1` by name. The threat model's slow-client row moves from delegated to bounded, with
+  the tests, and a row for the undeclared length joins it. **How to tell whether you are
+  affected:** a host that passes nothing sees the same 15 s it always had, now enforced as one
+  deadline. Two things change on the wire and in the log: the `408` was `Bandit`'s bare status
+  line with no body and is now this package's JSON-RPC refusal (`-32600`, the deadline named)
+  with `connection: close` over HTTP/1.1; and the adapter's error-level log line at its read
+  timeout (`Bandit.HTTPError Read timeout`) no longer fires, because the deadline is no longer
+  the adapter's — a host alerting on that line loses the signal, and nothing is written for a
+  `408` or a `411`. A client whose author sent a chunked body gets `411` until it sends a
+  `Content-Length`.
 
 ### Added — the threat model, package-wide, with the wire bounded vector by vector
 

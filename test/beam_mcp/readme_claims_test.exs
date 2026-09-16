@@ -441,11 +441,11 @@ defmodule BeamMCP.ReadmeClaimsTest do
       # Plug's own option, and the README's number is the module's default.
       claims("`read_timeout:` (default 15,000 ms")
       assert HTTP.read_timeout_default() == 15_000
-      claims("a drip client is answered `408`")
+      claims("is answered `408` when it lapses")
       # The whole-body deadline is now this package's, read in pieces against one clock, and a
       # chunked body is refused before it: the README says both.
       claims("one whole-body deadline")
-      claims("`transfer-encoding: chunked` is refused with `411`")
+      claims("refused with `411` before the body is read")
       claims("It does not bound **headers**")
     end
 

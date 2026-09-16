@@ -167,7 +167,10 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     Process => [info: 2, put: 2, whereis: 1],
     GenServer => [format_report: 1, start: 3, start_link: 3, stop: 3],
     Supervisor => [child_spec: 2],
+    # `get_http_protocol/1`: the transport's body read asks the adapter for one frame at a time
+    # over HTTP/2 and puts `connection: close` on HTTP/1 responses only.
     Plug.Conn => [
+      get_http_protocol: 1,
       get_req_header: 2,
       put_resp_content_type: 2,
       put_resp_header: 3,
