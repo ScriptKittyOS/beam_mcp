@@ -37,8 +37,9 @@ happened.
   process after a warm-up, set at roughly double the stable worst of ten runs on the release
   head; the reachability queries' cost recorded and judged by no number, but a query refused
   on the fixture fails the step by name), docs, reuse, licence files, publication, messages.
-  **11 properties, 602 tests, 0 failures**: 599 at the head 018 opened on, plus the three of
-  the README split census.
+  **11 properties, 604 tests, 0 failures**: 599 at the head 018 opened on, plus the three of
+  the README split census and the two that hold the will-not-implement page's row count to
+  the README's spelled count and to the page's own placement sentence.
 - The README's four-way split is held by census to the modules compiled from `lib/` (the
   beams whose source is under `lib/`, not the test build's `.app`, which also lists
   `test/support`): every module named under *shipping now* is among them, every module named
