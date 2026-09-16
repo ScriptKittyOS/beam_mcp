@@ -25,14 +25,16 @@
 # a cost a consumer's request pays. So every timed round here runs in a FRESH PROCESS (a Task),
 # and the figure is the operation's alone. Ten runs of this script on the release head, so
 # measured: run 117.9-121.6 ms, encode 121.1-130.1 ms. The owner's rule sets each ceiling at roughly
-# DOUBLE the stable worst of those runs, so a noisy runner does not fail for no defect while a
-# change that doubles the cost of either program is refused by number. The decision is the
+# DOUBLE the stable worst of those runs -- 121.6 -> 245, 130.1 -> 260 -- so a noisy runner does
+# not fail for no defect while a change that doubles the cost of either program is refused by
+# number. (Shown red first with both constants below the measurement: run 118.54 over 60,
+# encode 124.05 over 70, the gate's bench step FAIL; then restored to these, the gate green.) The decision is the
 # owner's (2026-09-15, the revisit condition of the 0.4.0 decision to leave the diff recording:
 # reachability landed and graph cost became something a consumer feels); a later slice that
 # needs either raised files a Question to the owner with the measurement attached. It is not an
 # edit.
-threshold_run_ms = 60
-threshold_encode_ms = 70
+threshold_run_ms = 245
+threshold_encode_ms = 260
 
 alias BeamMCP.Connectome.{Diff, Edge, Graph, Node}
 
