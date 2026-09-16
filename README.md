@@ -295,6 +295,15 @@ the connection is clean, and an ordinary response is possible.
 
 - It does not bound **headers**. `@max_body_bytes` is a body limit; the number and size of
   request headers are your HTTP server's settings, inherited the same way the read timeout is.
+- It bounds **nesting** separately. A body under the cap can still nest half its bytes deep,
+  and decoding one that did cost a 38 MiB heap for one request (measured); so every body, on
+  both transports, is refused by name past 64 levels of nesting before the decoder runs
+  (`-32600`, `400`), and the per-request figure above stays the body's size.
+
+Every vector on the wire — refused, bounded, or delegated to your HTTP server — with the
+test that enforces each, is [`docs/threat-model.md`](docs/threat-model.md). Mount this Plug
+ahead of `Plug.Parsers` or exclude its path: behind the parsers the body is already consumed
+and every request is a parse error.
 
 **A refusal issued before the body is read ends the connection, and says so.** The `Origin`
 `403`, the `405`, `authorize/1`'s refusals and the body-cap `413` are all issued before this
@@ -546,7 +555,9 @@ README, the census test that no line under `lib/` writes a sign other than `:uns
 test that no line under `lib/` names a receipt, an approval, a risk tier or egress. The full
 boundary — twelve entries, each with the test that enforces it by path and by name — is
 [`docs/will-not-implement.md`](docs/will-not-implement.md), held to the tests in both
-directions by a census of its own; a request to cross it is answered by pointing there.
+directions by a census of its own; a request to cross it is answered by pointing there. What
+the package defends against on the wire, and what it hands to the server or the host, is
+[`docs/threat-model.md`](docs/threat-model.md), held the same way.
 
 ## Status
 

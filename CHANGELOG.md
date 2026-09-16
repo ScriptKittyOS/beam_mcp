@@ -9,6 +9,41 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — the threat model, package-wide, with the wire bounded vector by vector
+
+- **`docs/threat-model.md`**: who is trusted for what — the host for everything, the client on
+  the wire for nothing, the node for everything by physics, this package for holding no tool,
+  key, signature, session, authority or client — and the wire vector by vector, each
+  **refused**, **bounded** or **delegated** to the HTTP server or the host by decision, with the
+  test that enforces it by path and by name and the OWASP id it answers to (the December 2025
+  Top 10 for Agentic Applications; the 2025 LLM Top 10, by edition). It extends the tracer's
+  threat model shipped in 0.4.0 rather than replacing it: an adversary executing code inside the
+  same node stays out of scope, now for every module, with the reason; prompt injection through
+  tool results is the host's (LLM01:2025) — this package carries bytes and never reads them. A
+  federation section states the trust domains a merge would cross — attribution, identity,
+  signs, integrity in transit, the peer as a client — so the seam is designed against them.
+  Where the Plug goes in a host's pipeline: ahead of `Plug.Parsers`, or its path excluded —
+  behind the parsers every request is `-32700 Parse error: empty body` (measured). A census
+  holds every citation on the page to a test in the tree, the discipline the will-not-implement
+  page is held by.
+- **JSON nesting is bounded before the decoder runs, on both transports.** The 1 MiB body cap
+  bounds how deep a body can nest but not what decoding it costs: a 1 MiB body nested 524,288
+  levels deep was decoded in full — 79–96 ms and a 38 MiB heap for one request, about 36× the
+  body — and refused only afterwards by its shape, so the per-request figure the README rests on
+  was the body's size only until a client nested it. `BeamMCP.JSON.decode/1`, the one place the
+  wire's JSON is now read, walks the bytes once — brackets outside strings, escapes honoured —
+  and refuses a body nesting past **64 levels** with `-32600` "Request body nests deeper than 64
+  levels" (`400` over HTTP with the connection kept, since the body was read; the same error
+  object on stdio), building nothing: the worst body under the cap is refused in microseconds,
+  and the walk costs a request-sized body nothing measurable and a 1 MiB well-formed one +1.7
+  ms. Sixty-four levels: a request is three deep before the host's data begins, and nothing in
+  the conformance suite or this package's tests comes near it; the number is a constant, for the
+  reason the body cap is. **How to tell whether you are affected:** only a client sending a body
+  nested past 64 levels sees a change, and it now gets `-32600` naming the depth instead of a
+  decoded-then-refused request; no field, method or capability moves.
+
 ## [0.5.0] — 2026-09-16
 
 Everything since `0.4.0`, grouped by the change that made it. **What moved on the wire in this

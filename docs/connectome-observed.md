@@ -159,7 +159,8 @@ process itself. The tracer is not a security boundary against it, and nothing th
 can do makes it one; a reader who takes it for one is in more danger than one who knows it
 is not. The shape guards on the running term and on the claim are robustness, not
 defence: they keep `stop/0` and `start/1` total against a term of the wrong shape, which
-the stale-term-after-crash case — in scope — needs.
+the stale-term-after-crash case — in scope — needs. The same line, drawn for the whole
+package and for the wire, is `docs/threat-model.md`.
 
 What it writes, through the same collector: a call into a traced module as a
 module-level `:invoke` edge from the caller's module to the callee's, with the `:arity`
