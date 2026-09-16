@@ -51,7 +51,10 @@ defmodule BeamMCP.Boundary do
   under lib/ (the test build compiles test/support into the same directory). The ebin, not the
   `.app` file: Mix regenerates the `.app` on the directory's mtime at one-second granularity, so
   a module compiled in the same second as the previous `.app` is absent from it -- measured by a
-  review lane, a green on a planted violation.
+  review lane, a green on a planted violation. The ebin's own limit: it is what the last compile
+  left, so a beam Mix's manifest does not own -- copied in, or left by a compile whose manifest
+  was lost -- whose `:source` says lib/ is counted until it is deleted (Mix prunes the beams of
+  removed sources it tracked; the exposure is beams outside the manifest). Not measured; stated.
   """
   def lib_modules do
     for path <- Path.wildcard(Path.join(Mix.Project.compile_path(), "*.beam")),

@@ -21,7 +21,8 @@ defmodule BeamMCP.ReadmeSplitCensusTest do
   is vacuous until one does, which is said rather than hidden.
 
   The shipping set is `BeamMCP.Boundary.lib_modules/0` -- the beams in the build's ebin whose
-  compile-time source is under `lib/` -- and not the `.app`'s module list: under `mix test`
+  compile-time source is under `lib/`, what the last compile left (its limit is stated on that
+  function) -- and not the `.app`'s module list: under `mix test`
   the `.app` also lists everything compiled from `test/support` (fifteen modules that never
   ship), and a review lane showed three of them named under "shipping now" passing green
   against the `.app`. Shown red by plants in a scratch copy of the README: a module that
