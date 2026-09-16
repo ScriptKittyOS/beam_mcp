@@ -540,14 +540,18 @@ defmodule BeamMCP.Transport.HTTPTest do
       right =
         post(read, [{@hdr, @modern}, {"mcp-method", "resources/read"}, {"mcp-name", "r://a"}])
 
-      refute right.status == 400
+      # The catalog here lists neither, so the right header reaches the core and is refused
+      # there (-32602), never by the header check (-32020).
+      assert body!(right)["error"]["code"] == -32_602
 
       get = msg("prompts/get", %{"params" => %{"name" => "greet"}})
       assert post(get, [{@hdr, @modern}, {"mcp-method", "prompts/get"}]).status == 400
       wrong = post(get, [{@hdr, @modern}, {"mcp-method", "prompts/get"}, {"mcp-name", "other"}])
       assert wrong.status == 400
       right = post(get, [{@hdr, @modern}, {"mcp-method", "prompts/get"}, {"mcp-name", "greet"}])
-      refute right.status == 400
+      # The catalog here lists neither, so the right header reaches the core and is refused
+      # there (-32602), never by the header check (-32020).
+      assert body!(right)["error"]["code"] == -32_602
     end
   end
 
