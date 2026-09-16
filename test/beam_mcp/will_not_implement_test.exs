@@ -23,24 +23,7 @@ defmodule BeamMCP.WillNotImplementTest do
     File.read!(path)
   end
 
-  # [{path, [name]}] in page order; a name belongs to the last path on its line.
-  defp citations(text) do
-    for line <- String.split(text, "\n"),
-        Regex.match?(~r/`test\/[^`]+_test\.exs`/, line),
-        {path, names} <- cite_line(line),
-        do: {path, names}
-  end
-
-  defp cite_line(line) do
-    ~r/`(test\/[^`]+_test\.exs)`|"([^"]+)"/
-    |> Regex.scan(line)
-    |> Enum.reduce([], fn
-      [_, path], acc when path != "" -> [{path, []} | acc]
-      [_, "", name], [{path, names} | rest] -> [{path, names ++ [name]} | rest]
-      [_, "", _name], [] -> []
-    end)
-    |> Enum.reverse()
-  end
+  defp citations(text), do: BeamMCP.Boundary.citations(text)
 
   defp marked_files do
     @root

@@ -65,6 +65,53 @@ defmodule BeamMCP.Boundary do
         do: m
   end
 
+  @doc """
+  The test citations a page makes: `[{path, [name]}]` in page order. A citation is a test
+  file's path in backticks followed, on the same line, by one or more test names in straight
+  double quotes: `` `test/x_test.exs` "a name" "another" ``; a name belongs to the last path
+  on its line. Read by the will-not-implement census and the threat-model census, so a page
+  that cites a test is held to the tree the same way wherever it lives.
+  """
+  def citations(text) do
+    for line <- String.split(text, "\n"),
+        Regex.match?(~r/`test\/[^`]+_test\.exs`/, line),
+        {path, names} <- cite_line(line),
+        do: {path, names}
+  end
+
+  defp cite_line(line) do
+    ~r/`(test\/[^`]+_test\.exs)`|"([^"]+)"/
+    |> Regex.scan(line)
+    |> Enum.reduce([], fn
+      [_, path], acc when path != "" -> [{path, []} | acc]
+      [_, "", name], [{path, names} | rest] -> [{path, names ++ [name]} | rest]
+      [_, "", _name], [] -> []
+    end)
+    |> Enum.reverse()
+  end
+
+  @doc "Every test the page cites exists, by path and by name; every citation names a test. Returns the defects."
+  def missing_citations(text, root) do
+    for {path, names} <- citations(text),
+        full = Path.join(root, path),
+        defect <-
+          (cond do
+             not File.exists?(full) ->
+               ["#{path} is not in the tree"]
+
+             names == [] ->
+               ["#{path} is cited without a test name"]
+
+             true ->
+               source = File.read!(full)
+
+               for n <- names,
+                   not String.contains?(source, ~s(test "#{n}")),
+                   do: "#{path} names no test #{inspect(n)}"
+           end),
+        do: defect
+  end
+
   @doc "Every module the built application's `.app` file lists."
   def app_modules do
     Application.load(:beam_mcp)
