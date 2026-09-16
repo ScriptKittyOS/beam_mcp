@@ -3,10 +3,11 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF — beam_mcp, after release 0.4.0; slice 016 (reachability) opens
+# HANDOFF — beam_mcp, release 0.5.0 prepared; the release commit is the owner's
 
 Tag and publish are owner steps — never `mix hex.publish`, never push a tag, never bump the
-version in `mix.exs`. Those were done for 0.4.0 by the owner on 2026-09-14.
+version in `mix.exs`. Those were done for 0.4.0 by the owner on 2026-09-14 and are done the
+same way for 0.5.0.
 
 The slice records — plans, findings, lane reports, signoffs, archived gate runs — live in the
 project's internal tree, not in this repository. Nothing here summarises a review that has not
@@ -14,66 +15,85 @@ happened.
 
 ## State
 
-- **`0.4.0` is released**: tag `v0.4.0`, published on Hex on 2026-09-14, `main` at the release
-  commit. Its changelog section is dated and is not amended. It carries everything since
-  `0.3.1`: the catalog-contract break (`BeamMCP.ToolCatalog` replaced by `BeamMCP.Catalog`) and
-  the connectome — declared, observed, canonical bytes, diff — with the Livebook, the
-  benchmark, property and instruments gates, and the docs census.
-- `mix.exs` says `0.4.0`. The README recommends `~> 0.4.0`, and a test binds that requirement
-  to the version and refuses `0.3.1` across the catalog break.
+- **Everything since `0.4.0` is in `[Unreleased]`**, with a paragraph under the heading saying
+  what moved on the wire and citing the recording that holds the connectome surface to having
+  moved nothing. Eight slices landed by rebase: reachability (`BeamMCP.Connectome.Reach`), the
+  conformance harness and the four wire fixes it forced (one a break: `params._meta`), the
+  will-not-implement page with its censuses, the sign vocabulary (a break in the bytes), the
+  pages in the tarball, the resources primitive and the cursor, the prompts primitive, and the
+  connectome on the wire (`BeamMCP.Connectome.Surface`). Four breaks — one on the wire, one in
+  the exported bytes, two in the host contract — each with a how-to-tell sentence in its entry.
+- `mix.exs` still says `0.4.0`; the README still recommends `~> 0.4.0`. The release commit —
+  `mix.exs`, the README requirement and its paragraph (a fourth use of the minor position),
+  the `[0.5.0]` heading's date, `SECURITY.md`'s table, the wire recording re-taken at the new
+  version (it pins the version the results carry, and says so), this file's title — is
+  prepared as a patch measured on a preview and applied by the owner.
 - **No head hash is written here** — a hash written into the file it describes cannot include
-  the commit that writes it. `git log main..slice/016-reachability` is the authority.
-- Gate on `main` at the release: thirteen steps, every line `pass` — format (the tracked set,
-  not a glob), compile, instruments, test, credo, properties (6 at 1 000 generations), optional
-  deps, bench (the collector's overhead under the 1.5 µs ceiling; the diff engine's cost
-  recorded, no threshold by the owner's decision), docs, reuse, licence files, publication,
-  messages. **6 properties, 430 tests, 0 failures.**
-- `CHANGELOG.md` has an empty `[Unreleased]` section again; the next release is `0.5.0`.
+  the commit that writes it. `git log main..slice/018-release-0-5-0` is the authority.
+- Gate on the slice head: thirteen steps, every line `pass` — format (the tracked set, not a
+  glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
+  deps, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
+  encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
+  process after a warm-up, set at roughly double the stable worst of ten runs on the release
+  head; the reachability queries' cost recorded and judged by no number, but a query refused
+  on the fixture fails the step by name), docs, reuse, licence files, publication, messages.
+  **11 properties, 602 tests, 0 failures**: 599 at the head 018 opened on, plus the three of
+  the README split census.
+- The README's four-way split is held to the built application by census: every module named
+  under *shipping now* is in the `.app`'s module list, every module named under the other
+  three paragraphs is not.
 
-## What 016 is
+## What is next
 
-Control-reachability queries over the declared graph, `BeamMCP.Connectome.Reach`: can entry E
-reach effect X; can it do so on a path that crosses no gate node (with the witness path when
-it can); does G dominate X from the entry set; the set of nodes every path to X must cross.
-On OTP's `:digraph`/`:digraph_utils`, with dominators hand-written (`:digraph_utils` has none —
-measured), and **no new dependency** — the owner declined `libgraph`; zero dependencies is part
-of what the package sells. Path-explosion caps are named parameters with defaults; a query over
-a cap is refused with a named error; all-paths enumeration and motif isomorphism are refused by
-name, not attempted. Red first: the gate fixture, the bypass fixture, the witness-path property,
-the cap refusal.
+The plan's order after this release: the federation seam (held on an answer from another
+board about who orchestrates a merge and which key registry verifies sub-graphs — nothing
+touching signing or key material is built without the owner's word), effective connectivity,
+then assessability and deployability toward `1.0.0`, which follows once the public API and the
+stated threat model have each survived a full minor release unchanged. A compiler-tracer census
+(module-body code run at compile time, which neither the text censuses nor `:xref` see) is
+scheduled with its lift measured. Sign-aware reachability, if asked for, is a later slice or a
+refusal decided in the open — never a widening inside a release slice; `all_paths` stays
+refused.
 
-## Owner decisions still open, carried from 015
+## Owner decisions still open
 
-1. **The diff engine's cost is recorded, not gated** (owner, 2026-09-14): a one-shot with a
-   ~35 % run-to-run spread on one machine; revisit when 016 or 017 lands and graph cost becomes
-   something a consumer feels, with a warm-up-and-median benchmark built like
-   `bench/overhead.exs`.
-2. **The Livebook is not opened from hexdocs.** ExDoc would copy it with a badge, but a copy
-   fetched by URL has no `exports/` beside it; it is run from a checkout and linked from the
-   README. Whether Livebook fetches attached files on a URL import is unmeasured.
-3. **The generation count** of the properties step (1 000) and the format population's form
-   are the agent's; both are one line in `tools/gate.sh`.
+1. **Subscriptions.** `resources/subscribe` is not in `2026-07-28` (`subscriptions/listen`
+   replaced it, a long-lived stream the stateless HTTP transport cannot hold); the capability
+   is advertised with `subscribe: false`. Whether to build `subscriptions/listen` on stdio, the
+   legacy pair on the legacy era only, or neither and say so on the will-not-implement page.
+2. **A resource template in the declared connectome.** The builder reads a `uri` per entry; a
+   template has a `uri_template` and is enumerated as unreadable — true and unflattering.
+   Whether a template is a node, and of what kind.
+3. **`tools/list` pagination.** The cursor exists and both resource lists and `prompts/list`
+   use it; adopting it on `tools/list` changes an existing result and waits for the word.
+4. **The diff encode's cost follows the caller's heap.** Measured while rebuilding the
+   benchmark: 115–126 ms in a fresh process, 133–151 ms after one encode in the same process,
+   240–252 ms in a process holding six earlier records. The gate's figure is the fresh one and
+   says so; whether a long-lived caller should encode in a spawned process is unmeasured on a
+   real host.
+5. **The Livebook is not opened from hexdocs**, as before: a copy fetched by URL has no
+   `exports/` beside it.
 
 ## Known limits, recorded rather than fixed
 
 - An Elixir script under `tools/` is parsed by the format step and run by nobody; a call into
-  a module the package renamed is caught only when the script is next run by hand. The shell
-  and Python instruments are parsed, not run.
+  a module the package renamed is caught only when the script is next run by hand.
 - The collector is node-wide: every dispatch on the node lands in its table, whatever the
   server. The Livebook's observed export is restricted to its server by id for that reason.
 - `readme_claims_test.exs` pins the claims listed in it and derives no claim set; the docs
-  census closes a neighbouring gap (names that do not exist, and short aliases ExDoc would not
-  link), not that one.
+  census closes a neighbouring gap (names that do not exist), and the split census another
+  (a module named in the wrong paragraph), not that one.
 - The 1.5 µs ceiling's margin on this machine: the worst measured since it was set is
   +0.878 µs/call, with the baseline alone swinging 1.4 µs between runs; the owner read the
   numbers and kept the ceiling. `bench/overhead.exs` says so beside the constant.
+- The `2025-11-25` revision is served on stdio only; over HTTP the conformance row for it is
+  0 / 30 by design, and the README says so beside the number.
 
-## To release 0.5.0, when 016 and 017 have landed
+## To release 0.5.0
 
-1. Merge the slice PRs to `main` by rebase (the ruleset requires two green checks).
-2. The release commit — `mix.exs`, the README requirement, the `[0.5.0]` heading's date,
-   `SECURITY.md`'s table, this file — is the owner's; the agent prepares it as a patch measured
-   on a preview and stops.
+1. Merge the slice PR to `main` by rebase (the ruleset requires two green checks).
+2. Apply the release patch — or say the word and the agent applies it — then the gate on the
+   result, thirteen `pass`, output recorded by command and exit code.
 3. `mix hex.publish`, then tag `v0.5.0` signed — or tag first and publish immediately after.
    The GitHub ruleset targets **branches, not tags**, so a tag push is unprotected: what is
    tagged is what was read.
