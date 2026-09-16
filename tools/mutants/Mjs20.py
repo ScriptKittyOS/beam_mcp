@@ -11,7 +11,7 @@ old = """        skip_remaining_headers()
         drain_bytes(length)
         {:error, :declared_frame_too_large}"""
 new = """        skip_remaining_headers()
-        drain_bytes(0)
+        drain_bytes(length - length)
         {:error, :declared_frame_too_large}"""
 assert s.count(old) == 1, "anchor not found once: %d" % s.count(old)
 s = s.replace(old, new)
