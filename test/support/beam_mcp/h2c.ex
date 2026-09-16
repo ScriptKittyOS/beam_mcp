@@ -50,6 +50,11 @@ defmodule BeamMCP.H2C do
 
   def finish(sock), do: data(sock, <<>>, true)
 
+  # A stream-level WINDOW_UPDATE: thirteen bytes on the wire that carry no body. The adapter
+  # re-arms its per-read wait on one, which is how a stream is held past the deadline.
+  def window_update(sock, increment),
+    do: :gen_tcp.send(sock, frame(0x8, 0x0, @stream, <<0::1, increment::31>>))
+
   def close(sock), do: :gen_tcp.close(sock)
 
   def response(sock, timeout_ms) do
