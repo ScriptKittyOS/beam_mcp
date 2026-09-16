@@ -868,7 +868,10 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       result = BeamMCP.H2C.response(sock, 5_000)
       elapsed = System.monotonic_time(:millisecond) - started
       BeamMCP.H2C.close(sock)
-      assert {:ok, _headers, response_body} = result
+      # The client applies RFC 9113, 8.2.2 to the response as nghttp2 does: a `connection`
+      # header here would be `{:malformed, "connection"}`, the reset a lane's Node client saw.
+      assert {:ok, headers, response_body} = result
+      assert {":status", "408"} in headers
       assert response_body =~ "not received within 300 ms"
 
       assert elapsed >= 300 and elapsed < 2_100,
@@ -880,7 +883,8 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       port = listen(read_timeout: 1_000)
       sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
       BeamMCP.H2C.data(sock, body, true)
-      assert {:ok, _headers, response_body} = BeamMCP.H2C.response(sock, 5_000)
+      assert {:ok, headers, response_body} = BeamMCP.H2C.response(sock, 5_000)
+      assert {":status", "200"} in headers
       assert response_body =~ ~s("id":1)
       BeamMCP.H2C.close(sock)
 
@@ -896,7 +900,8 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
           h2_headers(byte_size(body)) ++ [{"origin", "https://evil.example"}]
         )
 
-      assert {:ok, _headers, refusal} = BeamMCP.H2C.response(sock, 5_000)
+      assert {:ok, headers, refusal} = BeamMCP.H2C.response(sock, 5_000)
+      assert {":status", "403"} in headers
       assert refusal =~ "Origin not allowed"
       BeamMCP.H2C.close(sock)
     end
