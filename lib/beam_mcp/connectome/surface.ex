@@ -30,9 +30,11 @@ defmodule BeamMCP.Connectome.Surface do
   ## The bytes are the file export's
 
   `connectome://declared` and `connectome://observed` answer exactly what
-  `BeamMCP.Connectome.Canonical.encode/1` writes for the graph (`docs/connectome-canonical.md`);
-  `connectome://diff` answers exactly `BeamMCP.Connectome.Diff.encode/1` of the record
-  (`docs/connectome-diff.md`). A consumer who has the file has the resource, byte for byte, and
+  `BeamMCP.Connectome.Canonical.encode/2` writes for the graph (`docs/connectome-canonical.md`);
+  `connectome://diff` answers exactly `BeamMCP.Connectome.Diff.encode/2` of the record
+  (`docs/connectome-diff.md`) -- under the same `algorithm:`, since the option is a member of
+  the bytes: a file written with `BeamMCP.Connectome.Canonical.to_json/2` under `:sha384` matches a resource served under
+  `:sha384`, and neither matches the default's. A consumer who has the file has the resource, byte for byte, and
   the hash rule the canonical page defines verifies either. The tool answers the same bytes as the value of
   `bytes` in its structured content, with their hash beside them under the algorithm's name
   (`sha256` unless the host's `algorithm:` option says `:sha384` or `:sha512`), so a client verifies
@@ -121,7 +123,7 @@ defmodule BeamMCP.Connectome.Surface do
   """
   @spec read(String.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
   def read("connectome://" <> graph = uri, opts) when graph in @graphs and is_list(opts) do
-    with {:ok, {bytes, _hash}} <- bytes(graph, opts),
+    with {:ok, {bytes, _hash}} <- bytes(graph, opts, algorithm(opts)),
          do: {:ok, [%{uri: uri, text: bytes, mime_type: "application/json"}]}
   end
 
@@ -136,9 +138,13 @@ defmodule BeamMCP.Connectome.Surface do
   """
   @spec call(map(), keyword()) :: {:ok, map()} | {:error, term()}
   def call(%{graph: graph}, opts) when graph in @graphs and is_list(opts) do
-    with {:ok, {bytes, hash}} <- bytes(graph, opts) do
+    # The algorithm is read from the options once, here, and threaded to the bytes: the key
+    # the hex sits under and the member the bytes carry cannot come from two reads.
+    algorithm = algorithm(opts)
+
+    with {:ok, {bytes, hash}} <- bytes(graph, opts, algorithm) do
       hex = Base.encode16(hash, case: :lower)
-      {:ok, %{algorithm(opts) => hex, graph: graph, bytes: bytes}}
+      {:ok, %{algorithm => hex, graph: graph, bytes: bytes}}
     end
   end
 
@@ -146,27 +152,27 @@ defmodule BeamMCP.Connectome.Surface do
   def call(_args, _opts), do: {:error, {:missing, :graph}}
 
   # The bytes and their hash, both from the canonical module: the surface computes neither.
-  defp bytes("declared", opts) do
-    with {:ok, graph} <- declared(opts), do: graph_bytes(graph, opts)
+  defp bytes("declared", opts, algorithm) do
+    with {:ok, graph} <- declared(opts), do: graph_bytes(graph, algorithm)
   end
 
-  defp bytes("observed", opts) do
-    with {:ok, graph} <- observed(opts), do: graph_bytes(graph, opts)
+  defp bytes("observed", opts, algorithm) do
+    with {:ok, graph} <- observed(opts), do: graph_bytes(graph, algorithm)
   end
 
-  defp bytes("diff", opts) do
+  defp bytes("diff", opts, algorithm) do
     with {:ok, window} <- fetch(opts, :window),
          {:ok, declared} <- declared(opts),
          {:ok, observed} <- observed(opts),
          {:ok, diff} <- Diff.run(declared, observed, window: window),
-         {:ok, bytes} <- Diff.encode(diff, algorithm: algorithm(opts)),
-         {:ok, hash} <- Diff.hash(diff, algorithm: algorithm(opts)),
+         {:ok, bytes} <- Diff.encode(diff, algorithm: algorithm),
+         {:ok, hash} <- Diff.hash(diff, algorithm: algorithm),
          do: {:ok, {bytes, hash}}
   end
 
-  defp graph_bytes(graph, opts) do
-    with {:ok, bytes} <- Canonical.encode(graph, algorithm: algorithm(opts)),
-         {:ok, hash} <- Canonical.hash(graph, algorithm: algorithm(opts)),
+  defp graph_bytes(graph, algorithm) do
+    with {:ok, bytes} <- Canonical.encode(graph, algorithm: algorithm),
+         {:ok, hash} <- Canonical.hash(graph, algorithm: algorithm),
          do: {:ok, {bytes, hash}}
   end
 

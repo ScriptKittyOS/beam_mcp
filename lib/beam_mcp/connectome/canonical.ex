@@ -152,8 +152,33 @@ defmodule BeamMCP.Connectome.Canonical do
   @spec hash_value(map(), keyword()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
   def hash_value(value, opts \\ []) do
     algorithm = algorithm!(opts)
+    named!(value, algorithm)
     with {:ok, bytes} <- encode_value(value), do: {:ok, digest(algorithm, bytes)}
   end
+
+  # A value that names an algorithm under the key the envelope uses must name the one it is
+  # hashed with: this is the one public path where bytes could otherwise name a digest they
+  # were not hashed with, and it is refused before a byte is written.
+  defp named!(value, algorithm) when is_map(value) do
+    name = Atom.to_string(algorithm)
+
+    case Map.get(value, :algorithm, Map.get(value, "algorithm")) do
+      nil ->
+        :ok
+
+      ^algorithm ->
+        :ok
+
+      ^name ->
+        :ok
+
+      other ->
+        raise ArgumentError,
+              "the value names algorithm #{inspect(other)} and the option says #{inspect(algorithm)}"
+    end
+  end
+
+  defp named!(_value, _algorithm), do: :ok
 
   @doc "`hash_value/2`, raising."
   @spec hash_value!(map(), keyword()) :: binary()
@@ -186,15 +211,25 @@ defmodule BeamMCP.Connectome.Canonical do
 
   @doc """
   The algorithm an option list names, validated: `:sha256` when it names none, one of
-  `algorithms/0` otherwise, and `ArgumentError` for anything else or for a key this module
-  does not take. Public so a caller that writes the name into its own record (the diff) and
-  this module hash with one answer.
+  `algorithms/0` otherwise, and `ArgumentError` naming the fault for anything else -- a name
+  outside the three in any spelling (a string, an uppercase atom, a charlist), the option
+  given twice, a key this module does not take, or an argument that is not a keyword list.
+  Public so a caller that writes the name into its own record (the diff) and this module
+  hash with one answer.
   """
   @spec algorithm!(keyword()) :: algorithm()
-  def algorithm!(opts) when is_list(opts) do
+  def algorithm!(opts) do
+    unless Keyword.keyword?(opts) do
+      raise ArgumentError,
+            "algorithm!/1 takes a keyword list, got #{inspect(opts)}; the one option is :algorithm"
+    end
+
     case Keyword.keys(opts) -- [:algorithm] do
       [] ->
         :ok
+
+      [:algorithm | _] ->
+        raise ArgumentError, "algorithm: given twice in #{inspect(opts)}"
 
       other ->
         raise ArgumentError, "unknown option(s) #{inspect(other)}; the one option is :algorithm"
@@ -259,13 +294,13 @@ defmodule BeamMCP.Connectome.Canonical do
   @spec sidecar!(Graph.t()) :: binary()
   def sidecar!(graph), do: bang(sidecar(graph), "sidecar")
 
-  @doc "The JSON export: the canonical bytes themselves."
-  @spec to_json(Graph.t()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
-  def to_json(graph), do: encode(graph)
+  @doc "The JSON export: the canonical bytes themselves, naming the digest `algorithm:` chooses."
+  @spec to_json(Graph.t(), keyword()) :: {:ok, binary()} | {:error, {:uncanonical, uncanonical()}}
+  def to_json(graph, opts \\ []), do: encode(graph, opts)
 
-  @doc "`to_json/1`, raising."
-  @spec to_json!(Graph.t()) :: binary()
-  def to_json!(graph), do: bang(to_json(graph), "to_json")
+  @doc "`to_json/2`, raising."
+  @spec to_json!(Graph.t(), keyword()) :: binary()
+  def to_json!(graph, opts \\ []), do: bang(to_json(graph, opts), "to_json")
 
   # ---------------------------------------------------------------------------------------
   # DOT and GraphML read the canonical order and never choose one of their own.

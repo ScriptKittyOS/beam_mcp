@@ -25,7 +25,12 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    meets and the digest the second. The schema version is the integer `3` (see *Versions*
    below). The algorithm is one of the three strings `"sha256"`, `"sha384"`, `"sha512"` —
    the name under which the digest is known to `:crypto`, lowercase, no hyphen — and it is
-   what rule 9 hashes the bytes with. A name outside the three is not a canonical form: the
+   what rule 9 hashes the bytes with. **The nodes and edges members do not depend on the
+   algorithm:** two envelopes of one graph under two digests differ in that member's value
+   and in nothing else, so the bytes under another digest are derived from the bytes under
+   one by changing that value alone (the worked example shows it), and the goldens
+   `golden.sha384` and `golden.sha512` are the hashes of `golden.json` with the member so
+   changed. A name outside the three is not a canonical form: the
    package refuses it at the option before writing a byte, and a verifier meeting one
    refuses the record rather than guessing a digest.
 2. **`"nodes"` is an array sorted by `"id"`** — by the bytes of the UTF-8 id, which is the
@@ -94,7 +99,8 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    bytes do not name, and it treats a name it does not know as a malformed record. SHA-256 is
    the default the package writes when the caller names none, and stays the default
    indefinitely; the other two are a caller's option (`algorithm:` on
-   `BeamMCP.Connectome.Canonical.encode/2` and `hash/2`), never a constant of a release.
+   `BeamMCP.Connectome.Canonical.encode/2`, `hash/2`, `hash_hex/2`, `hash_value/2` and
+   `to_json/2`), never a constant of a release.
 
 ## Worked example
 
@@ -191,7 +197,7 @@ with the same reason.
 
 ## What the exports are
 
-`to_json/1` is the canonical bytes. `to_dot/1` and `to_graphml/1` are renderings of the same
+`to_json/2` is the canonical bytes, under the algorithm its option names. `to_dot/1` and `to_graphml/1` are renderings of the same
 canonical order for Graphviz and GraphML readers: they carry kind, level, labels, edge kind,
 provenance and sign, and no weight. They are not canonical forms and are not hashed.
 
