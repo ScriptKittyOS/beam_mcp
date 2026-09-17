@@ -7,7 +7,51 @@ defmodule BeamMCP.MixProject do
   @version "0.5.0"
   @source_url "https://github.com/ScriptKittyOS/beam_mcp"
 
+  # The oldest OTP this project supports. Mix has an `elixir:` key but none for OTP, so the
+  # floor is enforced here, at compile time: a below-floor build fails rather than shipping and
+  # failing in a way that looks like a defect in this package. The reason travels with the
+  # number (see `check_otp!/1` and the README), because a floor without a reason gets raised by
+  # the next person who finds it inconvenient.
+  @otp_floor 27
+
+  @doc "The oldest OTP release this project supports."
+  def otp_floor, do: @otp_floor
+
+  @doc """
+  Raises unless `release` -- the string `:erlang.system_info(:otp_release)` returns, or that
+  form -- is at or above `otp_floor/0`. The message names the floor, the version found, and
+  why the floor is where it is. Pure and public so a test can exercise the raise on any OTP.
+  """
+  def check_otp!(release) do
+    found = release |> to_string() |> String.trim() |> Integer.parse()
+
+    case found do
+      {major, _rest} when major >= @otp_floor ->
+        :ok
+
+      {major, _rest} ->
+        Mix.raise("""
+        beam_mcp requires Erlang/OTP #{@otp_floor} or newer; found OTP #{major}.
+
+        OTP 26.2 added the keyed process_info read the connectome tracer depends on --
+        `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
+        the whole process dictionary (2 us against up to a millisecond on a loaded tracer,
+        measured) -- so OTP 26.2 is the hard requirement. The floor is set at #{@otp_floor}, one
+        minor above it, because #{@otp_floor} is the oldest release this project tests: the CI
+        matrix runs the suite on it, so support for it is a measurement and not a hope. Older
+        releases are neither tested nor supported.
+
+        Install OTP #{@otp_floor} or newer (see .tool-versions), or pin an older beam_mcp.
+        """)
+
+      :error ->
+        Mix.raise("beam_mcp could not read the OTP release from #{inspect(release)}")
+    end
+  end
+
   def project do
+    _ = check_otp!(:erlang.system_info(:otp_release))
+
     [
       app: :beam_mcp,
       version: @version,
