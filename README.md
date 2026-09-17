@@ -149,7 +149,9 @@ to `beam_mcp`, and a host that wants its own name in `initialize` says so.
 
 ### The OTP floor
 
-This package requires **Erlang/OTP 27 or newer** (Elixir `~> 1.15`), enforced at compile time:
+This package requires **Erlang/OTP 27 or newer** and **Elixir 1.17 or newer** — 1.17 is the
+oldest Elixir that runs on OTP 27, so the two minimums are one coherent pair — the OTP half
+enforced at compile time:
 `mix.exs` reads `:erlang.system_info(:otp_release)` at `project/0` and a below-floor build fails
 with a message that names the floor and why, rather than compiling and failing later in a way
 that looks like a defect here. The reason, so the floor is not raised by the next person who

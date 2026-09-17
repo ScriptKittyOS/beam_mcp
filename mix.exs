@@ -58,7 +58,9 @@ defmodule BeamMCP.MixProject do
       # Fixtures under test/support compile only for the test environment: they are real
       # modules the connectome builder reads, never a mock, and they never ship.
       elixirc_paths: elixirc_paths(Mix.env()),
-      elixir: "~> 1.15",
+      # OTP 27 (the floor above) needs Elixir 1.17 or newer -- 1.15/1.16 do not run on it -- so
+      # the two stated minimums are coherent: the oldest supported pair is Elixir 1.17 on OTP 27.
+      elixir: "~> 1.17",
       elixirc_options: [warnings_as_errors: true],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
