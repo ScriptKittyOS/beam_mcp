@@ -9,7 +9,7 @@ p = sys.argv[1]
 s = io.open(p, encoding="utf-8").read()
 old = """      deadline = System.monotonic_time(:millisecond) + connection_timeout
       Process.put(@conn_deadline_key, deadline)"""
-new = """      deadline = System.monotonic_time(:millisecond) + div(connection_timeout, 2)
+new = """      deadline = System.monotonic_time(:millisecond) + connection_timeout - connection_timeout
       Process.put(@conn_deadline_key, deadline)"""
 assert s.count(old) == 1, "anchor not found once: %d" % s.count(old)
 s = s.replace(old, new)
