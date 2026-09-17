@@ -233,3 +233,32 @@ A consequence worth stating, because it looks like an omission: **the ranked ord
 board, not in a filename.** Anyone wanting to know what comes next reads the ranking, and a
 reordering is a comment rather than a rename. That is the point — a rename would have to reach into
 the one namespace this rule protects.
+
+## A slice's review tier is declared before the work, by what it changes for a stranger
+
+Three tiers, chosen in the PLAN before the first commit, by what the slice changes for someone who
+consumes the package — not by which files it touches. `mix.exs` can carry a consumer-visible hard
+stop; a README sentence can carry nothing.
+
+1. **Contract** — new or changed behaviour a consumer can hit: a raise, the wire, the catalog, reach,
+   a sign slot, an authority boundary, a host contract. **Two lanes.** Mutants if there is a pin to
+   kill.
+2. **Measurement** — CI, gates, pins that make an existing claim true. **One lane, one round.**
+3. **Prose and records** — this file, FINDINGS, gap notes, README sentences that change no behaviour.
+   **The gate and a self-review. No lanes.**
+
+Three limits sit beside the tiers. **A copy edit never opens a review round:** a claim about
+behaviour gets a round; a sentence about the same behaviour gets a commit. **Instrument gaps** —
+archive drift, `MIX_ENV` inheritance, a count field the harness stopped reading, signoff tooling —
+batch into one tools slice or wait until they block a slice; they do not ride along. **The tier
+cannot be chosen after the result is known.**
+
+Two measurements produced this. Slice 022 set the OTP floor in `mix.exs` — a contract, `project/0`
+raises and a dependent has no bypass — and then spent a third review round on "where" against
+"whereas", and on a `.tool-versions` pointer that dangles for a hex consumer: three rounds of the
+maximum ceremony, one of them for wording. Uniform maximum ceremony was the tax. Slice 023, the CI
+matrix, was the test: a measurement, so it ran one lane, and that is the shape this rule exists to
+produce.
+
+This entry is tier 3. Opening lanes, or a three-round review, on this file is a violation of the
+rule it adds.
