@@ -164,7 +164,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :telemetry => [attach_many: 4, detach: 1, execute: 3],
     Jason => [decode: 1, decode: 2, encode!: 1, encode!: 2],
     Logger => [__do_log__: 4, __should_log__: 2],
-    Process => [info: 2, put: 2, whereis: 1],
+    Process => [delete: 1, info: 2, put: 2, whereis: 1],
     GenServer => [format_report: 1, start: 3, start_link: 3, stop: 3],
     Supervisor => [child_spec: 2],
     # `get_http_protocol/1`: the transport's body read asks the adapter for one frame at a time
