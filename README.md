@@ -514,9 +514,10 @@ has no stdio server mode). `conformance/README.md` has the rest.
 **Reproduce it:** `tools/conformance.sh` — one command, for anyone with Node ≥ 22 and
 `python3`. **The trade, stated:** this package has two dependencies; producing this number
 costs a second toolchain, so the step runs in a CI job of its own (`conformance.yml`, Node 22
-pinned) and never in the local gate, which stays the thirteen steps a contributor with Elixir
-and Erlang runs green with nothing else installed. The CI job fails loudly when the toolchain
-is absent; it never skips.
+pinned) and never in the local gate, which stays the fourteen steps a contributor with Elixir
+and Erlang runs green with nothing else installed — offline, the dependency audit says NOT
+MEASURED rather than passing from hex's cache, and CI requires it. The CI job fails loudly
+when the toolchain is absent; it never skips.
 
 ## The connectome
 

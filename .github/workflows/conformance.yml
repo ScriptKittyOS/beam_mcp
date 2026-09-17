@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 # SPDX-License-Identifier: Apache-2.0
 #
-# The conformance step, CI-ONLY by decision: the local gate (tools/gate.sh, thirteen steps)
+# The conformance step, CI-ONLY by decision: the local gate (tools/gate.sh, fourteen steps)
 # stays dependency-light so a contributor with Elixir and Erlang runs it green without a Node
 # toolchain or a Python interpreter, and stays the gate people actually run. This job carries
 # the second toolchain the number costs -- Node 22, pinned -- and the runner's python3, runs
