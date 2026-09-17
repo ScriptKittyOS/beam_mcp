@@ -159,10 +159,11 @@ finds it inconvenient: OTP **26.2** added the keyed `process_info` read the conn
 depends on — `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
 the whole process dictionary (2 µs against up to a millisecond on a loaded tracer, measured), so
 26.2 is the hard requirement. The floor is set at 27, the next major release above it, because
-27 is the oldest release this project *supports*: the lowest leg a CI matrix is to run the suite
-on, so that support becomes a measurement rather than a hope. Today the suite runs on OTP 28
-only, on the maintainers' machines and in CI; releases older than 27 are neither tested nor
-supported.
+27 is the oldest release this project *supports*: the lowest leg the CI matrix runs the suite
+on, so that support is a measurement and not a hope. The suite runs on OTP 27, 28 and 29 in CI
+(the floor, the pinned line and the newest pair the compatibility table lists — `mix format` is
+measured on the pinned line only, the formatter being one program) and on 28 on the
+maintainers' machines; releases older than 27 are neither tested nor supported.
 
 ## One schema, one source
 

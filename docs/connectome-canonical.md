@@ -178,8 +178,9 @@ Weights are written separately as `{"schema_version":3,"weights":[…]}` — the
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
 integer; a float weight is written in the shortest form that round-trips
-(`:erlang.float_to_binary/2` with `:short`, which OTP 25 introduced; on an older OTP the
-sidecar raises rather than answering). The digits are the shortest that round-trip; the
+(`:erlang.float_to_binary/2` with `:short`, OTP 25's — every release this package compiles on
+has it, the floor being OTP 27, and the placement below is measured on OTP 27, 28 and 29 by the
+CI matrix). The digits are the shortest that round-trip; the
 placement is Erlang's, which differs from other runtimes' shortest forms and is decided by
 the digit count of the mantissa, not by the magnitude. Write the digits as D, a string with
 no trailing zeros, of length L, and let e be the power of ten such that the value is

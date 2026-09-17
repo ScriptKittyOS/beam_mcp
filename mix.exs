@@ -38,9 +38,10 @@ defmodule BeamMCP.MixProject do
         the whole process dictionary (2 us against up to a millisecond on a loaded tracer,
         measured) -- so OTP 26.2 is the hard requirement. The floor is set at #{@otp_floor},
         the next major release above it, because #{@otp_floor} is the oldest release this project supports:
-        the lowest leg a CI matrix is to run the suite on, so that support becomes a measurement
-        rather than a hope. Today the suite runs on OTP 28 only, on the maintainers' machines and
-        in CI. Releases older than #{@otp_floor} are neither tested nor supported.
+        the lowest leg the CI matrix runs the suite on, so that support is a measurement and not
+        a hope. The suite runs on OTP 27, 28 and 29 in CI (the floor, the pinned line and the
+        newest pair the compatibility table lists) and on 28 on the maintainers' machines.
+        Releases older than #{@otp_floor} are neither tested nor supported.
 
         Install OTP #{@otp_floor} or newer (the maintainers' pins are in the repository's
         .tool-versions), or pin an older beam_mcp.
