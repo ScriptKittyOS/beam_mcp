@@ -11,6 +11,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — the OTP floor is enforced at compile time, with its reason; the Elixir bound made coherent with it
+
+- **Erlang/OTP 27 is the floor, and a below-floor build now fails to compile** with a message
+  that names the floor, the version found and why. Mix has an `elixir:` requirement but none for
+  OTP, so `mix.exs` reads `:erlang.system_info(:otp_release)` at `project/0` and raises below
+  27 — rather than compiling and failing later in a way that looks like a defect here. The
+  reason travels with the number, in the message and in the README's "The OTP floor" section,
+  pinned equal by a test: OTP **26.2** added the keyed `:erlang.process_info(pid, {:dictionary,
+  key})` read the connectome tracer depends on (one claim key, 2 µs, against copying the whole
+  dictionary — up to a millisecond on a loaded tracer, measured), so 26.2 is the hard
+  requirement; 27 is the oldest release this project supports. Today the suite is run on OTP 28.
+- **`elixir: "~> 1.17"`, from `"~> 1.15"`.** Elixir 1.15 and 1.16 support OTP 24–26 only, and
+  1.17 is the oldest Elixir that supports OTP 27, so the two stated minimums are now one
+  coherent pair: Elixir 1.17 on OTP 27. No consumer is admitted or refused that the OTP floor
+  did not already decide — an Elixir 1.15/1.16 consumer cannot be on OTP 27 — so this is a
+  statement made true, not a requirement raised.
+
 ### Added — the HTTP/2 control-frame residue is bounded in duration by a connection deadline
 
 - **`connection_timeout:` on `BeamMCP.Transport.HTTP`** — a positive integer of milliseconds,

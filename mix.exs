@@ -37,8 +37,8 @@ defmodule BeamMCP.MixProject do
         `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
         the whole process dictionary (2 us against up to a millisecond on a loaded tracer,
         measured) -- so OTP 26.2 is the hard requirement. The floor is set at #{@otp_floor}, one
-        minor above it, because #{@otp_floor} is the oldest release this project supports: the
-        release its CI matrix's lowest leg is to run the suite on, so that support is a
+        minor above it, because #{@otp_floor} is the oldest release this project supports, and
+        the release a CI matrix is to run the suite on as its lowest leg, so that support is a
         measurement and not a hope. Today the suite is run on OTP 28, here and in CI. Older
         releases than #{@otp_floor} are neither tested nor supported.
 
@@ -59,8 +59,9 @@ defmodule BeamMCP.MixProject do
       # Fixtures under test/support compile only for the test environment: they are real
       # modules the connectome builder reads, never a mock, and they never ship.
       elixirc_paths: elixirc_paths(Mix.env()),
-      # OTP 27 (the floor above) needs Elixir 1.17 or newer -- 1.15/1.16 do not run on it -- so
-      # the two stated minimums are coherent: the oldest supported pair is Elixir 1.17 on OTP 27.
+      # OTP 27 (the floor above) needs Elixir 1.17 or newer -- Elixir 1.15/1.16 support OTP 24-26
+      # only -- so the two stated minimums are coherent: the oldest supported pair is Elixir 1.17
+      # on OTP 27. The README states the same pair, pinned equal by the census test.
       elixir: "~> 1.17",
       elixirc_options: [warnings_as_errors: true],
       start_permanent: Mix.env() == :prod,
