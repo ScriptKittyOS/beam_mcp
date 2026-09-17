@@ -47,6 +47,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     System,
     :application,
     :atomics,
+    :beam_lib,
     :code,
     :crypto,
     :digraph,
@@ -82,6 +83,14 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :trace,
     Jason.OrderedObject
   ]
+
+  # The same collision, one OTP later: `:graph` -- a key in this package's maps (`%{graph: g}`,
+  # Surface.call/2) -- is the name of a stdlib module from OTP 29 (`lib/stdlib/src/graph.erl`,
+  # beside `digraph`; measured on the CI head leg, OTP 29 / Elixir 1.20). On OTP 27 and 28 it
+  # names nothing and the census does not see it. So: named as data where the OTP makes it a
+  # module's name, and not required where it does not. Nothing else is tolerated this way;
+  # the next OTP's collision is added here by name, with its module cited.
+  @named_on_newer_otp [:graph]
 
   # The functions called on the modules through which code, names, secrets, the operating
   # system, the file system, another process or another node could be reached. Operators on
@@ -132,6 +141,9 @@ defmodule BeamMCP.Boundary.PackageReachTest do
       tuple_to_list: 1
     ],
     :code => [get_object_code: 1],
+    # The declared builder reads a beam's `Dbgi` chunk by path (`Declared.add_module/2`) to
+    # classify a stripped beam itself, before xref: the same file `get_object_code/1` named.
+    :beam_lib => [chunks: 2],
     Code => [ensure_compiled: 1, ensure_loaded?: 1],
     # `monotonic_time/1` is the HTTP transport's whole-body deadline clock; a clock, not the environment.
     System => [convert_time_unit: 3, monotonic_time: 1],
@@ -237,7 +249,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
        %{lib: lib, edges: edges} do
     called = for {_, {m, _, _}} <- edges, m not in lib, uniq: true, do: m
     named = Boundary.module_atoms()
-    strays = named -- (called ++ @named_not_called)
+    strays = named -- (called ++ @named_not_called ++ @named_on_newer_otp)
     unused = @named_not_called -- named
 
     assert strays == [] and unused == [],

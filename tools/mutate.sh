@@ -127,7 +127,10 @@ apply() {
 suite() {
   local out rc
   out=$(mix test 2>&1); rc=$?
-  printf '%s\n' "$out" | grep -E '^[0-9]+ tests?, ' | tail -1
+  # ExUnit's summary: `658 tests, 1 failure` (with `11 properties, ` before it since the
+  # property tests landed -- the anchor missed that prefix from then until 023, G-065) through
+  # Elixir 1.19; `Result: 667/669 passed (11/11 properties, 656/658 tests)` from 1.20.
+  printf '%s\n' "$out" | grep -E '^([0-9]+ propert(y|ies), )?[0-9]+ tests?, |^Result: ' | tail -1
   printf '%s\n' "$out" | grep -E '^ +[0-9]+\) test ' | sed 's/^ *[0-9]*) test /        failed: /'
   # AND HOW MANY EXCHANGES PRODUCED NO MEASUREMENT. The Bandit harness repeats an exchange whose
   # response was destroyed in transit, and announces each one on stderr. Slice 006 round 1 found
