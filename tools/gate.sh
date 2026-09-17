@@ -32,13 +32,30 @@ echo "== beam_mcp gate =="
 # step's job, not a defect in it.
 # Read with -z / -0 so a name with whitespace is one name, as the REUSE and publication
 # steps read theirs.
+# THE FORMATTER IS ONE PROGRAM: THE ELIXIR LINE `.tool-versions` PINS. `mix format` changes
+# between Elixir minors (G-016: a 98-column `with` clause 1.18 wraps and 1.19 does not), so a
+# tree formatted on one line is red on another for formatting alone. The CI matrix (023) runs
+# this gate on the floor and the head Elixir as well as the pinned line; on those legs this
+# step MEASURES NOTHING and says so -- it does not pass (a pass would claim a formatter agreed
+# that never ran) and it does not fail (the tree is not wrong, the program differs). The
+# pinned line is read from `.tool-versions`, the same file the pinned CI leg and every
+# contributor's asdf read, so there is no second copy of the number to drift.
+fmt_pinned=$(awk '$1 == "elixir" { split($2, v, "."); print v[1] "." v[2] }' .tool-versions)
+fmt_running=$(elixir -e 'IO.puts(System.version() |> String.split(".") |> Enum.take(2) |> Enum.join("."))' 2>/dev/null)
 fmt_n=$(git ls-files -- '*.ex' '*.exs' | grep -c .)
-fmt_out=$(git ls-files -z -- '*.ex' '*.exs' | xargs -0 mix format --check-formatted 2>&1); fmt_rc=$?
-if [ "$fmt_rc" -eq 0 ] && [ "$fmt_n" -gt 0 ]; then
-  note "format" "pass ($fmt_n tracked .ex/.exs)"
+if [ -z "$fmt_pinned" ] || [ -z "$fmt_running" ]; then
+  note "format" "FAIL (cannot read the pinned Elixir line from .tool-versions ('$fmt_pinned') or the running one ('$fmt_running'))"
+  fail=1
+elif [ "$fmt_pinned" != "$fmt_running" ]; then
+  note "format" "NOT MEASURED (running Elixir $fmt_running, the pinned formatter is $fmt_pinned per .tool-versions; the pinned leg measures it; $fmt_n tracked .ex/.exs)"
 else
-  note "format" "FAIL (exit $fmt_rc, $fmt_n tracked .ex/.exs)"
-  printf '%s\n' "$fmt_out" | sed 's/^/      /'; fail=1
+  fmt_out=$(git ls-files -z -- '*.ex' '*.exs' | xargs -0 mix format --check-formatted 2>&1); fmt_rc=$?
+  if [ "$fmt_rc" -eq 0 ] && [ "$fmt_n" -gt 0 ]; then
+    note "format" "pass ($fmt_n tracked .ex/.exs, Elixir $fmt_running = the pinned line)"
+  else
+    note "format" "FAIL (exit $fmt_rc, $fmt_n tracked .ex/.exs)"
+    printf '%s\n' "$fmt_out" | sed 's/^/      /'; fail=1
+  fi
 fi
 step "compile"  mix compile --warnings-as-errors --force
 

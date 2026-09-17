@@ -8,20 +8,60 @@ on:
     branches: ["**"]
   pull_request:
 
+# THE MATRIX: the floor pair, the pinned pair, the head pair. The floor leg is what turns
+# "beam_mcp supports OTP 27" (the compile-time floor in mix.exs) from a sentence into a
+# measurement; until it ran, the floor was a claim about a release nobody here had run. The
+# pinned leg is `.tool-versions`' line, and it is the only leg on which the gate's format step
+# measures anything -- `mix format` differs between Elixir minors, so the formatter is one
+# program and the other legs' format line reads NOT MEASURED by design (tools/gate.sh). The
+# head leg is the newest pair the compatibility table lists. Each pair is one the table lists
+# as supported (Elixir 1.17 -> OTP 25-27; 1.18 -> 25-27, with 1.18.5 running on 28 as
+# CONVENTIONS records; 1.20 -> 27-29). What setup-beam installs for a pair on a given runner
+# image is observed, not assumed: the first run's log is the evidence, and the slice record
+# quotes it. `fail-fast: false` so one leg's red does not hide another's measurement.
+#
+# THE REQUIRED CHECK IS THE SUMMARY JOB. The repository's ruleset on main requires the status
+# context "Gate - quality gate" by name; a matrix leg's context carries its values, so no leg
+# could satisfy it and a pull request would wait on a check that never reports. `summary`
+# carries that exact name, runs after every leg (`if: always()`), and fails unless the legs
+# all succeeded -- so the ruleset stays as it is and the required check means "all three".
 jobs:
   gate:
-    name: Gate - quality gate
+    name: Gate - leg (OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }}, ${{ matrix.leg }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { leg: floor,  otp: "27", elixir: "1.17" }
+          - { leg: pinned, otp: "28", elixir: "1.18" }
+          - { leg: head,   otp: "29", elixir: "1.20" }
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: "28"
-          elixir-version: "1.18"
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: the pair setup-beam installed (observed, quoted in the slice record)
+        run: |
+          erl -noshell -eval 'io:format("OTP ~s~n", [erlang:system_info(otp_release)]), halt().'
+          elixir --version
+          cat .tool-versions
       - run: mix deps.get
       - run: ./tools/gate.sh
+
+  summary:
+    name: Gate - quality gate
+    runs-on: ubuntu-latest
+    needs: gate
+    if: always()
+    steps:
+      - name: every leg of the matrix passed
+        run: |
+          echo "legs: ${{ needs.gate.result }}"
+          [ "${{ needs.gate.result }}" = "success" ]
 
   dco:
     name: Gate - DCO sign-off
