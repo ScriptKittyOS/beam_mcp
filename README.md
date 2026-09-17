@@ -158,10 +158,10 @@ that looks like a defect here. The reason, so the floor is not raised by the nex
 finds it inconvenient: OTP **26.2** added the keyed `process_info` read the connectome tracer
 depends on — `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
 the whole process dictionary (2 µs against up to a millisecond on a loaded tracer, measured), so
-26.2 is the hard requirement. The floor is set at 27, one minor above it, because 27 is the
-oldest release this project *supports*, and the release a CI matrix is to run the suite on as
-its lowest leg, so that support is a measurement and not a hope. Today the suite is run on
-OTP 28, locally and in CI; releases older than 27 are neither tested nor supported.
+26.2 is the hard requirement. The floor is set at 27, the next release above it, because 27 is
+the oldest release this project *supports*: the lowest leg a CI matrix is to run the suite on,
+so that support becomes a measurement rather than a hope. Today the suite runs on OTP 28 only,
+locally and in CI; releases older than 27 are neither tested nor supported.
 
 ## One schema, one source
 
