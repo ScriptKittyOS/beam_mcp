@@ -149,11 +149,31 @@ step "optional deps" bash tools/probe_optional_deps.sh
 # the format step above (the tracked set) and not run -- the limit of this step, stated rather
 # than hidden. Their one-line figures are kept in the note, because a pass that hides its
 # number is a number nobody can compare later.
+#
+# WHERE THE THRESHOLDS ARE ENFORCED. They are the owner's numbers for a known machine. On a
+# shared CI runner the same code drew the diff's run median anywhere from 129 to 261 ms across
+# twelve legs of the matrix, against a threshold of 245: the draw overlaps the ceiling, so
+# there the step measures contention, not the code, and a check that reddens on a slow minute
+# is a check that gets switched off. So with `GATE_BENCH=record` (the CI workflow sets it) the
+# three scripts run and their figures are RECORDED beside the local thresholds -- a draw over
+# its ceiling is printed as OVER, still visible, never red -- and only a failure that is not a
+# threshold breach (a posture not measured, a query refused on the fixture, a crash) fails the
+# step. Raising the ceiling for the runner would be tuning the instrument to the sample. The
+# enforcing seat is the maintainers' machine, where the numbers were set.
 bench_out=$(mix run bench/overhead.exs 2>&1); bench_rc=$?
 diff_out=$(mix run bench/diff.exs 2>&1); diff_rc=$?
 reach_out=$(mix run bench/reach.exs 2>&1); reach_rc=$?
+# A script's exit 1 is a threshold breach only when every BENCH FAIL line it printed says so.
+breach_only() { ! printf '%s\n' "$1" | grep '^BENCH FAIL' | grep -qvE 'over (its|the) threshold'; }
+figure() { printf '%s\n' "$1" | grep -v '^BENCH FAIL' | tail -1; }
 if [ "$bench_rc" -eq 0 ] && [ "$diff_rc" -eq 0 ] && [ "$reach_rc" -eq 0 ]; then
-  note "bench" "pass ($(printf '%s\n' "$bench_out" | tail -1); $(printf '%s\n' "$diff_out" | tail -1); $(printf '%s\n' "$reach_out" | tail -1))"
+  note "bench" "pass ($(figure "$bench_out"); $(figure "$diff_out"); $(figure "$reach_out"))"
+elif [ "${GATE_BENCH:-enforce}" = "record" ] \
+  && { [ "$bench_rc" -eq 0 ] || { [ "$bench_rc" -eq 1 ] && breach_only "$bench_out"; }; } \
+  && { [ "$diff_rc" -eq 0 ] || { [ "$diff_rc" -eq 1 ] && breach_only "$diff_out"; }; } \
+  && [ "$reach_rc" -eq 0 ]; then
+  over=$(printf '%s\n%s\n' "$bench_out" "$diff_out" | grep -E 'over (its|the) threshold' | sed 's/^BENCH FAIL: /OVER: /' | tr '\n' ';')
+  note "bench" "recorded, thresholds not applied (GATE_BENCH=record: a shared runner measures contention, not the code; enforced on the maintainers' machine) ${over}($(figure "$bench_out"); $(figure "$diff_out"); $(figure "$reach_out"))"
 else
   note "bench" "FAIL (overhead exit $bench_rc, diff exit $diff_rc, reach exit $reach_rc)"
   printf '%s\n%s\n%s\n' "$bench_out" "$diff_out" "$reach_out" | sed 's/^/      /'; fail=1
