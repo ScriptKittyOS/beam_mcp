@@ -11,6 +11,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the CI gate runs on three OTP/Elixir pairs, so the floor is a measurement
+
+- **The CI gate is a matrix:** the floor pair (OTP 27 / Elixir 1.17 — the oldest pair the
+  compatibility table lists for OTP 27), the pinned pair (28 / 1.18, `.tool-versions`' line)
+  and the head pair (29 / 1.20, the newest listed). The floor leg is what turns "beam_mcp
+  supports OTP 27" — the compile-time floor above — from a sentence into a measurement; until it
+  ran, the floor was a claim about a release nobody had run the suite on. `mix format` is
+  measured on the pinned leg only: the formatter changes between Elixir minors, so on the other
+  legs the gate's format step reads NOT MEASURED rather than passing on a program that never ran
+  or failing a tree that is not wrong.
+- **What the legs found, fixed at the source:** on Elixir 1.20 the test-only h2c client's frame
+  parser used a variable bound outside a match inside `binary-size` without the pin (now
+  `^len`); on OTP 29 the stdlib gained a `graph` module, so the atom `:graph` — a key in this
+  package's maps — names a module there, which the package-reach census now knows; and OTP
+  29.1's xref crashes on a beam stripped of debug information instead of refusing it, so the
+  declared builder now classifies such a beam itself, by its own `Dbgi` chunk, before xref sees
+  the file — one `:beam_lib.chunks/2` read, the same answer on every release. The censuses that
+  pinned one compiler's spelling (a struct's own `__struct__/1`, `String.to_atom/1`'s inlining,
+  the compiler's own macro-expansion calls) now say what they mean on all three.
+- **The sidecar's float placement is measured on the floor.** `docs/connectome-canonical.md`
+  said the sidecar raises on an OTP older than 25; no such release can compile this package
+  (the floor is 27), so the sentence now says what is true: every release the package runs on
+  has `:short`, and the thirteen placement examples run on OTP 27, 28 and 29.
+
 ### Changed — the OTP floor is enforced at compile time, with its reason; the Elixir bound made coherent with it
 
 - **Erlang/OTP 27 is the floor, and a below-floor build now fails to compile** with a message
@@ -22,7 +46,7 @@ All notable changes to this project are documented here. The format follows
   key})` read the connectome tracer depends on (one claim key, 2 µs, against copying the whole
   dictionary — up to a millisecond on a loaded tracer, measured), so 26.2 is the hard
   requirement; 27 is the oldest release this project supports. At the time of this entry the
-  suite runs on OTP 28 only.
+  suite ran on OTP 28 only; the CI matrix (the entry above) has since measured it on 27 and 29.
 - **`elixir: "~> 1.17"`, from `"~> 1.15"`.** Elixir 1.15 and 1.16 support OTP 24–26 only, and
   1.17 is the oldest Elixir that supports OTP 27, so the two stated minimums are now one
   coherent pair: Elixir 1.17 on OTP 27. No consumer is admitted or refused that the OTP floor
