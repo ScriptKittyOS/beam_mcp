@@ -58,15 +58,29 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
     # The generated sites are not skipped: they are pinned. The compiler writes the struct's
     # own __struct__/0,1 (two constructions, six values) and Catalog's callback info (three
     # values), and nothing else -- an `unquote` of a hand-built AST carrying `generated: true`
-    # (a lane's plant) is a fourth generated construction, and fails here.
-    generated = for {m, loc, ctx} <- sites, Boundary.generated?(loc), do: {m, ctx}
+    # (a lane's plant) is a third construction, and fails here. The two own constructions are
+    # counted whether or not the compiler marks them (1.18+ marks both; 1.17 marks one --
+    # measured on the CI floor leg), and a generated construction anywhere but in the struct's
+    # own module is a plant by definition.
+    own_constructions =
+      for {BeamMCP.ToolSpec, _, {:construction, :__struct__}} <- sites, do: :construction
 
-    assert Enum.frequencies(generated) == %{
-             {BeamMCP.Catalog, :value} => 3,
-             {BeamMCP.ToolSpec, :value} => 6,
-             {BeamMCP.ToolSpec, {:construction, :__struct__}} => 2
-           },
-           "generated sites of BeamMCP.ToolSpec: #{inspect(Enum.frequencies(generated))}"
+    assert length(own_constructions) == 2,
+           "BeamMCP.ToolSpec's own constructions: #{length(own_constructions)}, expected __struct__/0 and __struct__/1"
+
+    elsewhere =
+      for {m, loc, {:construction, :__struct__}} <- sites,
+          Boundary.generated?(loc),
+          m != BeamMCP.ToolSpec,
+          do: m
+
+    assert elsewhere == [],
+           "generated constructions of BeamMCP.ToolSpec outside it: #{inspect(elsewhere)}"
+
+    generated_values = for {m, loc, :value} <- sites, Boundary.generated?(loc), do: m
+
+    assert Enum.frequencies(generated_values) == %{BeamMCP.Catalog => 3, BeamMCP.ToolSpec => 6},
+           "generated value sites of BeamMCP.ToolSpec: #{inspect(Enum.frequencies(generated_values))}"
   end
 
   # The names the package reaches by dot syntax, from the compiled forms. A field access and a
