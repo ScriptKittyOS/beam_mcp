@@ -36,8 +36,9 @@ defmodule BeamMCP.OTPFloorTest do
     # The reason, not just the number: the keyed process_info read the tracer uses, added in
     # OTP 26.2, and that 27 is the release the project tests. A floor without a reason gets
     # raised by the next person who finds it inconvenient.
-    assert e.message =~ "process_info"
-    assert e.message =~ "26.2"
+    assert e.message =~ "keyed process_info"
+    assert e.message =~ "26.2 is the hard requirement"
+    assert e.message =~ "oldest release this project tests"
   end
 
   test "the running OTP is at or above the floor (this build compiled, so the guard passed)" do
