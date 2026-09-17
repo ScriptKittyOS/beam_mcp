@@ -188,8 +188,16 @@ defmodule BeamMCP.Boundary.PackageReachTest do
   setup_all do
     lib = Boundary.lib_modules()
     {edges, _unresolved} = Boundary.xref()
-    %{lib: lib, edges: edges}
+    %{lib: lib, edges: Enum.map(edges, &same_call/1)}
   end
+
+  # One call, two spellings by compiler: `String.to_atom/1` is inlined to
+  # `:erlang.binary_to_atom(b, :utf8)` by Elixir up to 1.17 and to `:erlang.binary_to_atom(b)`
+  # by 1.18+ (measured on the CI floor leg, OTP 27 / Elixir 1.17). The census is about what the
+  # package can reach, and both spellings reach exactly the same thing, so the /2 form is read
+  # as the /1 form here and the lists below carry one entry.
+  defp same_call({from, {:erlang, :binary_to_atom, 2}}), do: {from, {:erlang, :binary_to_atom, 1}}
+  defp same_call(edge), do: edge
 
   test "the modules the package calls are exactly the listed ones", %{lib: lib, edges: edges} do
     called = for {_, {m, _, _}} <- edges, m not in lib, uniq: true, do: m
