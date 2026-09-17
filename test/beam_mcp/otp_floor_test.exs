@@ -68,5 +68,12 @@ defmodule BeamMCP.OTPFloorTest do
       assert text =~ "process_info"
       assert text =~ "26.2"
     end
+
+    # The Elixir half of the pair is one number too: the `elixir:` requirement Mix reads and the
+    # README's "Elixir X.Y or newer" name the same minimum, so a bump of one cannot leave the
+    # other stale. 1.17 is the oldest Elixir that supports OTP 27, which is what makes the pair
+    # coherent; the floor above is what makes it necessary.
+    "~> " <> elixir_min = Keyword.fetch!(BeamMCP.MixProject.project(), :elixir)
+    assert readme =~ "Elixir #{elixir_min} or newer"
   end
 end
