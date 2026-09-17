@@ -416,12 +416,24 @@ defmodule BeamMCP.Connectome.Declared do
     |> then(fn {a, b, c} -> {Enum.sort(a), b, c} end)
   end
 
+  # A beam stripped of its debug information is classified HERE, by its own `Dbgi` chunk,
+  # before xref is asked to read it. OTP 28's xref answered such a file with an error tuple;
+  # OTP 29.1's reads its chunks with `allow_missing_chunks`, meets `abstract_code: missing_chunk`
+  # where its only clause expects `no_abstract_code`, and the linked reader's case_clause takes
+  # the xref server down -- so `:xref.stop/1` afterwards finds no process (`xref_base:abst/3`,
+  # tools 4.2.3; measured on the CI head leg and reproduced locally). The chunk read is one
+  # `beam_lib` call on the file's bytes, no decompression of the debug information, and it
+  # makes the classification the package's own rather than a version of xref's. A beam that
+  # carries the chunk but no forms (`debug_info: false` at compile time) is still xref's to
+  # refuse, and it does, on every release the package runs on.
   defp add_module(ref, m) do
     with {^m, _binary, file} <- :code.get_object_code(m),
+         {:ok, {^m, [debug_info: _]}} <- :beam_lib.chunks(file, [:debug_info]),
          {:ok, _} <- :xref.add_module(ref, file) do
       :added
     else
       :error -> :no_beam
+      {:error, :beam_lib, {:missing_chunk, _, _}} -> :no_debug_info
       {:error, _, _} -> :no_debug_info
     end
   end
