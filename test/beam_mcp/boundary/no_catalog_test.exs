@@ -63,7 +63,7 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   # compile to the same branch, so the artefact cannot tell them apart -- but every name is
   # listed, and the list is the package's own fields. `capabilities` is not among them.
   @dotted ~w(__struct__ allowed_origins allowlisted ancestor authorize authorize_body bucket
-    catalog classes collector command_class companion coverage description dfnum dispatch
+    catalog classes collector command_class companion connection_timeout coverage description dfnum dispatch
     dispatch_opts edges entries external from id idom input_schema kind kinds label labels level
     macro max_duration_ms method mode module_ids modules name no_beam no_debug_info nodes parent
     pids provenance read_timeout schema_version semi server server_name server_opts shutdown? sign sources

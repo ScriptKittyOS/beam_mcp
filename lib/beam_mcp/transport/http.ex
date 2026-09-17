@@ -26,6 +26,7 @@ if Code.ensure_loaded?(Plug) do
     # it, through `read_timeout:`. `Plug.Test` never times out, so the deadline is measured
     # against a real listener (`http_bandit_test.exs`).
     @read_timeout_default 15_000
+    @connection_timeout_factor 2
 
     @moduledoc """
     Stateless Streamable HTTP transport: a `Plug` serving `2026-07-28` at one endpoint.
@@ -84,14 +85,26 @@ if Code.ensure_loaded?(Plug) do
         threat model states both, and the two `Bandit` listener options that bound the
         exposure: `http_2_options: [default_local_settings: [max_concurrent_streams: n]]`
         caps the held streams per connection, `http_2_options: [enabled: false]` removes
-        HTTP/2 from the listener). A body must declare its
+        HTTP/2 from the listener). That per-stream hold the adapter owns is bounded in
+        DURATION here by `:connection_timeout` below. A body must declare its
         length — `transfer-encoding: chunked` is refused with `411` before the read, since a
         chunked body is read chunk by chunk on a per-chunk clock that no deadline above it can
         bound. The `408` is this Plug's
         JSON-RPC refusal, with `connection: close` over HTTP/1.1 (over HTTP/2 the stream ends
         with the response); nothing is written to the host's log for it — the adapter's own
         error-level line at its read timeout no longer fires, since the deadline is this Plug's.
-        A DoS control, and the host's to set: longer behind
+      * `:connection_timeout` — positive integer, milliseconds, default twice `:read_timeout`.
+        The whole-body deadline above is a stream's; over HTTP/2 a stream held open by control
+        frames alone cannot be ended from outside the adapter, but its **connection** can. When
+        a body read has been blocked this long and nothing else on the connection is still
+        within its own body deadline, the connection is closed with a `GOAWAY` the client can
+        read — an OTP `GenServer.stop` on the socket handler, not a forged adapter message or a
+        reset. So the residue the adapter owns is bounded in duration by this option and in
+        count by `http_2_options`'s `max_concurrent_streams`. The cost is per connection: the
+        client's other legitimate streams still open on that connection end with it, so a host
+        multiplexing streams that outlive one body read raises this. Twice the read deadline by
+        default: one for the body to arrive, a second before a still-blocked read is taken for a
+        hold. A DoS control, and the host's to set: longer behind
         a slow link, shorter facing the open internet. The default is a chosen number with its
         reasoning beside the constant, not the adapter's default (which it was, unstated, for
         two releases).
@@ -185,7 +198,7 @@ if Code.ensure_loaded?(Plug) do
     # This Plug's own options; everything else in the keyword list belongs to Server.new/1.
     # Derived by exclusion rather than by naming what to keep: a `Keyword.take` list silently
     # dropped `tools_ttl_ms` and `tools_cache_scope` when they were added, and a test caught it.
-    @plug_opts [:authorize, :allowed_origins, :authorize_body, :read_timeout]
+    @plug_opts [:authorize, :allowed_origins, :authorize_body, :read_timeout, :connection_timeout]
 
     # Extracted from `init/1` rather than inlined, and not for tidiness: adding this check
     # inline took `init/1` to a cyclomatic complexity of 11 against a limit of 9, and the gate
@@ -280,11 +293,17 @@ if Code.ensure_loaded?(Plug) do
       read_timeout =
         validate_read_timeout!(Keyword.get(opts, :read_timeout, @read_timeout_default))
 
+      connection_timeout =
+        validate_connection_timeout!(
+          Keyword.get(opts, :connection_timeout, @connection_timeout_factor * read_timeout)
+        )
+
       %{
         authorize: authorize,
         authorize_body: authorize_body,
         allowed_origins: origins,
         read_timeout: read_timeout,
+        connection_timeout: connection_timeout,
         # This transport serves the 2026-07-28 stateless model and refuses every other
         # revision on every POST, so the core it builds advertises exactly that -- in
         # server/discover's supportedVersions and in -32022's supported. Dual-era is a
@@ -393,7 +412,7 @@ if Code.ensure_loaded?(Plug) do
              {:ok, conn} <- check_method(conn),
              {:ok, conn} <- check_length_declared(conn),
              {:ok, conn} <- authorize(conn, opts.authorize) do
-          read_body_bounded(conn, opts.read_timeout)
+          read_body_bounded(conn, opts.read_timeout, opts.connection_timeout)
         end
 
       case result do
@@ -575,6 +594,26 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    # The connection deadline is derived from the body-read deadline: two of it by default.
+    # One `read_timeout` is the whole-body deadline the loop enforces; a read still blocked a
+    # second `read_timeout` later is not a slow legitimate body (the loop answers those, per
+    # DATA frame) but a stream held by control frames alone, so its connection -- if nothing
+    # else on it is still within its own deadline -- is closed. A host multiplexing streams
+    # that legitimately outlive one body read raises it; it is a DoS bound, not an SLA.
+
+    @doc "The connection deadline in milliseconds when `connection_timeout:` is not given: twice `read_timeout`."
+    @spec connection_timeout_factor() :: pos_integer()
+    def connection_timeout_factor, do: @connection_timeout_factor
+
+    defp validate_connection_timeout!(ms) when is_integer(ms) and ms > 0, do: ms
+
+    defp validate_connection_timeout!(other) do
+      raise ArgumentError, """
+      BeamMCP.Transport.HTTP's :connection_timeout must be a positive integer of milliseconds --
+      got #{inspect(other)}. The default is #{@connection_timeout_factor} times :read_timeout.
+      """
+    end
+
     defp validate_read_timeout!(ms) when is_integer(ms) and ms > 0, do: ms
 
     defp validate_read_timeout!(other) do
@@ -603,9 +642,20 @@ if Code.ensure_loaded?(Plug) do
     # the adapter's frame size -- and the 413 comes at that frame.
     @read_piece 65_536
 
-    defp read_body_bounded(conn, read_timeout) do
+    defp read_body_bounded(conn, read_timeout, connection_timeout) do
       deadline = System.monotonic_time(:millisecond) + read_timeout
-      read_by_deadline(conn, deadline, read_timeout, [], 0)
+      # Over HTTP/2 the read can be held past its deadline by control frames alone, which no
+      # clock in this loop can end (029a's residue: the adapter's receive is not ours to
+      # interrupt). The connection is, though: a watchdog closes it at the connection deadline
+      # if the read is still blocked and nothing else on the connection is still within its
+      # own deadline. Armed only over HTTP/2; over HTTP/1 the loop below bounds every read.
+      watchdog = arm_connection_watchdog(conn, connection_timeout)
+
+      try do
+        read_by_deadline(conn, deadline, read_timeout, [], 0)
+      after
+        disarm_connection_watchdog(watchdog)
+      end
     end
 
     defp read_by_deadline(conn, deadline, read_timeout, acc, size) do
@@ -649,6 +699,129 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    # The process-dictionary key under which each reading stream publishes its connection
+    # deadline, so a sibling's watchdog can read it without a registry or a process this
+    # package owns. Namespaced by this module.
+    @conn_deadline_key {__MODULE__, :connection_deadline}
+
+    # Arm the connection watchdog for an HTTP/2 body read, and return what disarms it. The
+    # stream records its own connection deadline in its process dictionary and spawns a
+    # watchdog that closes the whole connection at the connection deadline IF the read is
+    # still blocked and no other stream on the connection is still within its own deadline.
+    # Over HTTP/1 there is no residue -- the loop bounds every read -- so nothing is armed.
+    defp arm_connection_watchdog(conn, connection_timeout) do
+      if get_http_protocol(conn) == :"HTTP/2" and is_integer(connection_timeout) do
+        arm_watchdog_on(connection_pid(), connection_timeout)
+      else
+        :not_armed
+      end
+    end
+
+    defp arm_watchdog_on(nil, _connection_timeout), do: :not_armed
+
+    defp arm_watchdog_on(conn_pid, connection_timeout) do
+      deadline = System.monotonic_time(:millisecond) + connection_timeout
+      Process.put(@conn_deadline_key, deadline)
+      stream = self()
+      watchdog = spawn(fn -> watch_connection(conn_pid, stream, deadline) end)
+      {:armed, watchdog}
+    end
+
+    defp disarm_connection_watchdog(:not_armed), do: :ok
+
+    defp disarm_connection_watchdog({:armed, watchdog}) do
+      Process.delete(@conn_deadline_key)
+      send(watchdog, :stand_down)
+      :ok
+    end
+
+    # The connection process is the socket handler the stream process is linked to: a
+    # `ThousandIsland.Handler` GenServer whose `$initial_call` names its module (over HTTP/2,
+    # `Bandit.DelegatingHandler`). Identified not by that name but by the callback the close
+    # relies on -- `handle_shutdown/2`, which writes the GOAWAY -- so the lever is an OTP
+    # interface on the process (`GenServer.stop/3`, below), not a forged adapter message, and
+    # is not coupled to one adapter's module names.
+    defp connection_pid do
+      {:links, links} = Process.info(self(), :links)
+
+      Enum.find(links, fn
+        pid when is_pid(pid) -> shutdown_handler?(pid)
+        _ -> false
+      end)
+    end
+
+    defp shutdown_handler?(pid) do
+      case Process.info(pid, :dictionary) do
+        {:dictionary, dict} ->
+          case Keyword.get(dict, :"$initial_call") do
+            {mod, _, _} -> function_exported?(mod, :handle_shutdown, 2)
+            _ -> false
+          end
+
+        _ ->
+          false
+      end
+    end
+
+    # Waits until the latest connection deadline among the streams still reading on this
+    # connection, then closes the connection -- unless the stream stood down first (its read
+    # returned). Closing is `GenServer.stop(conn, :shutdown)`, which runs the handler's own
+    # orderly termination: a GOAWAY(NO_ERROR) the client can read, then the socket closed.
+    # The other streams on the connection die with it; that is the stated cost.
+    defp watch_connection(conn_pid, stream, deadline) do
+      wait = deadline - System.monotonic_time(:millisecond)
+
+      receive do
+        :stand_down -> :ok
+      after
+        max(wait, 0) -> on_deadline(conn_pid, stream)
+      end
+    end
+
+    # At a stream's connection deadline: close the connection if a stream is still held, or
+    # wait longer if a sibling is still within its own deadline. If our own stream finished
+    # between the timeout firing and here, its key is gone, `latest_live_deadline` returns nil,
+    # and a clean connection is never closed. A deadline still present and past means held.
+    defp on_deadline(conn_pid, stream) do
+      now = System.monotonic_time(:millisecond)
+
+      case latest_live_deadline(conn_pid) do
+        nil -> :ok
+        latest when latest > now -> watch_connection(conn_pid, stream, latest)
+        _past -> GenServer.stop(conn_pid, :shutdown, 5_000)
+      end
+    end
+
+    # The latest connection deadline recorded by any stream still reading on this connection,
+    # or nil if none is. Reads each linked stream's process dictionary; a stream that has
+    # finished its read has deleted its key, so only streams still within or past their own
+    # deadline are counted. A sibling still in the future keeps the connection open.
+    defp latest_live_deadline(conn_pid) do
+      case Process.info(conn_pid, :links) do
+        {:links, links} ->
+          case Enum.flat_map(links, &stream_deadline/1) do
+            [] -> nil
+            deadlines -> Enum.max(deadlines)
+          end
+
+        _ ->
+          nil
+      end
+    end
+
+    # The connection deadline a linked stream process has published, or `[]` for a link that
+    # is not a reading stream (the socket port, or a stream past its read).
+    defp stream_deadline(pid) when is_pid(pid) do
+      with {:dictionary, dict} <- Process.info(pid, :dictionary),
+           {_key, deadline} <- List.keyfind(dict, @conn_deadline_key, 0) do
+        [deadline]
+      else
+        _ -> []
+      end
+    end
+
+    defp stream_deadline(_not_a_pid), do: []
+
     # How much one read asks for. Over HTTP/1 a piece, or what is left under the cap -- zero at
     # the cap, so the last read answers whether the body is complete. Over HTTP/2 always below
     # zero: the adapter gathers DATA frames inside one read until the frames gathered EXCEED
@@ -675,9 +848,11 @@ if Code.ensure_loaded?(Plug) do
     # without END_STREAM -- a malformed request under RFC 9113, 8.1, which the adapter reads
     # as trailers -- writes a warning line per frame to the host's log carrying the client's
     # header bytes. The host's cost is one stream process held for as long as the frames
-    # keep coming, up to the adapter's streams-per-connection setting. The threat model
-    # states it as the adapter's, with tests that fail the day the adapter honours the
-    # deadline it is given.
+    # keep coming, up to the adapter's streams-per-connection setting -- but bounded in
+    # DURATION by the connection watchdog above: the stream itself cannot be ended from
+    # outside the adapter, so at the connection deadline the whole connection is closed with
+    # a GOAWAY. The threat model states the residue as the adapter's, with tests that fail
+    # the day the adapter honours the deadline it is given.
     defp piece_length(true, size), do: min(@read_piece, @max_body_bytes - size)
     defp piece_length(false, _size), do: -1
 

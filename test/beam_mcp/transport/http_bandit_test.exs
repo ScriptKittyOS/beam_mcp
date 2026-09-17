@@ -752,6 +752,50 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       end
     end
 
+    test "init/1 takes connection_timeout: and refuses a value that is not a positive integer" do
+      assert %{connection_timeout: 900} =
+               HTTP.init(
+                 catalog: Catalog,
+                 dispatch: fn _n, a, _o -> {:ok, a} end,
+                 authorize: fn _conn -> :ok end,
+                 allowed_origins: :any,
+                 connection_timeout: 900
+               )
+
+      # The default is twice read_timeout, derived from whatever read_timeout is set to.
+      assert %{connection_timeout: 500, read_timeout: 250} =
+               HTTP.init(
+                 catalog: Catalog,
+                 dispatch: fn _n, a, _o -> {:ok, a} end,
+                 authorize: fn _conn -> :ok end,
+                 allowed_origins: :any,
+                 read_timeout: 250
+               )
+
+      default =
+        HTTP.init(
+          catalog: Catalog,
+          dispatch: fn _n, a, _o -> {:ok, a} end,
+          authorize: fn _conn -> :ok end,
+          allowed_origins: :any
+        )
+
+      assert default.connection_timeout == 2 * HTTP.read_timeout_default()
+      assert HTTP.connection_timeout_factor() == 2
+
+      for bad <- [0, -1, 1.5, "900", :infinity, nil] do
+        assert_raise ArgumentError, ~r/connection_timeout/, fn ->
+          HTTP.init(
+            catalog: Catalog,
+            dispatch: fn _n, a, _o -> {:ok, a} end,
+            authorize: fn _conn -> :ok end,
+            allowed_origins: :any,
+            connection_timeout: bad
+          )
+        end
+      end
+    end
+
     test "a drip client is answered 408 at the deadline set, at two values" do
       body = call_json(1, 200)
       partial = binary_part(body, 0, 20)

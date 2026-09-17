@@ -306,7 +306,13 @@ the connection is clean, and an ordinary response is possible.
   can end through an interface the adapter offers — one frame per deadline holds a stream
   process indefinitely, whatever body then comes is refused, a WINDOW_UPDATE costs thirteen
   bytes with nothing accumulated, and a HEADERS without END_STREAM writes a warning line per
-  frame to the host's log carrying the client's header bytes.
+  frame to the host's log carrying the client's header bytes. The stream is the adapter's to
+  end, but the **connection** is this package's: `connection_timeout:` (default twice
+  `read_timeout`) closes a connection whose body read has been held that long, with nothing
+  else on it still within its own deadline, using a `GOAWAY` the client can read — so the
+  residue is bounded in duration by this package and in count by `max_concurrent_streams`,
+  and its cost is per connection (the client's other streams still open on it end with the
+  `GOAWAY`; a host multiplexing long streams raises `connection_timeout`).
   The `408` is this package's refusal — the JSON-RPC error object
   every refusal carries, with `connection: close` over HTTP/1.1 as for every refusal issued
   before the body is read (over HTTP/2 the stream ends with the response; the header would be a

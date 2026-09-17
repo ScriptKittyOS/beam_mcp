@@ -11,6 +11,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the HTTP/2 control-frame residue is bounded in duration by a connection deadline
+
+- **`connection_timeout:` on `BeamMCP.Transport.HTTP`** — a positive integer of milliseconds,
+  default twice `:read_timeout`. Over HTTP/2 a stream held open by control frames alone (a
+  WINDOW_UPDATE, or a HEADERS without END_STREAM) cannot be ended from outside the adapter —
+  the residue the slow-client threat-model row records — but its **connection** can. When a
+  body read has been blocked for the connection deadline and nothing else on the connection is
+  still within its own body deadline, the whole connection is closed with a `GOAWAY` the client
+  can read: an OTP `GenServer.stop` on the socket handler (found by the `handle_shutdown/2`
+  callback it exports, not by an adapter name), which runs the handler's own orderly
+  termination — `GOAWAY(NO_ERROR)`, then the socket closed, not a reset. Measured: a stream
+  pinned by control frames for three seconds under `connection_timeout: 600` is closed at
+  ~605 ms, where without the bound it lived as long as the frames came (~3.34 s). So the
+  residue is bounded in duration by this option and in count by `http_2_options`'s
+  `max_concurrent_streams`; `http_2_options: [enabled: false]` still removes HTTP/2 whole.
+- **The cost is per connection, and stated:** the client's other streams still open on the
+  connection end with the `GOAWAY`. A legitimate stream that already answered is unharmed; one
+  still in flight when the close fires dies with it, so a host multiplexing streams that outlive
+  one body read raises `connection_timeout`. The default is twice `read_timeout` — one for the
+  body to arrive, a second before a still-blocked read is taken for a hold rather than a slow
+  arrival (the read loop answers slow arrivals per DATA frame within `read_timeout`).
+- **How to tell whether you are affected:** a host that never faced this residue (no HTTP/2, or
+  clients that always complete or abandon a body) sees no change. A host that ran HTTP/2 and
+  had connections pinned by control-frame floods now sees them closed with a `GOAWAY` at the
+  connection deadline rather than held until the client stops. The two per-stream residue tests
+  stay, carrying a high `connection_timeout` so the connection bound does not close them first —
+  they are the offer that fails the day `Bandit` bounds the stream itself.
+
+
 ### Changed — the canonical envelope names its algorithm; `schema_version` 3; SHA-384 and SHA-512 by option
 
 - **The algorithm is in the bytes.** A canonical envelope carries a fourth top-level member,
