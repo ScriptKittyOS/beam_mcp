@@ -199,8 +199,22 @@ defmodule BeamMCP.Boundary.PackageReachTest do
   defp same_call({from, {:erlang, :binary_to_atom, 2}}), do: {from, {:erlang, :binary_to_atom, 1}}
   defp same_call(edge), do: edge
 
+  # A module a newer compiler calls directly where an older one calls its Elixir wrapper: on
+  # Elixir 1.20 the package's `Regex` calls (match?/2, scan/2, replace/3, escape/1 -- Catalog and
+  # the HTTP transport) reach `:re` as a direct callee, where 1.17 and 1.18 reach only `Regex`
+  # (measured on the CI head leg, OTP 29 / Elixir 1.20). The same code, the same reach -- `Regex`
+  # is `:re` -- so `:re` is tolerated beside `Regex` and required on neither compiler. Nothing
+  # else is tolerated: a second module here needs its own measured reason.
+  @inlined_by_newer_compilers [re: Regex]
+
   test "the modules the package calls are exactly the listed ones", %{lib: lib, edges: edges} do
     called = for {_, {m, _, _}} <- edges, m not in lib, uniq: true, do: m
+
+    for {inlined, wrapper} <- @inlined_by_newer_compilers, inlined in called do
+      assert wrapper in called, "#{inspect(inlined)} called without #{inspect(wrapper)}"
+    end
+
+    called = called -- Keyword.keys(@inlined_by_newer_compilers)
 
     assert Enum.sort(called) == Enum.sort(@modules),
            "not on the list: #{inspect(Enum.sort(called -- @modules))}; on the list, not called: #{inspect(Enum.sort(@modules -- called))}"
