@@ -275,6 +275,15 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     assert @named_on_newer_otp -- named == not_a_module_here,
            "newer-OTP names: not seen #{inspect(@named_on_newer_otp -- named)}, not a module on this OTP #{inspect(not_a_module_here)}"
 
+    # And "newer" means newer than the floor: on the floor release (the CI matrix's lowest
+    # leg) none of these may be a module, or the atom belongs on `@named_not_called` with
+    # its own reason -- a one-VM check cannot tell a newer-OTP collision from an atom that
+    # names a module everywhere; the floor leg can.
+    if List.to_integer(:erlang.system_info(:otp_release)) == BeamMCP.MixProject.otp_floor() do
+      assert not_a_module_here == @named_on_newer_otp,
+             "on the floor OTP these are modules already, so they are not newer-OTP names: #{inspect(@named_on_newer_otp -- not_a_module_here)}"
+    end
+
     assert strays == [] and unused == [],
            "modules named but neither called nor on the data list: #{inspect(Enum.sort(strays))}; listed as data, not named: #{inspect(unused)}"
   end
