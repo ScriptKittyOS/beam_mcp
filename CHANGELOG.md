@@ -21,14 +21,14 @@ All notable changes to this project are documented here. The format follows
   pinned equal by a test: OTP **26.2** added the keyed `:erlang.process_info(pid, {:dictionary,
   key})` read the connectome tracer depends on (one claim key, 2 µs, against copying the whole
   dictionary — up to a millisecond on a loaded tracer, measured), so 26.2 is the hard
-  requirement; 27 is the oldest release this project supports. Today the suite runs on OTP 28
-  only.
+  requirement; 27 is the oldest release this project supports. At the time of this entry the
+  suite runs on OTP 28 only.
 - **`elixir: "~> 1.17"`, from `"~> 1.15"`.** Elixir 1.15 and 1.16 support OTP 24–26 only, and
   1.17 is the oldest Elixir that supports OTP 27, so the two stated minimums are now one
   coherent pair: Elixir 1.17 on OTP 27. No consumer is admitted or refused that the OTP floor
   did not already decide — Elixir 1.15/1.16 are not supported on OTP 27, and Mix only warns on
-  a dependency's `elixir:` mismatch where the OTP guard is a hard stop — so this is a statement
-  made true, not a requirement raised.
+  a dependency's `elixir:` mismatch whereas the OTP guard is a hard stop — so this is a
+  statement made true, not a requirement raised.
 
 ### Added — the HTTP/2 control-frame residue is bounded in duration by a connection deadline
 
