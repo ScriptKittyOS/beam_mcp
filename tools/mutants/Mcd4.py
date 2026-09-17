@@ -7,9 +7,8 @@ import io
 import sys
 p = sys.argv[1]
 s = io.open(p, encoding="utf-8").read()
-old = """        latest when latest > now -> watch_connection(conn_pid, stream, latest)
-        _past -> GenServer.stop(conn_pid, :shutdown, 5_000)"""
-new = """        _latest -> GenServer.stop(conn_pid, :shutdown, 5_000)"""
+old = """        latest when latest > now -> watch_connection(conn_pid, stream, latest)"""
+new = """        latest when latest > now and now > now -> watch_connection(conn_pid, stream, latest)"""
 assert s.count(old) == 1, "anchor not found once: %d" % s.count(old)
 s = s.replace(old, new)
 io.open(p, "w", encoding="utf-8").write(s)
