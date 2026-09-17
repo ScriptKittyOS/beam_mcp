@@ -54,6 +54,11 @@ defmodule BeamMCP.OTPFloorTest do
     assert mix =~ "@otp_floor #{@floor}"
     assert readme =~ "OTP #{@floor}"
 
+    # And the guard is wired into project/0 against the running release: pinned by source,
+    # because no below-floor OTP is installed here to fail a real compile (named as a gap in
+    # the slice record; 023's CI floor leg compiles on the floor release itself).
+    assert mix =~ "check_otp!(:erlang.system_info(:otp_release))"
+
     # The reason travels with it: the keyed process_info read and its OTP version.
     for text <- [mix, readme] do
       assert text =~ "process_info"
