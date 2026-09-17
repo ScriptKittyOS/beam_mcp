@@ -134,6 +134,29 @@ fi
 # artefact in a throwaway consumer project, because a compile that "succeeded" is not evidence.
 step "optional deps" bash tools/probe_optional_deps.sh
 
+# The dependency audit: no retired package, no package with a security advisory, in the lock
+# file -- `mix hex.audit`, built into Hex, reading OSV's advisories (tools/audit.sh says how
+# that was measured). Three outcomes, and the third is why the script exists: with the
+# registry unreachable hex answers from its cache and EXITS 0 -- a pass from stale data --
+# so the script refuses that as a measurement. Here it is said and not failed (a contributor
+# offline is not wrong); with GATE_AUDIT=require, which the CI workflow sets on every leg, it
+# fails, because CI can always reach the registry and is where a stale pass would be taken
+# for a fresh one. The red was demonstrated first in a throwaway consumer carrying `plug
+# 1.20.0` (retired, and in two advisories' ranges) -- tools/probe_audit.sh keeps that plant.
+audit_out=$(bash tools/audit.sh 2>&1); audit_rc=$?
+audit_line=$(printf '%s\n' "$audit_out" | head -1 | sed -E 's/^audit (ok|FAIL|NOT MEASURED): //')
+case "$audit_rc" in
+  0) note "audit" "pass ($audit_line)" ;;
+  2) if [ "${GATE_AUDIT:-}" = "require" ]; then
+       note "audit" "FAIL (GATE_AUDIT=require and $audit_line)"
+       printf '%s\n' "$audit_out" | sed 's/^/      /'; fail=1
+     else
+       note "audit" "NOT MEASURED ($audit_line; CI requires it)"
+     fi ;;
+  *) note "audit" "FAIL ($audit_line)"
+     printf '%s\n' "$audit_out" | tail -n +2 | sed 's/^/      /'; fail=1 ;;
+esac
+
 # The benchmark gate. `bench/overhead.exs` measures the observed collector's per-call
 # overhead and exits 1 over its threshold -- a ceiling the owner set, with its reasoning in
 # the script; `bench/diff.exs` measures the diff engine's run and its encode on a 10 000-edge

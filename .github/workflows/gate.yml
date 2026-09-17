@@ -56,7 +56,9 @@ jobs:
       # leave every leg unmeasured and the summary green (a review lane's finding).
       # GATE_BENCH=record: on a shared runner the bench's figures are recorded beside the
       # local thresholds, never enforced -- the draw overlaps the ceiling there (tools/gate.sh).
-      - run: GATE_LEG=${{ matrix.leg }} GATE_BENCH=record ./tools/gate.sh
+      # GATE_AUDIT=require: the dependency audit must reach the registry here; an answer from
+      # hex's cache is a failure in CI, where a stale pass would be taken for a fresh one.
+      - run: GATE_LEG=${{ matrix.leg }} GATE_BENCH=record GATE_AUDIT=require ./tools/gate.sh
 
   summary:
     name: Gate - quality gate
