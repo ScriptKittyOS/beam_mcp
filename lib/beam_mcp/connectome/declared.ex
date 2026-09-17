@@ -428,15 +428,18 @@ defmodule BeamMCP.Connectome.Declared do
   # refuse, and it does, on every release the package runs on.
   defp add_module(ref, m) do
     with {^m, _binary, file} <- :code.get_object_code(m),
-         {:ok, {_, [debug_info: _]}} <- :beam_lib.chunks(file, [:debug_info]),
+         {:ok, {^m, [debug_info: _]}} <- :beam_lib.chunks(file, [:debug_info]),
          {:ok, _} <- :xref.add_module(ref, file) do
       :added
     else
       :error -> :no_beam
+      # The file `get_object_code/1` found under `m`'s name holds some other module: `m` has no
+      # beam of its own on the path, and that is what it is filed as. Handed to xref it would
+      # be added under the other module's name -- a node for `m` with no edges, its in-scope
+      # callees misfiled as external (a review lane measured it) -- and nothing would say so.
+      {:ok, {_other, _}} -> :no_beam
       # `{:error, :beam_lib, {:missing_chunk, _, ~c"Dbgi"}}` -- the stripped beam -- and xref's
-      # own refusals share this shape. A beam whose file and module names disagree is not
-      # pinned here (the chunk read's module is not matched against `m`): xref reads it and
-      # reports it as it did before, rather than this clause raising on a broken install.
+      # own refusals share this shape.
       {:error, _, _} -> :no_debug_info
     end
   end

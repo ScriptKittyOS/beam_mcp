@@ -163,8 +163,15 @@ step "optional deps" bash tools/probe_optional_deps.sh
 bench_out=$(mix run bench/overhead.exs 2>&1); bench_rc=$?
 diff_out=$(mix run bench/diff.exs 2>&1); diff_rc=$?
 reach_out=$(mix run bench/reach.exs 2>&1); reach_rc=$?
-# A script's exit 1 is a threshold breach only when every BENCH FAIL line it printed says so.
-breach_only() { ! printf '%s\n' "$1" | grep '^BENCH FAIL' | grep -qvE 'over (its|the) threshold'; }
+# A script's exit 1 is a threshold breach only when it SAID so: at least one BENCH FAIL line,
+# and every one of them a threshold verdict. An exit 1 with no verdict line is a crash (an
+# uncaught exception under `mix run` exits 1 too) and is never recorded as a draw -- a review
+# lane planted a raise in bench/diff.exs and this step read it as a figure; that pass measured
+# nothing, which is the family gate.sh exists to refuse.
+breach_only() {
+  printf '%s\n' "$1" | grep -q '^BENCH FAIL' \
+    && ! printf '%s\n' "$1" | grep '^BENCH FAIL' | grep -qvE 'over (its|the) threshold'
+}
 figure() { printf '%s\n' "$1" | grep -v '^BENCH FAIL' | tail -1; }
 if [ "$bench_rc" -eq 0 ] && [ "$diff_rc" -eq 0 ] && [ "$reach_rc" -eq 0 ]; then
   note "bench" "pass ($(figure "$bench_out"); $(figure "$diff_out"); $(figure "$reach_out"))"

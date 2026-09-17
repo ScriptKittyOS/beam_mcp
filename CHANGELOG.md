@@ -20,7 +20,11 @@ All notable changes to this project are documented here. The format follows
   ran, the floor was a claim about a release nobody had run the suite on. `mix format` is
   measured on the pinned leg only: the formatter changes between Elixir minors, so on the other
   legs the gate's format step reads NOT MEASURED rather than passing on a program that never ran
-  or failing a tree that is not wrong.
+  or failing a tree that is not wrong. The bench step's thresholds are enforced only where the
+  machine is known — the maintainers' — and on a CI runner the figures are recorded beside them
+  (a draw over its ceiling reads OVER, never red): on a shared runner the same code measured
+  129–261 ms against a 245 ms ceiling, so there the step measures contention, not the code. A
+  bench script that crashes still fails the step everywhere.
 - **What the legs found, fixed at the source:** on Elixir 1.20 the test-only h2c client's frame
   parser used a variable bound outside a match inside `binary-size` without the pin (now
   `^len`); on OTP 29 the stdlib gained a `graph` module, so the atom `:graph` — a key in this
