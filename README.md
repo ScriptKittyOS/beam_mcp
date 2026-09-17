@@ -147,6 +147,19 @@ BeamMCP.Transport.Stdio.run(
 `:catalog` is required. `:dispatch` is required for `tools/call`. `:server_name` defaults
 to `beam_mcp`, and a host that wants its own name in `initialize` says so.
 
+### The OTP floor
+
+This package requires **Erlang/OTP 27 or newer** (Elixir `~> 1.15`), enforced at compile time:
+`mix.exs` reads `:erlang.system_info(:otp_release)` at `project/0` and a below-floor build fails
+with a message that names the floor and why, rather than compiling and failing later in a way
+that looks like a defect here. The reason, so the floor is not raised by the next person who
+finds it inconvenient: OTP **26.2** added the keyed `process_info` read the connectome tracer
+depends on — `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
+the whole process dictionary (2 µs against up to a millisecond on a loaded tracer, measured), so
+26.2 is the hard requirement. The floor is set at 27, one minor above it, because 27 is the
+oldest release this project *tests* — the CI matrix runs the suite on it, so support for it is a
+measurement and not a hope; older releases are neither tested nor supported.
+
 ## One schema, one source
 
 A tool's schema lives on its `BeamMCP.ToolSpec`. `tools/list` advertises **that** schema and
