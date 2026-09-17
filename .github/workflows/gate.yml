@@ -50,7 +50,11 @@ jobs:
           elixir --version
           cat .tool-versions
       - run: mix deps.get
-      - run: ./tools/gate.sh
+      # The leg says what it claims to be, so the gate can hold it to it: on the pinned leg a
+      # format step that cannot measure (the running Elixir is not `.tool-versions`' line) is a
+      # FAIL, not NOT MEASURED -- otherwise a pin moved in `.tool-versions` and not here would
+      # leave every leg unmeasured and the summary green (a review lane's finding).
+      - run: GATE_LEG=${{ matrix.leg }} ./tools/gate.sh
 
   summary:
     name: Gate - quality gate

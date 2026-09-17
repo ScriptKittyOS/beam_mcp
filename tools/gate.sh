@@ -46,6 +46,13 @@ fmt_n=$(git ls-files -- '*.ex' '*.exs' | grep -c .)
 if [ -z "$fmt_pinned" ] || [ -z "$fmt_running" ]; then
   note "format" "FAIL (cannot read the pinned Elixir line from .tool-versions ('$fmt_pinned') or the running one ('$fmt_running'))"
   fail=1
+elif [ "$fmt_pinned" != "$fmt_running" ] && [ "${GATE_LEG:-}" = "pinned" ]; then
+  # The leg that claims to be the pin must measure. The matrix names its pinned pair in
+  # gate.yml, a second copy of the number `.tool-versions` carries; if the two drift apart,
+  # this is the line that goes red -- without it every leg reads NOT MEASURED and the summary
+  # is green with the formatter measured nowhere.
+  note "format" "FAIL (this leg claims to be the pinned line, but runs Elixir $fmt_running where .tool-versions pins $fmt_pinned -- gate.yml's pinned pair and .tool-versions have drifted apart)"
+  fail=1
 elif [ "$fmt_pinned" != "$fmt_running" ]; then
   note "format" "NOT MEASURED (running Elixir $fmt_running, the pinned formatter is $fmt_pinned per .tool-versions; the pinned leg measures it; $fmt_n tracked .ex/.exs)"
 else
@@ -111,8 +118,9 @@ prop_runs=1000
 prop_out=$(PROPERTY_RUNS=$prop_runs mix test --only property 2>&1); prop_rc=$?
 prop_n=$(printf '%s\n' "$prop_out" | grep -oE '^[0-9]+ propert(y|ies)' | tail -1 | cut -d' ' -f1)
 if [ -z "$prop_n" ]; then
+  # `N passed` is the count; `N/M passed` means M were run and N passed -- M is the count.
   prop_n=$(printf '%s\n' "$prop_out" | grep -oE '^Result: [0-9]+(/[0-9]+)? passed' | tail -1 \
-    | sed -E 's#^Result: ([0-9]+)(/([0-9]+))? passed#\3 \1#' | awk '{ print ($1 != "" ? $1 : $2) }')
+    | sed -E 's#^Result: [0-9]+/([0-9]+) passed#\1#; s#^Result: ([0-9]+) passed#\1#')
 fi
 if [ "$prop_rc" -eq 0 ] && [ -n "$prop_n" ] && [ "$prop_n" -gt 0 ]; then
   note "properties" "pass ($prop_n properties at $prop_runs generations each)"

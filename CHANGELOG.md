@@ -29,7 +29,8 @@ All notable changes to this project are documented here. The format follows
   declared builder now classifies such a beam itself, by its own `Dbgi` chunk, before xref sees
   the file — one `:beam_lib.chunks/2` read, the same answer on every release. The censuses that
   pinned one compiler's spelling (a struct's own `__struct__/1`, `String.to_atom/1`'s inlining,
-  the compiler's own macro-expansion calls) now say what they mean on all three.
+  what `quote` compiles to, and Elixir 1.20 reaching `:re` directly for `Regex` — required
+  there, refused on the compilers that do not inline it) now say what they mean on all three.
 - **The sidecar's float placement is measured on the floor.** `docs/connectome-canonical.md`
   said the sidecar raises on an OTP older than 25; no such release can compile this package
   (the floor is 27), so the sentence now says what is true: every release the package runs on
