@@ -13,9 +13,11 @@ defmodule BeamMCP.H2C do
   `open/2` connects and sends the preface, an empty SETTINGS and the request HEADERS (with
   END_HEADERS, without END_STREAM); `data/3` sends one DATA frame; `finish/1` an empty DATA
   with END_STREAM; `response/2` reads frames until the stream's HEADERS and DATA have arrived
-  (or RST_STREAM, or the timeout), returning `{:ok, headers, body}` -- the headers decoded
-  with the adapter's own HPACK library, since what the server sent is the point -- or
-  `{:rst, code}` or `:timeout`.
+  (or RST_STREAM, or GOAWAY, or the timeout), returning `{:ok, headers, body}` -- the headers
+  decoded with the adapter's own HPACK library, since what the server sent is the point -- or
+  `{:rst, code}`, `{:goaway, code, last_stream_id}`, `{:closed, body}` or `:timeout`. Every
+  sender and the reader take a stream id, `1` unless given: `request/3` opens a further
+  stream on the same connection, which is how one connection pins several.
 
   One rule of a real client is kept: a response carrying a connection-specific header
   (`connection`, `keep-alive`, `transfer-encoding`, `upgrade`, ...) is malformed under
@@ -45,25 +47,45 @@ defmodule BeamMCP.H2C do
     sock
   end
 
-  def data(sock, bytes, end_stream? \\ false),
-    do: :gen_tcp.send(sock, frame(0x0, if(end_stream?, do: 0x1, else: 0x0), @stream, bytes))
+  def data(sock, bytes, end_stream? \\ false, stream \\ @stream),
+    do: :gen_tcp.send(sock, frame(0x0, if(end_stream?, do: 0x1, else: 0x0), stream, bytes))
 
   def finish(sock), do: data(sock, <<>>, true)
 
+  # A further request on the same connection: HEADERS on a new odd stream id (with END_HEADERS,
+  # without END_STREAM), no preface. What a client pinning several streams at once sends.
+  def request(sock, stream, headers) when rem(stream, 2) == 1,
+    do: :gen_tcp.send(sock, frame(0x1, 0x4, stream, hpack(headers)))
+
   # A stream-level WINDOW_UPDATE: thirteen bytes on the wire that carry no body. The adapter
   # re-arms its per-read wait on one, which is how a stream is held past the deadline.
-  def window_update(sock, increment),
-    do: :gen_tcp.send(sock, frame(0x8, 0x0, @stream, <<0::1, increment::31>>))
+  def window_update(sock, increment, stream \\ @stream),
+    do: :gen_tcp.send(sock, frame(0x8, 0x0, stream, <<0::1, increment::31>>))
 
   # A second HEADERS on the stream with END_HEADERS and without END_STREAM: malformed under
   # RFC 9113, 8.1 (trailers end the stream), which the adapter reads as trailers, ignores with
   # a warning line, and re-arms its wait on -- the other way a stream is held.
-  def headers(sock, fields), do: :gen_tcp.send(sock, frame(0x1, 0x4, @stream, hpack(fields)))
+  def headers(sock, fields, stream \\ @stream),
+    do: :gen_tcp.send(sock, frame(0x1, 0x4, stream, hpack(fields)))
 
   def close(sock), do: :gen_tcp.close(sock)
 
-  def response(sock, timeout_ms) do
-    state = %{sock: sock, deadline: System.monotonic_time(:millisecond) + timeout_ms}
+  def response(sock, timeout_ms, stream \\ @stream) do
+    state = %{
+      sock: sock,
+      deadline: System.monotonic_time(:millisecond) + timeout_ms,
+      stream: stream
+    }
+
+    # HPACK's decode table is per connection, not per response: a second response on the same
+    # socket may name entries the first added by incremental indexing. Kept in the process
+    # dictionary, keyed by the socket, so several `response/3` calls decode as one client does.
+    _ =
+      Process.put(
+        {__MODULE__, :hpax, sock},
+        Process.get({__MODULE__, :hpax, sock}, HPAX.new(4096))
+      )
+
     read_frames(state, <<>>, nil, <<>>)
   end
 
@@ -100,15 +122,21 @@ defmodule BeamMCP.H2C do
     read_frames(state, rest, headers, body)
   end
 
-  defp handle({0x3, _flags, @stream}, <<code::32>>, _state, _rest, _headers, _body),
+  defp handle({0x3, _flags, s}, <<code::32>>, %{stream: s}, _rest, _headers, _body),
     do: {:rst, code}
 
-  defp handle({0x7, _flags, 0}, <<_::32, code::32, _::binary>>, _state, _rest, _headers, _body),
-    do: {:goaway, code}
+  # GOAWAY carries the last stream id the server will act on and the error code: the clean
+  # close of a whole connection, which a client tells from a socket simply gone.
+  defp handle({0x7, _flags, 0}, <<_::1, last::31, code::32, _::binary>>, _state, _rest, _h, _b),
+    do: {:goaway, code, last}
 
-  defp handle({0x1, flags, @stream}, payload, state, rest, _headers, body) do
+  defp handle({0x1, flags, s}, payload, %{stream: s} = state, rest, _headers, body) do
     block = strip_padding_and_priority(payload, flags)
-    {:ok, headers, _table} = HPAX.decode(block, HPAX.new(4096))
+
+    {:ok, headers, table} =
+      HPAX.decode(block, Process.get({__MODULE__, :hpax, state.sock}, HPAX.new(4096)))
+
+    Process.put({__MODULE__, :hpax, state.sock}, table)
 
     case Enum.find(headers, fn {name, _value} -> name in @connection_specific end) do
       {name, _value} ->
@@ -121,7 +149,7 @@ defmodule BeamMCP.H2C do
     end
   end
 
-  defp handle({0x0, flags, @stream}, payload, state, rest, headers, body) do
+  defp handle({0x0, flags, s}, payload, %{stream: s} = state, rest, headers, body) do
     body = body <> strip_padding(payload, flags)
     if end_stream?(flags), do: {:ok, headers, body}, else: read_frames(state, rest, headers, body)
   end
