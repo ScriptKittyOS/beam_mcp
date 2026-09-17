@@ -1081,6 +1081,30 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       assert elapsed >= 600 and elapsed < 1_500
     end
 
+    test "over HTTP/2 the connection is not closed while another stream on it is still within its own deadline" do
+      # A stream held past its connection deadline does not close the connection out from
+      # under a sibling still within its deadline: the watchdog waits for the latest live
+      # deadline, not the first. Stream 1 is armed at t~0 (deadline 600); stream 3 opens ~400
+      # ms later (deadline ~1000). The connection is closed at ~1000, not 600 -- without the
+      # wait it would close at 600 and cut stream 3 off.
+      body = call_json(1, 200)
+      port = listen(read_timeout: 300, connection_timeout: 600)
+      started = System.monotonic_time(:millisecond)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+      pin_stream(sock, 1, fn s, st -> BeamMCP.H2C.window_update(s, 1, st) end, 3_000)
+
+      Process.sleep(400)
+      BeamMCP.H2C.request(sock, 3, h2_headers(byte_size(body)))
+      pin_stream(sock, 3, fn s, st -> BeamMCP.H2C.window_update(s, 1, st) end, 3_000)
+
+      assert {:goaway, 0, _last} = BeamMCP.H2C.response(sock, 5_000, 1)
+      elapsed = System.monotonic_time(:millisecond) - started
+      BeamMCP.H2C.close(sock)
+
+      assert elapsed >= 1_000 and elapsed < 2_000,
+             "the connection closed at #{elapsed} ms; stream 3's deadline (~1000 ms) should hold it"
+    end
+
     test "over HTTP/2 a legitimate stream on the pinned connection is served before the close, and the close is a GOAWAY not a reset" do
       # The cost, stated on the row and measured here: the legitimate stream that already
       # answered is fine; a stream still open when the close fires dies with the connection.
