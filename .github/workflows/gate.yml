@@ -54,7 +54,9 @@ jobs:
       # format step that cannot measure (the running Elixir is not `.tool-versions`' line) is a
       # FAIL, not NOT MEASURED -- otherwise a pin moved in `.tool-versions` and not here would
       # leave every leg unmeasured and the summary green (a review lane's finding).
-      - run: GATE_LEG=${{ matrix.leg }} ./tools/gate.sh
+      # GATE_BENCH=record: on a shared runner the bench's figures are recorded beside the
+      # local thresholds, never enforced -- the draw overlaps the ceiling there (tools/gate.sh).
+      - run: GATE_LEG=${{ matrix.leg }} GATE_BENCH=record ./tools/gate.sh
 
   summary:
     name: Gate - quality gate
