@@ -152,15 +152,15 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       {:ok, %{graph: g, bound: bound}} = build()
       refute :elixir_quote in bound.external_callees
 
-      # The fixture's own expansion call is exact. Calls into the compiler's own modules
-      # (`:elixir_quote.shallow_validate_ast/1` on Elixir 1.18+; none on 1.17 -- measured on the
-      # CI floor leg) are the compiler's business and differ by Elixir version: each is asserted
-      # to be attributed to the macro and to name an `elixir_*` module, and nothing else is in
-      # the list.
+      # The fixture's own expansion call is exact. What `quote` itself compiles to is the
+      # compiler's business and differs by Elixir version -- none on 1.17;
+      # `:elixir_quote.shallow_validate_ast/1` on 1.18; `:elixir_quote.unquote/1` and
+      # `:elixir_quote.validate_quote/1` on 1.20 (measured on the CI floor and head legs and
+      # locally) -- so those calls are asserted by what they are, the quote machinery
+      # (`:elixir_quote`, no other module) attributed to the macro, and not by a name that moves
+      # every minor. Any other module called from the macro body is the fixture's, and exact.
       {compiler_calls, fixture_calls} =
-        Enum.split_with(bound.macro_expansion_calls, fn {_, {m, _, _}} ->
-          String.starts_with?(Atom.to_string(m), "elixir_")
-        end)
+        Enum.split_with(bound.macro_expansion_calls, &match?({_, {:elixir_quote, _, _}}, &1))
 
       assert fixture_calls == [{{Fx.MacroOnly, :"MACRO-twice", 2}, {Fx.MacroHelper, :note, 1}}]
       assert Enum.all?(compiler_calls, &match?({{Fx.MacroOnly, :"MACRO-twice", 2}, _}, &1))

@@ -428,12 +428,15 @@ defmodule BeamMCP.Connectome.Declared do
   # refuse, and it does, on every release the package runs on.
   defp add_module(ref, m) do
     with {^m, _binary, file} <- :code.get_object_code(m),
-         {:ok, {^m, [debug_info: _]}} <- :beam_lib.chunks(file, [:debug_info]),
+         {:ok, {_, [debug_info: _]}} <- :beam_lib.chunks(file, [:debug_info]),
          {:ok, _} <- :xref.add_module(ref, file) do
       :added
     else
       :error -> :no_beam
-      {:error, :beam_lib, {:missing_chunk, _, _}} -> :no_debug_info
+      # `{:error, :beam_lib, {:missing_chunk, _, ~c"Dbgi"}}` -- the stripped beam -- and xref's
+      # own refusals share this shape. A beam whose file and module names disagree is not
+      # pinned here (the chunk read's module is not matched against `m`): xref reads it and
+      # reports it as it did before, rather than this clause raising on a broken install.
       {:error, _, _} -> :no_debug_info
     end
   end

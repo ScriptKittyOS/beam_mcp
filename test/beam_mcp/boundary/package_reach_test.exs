@@ -214,16 +214,30 @@ defmodule BeamMCP.Boundary.PackageReachTest do
   # A module a newer compiler calls directly where an older one calls its Elixir wrapper: on
   # Elixir 1.20 the package's `Regex` calls (match?/2, scan/2, replace/3, escape/1 -- Catalog and
   # the HTTP transport) reach `:re` as a direct callee, where 1.17 and 1.18 reach only `Regex`
-  # (measured on the CI head leg, OTP 29 / Elixir 1.20). The same code, the same reach -- `Regex`
-  # is `:re` -- so `:re` is tolerated beside `Regex` and required on neither compiler. Nothing
-  # else is tolerated: a second module here needs its own measured reason.
-  @inlined_by_newer_compilers [re: Regex]
+  # (measured on the CI head and floor legs). The same code, the same reach -- `Regex` is `:re`
+  # -- so `:re` is REQUIRED on the compiler that inlines it and REFUSED on the ones that do not:
+  # a hand-written `:re` call in lib is caught on 1.17 and 1.18, and a compiler that stops
+  # inlining is caught on the head. Nothing else is tolerated: a second module here needs its
+  # own measured reason.
+  @inlined_by_newer_compilers [re: {Regex, ">= 1.20.0"}]
 
   test "the modules the package calls are exactly the listed ones", %{lib: lib, edges: edges} do
     called = for {_, {m, _, _}} <- edges, m not in lib, uniq: true, do: m
 
-    for {inlined, wrapper} <- @inlined_by_newer_compilers, inlined in called do
-      assert wrapper in called, "#{inspect(inlined)} called without #{inspect(wrapper)}"
+    for {inlined, {wrapper, from}} <- @inlined_by_newer_compilers do
+      assert wrapper in called, "#{inspect(wrapper)} is not called at all"
+
+      if Version.match?(System.version(), from),
+        do:
+          assert(
+            inlined in called,
+            "Elixir #{System.version()} should reach #{inspect(inlined)} for #{inspect(wrapper)}"
+          ),
+        else:
+          refute(
+            inlined in called,
+            "#{inspect(inlined)} reached directly on Elixir #{System.version()}, which does not inline #{inspect(wrapper)}"
+          )
     end
 
     called = called -- Keyword.keys(@inlined_by_newer_compilers)
@@ -251,6 +265,15 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     named = Boundary.module_atoms()
     strays = named -- (called ++ @named_not_called ++ @named_on_newer_otp)
     unused = @named_not_called -- named
+
+    # Each newer-OTP entry is named exactly where this VM loads it as a module: on OTP 29 the
+    # census must see `:graph`, on 27 and 28 it must not -- so an entry that leaves the
+    # package's maps, or one added without a module behind it, fails on the leg that can tell.
+    not_a_module_here =
+      Enum.reject(@named_on_newer_otp, &match?({:module, _}, Code.ensure_loaded(&1)))
+
+    assert @named_on_newer_otp -- named == not_a_module_here,
+           "newer-OTP names: not seen #{inspect(@named_on_newer_otp -- named)}, not a module on this OTP #{inspect(not_a_module_here)}"
 
     assert strays == [] and unused == [],
            "modules named but neither called nor on the data list: #{inspect(Enum.sort(strays))}; listed as data, not named: #{inspect(unused)}"
