@@ -32,8 +32,19 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
     # to the module and `%{m | __struct__: _}` all leave the atom somewhere that is not a
     # pattern. Compiler-generated sites (module_info, the struct's own __struct__/0,1) are not
     # read. So: at every real site, the atom is a pattern's `__struct__`.
+    #
+    # The struct's own `__struct__/1` -- `defstruct`'s generated builder inside BeamMCP.ToolSpec
+    # itself -- is the struct's DEFINITION, not a line constructing a tool. Elixir 1.18+ marks
+    # that site `generated`; Elixir 1.17 leaves it at the `defstruct` line (measured on the CI
+    # floor leg: `{BeamMCP.ToolSpec, 12, {:construction, :__struct__}}`), so it is named here by
+    # what it is rather than by the mark a given compiler gives it.
     sites = Boundary.atom_sites(BeamMCP.ToolSpec)
-    real = for {m, loc, ctx} <- sites, not Boundary.generated?(loc), do: {m, loc, ctx}
+
+    real =
+      for {m, loc, ctx} <- sites,
+          not Boundary.generated?(loc),
+          {m, ctx} != {BeamMCP.ToolSpec, {:construction, :__struct__}},
+          do: {m, loc, ctx}
 
     not_patterns = for {_, _, ctx} = site <- real, ctx != {:pattern, :__struct__}, do: site
 

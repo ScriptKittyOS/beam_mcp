@@ -176,7 +176,7 @@ defmodule BeamMCP.H2C do
 
   defp parse(<<len::24, type::8, flags::8, _r::1, stream::31, rest::binary>>)
        when byte_size(rest) >= len do
-    <<payload::binary-size(len), tail::binary>> = rest
+    <<payload::binary-size(^len), tail::binary>> = rest
     {:frame, type, flags, stream, payload, tail}
   end
 
