@@ -41,7 +41,7 @@ defmodule BeamMCP.OTPFloorTest do
     assert e.message =~ "keyed process_info"
     assert e.message =~ "26.2 is the hard requirement"
     assert e.message =~ "oldest release this project supports"
-    assert e.message =~ "Today the suite is run on OTP 28"
+    assert e.message =~ "Today the suite runs on OTP 28 only"
   end
 
   test "the running OTP is at or above the floor (this build compiled, so the guard passed)" do

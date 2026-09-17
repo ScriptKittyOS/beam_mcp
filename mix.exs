@@ -36,11 +36,11 @@ defmodule BeamMCP.MixProject do
         OTP 26.2 added the keyed process_info read the connectome tracer depends on --
         `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
         the whole process dictionary (2 us against up to a millisecond on a loaded tracer,
-        measured) -- so OTP 26.2 is the hard requirement. The floor is set at #{@otp_floor}, one
-        minor above it, because #{@otp_floor} is the oldest release this project supports, and
-        the release a CI matrix is to run the suite on as its lowest leg, so that support is a
-        measurement and not a hope. Today the suite is run on OTP 28, here and in CI. Older
-        releases than #{@otp_floor} are neither tested nor supported.
+        measured) -- so OTP 26.2 is the hard requirement. The floor is set at #{@otp_floor}, the
+        next release above it, because #{@otp_floor} is the oldest release this project supports:
+        the lowest leg a CI matrix is to run the suite on, so that support becomes a measurement
+        rather than a hope. Today the suite runs on OTP 28 only, by the maintainers and in CI.
+        Releases older than #{@otp_floor} are neither tested nor supported.
 
         Install OTP #{@otp_floor} or newer (see .tool-versions), or pin an older beam_mcp.
         """)
