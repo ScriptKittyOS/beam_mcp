@@ -919,7 +919,10 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # HEADERS without END_STREAM as trailers, ignores it with a warning carrying the
       # client's header bytes, and waits again. Recorded like the WINDOW_UPDATE hold.
       body = call_json(1, 200)
-      port = listen(read_timeout: 300)
+      # A high connection deadline so the per-stream residue below is what this records, not
+      # the package's connection-level bound (029b); the offer is that Bandit's per-stream
+      # hold still lives, and the day Bandit bounds it this fails.
+      port = listen(read_timeout: 300, connection_timeout: 30_000)
       started = System.monotonic_time(:millisecond)
       sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
 
@@ -968,7 +971,9 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # window, nothing accumulated, the body refused whenever it comes. This test records
       # that; the day the adapter bounds it, this fails and the page's row is rewritten.
       body = call_json(1, 200)
-      port = listen(read_timeout: 300)
+      # High connection deadline: this records the adapter's per-stream hold, not 029b's
+      # connection bound.
+      port = listen(read_timeout: 300, connection_timeout: 30_000)
       started = System.monotonic_time(:millisecond)
       sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
 
@@ -982,6 +987,73 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       assert {:ok, headers, _body} = result
       assert {":status", "408"} in headers
       assert elapsed >= 1_000, "the hold ended at #{elapsed} ms: the adapter bounds it now"
+    end
+
+    # Sends `filler` on `stream` every 100 ms for `ms` from another process; the connection is
+    # never fed a body byte, so nothing this package's read loop can end brings the stream back.
+    defp pin_stream(sock, stream, filler, ms) do
+      spawn(fn ->
+        for _ <- 1..div(ms, 100) do
+          Process.sleep(100)
+          filler.(sock, stream)
+        end
+      end)
+    end
+
+    test "over HTTP/2 a connection pinned by WINDOW_UPDATE frames alone is closed with a readable GOAWAY at the connection deadline" do
+      # The stream's read cannot be ended from outside the adapter (029a's residue); the
+      # connection can. A client that holds a body-read stream open with control frames past
+      # the connection deadline, with nothing else in flight, has its whole connection closed
+      # -- a GOAWAY it can read, not a reset. read_timeout 300, connection_timeout 600; the
+      # client keeps sending for three seconds, and is answered in well under one.
+      body = call_json(1, 200)
+      port = listen(read_timeout: 300, connection_timeout: 600)
+      started = System.monotonic_time(:millisecond)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+      pin_stream(sock, 1, fn s, st -> BeamMCP.H2C.window_update(s, 1, st) end, 3_000)
+
+      result = BeamMCP.H2C.response(sock, 5_000)
+      elapsed = System.monotonic_time(:millisecond) - started
+      BeamMCP.H2C.close(sock)
+
+      assert {:goaway, 0, _last} = result
+
+      assert elapsed >= 600 and elapsed < 1_500,
+             "the connection closed at #{elapsed} ms for a 600 ms connection deadline"
+    end
+
+    test "over HTTP/2 a connection pinned by HEADERS frames without END_STREAM is closed the same way" do
+      body = call_json(1, 200)
+      port = listen(read_timeout: 300, connection_timeout: 600)
+      started = System.monotonic_time(:millisecond)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+      pin_stream(sock, 1, fn s, st -> BeamMCP.H2C.headers(s, [{"x-fill", "y"}], st) end, 3_000)
+
+      result = BeamMCP.H2C.response(sock, 5_000)
+      elapsed = System.monotonic_time(:millisecond) - started
+      BeamMCP.H2C.close(sock)
+
+      assert {:goaway, 0, _last} = result
+      assert elapsed >= 600 and elapsed < 1_500
+    end
+
+    test "over HTTP/2 a legitimate stream on the pinned connection is served before the close, and the close is a GOAWAY not a reset" do
+      # The cost, stated on the row and measured here: the legitimate stream that already
+      # answered is fine; a stream still open when the close fires dies with the connection.
+      body = call_json(1, 0)
+      port = listen(read_timeout: 300, connection_timeout: 600)
+      sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
+
+      # Stream 3: a complete body at once. Answered 200 before the close.
+      BeamMCP.H2C.request(sock, 3, h2_headers(byte_size(body)))
+      BeamMCP.H2C.data(sock, body, true, 3)
+      assert {:ok, legit_headers, _} = BeamMCP.H2C.response(sock, 5_000, 3)
+      assert {":status", "200"} in legit_headers
+
+      # Stream 1: held open by control frames past the connection deadline.
+      pin_stream(sock, 1, fn s, st -> BeamMCP.H2C.window_update(s, 1, st) end, 3_000)
+      assert {:goaway, 0, _last} = BeamMCP.H2C.response(sock, 5_000, 1)
+      BeamMCP.H2C.close(sock)
     end
 
     test "over HTTP/2 a whole body under the deadline is served, and a refusal before the body is a response, not a stream reset" do
