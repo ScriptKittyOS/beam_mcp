@@ -85,13 +85,13 @@ check "P4 a green gate lets the commit through" 0 "$rc"
 [ -f gate.ran ] && ok "P4 the gate ran" || bad "P4 the gate did not run"
 
 # P5 -- a publication term in the message: refused by commit-msg even with the gate green.
-before=$(commits); attempt "P5 fixes SCR-123"; rc=$?
+before=$(commits); attempt "P5 Generated with [Claude Code]"; rc=$?
 check "P5 a term in the message is refused" 1 "$rc"
 [ "$(commits)" = "$before" ] && ok "P5 no commit was made" || bad "P5 a commit with a term landed"
 
 # P6 -- git's own bypass: --no-verify skips both hooks (documented, not taken away).
 echo 1 > tools/gate.rc
-before=$(commits); attempt "P6 fixes SCR-123" --no-verify; rc=$?
+before=$(commits); attempt "P6 Generated with [Claude Code]" --no-verify; rc=$?
 check "P6 --no-verify skips the red gate and the term check" 0 "$rc"
 [ -f gate.ran ] && bad "P6 the gate ran under --no-verify" || ok "P6 the gate did not run"
 
