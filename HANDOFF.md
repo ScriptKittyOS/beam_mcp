@@ -99,6 +99,10 @@ refused.
 1. The slice PR merged to `main` by rebase (the ruleset requires two green checks).
 2. This release commit applied by the owner, then the gate on the result, thirteen `pass`,
    output recorded by command and exit code.
-3. `mix hex.publish`, then tag `v0.5.0` signed — or tag first and publish immediately after.
-   The GitHub ruleset targets **branches, not tags**, so a tag push is unprotected: what is
-   tagged is what was read.
+3. `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` from the release commit
+   (the script builds the canonical tarball from `git archive` and publishes from that tree —
+   a working-tree `mix hex.publish` ships that machine's file modes and is not what the
+   provenance workflow attests), **then** tag and push the tag: the tag's run downloads what
+   hex.pm serves and verifies the attestation against it, and treats a version hex.pm does not
+   serve yet as a failure. The GitHub ruleset targets **branches, not tags**, so a tag push is
+   unprotected: what is tagged is what was read.

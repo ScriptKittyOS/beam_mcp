@@ -27,6 +27,19 @@ defmodule BeamMCP.ProvenanceTest do
     assert wf =~ "https://repo.hex.pm/tarballs/beam_mcp-"
     assert wf =~ "gh attestation verify"
 
+    # On a tag a digest mismatch fails the run; off a tag the tarball is nobody's release and
+    # the same mismatch is NOT MEASURED -- a manual run must be able to be green, or it proves
+    # nothing (a review lane found the proof run red by construction). Pinned by shape: the
+    # mismatch's `exit 1` sits inside an ON_TAG test.
+    [_, mismatch_block] =
+      String.split(wf, ~s(if [ "${pub}" != "${{ steps.build.outputs.sha256 }}" ]; then), parts: 2)
+
+    [mismatch_block, _] =
+      String.split(mismatch_block, "gh attestation verify \"published-", parts: 2)
+
+    assert mismatch_block =~ ~r/if \[ "\$\{ON_TAG\}" = "true" \]; then\n(.*\n)*?\s+exit 1\n/
+    assert mismatch_block =~ ~r/NOT MEASURED.*\n\s+exit 0/
+
     # The attestation permissions are the attesting job's, not the workflow's: the top-level
     # block grants read only, and id-token/attestations appear inside a job's block.
     [top | _] = String.split(wf, ~r/^jobs:/m)
@@ -90,6 +103,16 @@ defmodule BeamMCP.ProvenanceTest do
 
       assert Enum.map(entries, &elem(&1, 0)) == expected
       assert length(expected) >= 39
+
+      # A non-ASCII name is written in the machine's locale encoding (Erlang's native name
+      # encoding is latin1 under LC_ALL=C, utf8 otherwise -- a review lane measured two
+      # checksums for one such file), so the canonical bytes hold only while every name is ASCII.
+      non_ascii =
+        Enum.reject(expected, fn name ->
+          name == for(<<c <- name>>, c < 128, into: "", do: <<c>>)
+        end)
+
+      assert non_ascii == [], "packaged names that are not ASCII: #{inspect(non_ascii)}"
     after
       File.rm_rf!(dir)
     end
