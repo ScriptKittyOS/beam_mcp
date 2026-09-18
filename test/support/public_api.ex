@@ -48,30 +48,34 @@ defmodule BeamMCP.PublicAPI do
 
   # The application's modules compiled from lib/ -- under MIX_ENV=test the application also
   # carries test/support (this module, the fixtures, the h2c client), which ship to nobody.
+  # By the source path's prefix, the repository's own lib/ directory: a substring test on
+  # "/lib/" read every test/support module as lib/ under a clone path that carried "/lib/"
+  # (a lane measured `/var/lib/jenkins/...`) -- a false red, but a red for a right tree.
   @doc false
   def modules do
     {:ok, modules} = :application.get_key(:beam_mcp, :modules)
+    lib = Path.expand("lib") <> "/"
 
     for m <- Enum.sort(modules),
         source = to_string(m.module_info(:compile)[:source]),
-        String.contains?(source, "/lib/"),
+        String.starts_with?(source, lib),
         do: m
   end
 
   @doc false
-  @spec population() :: [entry()]
-  def population do
-    for {entry, _meta} <- listed(), do: entry
+  @spec population([module()]) :: [entry()]
+  def population(modules \\ modules()) do
+    for {entry, _meta} <- listed(modules), do: entry
   end
 
   @doc false
-  @spec deprecated() :: [entry()]
-  def deprecated do
-    for {entry, meta} <- listed(), is_binary(meta[:deprecated]), do: entry
+  @spec deprecated([module()]) :: [entry()]
+  def deprecated(modules \\ modules()) do
+    for {entry, meta} <- listed(modules), is_binary(meta[:deprecated]), do: entry
   end
 
-  defp listed do
-    for m <- modules(),
+  defp listed(modules) do
+    for m <- modules,
         {:docs_v1, _, _, _, mdoc, _, entries} <- [Code.fetch_docs(m)],
         mdoc != :hidden,
         {{kind, name, arity}, _, _, doc, meta} <- entries,
@@ -149,6 +153,8 @@ defmodule BeamMCP.PublicAPI do
   # CHANGELOG line to be held to.
   @doc false
   def write_baseline!(path \\ @baseline, opts \\ []) do
+    modules = Keyword.get(opts, :modules, modules())
+
     header = """
     # SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
     # SPDX-License-Identifier: Apache-2.0
@@ -164,8 +170,8 @@ defmodule BeamMCP.PublicAPI do
     """
 
     existing = if File.exists?(path), do: Map.new(read_baseline!(path)), else: %{}
-    present = MapSet.new(population())
-    deprecated = MapSet.new(deprecated())
+    present = MapSet.new(population(modules))
+    deprecated = MapSet.new(deprecated(modules))
     initial = opts[:initial] == true
 
     marked =
@@ -209,6 +215,213 @@ defmodule BeamMCP.PublicAPI do
       true ->
         markers
     end
+  end
+
+  # THE RULE, as one pure function over what the tree says, so the census test runs it on
+  # the tree and a unit test runs it on literal fixtures -- a lane found every rule path
+  # vacuous on a tree with no deprecation, no hidden module and no Unreleased marker, six of
+  # seven mutants surviving, one of them switching the census off. `input` carries
+  # `population` and `deprecated` (entries), `lines` (the baseline as read), `sections` (the
+  # CHANGELOG's Unreleased section as `sections/1` returns it) and `version` (mix.exs's).
+  # Returns `[]` when the surface is on the record, else `{check, entry_or_text}` tuples, one
+  # per violation, with `check` naming the rule that failed.
+  @break_phrase "documented break at the minor"
+  @how_to_tell "How to tell whether you are affected"
+
+  @doc false
+  def break_phrase, do: @break_phrase
+  @doc false
+  def how_to_tell, do: @how_to_tell
+
+  @doc false
+  def violations(input) do
+    ctx = %{
+      population: MapSet.new(input.population),
+      deprecated: MapSet.new(input.deprecated),
+      lines: input.lines,
+      baseline: Map.new(input.lines),
+      sections: input.sections,
+      version: input.version,
+      now: Version.parse!(input.version)
+    }
+
+    List.flatten([
+      marker_violations(ctx),
+      surface_violations(ctx),
+      addition_violations(ctx),
+      deprecation_violations(ctx),
+      removal_violations(ctx),
+      heading_violations(ctx)
+    ])
+  end
+
+  # Markers parse and name no release after mix.exs's; an Unreleased marker needs an
+  # Unreleased section with content (else the release skipped `release_markers!/1`).
+  defp marker_violations(ctx) do
+    released =
+      for {e, markers} <- ctx.lines,
+          {k, v} <- markers,
+          not this_cycle?(v),
+          do: released_marker(e, k, v, ctx.now)
+
+    leftover =
+      for {e, markers} <- ctx.lines,
+          {k, v} <- markers,
+          ctx.sections == [] and this_cycle?(v),
+          do: {:unreleased_leftover, "#{format(e)} #{k}"}
+
+    [released, leftover]
+  end
+
+  defp released_marker(e, k, v, now) do
+    case Version.parse(v) do
+      {:ok, parsed} ->
+        if Version.compare(parsed, now) == :gt,
+          do: [{:future_marker, "#{format(e)} #{k}=#{v}"}],
+          else: []
+
+      :error ->
+        [{:unparsed_marker, "#{format(e)} #{k}=#{v}"}]
+    end
+  end
+
+  # The compiled application and the baseline agree: every public entry has an unremoved
+  # line; every unremoved line has a public entry.
+  defp surface_violations(ctx) do
+    missing =
+      for e <- ctx.population, not Map.has_key?(ctx.baseline, e), do: {:not_in_baseline, e}
+
+    still_public =
+      for e <- ctx.population,
+          markers = ctx.baseline[e],
+          is_map(markers) and Map.has_key?(markers, "removed_in"),
+          do: {:marked_removed_but_public, e}
+
+    gone =
+      for {e, markers} <- ctx.lines,
+          not Map.has_key?(markers, "removed_in"),
+          not MapSet.member?(ctx.population, e),
+          do: {:gone_unmarked, e}
+
+    [missing, still_public, gone]
+  end
+
+  defp addition_violations(ctx) do
+    for {e, %{"since" => v}} <- ctx.lines,
+        this_cycle?(v),
+        naming(e, ctx.sections) == [],
+        do: {:added_unnamed, e}
+  end
+
+  # The attribute and the marker agree both ways; this cycle's deprecation is what a bullet
+  # records (a removed entry's deprecation is the removal check's business).
+  defp deprecation_violations(ctx) do
+    marked =
+      for {e, %{"deprecated_since" => _}} <- ctx.lines,
+          not Map.has_key?(ctx.baseline[e], "removed_in"),
+          do: e
+
+    attr_only = for e <- ctx.deprecated, e not in marked, do: {:deprecated_unmarked, e}
+
+    marker_only =
+      for e <- marked, not MapSet.member?(ctx.deprecated, e), do: {:marker_without_deprecated, e}
+
+    unrecorded =
+      for {e, %{"deprecated_since" => v} = markers} <- ctx.lines,
+          this_cycle?(v),
+          not Map.has_key?(markers, "removed_in"),
+          not Enum.any?(naming(e, ctx.sections), fn {_, _, bullet} -> bullet =~ ~r/deprecat/i end),
+          do: {:deprecation_unrecorded, e}
+
+    [attr_only, marker_only, unrecorded]
+  end
+
+  # This cycle's removals: named, and either three minors of a released deprecation or the
+  # 0.x sentence, whole.
+  defp removal_violations(ctx) do
+    removed =
+      for {e, %{"removed_in" => v} = markers} <- ctx.lines, this_cycle?(v), do: {e, markers}
+
+    unnamed = for {e, _} <- removed, naming(e, ctx.sections) == [], do: {:removed_unnamed, e}
+
+    unjustified =
+      for {e, markers} <- removed,
+          naming(e, ctx.sections) != [],
+          not waited?(markers, ctx.version),
+          not documented_break?(e, ctx.sections, ctx.now),
+          do: {:removed_unjustified, e}
+
+    [unnamed, unjustified]
+  end
+
+  defp heading_violations(ctx) do
+    for {heading, body, _} <- ctx.sections,
+        String.contains?(heading, "BREAKING"),
+        not String.contains?(body, @how_to_tell),
+        do: {:breaking_without_how_to_tell, heading}
+  end
+
+  # This cycle's marker: the word, not a release number.
+  defp this_cycle?(v), do: v == @unreleased
+
+  # Three minors of @deprecated on the tree, the marker naming a RELEASE (an Unreleased
+  # deprecation in the same change is no wait).
+  defp waited?(markers, version) do
+    case markers do
+      %{"deprecated_since" => since} when since != @unreleased -> removable?(since, version)
+      _ -> false
+    end
+  end
+
+  # The 0.x skip: mix.exs's major is 0, and a bullet naming the entry carries the phrase,
+  # under a heading that says BREAKING, in a section that carries the how-to-tell sentence.
+  defp documented_break?(e, sections, now) do
+    now.major == 0 and
+      Enum.any?(naming(e, sections), fn {heading, body, bullet} ->
+        String.contains?(bullet, @break_phrase) and String.contains?(heading, "BREAKING") and
+          String.contains?(body, @how_to_tell)
+      end)
+  end
+
+  # The CHANGELOG's Unreleased section as `{heading, body, bullets}` per `### ` heading; each
+  # bullet is one `- ` item with its continuation lines, one string. No Unreleased heading at
+  # all is a CHANGELOG this census does not know how to read: raise, loudly.
+  @doc false
+  def sections(changelog) do
+    [_, rest] = String.split(changelog, "\n## [Unreleased]", parts: 2)
+    section = rest |> String.split(~r/\n## \[/, parts: 2) |> hd()
+
+    section
+    |> String.split(~r/\n(?=### )/)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&String.starts_with?(&1, "### "))
+    |> Enum.map(fn block ->
+      [heading | body] = String.split(block, "\n", parts: 2)
+      body = Enum.join(body, "")
+
+      bullets =
+        body
+        |> String.split(~r/\n(?=- )/)
+        |> Enum.map(&String.trim/1)
+        |> Enum.filter(&String.starts_with?(&1, "- "))
+
+      {heading, body, bullets}
+    end)
+  end
+
+  # The CHANGELOG names an entry when a bullet carries the exact `Module.name/arity` (a type
+  # or callback may be written with its `t:`/`c:` prefix; a defaults count is not part of the
+  # name), the name starting and the arity ending there -- `Foo.bar/1` is not named by
+  # `Foo.bar/12` nor by `Other.Foo.bar/1`. Nothing looser: not the name alone, not the module
+  # alone. Returns `{heading, body, bullet}` per naming bullet.
+  @doc false
+  def naming({m, _kind, name, arity, _defaults}, sections) do
+    pattern = ~r/(?<![\w.])#{Regex.escape("#{inspect(m)}.#{name}/#{arity}")}(?!\d)/
+
+    for {heading, body, bullets} <- sections,
+        bullet <- bullets,
+        bullet =~ pattern,
+        do: {heading, body, bullet}
   end
 
   # The release step: every `Unreleased` marker becomes the release's number. Returns how
