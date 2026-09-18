@@ -18,7 +18,14 @@ step() { # step <name> <command...>
   else note "$name" "FAIL (exit $rc)"; printf '%s\n' "$out" | sed 's/^/      /'; fail=1; fi
 }
 
-echo "== beam_mcp gate =="
+# THE GATE PINS ITS OWN ENVIRONMENT. Inherited from a caller, MIX_ENV=test turned the docs
+# step red ("The task docs could not be found" -- ex_doc is a dev dependency) and the optional-
+# deps probe red (its ebin is hard-coded under _build/dev), and MIX_BUILD_ROOT did the same to
+# the probe -- a red that reads like the tree's and is not (G-064). `mix test` sets its own
+# environment; every other step means dev; no step means a relocated build. Said here so the
+# verdict is a function of the tree and nothing else.
+unset MIX_ENV MIX_BUILD_ROOT
+echo "== beam_mcp gate ==  (MIX_ENV and MIX_BUILD_ROOT unset by the gate; mix test sets its own)"
 
 # THE FORMAT POPULATION IS THE TRACKED SET, NOT `.formatter.exs`'s GLOB. The glob once read
 # `{lib,test}/**/*.{ex,exs}`; five tracked Elixir scripts under tools/ sat outside it, a
