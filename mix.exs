@@ -146,7 +146,11 @@ defmodule BeamMCP.MixProject do
     [
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib docs mix.exs README.md CHANGELOG.md LICENSE NOTICE LICENSES)
+      # Globs, not directories: Hex walks a directory in readdir order (`File.ls!`, unsorted --
+      # ext4's per-filesystem hash order, tmpfs's another), so a directory here gave one tarball on
+      # this machine and a different one on tmpfs with the same 39 files (a review lane measured
+      # it); `Path.wildcard` sorts, so a glob gives one entry order everywhere. The set is the same.
+      files: ~w(lib/**/*.ex docs/*.md mix.exs README.md CHANGELOG.md LICENSE NOTICE LICENSES/*)
     ]
   end
 end
