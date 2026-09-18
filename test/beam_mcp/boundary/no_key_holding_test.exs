@@ -10,7 +10,8 @@ defmodule BeamMCP.Boundary.NoKeyHoldingTest do
   # derivation and signing library `plug` brings into the lock file, which is not `:crypto` by
   # name. Key material by any other name -- an environment variable, a `_KEY` constant -- is
   # barred by the way it would be loaded, since a census cannot know what a binary is (the
-  # tracer keeps its running flag in `:persistent_term`, so the store itself is not barred). And
+  # `:persistent_term` store itself is not barred -- the tracer kept its running flag there
+  # until 027b, and nothing under lib/ writes one today). And
   # `:crypto.hash/2` is called at exactly ONE site, the canonical module's `digest/2`, with the
   # algorithm a variable bound from the caller's option (`:sha256`, `:sha384` or `:sha512`, the
   # envelope naming which) and never a literal -- until the algorithm joined the bytes there
