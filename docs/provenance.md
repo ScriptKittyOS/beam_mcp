@@ -60,7 +60,7 @@ gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp
 
 `gh attestation` needs GitHub CLI 2.49 or newer (Ubuntu's packaged 2.45 does not have it —
 measured here), and it is the verifier GitHub documents; the attestation is a Sigstore bundle
-(`gh attestation download` fetches it; the repository's *Attestations* tab links each one), so
+(`gh attestation download` fetches it; the repository's Actions tab lists each one under *Attestations*), so
 another Sigstore verifier can read it, but no such path is measured here and none is claimed.
 What a verifier proves: the tarball's digest is the one a run of `provenance.yml` at a named commit
 of this repository produced, signed through Sigstore at the time. What it does not prove:

@@ -29,7 +29,7 @@ happened.
   the surface's entries is still what "before" means.
 - **No head hash is written here** — a hash written into the file it describes cannot include
   the commit that writes it. `git log main..slice/018-release-0-5-0` is the authority.
-- Gate on the release commit: thirteen steps, every line `pass` — format (the tracked set, not a
+- Gate on the release commit: fourteen steps, every line `pass` — format (the tracked set, not a
   glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
   deps, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
   encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
@@ -97,12 +97,14 @@ refused.
 ## The release steps, for the record
 
 1. The slice PR merged to `main` by rebase (the ruleset requires two green checks).
-2. This release commit applied by the owner, then the gate on the result, thirteen `pass`,
+2. This release commit applied by the owner, then the gate on the result, fourteen `pass`,
    output recorded by command and exit code.
-3. `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` from the release commit
-   (the script builds the canonical tarball from `git archive` and publishes from that tree —
-   a working-tree `mix hex.publish` ships that machine's file modes and is not what the
-   provenance workflow attests), **then** tag and push the tag: the tag's run downloads what
-   hex.pm serves and verifies the attestation against it, and treats a version hex.pm does not
-   serve yet as a failure. The GitHub ruleset targets **branches, not tags**, so a tag push is
+3. Tag the release commit locally, signed (`git tag -s vX.Y.Z`); then
+   `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` (the script builds the
+   canonical tarball from `git archive` of that tag and publishes from that tree — a
+   working-tree `mix hex.publish` ships that machine's file modes and is not what the
+   provenance workflow attests); **then** push the tag. The tag's run downloads what hex.pm
+   serves and verifies the attestation against it, and treats a version hex.pm does not serve
+   yet as a failure — so the push comes last. (A tag and its commit build the same bytes;
+   measured.) The GitHub ruleset targets **branches, not tags**, so a tag push is
    unprotected: what is tagged is what was read.

@@ -37,7 +37,20 @@ defmodule BeamMCP.ProvenanceTest do
     [mismatch_block, _] =
       String.split(mismatch_block, "gh attestation verify \"published-", parts: 2)
 
-    assert mismatch_block =~ ~r/if \[ "\$\{ON_TAG\}" = "true" \]; then\n(.*\n)*?\s+exit 1\n/
+    # The `exit 1` is INSIDE the ON_TAG test -- between its `then` and its `fi`, with no `fi`
+    # before it -- and no `exit 1` stands at the block's outer level (a lane's plant moved it one
+    # line past the guard's `fi` and the looser pin passed).
+    assert mismatch_block =~
+             ~r/if \[ "\$\{ON_TAG\}" = "true" \]; then\n(?:(?!\s*fi\n).*\n)*?\s+exit 1\n\s+fi\n/
+
+    outer_exits =
+      mismatch_block
+      |> String.split("\n")
+      |> Enum.filter(&(String.trim(&1) == "exit 1"))
+      |> Enum.map(&(String.length(&1) - String.length(String.trim_leading(&1))))
+
+    guard_indent = String.length(hd(Regex.run(~r/^\s+(?=if \[ "\$\{ON_TAG\}")/m, mismatch_block)))
+    assert Enum.all?(outer_exits, &(&1 > guard_indent)), "an exit 1 sits outside the ON_TAG guard"
     assert mismatch_block =~ ~r/NOT MEASURED.*\n\s+exit 0/
 
     # The attestation permissions are the attesting job's, not the workflow's: the top-level
