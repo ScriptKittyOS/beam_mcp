@@ -467,14 +467,15 @@ fi
 # carries (test/beam_mcp/publication_content_test.exs), plus the two trailer names and the
 # session-URL host; nothing here names anything the tree does not name already.
 #
-# The limit, stated: a pull request's body is not a commit message and is not read here. A
-# body is policed by a person reading it before merge.
+# The limit, stated: a pull request's body is not a commit message and is not read here --
+# it exists only on GitHub. The CI workflow's `pr-body` job reads it from the pull_request
+# event and hands it to the same script, tools/text_terms.sh, so the terms live once (G-015).
 msg_fail=0
 if base=$(git merge-base origin/main HEAD 2>/dev/null); then
   n_msgs=$(git rev-list --count "$base"..HEAD)
   msg_hits=$(for h in $(git rev-list "$base"..HEAD); do
     git log -1 --format=%B "$h" | sed "s/^/$(git rev-parse --short "$h")	/"
-  done | grep -i -E 'Co-Authored-By:|Claude-Session:|claude\.ai|SCR-[0-9]+|Ultraviolet|Trinity' || true)
+  done | bash tools/text_terms.sh || true)
   if [ -z "$msg_hits" ]; then
     note "messages" "pass ($n_msgs commit(s) since origin/main; none names a trailer, a session, a board id or a consumer)"
   else

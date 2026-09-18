@@ -60,16 +60,42 @@ jobs:
       # hex's cache is a failure in CI, where a stale pass would be taken for a fresh one.
       - run: GATE_LEG=${{ matrix.leg }} GATE_BENCH=record GATE_AUDIT=require ./tools/gate.sh
 
+  # The pull-request body, read from the event and held to the same terms as the commit
+  # messages (tools/text_terms.sh) -- the one public surface a person writes last, which no
+  # offline step can read. The body goes through an environment variable, never inline in the
+  # script, so its contents cannot be run as a command.
+  pr-body:
+    name: Gate - pull-request body
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+      - name: the body names no trailer, session, board id or consumer
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -uo pipefail
+          printf '%s\n' "$PR_BODY" > body.txt
+          echo "body: $(wc -l < body.txt) line(s)"
+          if hits=$(bash tools/text_terms.sh < body.txt); then
+            echo "pass: the body names no trailer, session, board id or consumer"
+          else
+            echo "FAIL: the body carries a term the gate refuses in commit messages:"
+            printf '%s\n' "$hits" | sed 's/^/  /'
+            exit 1
+          fi
+
   summary:
     name: Gate - quality gate
     runs-on: ubuntu-latest
-    needs: gate
+    needs: [gate, pr-body]
     if: always()
     steps:
-      - name: every leg of the matrix passed
+      - name: every leg of the matrix passed, and the pull-request body where there is one
         run: |
-          echo "legs: ${{ needs.gate.result }}"
+          echo "legs: ${{ needs.gate.result }}; pr-body: ${{ needs.pr-body.result }}"
           [ "${{ needs.gate.result }}" = "success" ]
+          case "${{ needs.pr-body.result }}" in success|skipped) ;; *) exit 1 ;; esac
 
   dco:
     name: Gate - DCO sign-off
