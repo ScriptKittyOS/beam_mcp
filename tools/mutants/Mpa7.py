@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '    new_markers = if opts[:initial], do: %{}, else: %{"since" => version}'
-new = '    new_markers = if opts[:initial] or version != nil, do: %{}, else: %{"since" => version}'
+old = '         |> Map.merge(if(initial, do: %{}, else: %{"since" => @unreleased}))}'
+new = '         |> Map.merge(if(initial or not initial, do: %{}, else: %{"since" => @unreleased}))}'
 
 if s.count(old) != 1:
     sys.exit("Mpa7: anchor found %d times" % s.count(old))
