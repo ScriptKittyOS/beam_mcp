@@ -87,6 +87,8 @@ defmodule BeamMCP.MixProject do
           "docs/crypto-posture.md",
           "docs/fips.md",
           "docs/provenance.md",
+          "docs/api-stability.md",
+          "UPGRADING.md",
           "SECURITY.md"
         ],
         # Grouped by namespace, not by a list of names: a module added under either prefix
@@ -98,7 +100,7 @@ defmodule BeamMCP.MixProject do
         groups_for_extras: [
           Connectome: ~r{^docs/connectome},
           Policy:
-            ~r{^(docs/(will-not-implement|threat-model|crypto-posture|fips|provenance)|SECURITY)}
+            ~r{^(docs/(will-not-implement|threat-model|crypto-posture|fips|provenance|api-stability)|SECURITY|UPGRADING)}
         ]
       ]
     ]
@@ -153,7 +155,7 @@ defmodule BeamMCP.MixProject do
       # this machine and a different one on tmpfs with the same 39 files (a review lane measured
       # it); `Path.wildcard` sorts, so a glob gives one entry order everywhere. The set is the same.
       files:
-        ~w(lib/**/*.ex docs/*.md mix.exs README.md CHANGELOG.md SECURITY.md LICENSE NOTICE LICENSES/*)
+        ~w(lib/**/*.ex docs/*.md docs/public-api.txt mix.exs README.md CHANGELOG.md UPGRADING.md SECURITY.md LICENSE NOTICE LICENSES/*)
     ]
   end
 end

@@ -11,6 +11,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the API stability policy, the public surface pinned, and an upgrade guide
+
+- **`docs/api-stability.md`** says what a `~>` pin can rely on: public is what ex_doc lists
+  (`@moduledoc false` and `@doc false` are the private surface); `0.x` breaks land at the
+  minor and say so; from `1.0.0` semantic versioning; a deprecation runs in three steps —
+  `@deprecated` with the replacement already shipped, three minors of warning (`0.x`; the
+  next major on `1.x`), removal on the record — and a docs-hidden flip is a removal.
+- **`docs/public-api.txt`** is the surface itself, one line per function, macro, callback or
+  type — 26 modules, 128 entries at this writing — written by a command from the compiled
+  application, with markers (`since`, `deprecated_since`, `removed_in`) that carry each
+  entry's history in the tree. It ships in the tarball.
+- **A census test holds the surface to the record**
+  (`test/beam_mcp/public_api_census_test.exs`): a documented public entry may change
+  only if, in the same change, the baseline moves, this file's Unreleased section names the
+  exact `Module.name/arity`, and the kind's condition holds — with no OR between the kinds.
+  Shown red before it was trusted, with the baseline unchanged: a public function deleted,
+  renamed, hidden; with the baseline moved and this file silent; with a sibling deprecated
+  instead; with this file naming it but the `@deprecated` first added in the same change; and
+  each half of a deprecation without the other. Green: three minors of `deprecated_since` on
+  the tree, or — `0.x` only — a bullet that says *documented break at the minor*.
+- **`UPGRADING.md`**: every `0.x` break so far in one table, the rule for moving a minor, and
+  what `1.0` will ask (today: nothing beyond the minors, since no entry is deprecated).
+
 ### Changed — the connectome tracer runs in a trace session of its own
 
 - **`BeamMCP.Connectome.Tracer` sets everything inside one OTP trace session**
