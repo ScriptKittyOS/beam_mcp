@@ -204,7 +204,7 @@ defmodule BeamMCP.Connectome.SurfaceTest do
                Surface.call(%{graph: "reach"}, declared: @declared)
     end
 
-    test "call/2 never mutates: the collector's rows and the package's persistent terms are equal before and after",
+    test "call/2 never mutates: the collector's rows and every persistent term of this package's (none today) are equal before and after",
          %{collector: c} do
       before = {Observed.rows(c), package_terms()}
       {:ok, _} = Surface.call(%{graph: "observed"}, observed: c)
@@ -420,7 +420,9 @@ defmodule BeamMCP.Connectome.SurfaceTest do
     end
   end
 
-  # Every persistent term whose key is a module of this package, or a tuple headed by one.
+  # Every persistent term whose key is a module of this package, or a tuple headed by one --
+  # none since the tracer moved to a trace session (027b), so this half compares two empty
+  # lists; it stays so a term that reappears is compared, not missed.
   defp package_terms do
     :persistent_term.get()
     |> Enum.filter(fn
