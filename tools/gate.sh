@@ -143,19 +143,27 @@ step "optional deps" bash tools/probe_optional_deps.sh
 # fails, because CI can always reach the registry and is where a stale pass would be taken
 # for a fresh one. The red was demonstrated first in a throwaway consumer carrying `plug
 # 1.20.0` (retired, and in two advisories' ranges) -- tools/probe_audit.sh keeps that plant.
+# GATE_AUDIT is `require`, or unset; any other value is a FAIL by name rather than a silent
+# fall to the lenient side (a typo in the workflow must not read NOT MEASURED on every leg).
 audit_out=$(bash tools/audit.sh 2>&1); audit_rc=$?
 audit_line=$(printf '%s\n' "$audit_out" | head -1 | sed -E 's/^audit (ok|FAIL|NOT MEASURED): //')
-case "$audit_rc" in
-  0) note "audit" "pass ($audit_line)" ;;
-  2) if [ "${GATE_AUDIT:-}" = "require" ]; then
-       note "audit" "FAIL (GATE_AUDIT=require and $audit_line)"
-       printf '%s\n' "$audit_out" | sed 's/^/      /'; fail=1
-     else
-       note "audit" "NOT MEASURED ($audit_line; CI requires it)"
-     fi ;;
-  *) note "audit" "FAIL ($audit_line)"
-     printf '%s\n' "$audit_out" | tail -n +2 | sed 's/^/      /'; fail=1 ;;
-esac
+if [ -n "${GATE_AUDIT:-}" ] && [ "$GATE_AUDIT" != "require" ]; then
+  note "audit" "FAIL (GATE_AUDIT='$GATE_AUDIT' is not a value this gate knows; 'require' or unset)"; fail=1
+else
+  case "$audit_rc" in
+    0) note "audit" "pass ($audit_line)"
+       # A pass over ignores prints hex's ignored sections, so the ignore is on the record.
+       printf '%s\n' "$audit_out" | tail -n +2 | sed 's/^/      /' ;;
+    2) if [ "${GATE_AUDIT:-}" = "require" ]; then
+         note "audit" "FAIL (GATE_AUDIT=require and $audit_line)"
+         printf '%s\n' "$audit_out" | tail -n +2 | sed 's/^/      /'; fail=1
+       else
+         note "audit" "NOT MEASURED ($audit_line; CI requires it)"
+       fi ;;
+    *) note "audit" "FAIL ($audit_line)"
+       printf '%s\n' "$audit_out" | tail -n +2 | sed 's/^/      /'; fail=1 ;;
+  esac
+fi
 
 # The benchmark gate. `bench/overhead.exs` measures the observed collector's per-call
 # overhead and exits 1 over its threshold -- a ceiling the owner set, with its reasoning in

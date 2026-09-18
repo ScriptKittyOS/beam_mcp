@@ -11,8 +11,10 @@
 # change on Plug.Conn.inform") and inside two advisories' ranges (EEF-CVE-2026-56813,
 # EEF-CVE-2026-56814; measured 2026-09-17) -- and the same script is run there. A second run
 # points HEX_MIRROR at a closed port, which is how the cache-pass was found. Nothing in this
-# tree is touched. Network: the first run needs hex.pm; without it the probe says so and
-# exits 2, never "pass".
+# tree is touched -- the plant's records and tarballs DO land in the user's ~/.hex cache, as
+# any `deps.get` does. Network: the first run needs hex.pm; without it the probe says so and
+# exits 2, never "pass" -- and with a warm ~/.hex, `deps.get` succeeds from the cache while the
+# audit cannot reach the registry, which is also NOT MEASURED, not a defect (a lane hit it).
 #
 #     tools/probe_audit.sh
 set -uo pipefail
@@ -32,6 +34,9 @@ if ! mix deps.get >"$work/deps.get.out" 2>&1; then
 fi
 out=$(bash "$here/tools/audit.sh" 2>&1); rc=$?
 printf '  planted plug 1.20.0: exit %s; first line: %s\n' "$rc" "$(printf '%s\n' "$out" | head -1)"
+if [ "$rc" -eq 2 ]; then
+  echo "PROBE NOT MEASURED: the audit could not reach the registry (deps.get was served from the cache)"; exit 2
+fi
 if [ "$rc" -ne 1 ] || ! printf '%s\n' "$out" | grep -q '^Retired:' || ! printf '%s\n' "$out" | grep -q '^Advisories:'; then
   echo "PROBE FAIL: expected exit 1 with a Retired: and an Advisories: section"; printf '%s\n' "$out"; exit 1
 fi

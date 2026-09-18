@@ -12,14 +12,20 @@
 #
 #     0   measured, clean:   "audit ok: N locked packages, none retired, no advisory (M ignored)"
 #     1   measured, not clean: hex's own output follows the line, verbatim
-#     2   NOT MEASURED:      the registry could not be reached and hex answered from its cache
+#     2   NOT MEASURED:      hex answered without reaching the registry
 #
-# THE THIRD IS THE REASON THIS SCRIPT EXISTS. With the registry unreachable, `mix hex.audit`
-# prints "Failed to fetch record for <pkg> from registry (using cache instead)" per package,
-# then "No retired or security advisory packages found", and EXITS 0 -- a pass from stale
-# data (measured 2026-09-17 with HEX_MIRROR pointed at a closed port). An audit that read
-# yesterday's registry is not an audit of today's advisories, so those lines are read and the
-# result is refused as a measurement, whatever the exit code says. The gate decides what a
+# THE THIRD IS THE REASON THIS SCRIPT EXISTS, and it has two doors. (1) With the registry
+# unreachable, `mix hex.audit` prints "Failed to fetch record for <pkg> from registry (using
+# cache instead)" per package, then "No retired or security advisory packages found", and
+# EXITS 0 (measured 2026-09-17 with HEX_MIRROR at a closed port). In Hex 2.5.1 that suffix is
+# printed on every fetch failure whether or not anything is cached -- so it is a pass from no
+# data as often as from stale data -- and "Failed to fetch record" is read here with or without
+# the suffix, in case Hex ever stops adding it. (2) Hex's own OFFLINE MODE -- `HEX_OFFLINE=1`, or
+# `offline: true` in the global hex config or in mix.exs's `hex:` -- never touches HTTP and
+# prints NOTHING when every package is cached; a review lane measured "No retired or security
+# advisory packages found", exit 0, under it. So this script FORCES online mode: `HEX_OFFLINE=0`
+# wins over both config sources in Hex (state.ex), and a machine that truly cannot reach the
+# registry then takes door (1) and is refused as a measurement. The gate decides what a
 # non-measurement costs: locally it is said and not failed (a contributor offline is not
 # wrong), in CI it fails (GATE_AUDIT=require), because CI is the seat that can always reach
 # the registry and the one place a stale pass would be mistaken for a fresh one.
@@ -28,25 +34,43 @@
 # with CVE and GHSA aliases; the EEF CNA's ids), so this one call is the OSV audit too --
 # a second scanner would add a dependency and no source (measured on hex.pm's package API).
 #
-# The population is the lock file's, which is what hex audits: N is counted from mix.lock so
-# the line says how many packages the verdict is about. Advisories a project has chosen to
-# ignore (`hex: [audit: [ignore: ...]]` in mix.exs) are counted and printed with the pass, so
-# a pass over an ignore is never a silent one.
+# IGNORES ARE READ FROM HEX'S OUTPUT, NOT FROM mix.exs. A project can ignore findings by
+# `hex: [ignore_advisories: [...], ignore_retirements: [...]]` in mix.exs, by the global
+# config, or by HEX_IGNORE_ADVISORIES / HEX_IGNORE_RETIREMENTS; hex then prints them under
+# "Ignored retired:" / "Ignored advisories:" INSTEAD of the "No retired ..." line, still exit 0.
+# A clean run with ignores is a pass here, with the count on the line and hex's ignored
+# sections printed after it, so a pass over an ignore is never a silent one. The count is
+# hex's -- the entries it listed as ignored -- not a grep of mix.exs (a first cut grepped for
+# a key that does not exist and would have read "0 ignored" over a real one).
+#
+# N is the lock file's `{:hex, ...}` entries -- the population hex audits (git and path
+# dependencies are not hex's to audit and are not counted).
 set -uo pipefail
-out=$(mix hex.audit 2>&1); rc=$?
-n_locked=$(grep -cE '^  "[a-z_0-9]+": \{' mix.lock 2>/dev/null || echo 0)
-n_ignored=$(grep -A20 'hex:' mix.exs 2>/dev/null | grep -cE '^\s*(ignore|"[A-Z]+-[A-Za-z0-9-]+")' || true)
-stale=$(printf '%s\n' "$out" | grep -c 'using cache instead' || true)
-if [ "$stale" -gt 0 ]; then
-  echo "audit NOT MEASURED: the registry could not be reached; hex answered for $stale package(s) from its cache and would have said pass"
+out=$(HEX_OFFLINE=0 mix hex.audit 2>&1); rc=$?
+n_locked=$(grep -cE '^  "[a-z_0-9]+": \{:hex, ' mix.lock 2>/dev/null); n_locked=${n_locked:-0}
+unreached=$(printf '%s\n' "$out" | grep -c 'Failed to fetch record' || true)
+if [ "$unreached" -gt 0 ]; then
+  echo "audit NOT MEASURED: hex answered without reaching the registry for $unreached package(s) (it would have said pass)"
   printf '%s\n' "$out" | grep -E 'failed_connect|Failed to fetch' | head -3
   exit 2
 fi
-if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^No retired or security advisory packages found'; then
-  echo "audit ok: $n_locked locked packages, none retired, no advisory ($n_ignored ignored)"
-  exit 0
+found=$(printf '%s\n' "$out" | grep -cE '^Found (retired packages|packages with security advisories)$' || true)
+if [ "$rc" -eq 0 ] && [ "$found" -eq 0 ]; then
+  if printf '%s\n' "$out" | grep -q '^No retired or security advisory packages found'; then
+    echo "audit ok: $n_locked locked packages, none retired, no advisory (0 ignored)"
+    exit 0
+  fi
+  if printf '%s\n' "$out" | grep -qE '^Ignored (retired|advisories):'; then
+    # Hex lists each ignored finding as an indented "  <package> <version> - ..." line under
+    # its section, entries separated by blank lines; on a clean run everything from the first
+    # "Ignored" header to the end is ignored content, and nothing else is indented that way.
+    n_ignored=$(printf '%s\n' "$out" | sed -n '/^Ignored \(retired\|advisories\):/,$p' | grep -cE '^  [a-z_0-9]+ [0-9][^ ]* - ' || true)
+    echo "audit ok: $n_locked locked packages, none retired, no advisory ($n_ignored ignored -- hex's sections follow)"
+    printf '%s\n' "$out" | sed -n '/^Ignored /,$p'
+    exit 0
+  fi
 fi
-if printf '%s\n' "$out" | grep -qE '^Found (retired packages|packages with security advisories)'; then
+if [ "$found" -gt 0 ]; then
   echo "audit FAIL: $(printf '%s\n' "$out" | grep -E '^Found' | tr '\n' ';')"
   printf '%s\n' "$out"
   exit 1
