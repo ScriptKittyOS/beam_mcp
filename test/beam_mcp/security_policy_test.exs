@@ -19,6 +19,12 @@ defmodule BeamMCP.SecurityPolicyTest do
     assert @policy =~ "do not open a public issue"
   end
 
+  test "a report that cannot use the form has an address, and the policy ships with the package" do
+    assert @policy =~ "ayla@scriptkittyos.com"
+    assert "SECURITY.md" in Mix.Project.config()[:package][:files]
+    assert "SECURITY.md" in Mix.Project.config()[:docs][:extras]
+  end
+
   test "the commitments carry their numbers, and promise no bounty and no deadline" do
     assert @policy =~ ~r/Acknowledgement within 7 days/
     assert @policy =~ ~r/assessment within 30 days/
