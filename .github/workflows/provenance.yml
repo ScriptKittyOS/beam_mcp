@@ -7,16 +7,22 @@
 # that version, downloaded fresh, so the assertion is about the PUBLISHED tarball and not a
 # local copy.
 #
-# WHY THE DIGEST BINDS TO WHAT hex.pm SHOWS. `mix hex.build` is byte-deterministic (fixed
-# 2000-01-01 mtimes, uid 0 inside the tar), and the outer tarball's sha256 IS the "Package
-# checksum" hex.pm records: the tarball rebuilt from the v0.5.0 tag on 2026-09-17 is
-# byte-identical to the one repo.hex.pm serves for 0.5.0 (c95d7b2a...). So the attested
-# subject is the identifier a consumer already sees on the package page.
+# WHY THE DIGEST BINDS TO WHAT hex.pm SHOWS -- AND ONLY IF BOTH SIDES BUILD THE SAME WAY. The
+# outer tarball's sha256 IS the "Package checksum" hex.pm records. But `mix hex.build` packages
+# the working tree as it lies: on-disk file modes (umask 002 vs 022) and a directory's readdir
+# order both change the bytes -- one commit gave a review lane three checksums on one day. So
+# the tarball is built by tools/release_tarball.sh, which makes the bytes canonical by
+# construction (`git archive` at the ref with tar.umask=022: every file 644, only tracked
+# files; globs in mix.exs's `files:` for one entry order), and the publisher builds AND
+# publishes with the same script (`--publish`). A release published any other way will not
+# match this attestation, and the last step below says so, loudly, on the tag's run.
 #
-# THE OWNER TAGS AND PUBLISHES; THIS WORKFLOW ATTESTS. It never runs `mix hex.publish`. On a
-# tag it attests the bytes the owner is publishing from the same commit; on a manual run
-# (workflow_dispatch) it attests a tarball nobody publishes -- that run proves the loop, and
-# its hex.pm half reads NOT MEASURED, which is what it is.
+# THE OWNER TAGS AND PUBLISHES; THIS WORKFLOW ATTESTS. It never runs `mix hex.publish`. The
+# order is publish, then push the tag: the tag's run downloads the published bytes and
+# verifies the attestation against them, and on a tag any failure to fetch or to match is a
+# FAILURE -- that run is the one the binding is claimed on. On a manual run
+# (workflow_dispatch) the tarball is nobody's release; that run proves the loop, and its
+# hex.pm half reads NOT MEASURED, which is what it is.
 #
 # CI is unproven until a run exists (CONVENTIONS): the first workflow_dispatch run is the
 # evidence for the attest->verify loop; the first tag after this lands is the evidence for
@@ -47,23 +53,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # The pinned pair, a copy of .tool-versions' line (setup-beam does not resolve that file's
+      # spelling -- CONVENTIONS). checkout/setup-beam/upload-artifact are the mutable tags the other
+      # workflows use; the attestation action alone is pinned by commit, because it is the one
+      # whose behaviour the attestation's meaning depends on.
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "28"
           elixir-version: "1.18"
-      - run: mix deps.get
-      - name: the tarball, its version and its sha256 (hex.pm's package checksum)
+      - name: the tarball, built the canonical way, its version and its sha256 (hex.pm's package checksum)
         id: build
         run: |
           set -euo pipefail
-          version=$(mix run --no-start --no-compile --no-deps-check -e 'IO.puts(Mix.Project.config()[:version])' 2>/dev/null | tail -1)
-          mix hex.build -o "beam_mcp-${version}.tar" | tee build.out
+          version=$(sed -nE 's/^  @version "([^"]+)"$/\1/p' mix.exs | head -1)
+          [ -n "$version" ] || { echo "no @version in mix.exs"; exit 1; }
+          tools/release_tarball.sh "${GITHUB_SHA}" "beam_mcp-${version}.tar" | tee build.out
           sha=$(sha256sum "beam_mcp-${version}.tar" | cut -d' ' -f1)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "sha256=${sha}" >> "$GITHUB_OUTPUT"
           echo "tarball beam_mcp-${version}.tar sha256 ${sha}"
-          # The two are one number, or the premise above is false and this run says so.
-          grep -q "Package checksum: ${sha}" build.out
       # Pinned by commit (v4.2.2, 2026-08-06): the attestation's subject is the tarball's
       # sha256; the predicate is SLSA build provenance naming this repository, commit and
       # workflow; the signature is Sigstore's, the record GitHub's attestation store.
@@ -80,17 +88,23 @@ jobs:
       - name: verify the attestation against the bytes hex.pm serves for this version
         env:
           GH_TOKEN: ${{ github.token }}
+          ON_TAG: ${{ github.ref_type == 'tag' }}
         run: |
           set -uo pipefail
           v="${{ steps.build.outputs.version }}"
-          if ! curl -fsSL -o "published-${v}.tar" "https://repo.hex.pm/tarballs/beam_mcp-${v}.tar"; then
-            echo "NOT MEASURED: hex.pm serves no tarball for beam_mcp ${v} (not published, or not yet); the binding is measured on the release's run"
+          code=$(curl -sSL -o "published-${v}.tar" -w '%{http_code}' "https://repo.hex.pm/tarballs/beam_mcp-${v}.tar") || code="000"
+          if [ "${code}" != "200" ]; then
+            if [ "${ON_TAG}" = "true" ]; then
+              echo "FAIL: hex.pm answered ${code} for beam_mcp ${v} on the tag's run -- publish first, then push the tag (or re-run this workflow once it is published); 404 means not published, anything else means the fetch failed"
+              exit 1
+            fi
+            echo "NOT MEASURED: hex.pm answered ${code} for beam_mcp ${v}; nothing is published from a manual run, and the binding is measured on the tag's run"
             exit 0
           fi
           pub=$(sha256sum "published-${v}.tar" | cut -d' ' -f1)
           echo "published sha256 ${pub}; built ${{ steps.build.outputs.sha256 }}"
           if [ "${pub}" != "${{ steps.build.outputs.sha256 }}" ]; then
-            echo "FAIL: the published tarball is not the bytes this commit builds -- the attestation does not describe what hex.pm serves"
+            echo "FAIL: the published tarball is not the bytes this commit builds canonically -- it was not published with tools/release_tarball.sh, and this attestation does not describe what hex.pm serves"
             exit 1
           fi
           gh attestation verify "published-${v}.tar" --repo "${GITHUB_REPOSITORY}"

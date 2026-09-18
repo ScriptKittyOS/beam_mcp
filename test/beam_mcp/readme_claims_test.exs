@@ -116,8 +116,17 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
       # The split census holds the README to the modules compiled from lib/; that set is the
       # consumer's only while the whole of lib/ ships. A narrowed stanza would leave the census
-      # green over modules a consumer never gets (a review lane's stated slip).
-      assert "lib" in files, "lib/ is not in the Hex files list: #{inspect(files)}"
+      # green over modules a consumer never gets (a review lane's stated slip). `files:` names
+      # globs (so the tarball's entry order is sorted, not a filesystem's -- see
+      # docs/provenance.md), so the check is on what they expand to: every tracked file under
+      # lib/ is in the expansion.
+      shipped = Enum.flat_map(files, &Path.wildcard/1)
+      {tracked, 0} = System.cmd("git", ["ls-files", "--", "lib"])
+      lib = tracked |> String.split("\n", trim: true)
+      assert lib != []
+
+      assert lib -- shipped == [],
+             "tracked under lib/ but not in the Hex files list: #{inspect(lib -- shipped)}"
 
       assert "CHANGELOG.md" in files,
              "the changelog is the only document explaining why a version changed, and " <>
