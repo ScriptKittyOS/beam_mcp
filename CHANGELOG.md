@@ -11,6 +11,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — the security policy names severity in the package's own terms, the CVE path, and what it does not claim
+
+- **`SECURITY.md`** gains a severity rubric — four levels defined by what a defect lets a client
+  do to the embedding host (reach dispatch past the advertised schema; be served under an
+  undeclared revision; exceed a bound with a stated workaround; a wrong code or message), each
+  with the fix window intended at assessment — and the CVE path: advisories publish from this
+  repository's GitHub Security Advisories, GitHub is the CNA, and a published advisory reaches
+  OSV, the feed `mix hex.audit` reads, so a consumer's own audit shows it. The policy says it
+  claims no regulatory status. The intake (private advisory form), the 7-day and 30-day
+  commitments and the supported-versions table are unchanged and now held to the tree by a
+  test: the intake is derived from `mix.exs`'s source URL and the table's row is the shipped
+  minor.
+
 ### Added — the release tarball is attested, and the attestation binds to the checksum hex.pm shows
 
 - **Build provenance on every release tag** (`.github/workflows/provenance.yml`): CI builds the

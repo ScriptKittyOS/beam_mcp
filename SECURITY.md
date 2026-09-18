@@ -29,6 +29,36 @@ be kept rather than one that sounds reassuring:
 There is no paid bounty, and no guaranteed fix deadline. A single maintainer cannot honestly
 promise a 24-hour turnaround, so this policy does not.
 
+This policy is a maintainer's commitment and claims no regulatory status: it does not assert
+that the package, its author or its distribution meets any statutory scheme's definition of a
+product, a manufacturer or a steward.
+
+## Severity, in this package's terms
+
+The assessment names one of four levels, by what a defect lets a client do to the host that
+embeds this package — not by a generic score. The fix window is the intent stated at
+assessment; the 30-day assessment window above is the commitment.
+
+| level | what it means here | fix window (intent) |
+|---|---|---|
+| **Critical** | A client reaches dispatch with arguments the advertised schema forbids, or reaches a tool the catalog did not advertise, or crashes the host's server process with one message. | Next release, as soon as it can be cut; no other change rides along. |
+| **High** | A client is served under a protocol revision it did not declare, or reads server internals across the wire (a stack, a path, a secret in a fault), or desynchronises the reader so one message is read as another. | The next scheduled release, or sooner if a workaround cannot be stated. |
+| **Medium** | A bound (line, body, nesting, connection) can be exceeded or evaded so the host buffers without limit, where a stated workaround exists (a lower bound, a transport option). | A scheduled release; the workaround published at assessment. |
+| **Low** | Wrong error codes or messages, a refusal that names more than it should, a documented behaviour the package does not quite match. | With other work; recorded in the changelog when fixed. |
+
+The examples are this package's own surface (see *In scope*); a report about a host's tool or
+an injected function is out of scope at any level.
+
+## CVEs
+
+Advisories are published from this repository's GitHub Security Advisories. GitHub is a CVE
+Numbering Authority (CNA) for repositories it hosts, so a CVE is requested from the advisory
+draft and assigned before publication when the defect warrants one — Critical and High always
+do; Medium when a consumer needs an identifier to act on; Low rarely. A published advisory
+reaches the GitHub Advisory Database and OSV, which is the feed hex.pm's own `mix hex.audit`
+reads, so a consumer running the audit sees it against their lock file without this project
+telling them.
+
 ## In scope
 
 The package's own code, `lib/`:
