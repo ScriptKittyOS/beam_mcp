@@ -29,7 +29,8 @@ happened.
   the surface's entries is still what "before" means.
 - **No head hash is written here** — a hash written into the file it describes cannot include
   the commit that writes it. `git log main..slice/018-release-0-5-0` is the authority.
-- Gate on the release commit: fourteen steps, every line `pass` — format (the tracked set, not a
+- Gate on the release commit: thirteen steps (the audit step made it fourteen in 024, after this
+  release), every line `pass` — format (the tracked set, not a
   glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
   deps, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
   encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
@@ -94,11 +95,11 @@ refused.
 - The `2025-11-25` revision is served on stdio only; over HTTP the conformance row for it is
   0 / 30 by design, and the README says so beside the number.
 
-## The release steps, for the record
+## The release steps — the record of 0.5.0, and the runbook for the next
 
 1. The slice PR merged to `main` by rebase (the ruleset requires two green checks).
-2. This release commit applied by the owner, then the gate on the result, fourteen `pass`,
-   output recorded by command and exit code.
+2. This release commit applied by the owner, then the gate on the result, every line `pass`
+   (thirteen at 0.5.0; fourteen since 024), output recorded by command and exit code.
 3. Tag the release commit locally, signed (`git tag -s vX.Y.Z`); then
    `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` (the script builds the
    canonical tarball from `git archive` of that tag and publishes from that tree — a

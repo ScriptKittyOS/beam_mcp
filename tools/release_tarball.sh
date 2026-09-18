@@ -38,7 +38,7 @@ mix hex.build -o "$out" | tee "$work/build.out"
 sha=$(sha256 "$out")
 grep -q "Package checksum: ${sha}" "$work/build.out" \
   || { echo "the tarball's sha256 ${sha} is not the checksum hex printed" >&2; exit 1; }
-echo "release tarball ${out}: sha256 ${sha} (= hex's package checksum) from ${ref} = $(git -C "$root" rev-parse "$ref")"
+echo "release tarball ${out}: sha256 ${sha} (= hex's package checksum) from ${ref} = $(git -C "$root" rev-parse "${ref}^{commit}")"
 if [ "$publish" = "--publish" ]; then
   mix hex.publish
 fi
