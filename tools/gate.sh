@@ -73,6 +73,18 @@ else
 fi
 step "compile"  mix compile --warnings-as-errors --force
 
+# Dialyzer over the compiled beams: the OTP binary (dialyxir declined, CX-055), a PLT under
+# _build keyed by the OTP/Elixir pair and the lock, built cold once per seat and cached in CI
+# (tools/dialyzer.sh says the rest). The line carries the cold-build time when it happened,
+# so the cost the owner asked to see (G-013) is on every first run's record.
+dz_out=$(bash tools/dialyzer.sh 2>&1); dz_rc=$?
+if [ "$dz_rc" -eq 0 ]; then
+  note "dialyzer" "pass ($(printf '%s\n' "$dz_out" | head -1 | sed 's/^dialyzer ok: //'))"
+else
+  note "dialyzer" "FAIL ($(printf '%s\n' "$dz_out" | head -1 | sed 's/^dialyzer FAIL: //'))"
+  printf '%s\n' "$dz_out" | tail -n +2 | sed 's/^/      /'; fail=1
+fi
+
 # The other instruments: every tracked shell script and every tracked Python file (the
 # mutants, the scoring harness's probes) must at least parse. `bash -n` and `ast.parse`
 # are not compilation -- a shell script that calls a command that no longer exists, or a
