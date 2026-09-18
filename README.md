@@ -164,11 +164,11 @@ enforced at compile time:
 `mix.exs` reads `:erlang.system_info(:otp_release)` at `project/0` and a below-floor build fails
 with a message that names the floor and why, rather than compiling and failing later in a way
 that looks like a defect here. The reason, so the floor is not raised by the next person who
-finds it inconvenient: OTP **26.2** added the keyed `process_info` read the connectome tracer
-depends on — `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
-the whole process dictionary (2 µs against up to a millisecond on a loaded tracer, measured), so
-26.2 is the hard requirement. The floor is set at 27, the next major release above it, because
-27 is the oldest release this project *supports*: the lowest leg the CI matrix runs the suite
+finds it inconvenient: OTP **27.0** added the `trace` module — isolated trace sessions,
+`:trace.session_create/3` — and the connectome tracer runs inside one of its own, so that a
+process a host already traces is traced too and a host's own patterns and flags are never
+touched (`docs/connectome-observed.md`); so 27 is the hard requirement. It is also the oldest
+release this project *supports*: the lowest leg the CI matrix runs the suite
 on, so that support is a measurement and not a hope. The suite runs on OTP 27, 28 and 29 in CI
 (the floor, the pinned line and the newest pair the compatibility table lists — `mix format` is
 measured on the pinned line only, the formatter being one program) and on 28 on the
