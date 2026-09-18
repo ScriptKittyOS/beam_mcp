@@ -58,15 +58,15 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :lists,
     :logger,
     :maps,
-    :persistent_term,
     :telemetry,
+    :trace,
     :unicode,
     :xref
   ]
 
-  # The nine atoms that name a loadable module and occur in the compiled forms other than as
+  # The eight atoms that name a loadable module and occur in the compiled forms other than as
   # a call target: `-file`/`-compile` attributes and the compiler's own (`:file`, `:compile`,
-  # `:elixir`), export lists (`:init`), the tracer's option names (`:trace`), a handler's message
+  # `:elixir`), export lists (`:init`), a handler's message
   # tag (`:error_logger`), a tuple tag in the canonical encoder (`:array`), `:json` -- a local
   # function name that OTP 28 turned into a module's name, the collision this census is loud
   # about -- and `Jason.OrderedObject`, the struct the decoder hands back for ordered objects,
@@ -80,7 +80,6 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :file,
     :init,
     :json,
-    :trace,
     Jason.OrderedObject
   ]
 
@@ -103,7 +102,6 @@ defmodule BeamMCP.Boundary.PackageReachTest do
       binary_part: 3,
       binary_to_integer: 1,
       byte_size: 1,
-      demonitor: 2,
       element: 2,
       error: 1,
       error: 3,
@@ -133,9 +131,6 @@ defmodule BeamMCP.Boundary.PackageReachTest do
       send: 2,
       spawn: 1,
       system_time: 0,
-      trace: 3,
-      trace_info: 2,
-      trace_pattern: 3,
       tuple_size: 1,
       # A tuple error reason to a JSON array (Server.to_json_value/1); reads nothing.
       tuple_to_list: 1
@@ -147,7 +142,10 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     Code => [ensure_compiled: 1, ensure_loaded?: 1],
     # `monotonic_time/1` is the HTTP transport's whole-body deadline clock; a clock, not the environment.
     System => [convert_time_unit: 3, monotonic_time: 1],
-    :persistent_term => [erase: 1, get: 2, put: 2],
+    # The tracer's one trace session: created with itself as the tracer, its call patterns
+    # and process flags set inside it, destroyed in one call. `:trace.info/3` is not called:
+    # the tracer never asks what it set, it only sets and destroys.
+    :trace => [function: 4, process: 4, session_create: 3, session_destroy: 1],
     Application => [load: 1, spec: 2],
     :application => [get_application: 1],
     :crypto => [hash: 2],
