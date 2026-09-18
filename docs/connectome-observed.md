@@ -87,80 +87,96 @@ running trace as `{:shutdown, :companion_gone}`.
 process sending to a process. It is off until a host starts it, runs one at a time, and
 refuses to start without a running collector, with a limit that is not a positive integer
 — there is no unbounded mode — with the wildcard or an unloadable module in `modules:`, or
-with a name in `processes:` that is not registered; a start that fails part-way clears
-what it set and answers `{:error, {:init_failed, reason}}`. Calls are traced on every
-process in the node, present and future — except a process a host already traces under
-its own tracer, which the BEAM skips silently (one tracer per process), so its calls are
-no edges.
+with a name in `processes:` that is not registered; a start that fails part-way leaves
+nothing set and answers `{:error, {:init_failed, reason}}` — a name in `processes:`
+registered to a port rather than a process, or whose holder exited between the check and
+the start, is the cause that remains.
+
+**One trace session, the tracer's own.** Everything the tracer sets it sets inside one
+OTP trace session (`:trace.session_create/3`, OTP 27 — the reason this package's floor is
+27) whose tracer is the tracer process: the call patterns on the named modules, the call
+flag on every process in the node, present and future, and the send flag on the named
+processes. Sessions are isolated from each other and from the legacy `:erlang.trace/3`
+session a host may be using. So a process a host already traces is traced by this
+session as well and its calls are edges (measured: both tracers received the call — under
+the legacy tracer the BEAM skipped such a process silently, one tracer per process, and
+its calls were no edges); a host's own pattern on a module the tracer names is neither
+fed by the tracer's pattern nor touched by its clear (measured: the host's call tracer saw
+only what its own pattern generated, and its pattern read `local` after the tracer's
+session was gone); and nothing here reads or clears a flag or a pattern that is not the
+session's — a host's flags on any process, its patterns on any module, its own sessions,
+all survive the tracer's start, stop, deadline, limit and kill alike. The legacy view,
+`:erlang.trace_info/2`, does not see a session's settings at all: a host reading it will
+find none of the tracer's, which is the isolation working, not a tracer that set nothing;
+the tests that pin this page read `:trace.session_info/1`.
 
 It stops itself at `max_messages` handled trace messages of any shape, a send to a dead
-process included, or at `max_duration_ms`, clearing every pattern and flag it set, and
-exits `{:shutdown, {:limit, which, value}}`; `stop/0` is the third way out; each of the
-three ends the tracer on the next message it handles, and what was still queued behind it
-is discarded, not written; the collector dying under it is the fourth,
-`{:shutdown, :collector_gone}`. **What the limits bound:**
-`max_messages` counts messages as they are handled while the BEAM queues them as they
-arrive, so the tracer runs at high priority and clears its patterns the moment handled plus
-queued reaches the limit — generation stops there. The queue's size is the node-wide call
-rate into the named modules times the tracer's scheduling latency, not `max_messages`
+process included, or at `max_duration_ms`, destroying its session — every pattern and
+flag it set, in one call — and exits `{:shutdown, {:limit, which, value}}`; `stop/0` is
+the third way out; each of the three ends the tracer on the next message it handles, and
+what was still queued behind it is discarded, not written; the collector dying under it
+is the fourth, `{:shutdown, :collector_gone}`. **What the limits bound:** `max_messages`
+counts messages as they are handled while the BEAM queues them as they arrive, so the
+tracer runs at high priority and destroys its session the moment handled plus queued
+reaches the limit — generation stops there. The queue's size is the node-wide call rate
+into the named modules times the tracer's scheduling latency, not `max_messages`
 (measured: 64 hot callers against a limit of 1 000 peaked from some tens of thousands to
-a hundred-odd thousand queued messages, run to run; with a limit too large to reach, 32 hot callers
-queued some millions in a 100 ms window). The mailbox is kept off-heap, so a large queue
-is not copied at every collection while it drains. The
-early clear is best effort — the queue is read on the first and every 32nd message — while the hard bounds
-hold on every path but the one named below: at most `max_messages` handled, the patterns
-cleared at the limit and on every exit. A
-companion process enforces `max_duration_ms` from outside the tracer's mailbox — clearing
-raising a flag at the deadline and then clearing the patterns; the tracer reads the flag
-before every write, so nothing lands after it is raised — and
-clears on the tracer's exit for any reason, a kill included, so no pattern is left set with
-no tracer behind it: a leftover pattern would cost every call to that module a breakpoint
-and would feed a host's own later call tracer with arguments. The tracer watches the
-companion back and exits `{:shutdown, :companion_gone}` if it dies. One window is open:
-the companion killed and then the tracer killed before it handles that death leaves the
-patterns set until the next `start/1` or `stop/0`, either of which clears what the
-tracer's running term names. That term, `{BeamMCP.Connectome.Tracer, :running}`, is a
-public persistent term and is trusted only in its own shape — a three-tuple whose second
-element is a list of module atoms; a term of another shape put there by someone else
-names nothing, is erased by the next `start/1` or `stop/0` or by the tracer's own exit,
-and makes neither raise; a term of the right shape put there by someone else names what
-it names, and the next `start/1` or `stop/0` clears those modules' patterns, a host's own
-included. A running tracer's `stop/0` reads the tracer's own claim — flag, modules, the
-named processes' pids — from the tracer's process dictionary, which nothing outside it can
-write; its companion holds the same claim from the start, and reads a dictionary only to
-learn what a tracer running at its death claims. A claim of another shape — a process
-that took the tracer's name and put one there — is no claim: `stop/0` is `:ok` and clears
-nothing it names. So a forged term neither delays a stop nor passes for a newer tracer's
-claim. A
-`start/1` waits a bounded second for a previous companion still clearing after a kill;
-`stop/0` waits a bounded five seconds for the tracer to leave and is `:ok` either way. A
-companion that outlives a kill clears only the modules no tracer running at that moment
-claims. A `:send` trace message
-carries the sent term into the tracer's mailbox until it is handled, where anything that
-can read that process's queue can see it; nothing of it is written. Nothing is cleared
-that the tracer, or a stale running term, did not name — its patterns and the send flag
-on the processes it named, resolved once at start and cleared only where this tracer's is
-the flag on them: a name reused during the run belongs to another process, and a process
-a host re-traced under its own tracer keeps that; never every process's flags. Patterns are global in the BEAM;
-clearing a module's patterns clears any someone else set on it. The collector dying under the tracer is met as its DOWN
-or as the first write into the table that is gone, whichever is first in the queue, and is
-`{:shutdown, :collector_gone}` either way. It never calls `:dbg`.
+a hundred-odd thousand queued messages, run to run; with a limit too large to reach, 32
+hot callers queued some millions in a 100 ms window). The mailbox is kept off-heap, so a
+large queue is not copied at every collection while it drains. A `:send` trace message
+carries the sent term: a traced process's sends are copied into the tracer's mailbox at
+their own size until they are handled and dropped unread (measured: one traced send of a
+million-element list put 16 MB on the tracer), so that bound is the traced processes' own
+message sizes; nothing of a term is written, and anything that can read the tracer's
+queue can see one while it waits. The early clear is best effort — the queue is read on
+the first and every 32nd message — while the hard bounds hold on every path: at most
+`max_messages` handled, the session destroyed at the limit and on every exit. A companion
+process enforces `max_duration_ms` from outside the tracer's mailbox — raising a flag at
+the deadline and then destroying the session; the tracer reads the flag before every
+write, so nothing lands after it is raised. The tracer watches the companion back and
+exits `{:shutdown, :companion_gone}` if it dies.
+
+**Nothing left behind, on every path.** The session's handle is held by the tracer and by
+its companion and by nothing else — never in a persistent term, which would keep a dead
+tracer's session, and its breakpoints, alive until erased (measured). `stop/0`, the
+limit, the deadline and `terminate/2` each destroy the session by name; and a session
+whose every handle is gone is destroyed by the BEAM itself (measured: the last holder
+killed, the pattern was gone within 20 ms). The companion monitors the tracer and exits
+on its exit — a kill included, which skips `terminate/2` — and that exit is the clear: the
+last holder gone, the session goes with it. The window the legacy tracer left open, the
+companion killed and then the tracer killed before it handles that death, closes the same
+way: both holders gone, the session with them, whatever modules it named; there is no
+running term to clear, no stale term for a next `start/1` to read, and no wait for a
+previous companion. A session whose tracer has died but whose handle is still held keeps
+its patterns set at the cost of a breakpoint on every call (measured: 200 000 calls,
+10.4 ms against 4.4 ms): a companion suspended from outside is such a holder, and
+`terminate/2`'s own destroy is what ends the session on an orderly exit while it is; a
+companion that outlives its tracer that way destroys its own session and no other, since
+a handle reaches one session and a later tracer's is another. A running tracer's `stop/0`
+reads the tracer's own claim — the flag and the session handle — from the tracer's
+process dictionary, which nothing outside it can write, raises the flag and destroys the
+session before asking the tracer to stop, and waits a bounded five seconds for it to
+leave, `:ok` either way; a claim of another shape — a process that took the tracer's name
+and put one there — is no claim, and a term in it that is no handle destroys nothing.
+`stop/0` with no tracer running is `:ok` and touches no session. The collector dying
+under the tracer is met as its DOWN or as the first write into the table that is gone,
+whichever is first in the queue, and is `{:shutdown, :collector_gone}` either way. It
+never calls `:dbg`.
 
 **The threat model, which is the boundary of every claim in this section.** In scope:
 accident and failure on a node running only code the host put there — crashes, kills,
 restarts and the host's supervisor, a registered name reused by an unrelated process, a
-host tracing its own processes, hot reload, starvation under load, the public API called
-wrongly or in the wrong order, and a stale running term left by a previous crash of this
-module. Out of scope: an adversary executing code inside the same BEAM node — a process
-that registers itself under the tracer's name, a forged persistent term, a crafted process
-dictionary. Such an adversary can already read the collector's ETS table directly, call
-the host's dispatch function, replace a module with `:code.load_binary/3`, or trace every
-process itself. The tracer is not a security boundary against it, and nothing this package
-can do makes it one; a reader who takes it for one is in more danger than one who knows it
-is not. The shape guards on the running term and on the claim are robustness, not
-defence: they keep `stop/0` and `start/1` total against a term of the wrong shape, which
-the stale-term-after-crash case — in scope — needs. The same line, drawn for the whole
-package and for the wire, is `docs/threat-model.md`.
+host tracing its own processes under the legacy tracer or under a session of its own, hot
+reload, starvation under load, and the public API called wrongly or in the wrong order.
+Out of scope: an adversary executing code inside the same BEAM node — a process that
+registers itself under the tracer's name, a crafted process dictionary, a handle taken
+from the tracer's dictionary and destroyed. Such an adversary can already read the
+collector's ETS table directly, call the host's dispatch function, replace a module with
+`:code.load_binary/3`, or trace every process itself. The tracer is not a security
+boundary against it, and nothing this package can do makes it one; a reader who takes it
+for one is in more danger than one who knows it is not. The shape guard on the claim is
+robustness, not defence: it keeps `stop/0` total against a claim of the wrong shape. The
+same line, drawn for the whole package and for the wire, is `docs/threat-model.md`.
 
 What it writes, through the same collector: a call into a traced module as a
 module-level `:invoke` edge from the caller's module to the callee's, with the `:arity`

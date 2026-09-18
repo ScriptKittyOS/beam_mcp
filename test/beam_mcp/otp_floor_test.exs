@@ -33,13 +33,14 @@ defmodule BeamMCP.OTPFloorTest do
     assert e.message =~ "#{@floor}"
     assert e.message =~ "26"
 
-    # The reason, not just the number: the keyed process_info read the tracer uses, added in
-    # OTP 26.2, and that 27 is the oldest release the project supports -- the CI matrix's floor
-    # leg runs the suite on it (a measurement, since the matrix landed; before it the message
-    # said "is to run"). A floor without a reason gets raised by the next person who finds it
-    # inconvenient.
-    assert e.message =~ "keyed process_info"
-    assert e.message =~ "26.2 is the hard requirement"
+    # The reason, not just the number: the trace sessions the tracer runs in, added in OTP
+    # 27.0 (until 027b the reason was the keyed process_info read of 26.2, and the floor sat
+    # one major above the hard requirement; the session build made the two one number), and
+    # that 27 is the oldest release the project supports -- the CI matrix's floor leg runs the
+    # suite on it (a measurement, since the matrix landed; before it the message said "is to
+    # run"). A floor without a reason gets raised by the next person who finds it inconvenient.
+    assert e.message =~ "trace sessions"
+    assert e.message =~ "OTP 27 is the hard requirement"
     assert e.message =~ "oldest release this project supports"
     assert e.message =~ "The suite runs on OTP 27, 28 and 29 in CI"
   end
@@ -63,10 +64,10 @@ defmodule BeamMCP.OTPFloorTest do
     # the slice record; 023's CI floor leg compiles on the floor release itself).
     assert mix =~ "check_otp!(:erlang.system_info(:otp_release))"
 
-    # The reason travels with it: the keyed process_info read and its OTP version.
+    # The reason travels with it: the trace sessions and their OTP version.
     for text <- [mix, readme] do
-      assert text =~ "process_info"
-      assert text =~ "26.2"
+      assert text =~ "trace sessions"
+      assert text =~ "27.0"
     end
 
     # The Elixir half of the pair is one number too: the `elixir:` requirement Mix reads and the

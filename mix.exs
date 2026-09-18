@@ -33,15 +33,15 @@ defmodule BeamMCP.MixProject do
         Mix.raise("""
         beam_mcp requires Erlang/OTP #{@otp_floor} or newer; found OTP #{major}.
 
-        OTP 26.2 added the keyed process_info read the connectome tracer depends on --
-        `:erlang.process_info(pid, {:dictionary, key})` reads one claim key without copying
-        the whole process dictionary (2 us against up to a millisecond on a loaded tracer,
-        measured) -- so OTP 26.2 is the hard requirement. The floor is set at #{@otp_floor},
-        the next major release above it, because #{@otp_floor} is the oldest release this project supports:
-        the lowest leg the CI matrix runs the suite on, so that support is a measurement and not
-        a hope. The suite runs on OTP 27, 28 and 29 in CI (the floor, the pinned line and the
-        newest pair the compatibility table lists) and on 28 on the maintainers' machines.
-        Releases older than #{@otp_floor} are neither tested nor supported.
+        OTP 27.0 added the `trace` module -- isolated trace sessions
+        (`:trace.session_create/3`) -- and the connectome tracer runs inside one of its own,
+        so that a process a host already traces is traced too and a host's own patterns and
+        flags are never touched; so OTP 27 is the hard requirement. It is also the
+        oldest release this project supports: the lowest leg the CI matrix runs the suite
+        on, so that support is a measurement and not a hope. The suite runs on OTP 27, 28 and 29 in CI
+        (the floor, the pinned line and the newest pair the compatibility table lists) and on
+        28 on the maintainers' machines. Releases older than #{@otp_floor} are neither tested
+        nor supported.
 
         Install OTP #{@otp_floor} or newer (the maintainers' pins are in the repository's
         .tool-versions), or pin an older beam_mcp.

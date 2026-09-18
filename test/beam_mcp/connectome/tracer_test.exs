@@ -67,9 +67,9 @@ defmodule BeamMCP.Connectome.TracerTest do
   end
 
   # Nothing left behind, with a bounded wait for a companion's clear or the collector's GC.
-  defp assert_gone(what \\ nil) do
+  defp assert_gone(what) do
     assert Enum.any?(1..100, fn _ ->
-             if sessions() == [] and (what == nil or not traced?(what)),
+             if sessions() == [] and not traced?(what),
                do: true,
                else: Process.sleep(10) && false
            end),

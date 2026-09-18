@@ -11,6 +11,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — the connectome tracer runs in a trace session of its own
+
+- **`BeamMCP.Connectome.Tracer` sets everything inside one OTP trace session**
+  (`:trace.session_create/3`, OTP 27) whose tracer is the tracer process, and every clear is
+  one `:trace.session_destroy/1`. What that changes for a host: a process the host already
+  traces under its own tracer is traced by the session too, so its calls are edges (the
+  legacy tracer skipped such a process silently — one tracer per process); a host's own
+  pattern on a module the tracer names is neither fed by the tracer's pattern nor touched by
+  its clear; the `processes:` refusal for a host-traced pid is gone (a name registered to a
+  port, or whose holder exited between the check and the start, is the `init_failed` cause
+  that remains); and nothing is left behind on any exit path — the double-kill window the
+  observed page used to name closes by physics, since a session whose every handle is gone
+  is destroyed by the BEAM. The public running term `{BeamMCP.Connectome.Tracer, :running}`
+  and its stale, forged and malformed cases no longer exist; `stop/0` reads the tracer's
+  claim (the flag and the session handle) and nothing else. The legacy `:erlang.trace_info/2`
+  view does not show a session's settings: a host reading it finds none of the tracer's.
+  Measured before the design, on OTP 28.1.1: both tracers receive a host-traced process's
+  call; a host's legacy pattern and flags survive the session's destroy; the last holder of
+  a handle dying destroys the session within 20 ms; a dead tracer's session still held costs
+  a breakpoint per call (200 000 calls: 10.4 ms against 4.4 ms); a `:send` trace copies the
+  sent term into the tracer's mailbox at its size (16 MB for a million-element list) — said
+  on the page now. 20 mutants, 20 killed; two equivalent-by-physics mutants removed as code.
+- **The OTP floor's reason is now one number.** OTP 27.0's `trace` module is the hard
+  requirement and 27 is the oldest supported release; `mix.exs`'s raise text, the README and
+  the floor test say so (the previous reason, the keyed `process_info` read of OTP 26.2, put
+  the hard requirement one major below the floor).
+
 ### Added — opt-in git hooks that run the gate
 
 - **`tools/install-hooks.sh`** points a clone's `core.hooksPath` at the tracked `tools/hooks/`:
