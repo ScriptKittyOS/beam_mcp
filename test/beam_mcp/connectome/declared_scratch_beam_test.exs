@@ -41,6 +41,16 @@ defmodule BeamMCP.Connectome.DeclaredScratchBeamTest do
       {:ok, {Stripped, stripped}} = :beam_lib.strip(full)
       File.write!(Path.join(dir, "Elixir.Stripped.beam"), stripped)
 
+      # A beam found under one module's name that holds another -- a broken install. It calls
+      # an in-scope module, which is what would be misfiled if the builder handed it to xref
+      # under the wrong name (two review lanes measured that on the way to the guard).
+      [{Right, right}] =
+        Code.compile_string(
+          "defmodule Right do\n  def go, do: BeamMCP.Fixture.Declared.Beta.run(1)\nend"
+        )
+
+      File.write!(Path.join(dir, "Elixir.Wrong.beam"), right)
+
       Code.put_compiler_option(:debug_info, was)
 
       {:ok, {Orphan, [debug_info: {:debug_info_v1, :elixir_erl, {:elixir_v1, _, _}}]}} =
@@ -76,6 +86,18 @@ defmodule BeamMCP.Connectome.DeclaredScratchBeamTest do
 
       assert bound.modules_without_debug_info == [Stripped]
       refute Enum.any?(g.nodes, &(&1.id == Node.id({:module, @server, Stripped})))
+    end
+
+    test "a beam that holds a different module than its name is a module without a beam, not a node under the wrong name" do
+      {:ok, %{graph: g, bound: bound}} =
+        Declared.build(server: @server, modules: [Fx.Beta, Wrong])
+
+      # `Wrong` has no beam of its own; `Right`'s call to Beta is nobody's edge and Beta is not
+      # an external callee -- nothing is filed under a name the file does not hold.
+      assert bound.modules_without_beam == [Wrong]
+      assert bound.external_callees == []
+      refute Enum.any?(g.nodes, &(&1.id == Node.id({:module, @server, Wrong})))
+      refute Enum.any?(g.nodes, &(&1.id == Node.id({:module, @server, Right})))
     end
   end
 end
