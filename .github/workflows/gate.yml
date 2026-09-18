@@ -28,6 +28,11 @@ on:
 # could satisfy it and a pull request would wait on a check that never reports. `summary`
 # carries that exact name, runs after every leg (`if: always()`), and fails unless the legs
 # all succeeded -- so the ruleset stays as it is and the required check means "all three".
+# The token does nothing here but read: the legs read the tree, the summary reads check runs.
+# (What the Scorecard's Token-Permissions check asks for, and what the jobs need anyway.)
+permissions:
+  contents: read
+
 jobs:
   gate:
     name: Gate - leg (OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }}, ${{ matrix.leg }})
@@ -41,10 +46,10 @@ jobs:
           - { leg: pinned, otp: "28", elixir: "1.18" }
           - { leg: head,   otp: "29", elixir: "1.20" }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         id: beam
         with:
           otp-version: ${{ matrix.otp }}
@@ -59,7 +64,7 @@ jobs:
       # for: a runner image's OTP patch bump carries a dialyzer bump, and a PLT from another
       # dialyzer is refused -- with a cache that never overwrites a key, the major alone made
       # a permanent red) and the lock: built cold once per key (87-116 s measured), restored after.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: _build/dialyzer
           key: dialyzer-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock') }}
@@ -82,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: the body names no trailer, session, board id or consumer
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
@@ -103,6 +108,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [gate, pr-body]
     if: always()
+    # The edited path reads the legs' check runs for the head SHA: a read, granted here and
+    # nowhere wider.
+    permissions:
+      contents: read
+      checks: read
     steps:
       - name: every leg of the matrix passed, and the pull-request body where there is one
         env:
@@ -137,7 +147,7 @@ jobs:
     name: Gate - DCO sign-off
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: every commit in the range carries a Signed-off-by

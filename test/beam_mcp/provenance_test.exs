@@ -22,7 +22,7 @@ defmodule BeamMCP.ProvenanceTest do
     assert wf =~ ~r/^\s+tags: \["v\*"\]/m
     assert wf =~ ~r/^\s+workflow_dispatch:/m
     assert wf =~ "tools/release_tarball.sh"
-    assert wf =~ ~r/uses: actions\/attest-build-provenance@[0-9a-f]{40}$/m
+    assert wf =~ ~r/uses: actions\/attest-build-provenance@[0-9a-f]{40} # v[0-9.]+$/m
     assert wf =~ ~r/subject-path: beam_mcp-/
     assert wf =~ "https://repo.hex.pm/tarballs/beam_mcp-"
     assert wf =~ "gh attestation verify"

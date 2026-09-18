@@ -89,6 +89,8 @@ defmodule BeamMCP.MixProject do
           "docs/provenance.md",
           "docs/api-stability.md",
           "UPGRADING.md",
+          "docs/governance.md",
+          "docs/succession.md",
           "SECURITY.md"
         ],
         # Grouped by namespace, not by a list of names: a module added under either prefix
@@ -100,7 +102,7 @@ defmodule BeamMCP.MixProject do
         groups_for_extras: [
           Connectome: ~r{^docs/connectome},
           Policy:
-            ~r{^(docs/(will-not-implement|threat-model|crypto-posture|fips|provenance|api-stability)|SECURITY|UPGRADING)}
+            ~r{^(docs/(will-not-implement|threat-model|crypto-posture|fips|provenance|api-stability|governance|succession)|SECURITY|UPGRADING)}
         ]
       ]
     ]

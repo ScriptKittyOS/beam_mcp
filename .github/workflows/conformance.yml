@@ -21,17 +21,20 @@ on:
     branches: ["**"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   conformance:
     name: Conformance - the two rows
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: erlef/setup-beam@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           otp-version: "28"
           elixir-version: "1.18"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       - run: mix deps.get
@@ -44,7 +47,7 @@ jobs:
           OUT="$RUNNER_TEMP/conformance" ./tools/conformance.sh
       - name: the suite's results, kept with the run
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: conformance-results
           path: ${{ runner.temp }}/conformance
