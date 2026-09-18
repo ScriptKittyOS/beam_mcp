@@ -11,6 +11,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — opt-in git hooks that run the gate
+
+- **`tools/install-hooks.sh`** points a clone's `core.hooksPath` at the tracked `tools/hooks/`:
+  `pre-commit` runs `tools/gate.sh` on the tree about to be committed, `commit-msg` reads the
+  message through `tools/text_terms.sh` before the commit exists. Opt-in, once per clone,
+  `--uninstall` to undo; `git commit --no-verify` remains git's own bypass. A probe
+  (`tools/probe_install_hooks.sh`) drives a scratch repository through install, a red gate
+  refused, a green one landed, a term refused, the bypass, uninstall, and a hook that is not
+  executable refused by the installer.
+
 ### Added — the instruments: Dialyzer in the gate, a mutation harness that names a compiler kill and scores in scope, the pull-request body held to the gate's terms, and the gate pinning its own environment
 
 - **Dialyzer is the gate's fifteenth step**, on the OTP binary, with a PLT under `_build`

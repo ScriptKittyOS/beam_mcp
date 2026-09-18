@@ -21,7 +21,11 @@ tool is not a fact about the change.
 `--warnings-as-errors`, tests, `credo --strict`, an SPDX header check, and a licence-file
 check. **There is no baseline and none will be added:** this tree started clean, so a non-zero
 count is a failure rather than a number to hold. Run it before you push; CI runs the same
-script.
+script. To have git run it for you, `./tools/install-hooks.sh` once per clone points
+`core.hooksPath` at the tracked `tools/hooks/`: `pre-commit` runs the gate, `commit-msg` reads
+the message through `tools/text_terms.sh` (the terms in rule 2, and no board ids). It is
+opt-in; `--uninstall` undoes it; `git commit --no-verify` is git's own bypass and CI still runs
+the gate.
 
 **4. Rebase, never merge.** Keep history linear. Rebase onto `main` and force-push your branch
 rather than merging `main` into it.
