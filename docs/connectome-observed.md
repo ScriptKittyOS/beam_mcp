@@ -137,8 +137,11 @@ write, so nothing lands after it is raised. The tracer watches the companion bac
 exits `{:shutdown, :companion_gone}` if it dies.
 
 **Nothing left behind, on every path.** The session's handle is held by the tracer and by
-its companion and by nothing else — never in a persistent term, which would keep a dead
-tracer's session, and its breakpoints, alive until erased (measured). `stop/0`, the
+its companion and by nothing else the tracer writes — never in a persistent term, which
+would keep a dead tracer's session, and its breakpoints, alive until erased (measured); a
+copy anywhere is a holder too, and `:sys.get_state/1` on the tracer makes one on the
+caller's heap that holds the session up until that process next collects (measured: 50 ms
+after both holders had died, the session was still listed). `stop/0`, the
 limit, the deadline and `terminate/2` each destroy the session by name; and a session
 whose every handle is gone is destroyed by the BEAM itself (measured: the last holder
 killed, the pattern was gone within 20 ms). The companion monitors the tracer and exits
