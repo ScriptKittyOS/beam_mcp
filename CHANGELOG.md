@@ -11,6 +11,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the instruments: Dialyzer in the gate, a mutation harness that names a compiler kill and scores in scope, the pull-request body held to the gate's terms, and the gate pinning its own environment
+
+- **Dialyzer is the gate's fifteenth step**, on the OTP binary, with a PLT under `_build`
+  keyed by the OTP/Elixir pair and the lock — built cold once per machine (about a minute
+  here; 84–107 s on a CI runner, once per cache key) and cached in CI; the analysis is a few
+  seconds. Zero warnings on OTP 27, 28 and 29. What it found on the way: three opaque-`MapSet`
+  warnings in the reachability DFS that were Dialyzer's known false positive — the DFS's
+  `seen` set is a plain map now, the same set with nothing opaque.
+- **The mutation harness** (`tools/mutate.sh`) reads a compilation failure as
+  `COMPILER-KILL — not a kill` (a mutant that orphans a symbol under `warnings_as_errors`
+  used to read like a kill), and `SCOPE=derived` scores against the test files that name the
+  target's module, re-scoring a survivor against the whole suite before calling it one — a
+  tracer score in seconds, with no survivor bought by the speed-up. A probe plants both.
+- **The pull-request body** is held to the same terms as commit messages (an attribution
+  trailer, a session link, a board id, a consumer's name), by a CI job that reads it from the
+  event; the terms live in one script, `tools/text_terms.sh`, that the gate's `messages` step
+  reads too.
+- **The gate pins its own environment** (`MIX_ENV`, `MIX_BUILD_ROOT` unset at the top): an
+  inherited value had turned two steps red for reasons that were not the tree's. Record mode
+  for the bench counts a breach only when the verdict is the script's last line; the audit
+  prints hex's stale-ignore warnings after a pass; the provenance and security-policy pins
+  are held wider (a 404 on a tag, a fake `gh`, a reflow, a fifth severity row, an older row
+  marked supported); a beam holding a different module than its name has its own test.
+
 ### Changed — the security policy names severity in the package's own terms, the CVE path, and what it does not claim
 
 - **`SECURITY.md`** gains a severity rubric — four levels defined by what a defect lets a client
