@@ -296,7 +296,13 @@ defmodule BeamMCP.Connectome.TracerTest do
 
       assert {:error, {:init_failed, _}} = result
       refute Tracer.running?()
-      assert_gone({Beta, :run, 1})
+      # The error term carries the raise's arguments, the session handle among them, and
+      # this process holds it in `result` for the rest of the test -- a holder. The session
+      # must be gone NOW, destroyed by init before the reason left it, not when this process
+      # next collects (a lane measured the suite passing on GC timing before the fix).
+      assert sessions() == []
+      refute traced?({Beta, :run, 1})
+      assert result != nil
     end
 
     test "a kill leaves no pattern set: someone watches the tracer and clears what it set", %{
@@ -306,6 +312,19 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert traced?({Beta, :run, 1})
       Process.exit(pid, :kill)
       refute Process.alive?(pid)
+      assert_gone({Beta, :run, 1})
+    end
+
+    test "an exit signal from a process that is not the parent is ignored, not a stop: tracing goes on to its limits",
+         %{collector: c} do
+      # trap_exit plus the catch-all clause: the conventional gesture from elsewhere does
+      # nothing, and the moduledoc says so (a lane found it undocumented).
+      {:ok, pid} = start(c, modules: [Beta], max_duration_ms: 60_000)
+      Process.exit(pid, :shutdown)
+      Process.sleep(20)
+      assert Process.alive?(pid)
+      assert traced?({Beta, :run, 1})
+      :ok = Tracer.stop()
       assert_gone({Beta, :run, 1})
     end
 
@@ -633,6 +652,8 @@ defmodule BeamMCP.Connectome.TracerTest do
             {:atomics.new(1, []), :not_a_session},
             {:atomics.new(1, []), {make_ref(), {:beam_mcp_tracer, 0}}},
             {:not_a_reference, theirs},
+            # A plain reference passes is_reference/1 and raises out of :atomics.put/3.
+            {make_ref(), :not_a_session},
             @marker
           ] do
         test = self()

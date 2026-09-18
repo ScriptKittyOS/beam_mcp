@@ -102,9 +102,14 @@ defmodule BeamMCP.Connectome.Tracer do
   with it. So the window the legacy tracer had, the companion killed and then the tracer
   killed before it handles that death, closes by physics too, whatever modules the
   session named. A session whose tracer has died but whose handle is still held keeps
-  its patterns set at the cost of a breakpoint on every call (measured: 200 000 calls,
-  10.4 ms against 4.4 ms): a companion suspended from outside is such a holder, and
-  `terminate/2`'s own destroy is what ends the session on an orderly exit while it is.
+  its patterns set -- the BEAM drops a dead tracer's process flags, not its patterns --
+  at a cost per call into those modules (measured: 200 000 calls, from the baseline's
+  order to 2.4 times it, run to run): a companion suspended from outside is such a
+  holder, and `terminate/2`'s own destroy is what ends the session on an orderly exit
+  while it is. A start that fails part-way destroys its session before the reason leaves
+  `init/1`, because the error term carries the raise's arguments, the handle among them,
+  and a copy of a handle anywhere is a holder (measured: a host keeping that error kept an
+  empty session listed for as long as it did).
   The tracer watches the companion back and leaves `{:shutdown, :companion_gone}` if it
   dies, since it is the only enforcer of the deadline; a hot reload of this module purges
   the companion, an anonymous function of the old code, and ends a running trace that way
@@ -113,7 +118,11 @@ defmodule BeamMCP.Connectome.Tracer do
   Exits: `{:shutdown, {:limit, :max_messages, n}}`, `{:shutdown, {:limit, :max_duration_ms,
   ms}}`, `:normal` from `stop/0`, `{:shutdown, :collector_gone}` when the collector dies
   under it -- met as its DOWN or as the first write into the table that is gone, whichever
-  comes first in the queue -- and `{:shutdown, :companion_gone}`. It never calls `:dbg`.
+  comes first in the queue -- and `{:shutdown, :companion_gone}`. The tracer traps exits,
+  so an exit signal from a process that is not its parent -- `Process.exit(pid, :shutdown)`
+  from elsewhere, a linked process dying -- is a message it ignores, not a stop (measured):
+  tracing goes on to its limits; `stop/0` is the way to end it from outside, and a parent's
+  shutdown goes through `terminate/2`. It never calls `:dbg`.
 
   **The threat model, which is the boundary of every claim above.** In scope: accident and
   failure on a node running only code the host put there -- crashes, kills, restarts and the
@@ -203,18 +212,24 @@ defmodule BeamMCP.Connectome.Tracer do
         # landed for as long as the clear took (measured: 4 900-7 500 under eight hot
         # callers).
         case claim(pid) do
-          {flag, session} ->
-            :atomics.put(flag, 1, @stop)
-            destroy(session)
-
-          nil ->
-            :ok
+          {flag, session} -> raise_and_destroy(flag, session)
+          nil -> :ok
         end
 
         GenServer.stop(pid, :normal, @stop_timeout)
     end
   catch
     :exit, _ -> :ok
+  end
+
+  # A claim whose flag is a reference but not an atomics reference passes the shape guard
+  # and raises out of `:atomics.put/3` (a lane found the shape): nothing to raise or
+  # destroy, and the stop itself still goes ahead.
+  defp raise_and_destroy(flag, session) do
+    :atomics.put(flag, 1, @stop)
+    destroy(session)
+  rescue
+    ArgumentError -> false
   end
 
   # No claim, whether the process is gone (`Process.info/2` answers nil for a dead pid --
@@ -274,13 +289,28 @@ defmodule BeamMCP.Connectome.Tracer do
     companion = spawn_companion(self(), session, max_duration_ms, flag)
     _ = Process.monitor(companion)
 
-    for name <- processes, do: :trace.process(session, Process.whereis(name), true, [:send])
+    # A raise below ends this process, and the error term start/1 answers carries the
+    # raise's arguments -- the handle among them -- onto the caller's heap, where a copy is
+    # a holder (measured by a lane: a host keeping the error kept an empty session listed
+    # for as long as it did). So the session is destroyed HERE, before the reason leaves: a
+    # handle to a destroyed session is inert wherever it is copied.
+    try do
+      for name <- processes,
+          do: :trace.process(session, Process.whereis(name), true, [:send])
 
-    for m <- modules,
-        do: :trace.function(session, {m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [:local])
+      for m <- modules,
+          do:
+            :trace.function(session, {m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [
+              :local
+            ])
 
-    # Calls are traced from every process, with the arity flag so no argument ever arrives.
-    if modules != [], do: :trace.process(session, :all, true, [:call, :arity])
+      # Calls are traced from every process, with the arity flag so no argument ever arrives.
+      if modules != [], do: :trace.process(session, :all, true, [:call, :arity])
+    rescue
+      e ->
+        destroy(session)
+        reraise e, __STACKTRACE__
+    end
 
     # The collector's death is a way out by name, not a badarg on the next traced call into
     # a table that is gone.
