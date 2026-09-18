@@ -18,7 +18,8 @@ All notable changes to this project are documented here. The format follows
   undeclared revision; exceed a bound with a stated workaround; a wrong code or message), each
   with the fix window intended at assessment — and the CVE path: advisories publish from this
   repository's GitHub Security Advisories, GitHub is the CNA, and a published advisory reaches
-  OSV, the feed `mix hex.audit` reads, so a consumer's own audit shows it. The policy says it
+  OSV, the source hex.pm fills its registry advisories from and `mix hex.audit` reads, so a
+  consumer's own audit shows it. The policy says it
   claims no regulatory status. The intake (private advisory form), the 7-day and 30-day
   commitments and the supported-versions table are unchanged and now held to the tree by a
   test: the intake is derived from `mix.exs`'s source URL and the table's row is the shipped
