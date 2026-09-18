@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# The opt-in pre-commit hook: the gate, on the tree about to be committed. Installed by
+# tools/install-hooks.sh (core.hooksPath -> tools/hooks); never installed by anything else.
+# `git commit --no-verify` is git's own bypass and is not taken away here -- a hook that could
+# not be skipped would be skipped by deleting it. A skipped gate is still run by CI.
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+exec ./tools/gate.sh

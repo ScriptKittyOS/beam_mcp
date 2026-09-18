@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# The opt-in commit-msg hook: the message through tools/text_terms.sh, the same terms the
+# gate's messages step and the pull-request body check apply -- before the commit exists,
+# rather than after it has been pushed (two messages naming a term reached CI in one slice).
+# Installed by tools/install-hooks.sh (core.hooksPath -> tools/hooks).
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+if ! ./tools/text_terms.sh < "$1" > /dev/null; then
+  echo "commit-msg: the message carries a publication term (tools/text_terms.sh):" >&2
+  ./tools/text_terms.sh < "$1" >&2
+  exit 1
+fi
