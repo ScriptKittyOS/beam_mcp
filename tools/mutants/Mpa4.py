@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '        String.contains?(source, "/lib/"),'
-new = '        String.contains?(source, "/"),'
+old = '        String.starts_with?(source, lib),'
+new = '        String.starts_with?(source, String.slice(lib, 0, 1)),'
 
 if s.count(old) != 1:
     sys.exit("Mpa4: anchor found %d times" % s.count(old))

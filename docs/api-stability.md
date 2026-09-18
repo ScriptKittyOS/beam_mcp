@@ -48,9 +48,12 @@ Unreleased section; the release that ships it writes its number in
 a release), and the census refuses a leftover `Unreleased` once that section is empty. A line
 changes state; it is not deleted — with one exception, an entry that comes back after a
 removal, whose `removed_in` is deleted and `since` set again. The tree carries what left and
-when, and the census reads the tree, never git history. (A line deleted outright is invisible
-to a tree-only census — the same as deleting any pinned list — and is a reviewer's line, not
-this page's promise.)
+when, and the census reads the tree, never git history. Two hand edits are invisible to a
+tree-only census, the same as editing any pinned list: a line deleted outright, and a removal
+marked with the last release's number instead of `Unreleased` (the census reads a released
+number as a past cycle's record). Both are a reviewer's line — a `-` line in the diff of
+`docs/public-api.txt`, or a `removed_in` that is not `Unreleased` arriving in a change — and
+not this page's promise.
 
 **Promised separately, by their own pages, not by this list:** the wire — which protocol
 revisions the transports serve and what each request is answered with (`README.md`); the
@@ -99,7 +102,10 @@ A public entry that is going to leave goes in three steps, each on the record:
    section names the exact `Module.name/arity` in a bullet that records the deprecation and
    its replacement. The replacement exists in the same release or an earlier one; a
    deprecation that points at nothing is not one (a rule of review: the census checks the
-   attribute, the marker and the bullet, not what the message names).
+   attribute, the marker and the bullet, not what the message names). Every caller of the
+   entry inside the package moves to the replacement in the same change — the package
+   compiles with warnings as errors, so its own call to a deprecated function is a failed
+   build, which is the right answer.
 2. **Three minors of warning.** Three minor releases ship with the deprecation before the
    release that removes the entry: deprecated in `0.6.0`, it may be removed once `mix.exs` —
    the latest release — reads `0.8.0`, so `0.6`, `0.7` and `0.8` shipped with the warning and
