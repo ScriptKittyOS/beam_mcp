@@ -206,9 +206,13 @@ reach_out=$(mix run bench/reach.exs 2>&1); reach_rc=$?
 # uncaught exception under `mix run` exits 1 too) and is never recorded as a draw -- a review
 # lane planted a raise in bench/diff.exs and this step read it as a figure; that pass measured
 # nothing, which is the family gate.sh exists to refuse.
+# ...and the verdict must be the LAST line: a script that printed a threshold verdict and then
+# crashed would otherwise be recorded as a draw with a stack line for a figure (G-069; every
+# script today halts right after its verdict, so this is the rule for the day one does not).
 breach_only() {
   printf '%s\n' "$1" | grep -q '^BENCH FAIL' \
-    && ! printf '%s\n' "$1" | grep '^BENCH FAIL' | grep -qvE 'over (its|the) threshold'
+    && ! printf '%s\n' "$1" | grep '^BENCH FAIL' | grep -qvE 'over (its|the) threshold' \
+    && printf '%s\n' "$1" | tail -1 | grep -qE '^BENCH FAIL: .*over (its|the) threshold'
 }
 figure() { printf '%s\n' "$1" | grep -v '^BENCH FAIL' | tail -1; }
 if [ "$bench_rc" -eq 0 ] && [ "$diff_rc" -eq 0 ] && [ "$reach_rc" -eq 0 ]; then

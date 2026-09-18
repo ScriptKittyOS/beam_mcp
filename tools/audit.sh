@@ -58,6 +58,9 @@ found=$(printf '%s\n' "$out" | grep -cE '^Found (retired packages|packages with 
 if [ "$rc" -eq 0 ] && [ "$found" -eq 0 ]; then
   if printf '%s\n' "$out" | grep -q '^No retired or security advisory packages found'; then
     echo "audit ok: $n_locked locked packages, none retired, no advisory (0 ignored)"
+    # An ignore that matches nothing any more is hex's warning, and the gate is where a
+    # contributor would see it (G-071): printed after the pass line, never a failure.
+    printf '%s\n' "$out" | grep 'can be removed' | sed 's/\x1b\[[0-9;]*m//g' | sed 's/^/  stale ignore: /'
     exit 0
   fi
   if printf '%s\n' "$out" | grep -qE '^Ignored (retired|advisories):'; then
