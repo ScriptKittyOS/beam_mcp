@@ -29,29 +29,18 @@ defmodule BeamMCP.ProvenanceTest do
 
     # On a tag a digest mismatch fails the run; off a tag the tarball is nobody's release and
     # the same mismatch is NOT MEASURED -- a manual run must be able to be green, or it proves
-    # nothing (a review lane found the proof run red by construction). Pinned by shape: the
-    # mismatch's `exit 1` sits inside an ON_TAG test.
-    [_, mismatch_block] =
-      String.split(wf, ~s(if [ "${pub}" != "${{ steps.build.outputs.sha256 }}" ]; then), parts: 2)
-
-    [mismatch_block, _] =
-      String.split(mismatch_block, "gh attestation verify \"published-", parts: 2)
-
-    # The `exit 1` is INSIDE the ON_TAG test -- between its `then` and its `fi`, with no `fi`
-    # before it -- and no `exit 1` stands at the block's outer level (a lane's plant moved it one
-    # line past the guard's `fi` and the looser pin passed).
-    assert mismatch_block =~
-             ~r/if \[ "\$\{ON_TAG\}" = "true" \]; then\n(?:(?!\s*fi\n).*\n)*?\s+exit 1\n\s+fi\n/
-
-    outer_exits =
-      mismatch_block
-      |> String.split("\n")
-      |> Enum.filter(&(String.trim(&1) == "exit 1"))
-      |> Enum.map(&(String.length(&1) - String.length(String.trim_leading(&1))))
-
-    guard_indent = String.length(hd(Regex.run(~r/^\s+(?=if \[ "\$\{ON_TAG\}")/m, mismatch_block)))
-    assert Enum.all?(outer_exits, &(&1 > guard_indent)), "an exit 1 sits outside the ON_TAG guard"
-    assert mismatch_block =~ ~r/NOT MEASURED.*\n\s+exit 0/
+    # nothing (a review lane found the proof run red by construction). Pinned by BEHAVIOUR: the
+    # step's script is lifted from the file and run, with a curl that answers 200 and bytes
+    # that do not match, under each ref type. A shape pin cannot enumerate shapes (two lanes'
+    # plants passed one); running the step is the exact pin, and it costs a fake curl.
+    for {on_tag, expected_exit, expected_line} <- [
+          {"false", 0, "NOT MEASURED"},
+          {"true", 1, "FAIL: the published tarball is not the bytes"}
+        ] do
+      {out, exit} = run_hex_step(wf, on_tag)
+      assert exit == expected_exit, "ON_TAG=#{on_tag}: exit #{exit}, output:\n#{out}"
+      assert out =~ expected_line
+    end
 
     # The attestation permissions are the attesting job's, not the workflow's: the top-level
     # block grants read only, and id-token/attestations appear inside a job's block.
@@ -67,6 +56,52 @@ defmodule BeamMCP.ProvenanceTest do
       wf |> String.split("\n") |> Enum.reject(&String.starts_with?(String.trim(&1), "#"))
 
     assert Enum.filter(publishing, &String.contains?(&1, "hex.publish")) == []
+  end
+
+  # The hex.pm step's `run:` block, its two `${{ steps.build.outputs.* }}` expressions substituted,
+  # run by bash with a fake curl on PATH that writes a file and answers 200 -- so the bytes
+  # published (sha256 of "hello") never equal the built digest given, and the mismatch branch is
+  # the one exercised. A fake gh is never reached on a mismatch.
+  defp run_hex_step(wf, on_tag) do
+    [_, rest] =
+      String.split(wf, "verify the attestation against the bytes hex.pm serves for this version",
+        parts: 2
+      )
+
+    [_, rest] = String.split(rest, "run: |\n", parts: 2)
+    [block | _] = String.split(rest, "\n      - ", parts: 2)
+
+    script =
+      block
+      |> String.replace("${{ steps.build.outputs.version }}", "0.5.0")
+      |> String.replace("${{ steps.build.outputs.sha256 }}", "deadbeef")
+
+    dir = Path.join(System.tmp_dir!(), "beam_mcp-hexstep-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(Path.join(dir, "bin"))
+    curl = Path.join([dir, "bin", "curl"])
+
+    File.write!(
+      curl,
+      "#!/bin/sh\nwhile [ $# -gt 0 ]; do case $1 in -o) printf hello > \"$2\"; shift;; esac; shift; done; printf 200\n"
+    )
+
+    File.chmod!(curl, 0o755)
+    File.write!(Path.join(dir, "step.sh"), script)
+
+    try do
+      System.cmd("bash", ["step.sh"],
+        cd: dir,
+        stderr_to_stdout: true,
+        env: [
+          {"PATH", Path.join(dir, "bin") <> ":" <> System.get_env("PATH")},
+          {"ON_TAG", on_tag},
+          {"GITHUB_REPOSITORY", "ScriptKittyOS/beam_mcp"},
+          {"GH_TOKEN", "unused"}
+        ]
+      )
+    after
+      File.rm_rf!(dir)
+    end
   end
 
   test "the README and the page make the claim, and the page names the measurements" do
