@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '        {{kind, name, arity}, _, _, doc, _} <- entries,\n        kind in @kinds,\n        doc != :hidden,\n        do: {m, kind, name, arity}'
-new = '        {{kind, name, arity}, _, _, doc, _} <- entries,\n        kind in @kinds,\n        doc != :never,\n        do: {m, kind, name, arity}'
+old = '        kind in @kinds,\n        doc != :hidden,\n        meta = if(is_map(meta), do: meta, else: %{}),'
+new = '        kind in @kinds,\n        doc != :never,\n        meta = if(is_map(meta), do: meta, else: %{}),'
 
 if s.count(old) != 1:
     sys.exit("Mpa3: anchor found %d times" % s.count(old))

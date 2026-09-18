@@ -232,7 +232,7 @@ All notable changes to this project are documented here. The format follows
   they are the offer that fails the day `Bandit` bounds the stream itself.
 
 
-### Changed — the canonical envelope names its algorithm; `schema_version` 3; SHA-384 and SHA-512 by option
+### Changed — BREAKING (the exported bytes): the canonical envelope names its algorithm; `schema_version` 3; SHA-384 and SHA-512 by option
 
 - **The algorithm is in the bytes.** A canonical envelope carries a fourth top-level member,
   `"algorithm"`, right after `"schema_version"`: `"sha256"`, `"sha384"` or `"sha512"`, and its
