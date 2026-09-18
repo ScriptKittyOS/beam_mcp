@@ -118,8 +118,11 @@ jobs:
             # lane's finding). So the legs' verdicts for this head SHA are read from the checks
             # API -- the latest run of each leg name -- and all three must be success.
             [ "${{ needs.pr-body.result }}" = "success" ] || exit 1
+            # The expanded leg names only: the skipped matrix job of THIS run registers one
+            # unexpanded name ("Gate - leg (OTP ${{ '{{' }} matrix.otp ...", skipped), which is
+            # not a verdict (the first edited run measured exactly that).
             legs=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
-              --jq '.check_runs[] | select(.name | startswith("Gate - leg (")) | "\(.name): \(.conclusion)"')
+              --jq '.check_runs[] | select(.name | test("^Gate - leg \\(OTP [0-9]+, Elixir [0-9.]+, [a-z]+\\)$")) | "\(.name): \(.conclusion)"')
             printf '%s\n' "$legs"
             n=$(printf '%s\n' "$legs" | grep -c . || true)
             bad=$(printf '%s\n' "$legs" | grep -vc ': success$' || true)
