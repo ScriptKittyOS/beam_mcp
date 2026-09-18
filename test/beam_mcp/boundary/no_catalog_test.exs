@@ -90,8 +90,8 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   @dotted ~w(__struct__ allowed_origins allowlisted ancestor authorize authorize_body bucket
     catalog classes collector command_class companion connection_timeout coverage description dfnum dispatch
     dispatch_opts edges entries external from id idom input_schema kind kinds label labels level
-    macro max_duration_ms method mode module_ids modules name no_beam no_debug_info nodes parent
-    pids provenance read_timeout schema_version semi server server_name server_opts shutdown? sign sources
+    macro max_duration_ms method mode module_ids name no_beam no_debug_info nodes parent
+    provenance read_timeout schema_version semi server server_name server_opts session shutdown? sign sources
     supported_versions to tools tools_cache_scope tools_ttl_ms ungrouped ungrouped_calls
     unreadable unresolved weight window
     annotations icons mime_type page_size resources resources_cache_scope resources_ttl_ms

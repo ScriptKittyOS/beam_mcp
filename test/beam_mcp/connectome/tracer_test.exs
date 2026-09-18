@@ -7,12 +7,18 @@ defmodule BeamMCP.Connectome.TracerTest do
   leaves nothing behind, and writes identity only -- a module-to-module `:invoke` from a
   traced call, a name-to-name `:message` from a traced send -- into the collector's table.
 
-  The tests that forge the running term, forge a claim, or squat the tracer's registered
-  name are ROBUSTNESS tests, not security tests: the tracer's threat model (its moduledoc)
-  puts an adversary with code execution on the node out of scope. They stay because they
-  keep `stop/0` and `start/1` total against a term of the wrong shape, which the in-scope
-  stale-term-after-crash case needs, and they are cheap to run. No further guard of that
-  kind is added on their account.
+  Everything the tracer sets lives in one OTP trace session of its own, so every "pattern
+  cleared" and "flag gone" assertion here reads the SESSION view -- `:trace.session_info/1`
+  names the sessions that trace a function or a process -- and never `:erlang.trace_info/2`,
+  which sees the legacy session only and reads `false` for a session's pattern whether it
+  is set or not (measured: a fake pin). The legacy view is read where the claim is about a
+  host's OWN legacy settings surviving the tracer.
+
+  The tests that forge a claim or squat the tracer's registered name are ROBUSTNESS tests,
+  not security tests: the tracer's threat model (its moduledoc) puts an adversary with code
+  execution on the node out of scope. They stay because they keep `stop/0` total against a
+  claim of the wrong shape, and they are cheap to run. No further guard of that kind is
+  added on their account.
   """
   use ExUnit.Case, async: false
 
@@ -22,12 +28,14 @@ defmodule BeamMCP.Connectome.TracerTest do
 
   @marker "PAYLOAD-MARKER-1b2c3d"
   @server "srv"
+  # The session name the tracer creates its session under; a host's sessions carry their own.
+  @session :beam_mcp_tracer
 
   setup do
-    # trace_info/2 on a function of a module not yet loaded says :undefined; load them first.
-    # The tracer too: a lane found two tests failing whenever they were the first to touch
-    # Tracer, because its autoload sent a message to the code server from the traced test
-    # process, which consumed a one-shot tracer process the test had set up.
+    # session_info/1 on a function of a module not yet loaded says :undefined; load them
+    # first. The tracer too: a lane found two tests failing whenever they were the first to
+    # touch Tracer, because its autoload sent a message to the code server from the traced
+    # test process, which consumed a one-shot tracer process the test had set up.
     for m <- [Alpha, Beta, Traced, Tracer, Observed], do: {:module, ^m} = Code.ensure_loaded(m)
     name = Module.concat(__MODULE__, :"c#{System.unique_integer([:positive])}")
     start_supervised!({Observed, name: name})
@@ -39,12 +47,37 @@ defmodule BeamMCP.Connectome.TracerTest do
     Tracer.start(Keyword.merge([collector: collector, server: @server], opts))
   end
 
-  # A pid that is already gone, for a forged term's companion slot: a live one there is a
-  # previous companion the next start waits on, which is pinned elsewhere.
-  defp dead_pid do
-    {pid, ref} = spawn_monitor(fn -> :ok end)
-    receive do: ({:DOWN, ^ref, :process, ^pid, _} -> pid)
+  # The tracer's sessions alive in the node, as weak handles; nothing left behind is `[]`.
+  defp sessions, do: Enum.filter(:trace.session_info(:all), &match?({@session, _}, &1))
+
+  # Whether the tracer's session traces this function (`{m, f, a}`) or this process.
+  defp traced?(what) do
+    case :trace.session_info(what) do
+      list when is_list(list) -> Enum.any?(list, &match?({@session, _}, &1))
+      :undefined -> false
+    end
   end
+
+  # The session's flags on a process, read through the weak handle session_info/1 hands out.
+  defp session_flags(pid) do
+    case Enum.find(:trace.session_info(pid), &match?({@session, _}, &1)) do
+      nil -> []
+      weak -> elem(:trace.info(weak, pid, :flags), 1)
+    end
+  end
+
+  # Nothing left behind, with a bounded wait for a companion's clear or the collector's GC.
+  defp assert_gone(what \\ nil) do
+    assert Enum.any?(1..100, fn _ ->
+             if sessions() == [] and (what == nil or not traced?(what)),
+               do: true,
+               else: Process.sleep(10) && false
+           end),
+           "the tracer's session is still there: #{inspect(sessions())}"
+  end
+
+  # A companion pid, from the tracer's own state: the only other holder of the session.
+  defp companion, do: :sys.get_state(Tracer).companion
 
   describe "off by default, and guarded" do
     test "nothing is traced until a host starts the tracer: no flags on any process, no pattern on any module",
@@ -52,9 +85,9 @@ defmodule BeamMCP.Connectome.TracerTest do
            collector: _
          } do
       refute Tracer.running?()
-      {:flags, flags} = :erlang.trace_info(self(), :flags)
-      assert flags == []
-      assert {:traced, false} = :erlang.trace_info({Alpha, :run, 1}, :traced)
+      assert sessions() == []
+      refute traced?({Alpha, :run, 1})
+      refute traced?(self())
     end
 
     test "a second tracer is refused while one runs; one at a time", %{collector: c} do
@@ -106,10 +139,9 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_messages, 5}}}, 2_000
 
       refute Tracer.running?()
-      assert {:traced, false} = :erlang.trace_info({Alpha, :run, 1}, :traced)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      {:flags, flags} = :erlang.trace_info(self(), :flags)
-      assert flags == []
+      assert_gone({Alpha, :run, 1})
+      refute traced?({Beta, :run, 1})
+      refute traced?(self())
     end
 
     test "at max_duration_ms: the clock runs out, tracing is off, patterns cleared", %{
@@ -121,7 +153,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_duration_ms, 50}}},
                      2_000
 
-      assert {:traced, false} = :erlang.trace_info({Alpha, :run, 1}, :traced)
+      assert_gone({Alpha, :run, 1})
     end
 
     test "the collector dying under it is a named way out, not a crash on the next message", %{
@@ -133,7 +165,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       ref = Process.monitor(pid)
       :ok = stop_supervised!(c)
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :collector_gone}}, 2_000
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
       refute Tracer.running?()
     end
 
@@ -148,13 +180,17 @@ defmodule BeamMCP.Connectome.TracerTest do
 
     test "stop/0 is the third way out, and clears the same way", %{collector: c} do
       {:ok, _} = start(c, modules: [Alpha])
-      assert {:traced, :local} = :erlang.trace_info({Alpha, :run, 1}, :traced)
-      # While it runs, every process is call-traced WITH the arity flag: a trace message
-      # carries {m, f, arity}, never the arguments.
-      {:flags, flags} = :erlang.trace_info(self(), :flags)
+      assert [_one] = sessions()
+      assert traced?({Alpha, :run, 1})
+      # While it runs, every process is call-traced WITH the arity flag, in the tracer's
+      # session: a trace message carries {m, f, arity}, never the arguments. The legacy
+      # view sees none of it.
+      flags = session_flags(self())
       assert :call in flags and :arity in flags
-      :ok = Tracer.stop()
+      assert {:flags, []} = :erlang.trace_info(self(), :flags)
       assert {:traced, false} = :erlang.trace_info({Alpha, :run, 1}, :traced)
+      :ok = Tracer.stop()
+      assert_gone({Alpha, :run, 1})
       assert :ok = Tracer.stop()
     end
   end
@@ -184,7 +220,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       {:ok, g} = Observed.snapshot(c)
       assert [%Edge{weight: w}] = g.edges
       assert w <= 10
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
     end
 
     test "the duration limit stops tracing on time even when the tracer is not being scheduled, and the tracer leaves on the next message rather than draining the queue",
@@ -196,7 +232,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       for _ <- 1..500, do: Traced.wrapped(1)
       Process.sleep(150)
       # The tracer has not handled a thing; the patterns must be gone regardless.
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
       :sys.resume(pid)
 
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, {:limit, :max_duration_ms, 50}}},
@@ -218,7 +254,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       test = self()
       spawn(fn -> send(test, {:stopped, Tracer.stop()}) end)
       Process.sleep(50)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
       true = :erlang.resume_process(pid)
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
       assert_receive {:stopped, :ok}, 5_000
@@ -235,47 +271,41 @@ defmodule BeamMCP.Connectome.TracerTest do
       Process.exit(pid, :kill)
       refute Process.alive?(pid)
       Process.sleep(50)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
     end
 
-    test "a failed start leaves no pattern set and is a named refusal, not a raise", %{
+    test "a failed start leaves nothing set and is a named refusal, not a raise", %{
       collector: c
     } do
-      # A process already traced by someone else makes :erlang.trace/3 raise badarg; the
-      # first tracer had set its call patterns before reaching that line and raised out of
-      # start/1 with the patterns still set.
-      other = spawn(fn -> receive do: (_ -> :ok) end)
-      Process.register(self(), :tracer_test_owned)
-      :erlang.trace(self(), true, [:send, {:tracer, other}])
+      # A name registered to a PORT passes the not-registered check (whereis answers the
+      # port) and makes the session's process/4 raise in init -- the one cause of a
+      # part-way failure that remains now that a host-traced process is no cause at all.
+      # The legacy tracer had set its call patterns before the raise and left them.
+      port = Port.open({:spawn, "cat"}, [])
+      Process.register(port, :tracer_test_port)
 
-      result = start(c, modules: [Beta], processes: [:tracer_test_owned])
-      :erlang.trace(self(), false, [:all])
-      Process.unregister(:tracer_test_owned)
+      result = start(c, modules: [Beta], processes: [:tracer_test_port])
+      Port.close(port)
 
       assert {:error, {:init_failed, _}} = result
       refute Tracer.running?()
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
     end
 
     test "a kill leaves no pattern set: someone watches the tracer and clears what it set", %{
       collector: c
     } do
       {:ok, pid} = start(c, modules: [Beta])
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert traced?({Beta, :run, 1})
       Process.exit(pid, :kill)
       refute Process.alive?(pid)
-
-      assert Enum.any?(1..100, fn _ ->
-               Process.sleep(10)
-               :erlang.trace_info({Beta, :run, 1}, :traced) == {:traced, false}
-             end)
+      assert_gone({Beta, :run, 1})
     end
 
     test "the wildcard module is refused, and so is a module that cannot be loaded", %{
       collector: c
     } do
-      # modules: [:_] set the node-wide pattern and then, on stop, wiped every local
-      # pattern in the node, the host's own included.
+      # modules: [:_] would set the pattern on every module in the node.
       assert {:error, {:invalid, :modules, [:_]}} = start(c, modules: [:_])
       assert {:error, {:invalid, :modules, [NoSuch.Module]}} = start(c, modules: [NoSuch.Module])
     end
@@ -337,12 +367,11 @@ defmodule BeamMCP.Connectome.TracerTest do
   end
 
   describe "the companion, attacked" do
-    # Round 2 of the safety lane: the companion's clear-and-erase after a kill raced the
-    # next tracer's init (499 of 500 after a kill; 200 of 200 after a failed start), which
-    # then ran with no running term and a queue-ordered stop/0; the companion was the sole
-    # enforcer and nobody watched it; the node-wide flag clear wiped a host's own trace
-    # flags; and the collector dying under a loaded tracer was still a badarg.
-    test "a tracer started right after a kill owns the running term, and its stop/0 clears first",
+    # Round 2 of the legacy safety lane: the companion's clear-and-erase after a kill raced
+    # the next tracer's init, nobody watched the companion, the node-wide flag clear wiped a
+    # host's own trace flags, and the collector dying under a loaded tracer was a badarg.
+    # With one session per tracer most of that mechanism is gone; what remains is pinned.
+    test "a tracer started right after a kill has a session of its own, and its stop/0 destroys it first",
          %{
            collector: c
          } do
@@ -351,47 +380,41 @@ defmodule BeamMCP.Connectome.TracerTest do
         Process.exit(pid, :kill)
         refute Process.alive?(pid)
         {:ok, pid2} = start(c, modules: [Beta], max_messages: 1_000_000)
-        assert {flag, [Beta], _} = :persistent_term.get({Tracer, :running}, nil)
-        assert is_reference(flag)
-        assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+        assert traced?({Beta, :run, 1})
         Process.sleep(5)
-        # Still ours: the old companion's late clear did not take the pattern away.
-        assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+        # Still ours: the old companion's late destroy reached the old session only.
+        assert traced?({Beta, :run, 1})
+        assert [_one] = sessions()
         :ok = Tracer.stop()
-        assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-        assert :persistent_term.get({Tracer, :running}, nil) == nil
+        assert_gone({Beta, :run, 1})
         _ = pid2
       end
     end
 
-    test "a tracer started right after a failed start owns the running term", %{collector: c} do
-      other = spawn(fn -> receive do: (_ -> :ok) end)
-      Process.register(self(), :tracer_test_owned2)
-      :erlang.trace(self(), true, [:send, {:tracer, other}])
+    test "a tracer started right after a failed start has a session of its own", %{collector: c} do
+      port = Port.open({:spawn, "cat"}, [])
+      Process.register(port, :tracer_test_port2)
 
       assert {:error, {:init_failed, _}} =
-               start(c, modules: [Beta], processes: [:tracer_test_owned2])
+               start(c, modules: [Beta], processes: [:tracer_test_port2])
 
-      :erlang.trace(self(), false, [:all])
-      Process.unregister(:tracer_test_owned2)
+      Port.close(port)
+      assert_gone({Beta, :run, 1})
 
       {:ok, _} = start(c, modules: [Beta])
-      assert {_, [Beta], _} = :persistent_term.get({Tracer, :running}, nil)
-      Process.sleep(5)
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert [_one] = sessions()
+      assert traced?({Beta, :run, 1})
       :ok = Tracer.stop()
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
+      assert_gone({Beta, :run, 1})
     end
 
     test "the companion dying is a named way out, not a tracer with no deadline and no janitor",
          %{collector: c} do
       {:ok, pid} = start(c, modules: [Beta], max_duration_ms: 60_000)
       ref = Process.monitor(pid)
-      {_, _, companion} = :persistent_term.get({Tracer, :running})
-      Process.exit(companion, :kill)
+      Process.exit(companion(), :kill)
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :companion_gone}}, 2_000
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
+      assert_gone({Beta, :run, 1})
     end
 
     test "stopping clears what the tracer set and nothing a host set: another tracer's flags on another process survive",
@@ -426,103 +449,69 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :collector_gone}}, 5_000
     end
 
-    test "a new tracer waits for a previous companion that is slow to die, but not forever", %{
-      collector: c
-    } do
-      # A stale term naming a companion that never exits: the wait is bounded.
-      slow = spawn(fn -> receive do: (:die -> :ok) end)
-      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), [], slow})
-      {t, {:ok, _}} = :timer.tc(fn -> start(c, modules: [Beta]) end)
-      assert t >= 900_000 and t < 3_000_000
-      send(slow, :die)
-      :ok = Tracer.stop()
-    end
-
-    test "the companion's clear after a kill is only ever its own: a term already gone is left alone",
-         %{
-           collector: c
-         } do
-      {:ok, pid} = start(c, modules: [Beta])
-      # Another tracer's term in place of this one's: the companion must leave it alone.
-      foreign = {:atomics.new(1, []), [], self()}
-      :persistent_term.put({Tracer, :running}, foreign)
-      Process.exit(pid, :kill)
-      Process.sleep(50)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert :persistent_term.get({Tracer, :running}, nil) == foreign
-      :persistent_term.erase({Tracer, :running})
-
-      # And with no term at all in place, it still clears its own patterns.
-      {:ok, pid} = start(c, modules: [Beta])
-      :persistent_term.erase({Tracer, :running})
-      Process.exit(pid, :kill)
-      Process.sleep(50)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-    end
-
-    test "the double-kill window: a companion killed and then its tracer leaves patterns, and the next start clears them, whatever modules it names",
+    test "the double-kill window is closed by physics: a companion killed and then its tracer leaves nothing, and the next start is unaffected",
          %{collector: c} do
-      # Round 3 of the safety lane measured the page's mitigation false: a next tracer over
-      # other modules left the old pattern set 200 times in 200. A start now clears what a
-      # stale term names before it puts its own.
+      # The legacy tracer's one open path: with both holders of the patterns dead, nobody
+      # cleared them until the next start/1 or stop/0 (measured 200 of 200). A session
+      # whose every handle is gone is destroyed by the BEAM's collector, whatever it named.
       {:ok, pid} = start(c, modules: [Beta])
-      {_, _, companion} = :persistent_term.get({Tracer, :running})
-      Process.exit(companion, :kill)
+      Process.exit(companion(), :kill)
       Process.exit(pid, :kill)
       refute Process.alive?(pid)
-      # Nobody cleared: the tracer never handled the companion's death.
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
 
       {:ok, _} = start(c, modules: [Alpha])
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert {_, [Alpha], _} = :persistent_term.get({Tracer, :running})
+      assert [_one] = sessions()
+      assert traced?({Alpha, :run, 1})
+      refute traced?({Beta, :run, 1})
       :ok = Tracer.stop()
+      assert_gone({Alpha, :run, 1})
     end
 
-    test "a companion that outlives the wait clears only what the new tracer did not claim", %{
-      collector: c
-    } do
+    test "a companion that outlives its tracer destroys only its own session: a new tracer over the same modules keeps its patterns",
+         %{collector: c} do
       # A companion suspended from outside (a debugger) runs after the new tracer set its
-      # own pattern on the same module; it must not take that pattern away.
+      # own pattern on the same module. Under global patterns it had to be told what the
+      # new tracer claimed; a handle reaches one session, so there is nothing to tell it.
+      # While it is suspended it is the old session's last holder: the old session stays
+      # (a breakpoint's cost, measured) beside the new one, and goes when it runs.
       {:ok, pid} = start(c, modules: [Beta])
-      {_, _, companion} = :persistent_term.get({Tracer, :running})
-      true = :erlang.suspend_process(companion)
+      old_companion = companion()
+      true = :erlang.suspend_process(old_companion)
       Process.exit(pid, :kill)
       refute Process.alive?(pid)
+      assert [_old] = sessions()
 
-      {t, {:ok, _}} = :timer.tc(fn -> start(c, modules: [Beta, Alpha]) end)
-      assert t >= 900_000
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      {:ok, _} = start(c, modules: [Beta, Alpha])
+      assert [_old, _new] = sessions()
+      assert traced?({Beta, :run, 1})
 
-      true = :erlang.resume_process(companion)
+      true = :erlang.resume_process(old_companion)
       Process.sleep(50)
-      refute Process.alive?(companion)
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert {:traced, :local} = :erlang.trace_info({Alpha, :run, 1}, :traced)
-      assert {_, [Beta, Alpha], _} = :persistent_term.get({Tracer, :running})
+      refute Process.alive?(old_companion)
+      assert [_new] = sessions()
+      assert traced?({Beta, :run, 1})
+      assert traced?({Alpha, :run, 1})
       :ok = Tracer.stop()
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
     end
 
-    test "stop/0 with no tracer running clears what a stale term names and erases it", %{
-      collector: c
+    test "stop/0 with no tracer running is :ok and touches no session of a host's", %{
+      collector: _
     } do
-      {:ok, pid} = start(c, modules: [Beta])
-      {_, _, companion} = :persistent_term.get({Tracer, :running})
-      Process.exit(companion, :kill)
-      Process.exit(pid, :kill)
-      refute Process.alive?(pid)
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      host = spawn_link(fn -> Process.sleep(:infinity) end)
+      theirs = :trace.session_create(:host_session, host, [])
+      :trace.function(theirs, {Beta, :_, :_}, true, [:local])
       assert :ok = Tracer.stop()
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
+      assert {:traced, :local} = :trace.info(theirs, {Beta, :run, 1}, :traced)
+      assert :trace.session_destroy(theirs)
     end
 
     test "a name reused during the run is not the tracer's to clear: a host's own flags on the new holder survive stop/0 and the deadline",
          %{collector: c} do
-      # Found by the safety lane: the flags were cleared by NAME at clear time, so a process
-      # that took a named process's name after it died lost the host's own :send trace,
-      # silently, on both exit paths.
+      # Found by the legacy safety lane: the flags were cleared by NAME at clear time, so a
+      # process that took a named process's name after it died lost the host's own :send
+      # trace, silently, on both exit paths. A session's flag is on the pid it was set on.
       host_tracer = spawn_link(fn -> Process.sleep(:infinity) end)
 
       for exit_path <- [:stop, :deadline] do
@@ -571,77 +560,40 @@ defmodule BeamMCP.Connectome.TracerTest do
       # would exit on the first traced send and the BEAM would remove its flags itself.
       host_tracer = spawn_link(fn -> Process.sleep(:infinity) end)
       Process.register(self(), :tracer_test_retraced)
-      {:ok, pid} = start(c, modules: [], processes: [:tracer_test_retraced])
-      assert {:tracer, ^pid} = :erlang.trace_info(self(), :tracer)
+      {:ok, _pid} = start(c, modules: [], processes: [:tracer_test_retraced])
+      assert :send in session_flags(self())
 
-      # The host takes the process over: flags are global, and it may.
+      # The host traces the process under the legacy tracer too: its session and ours are
+      # separate, so neither its clear nor ours reaches the other's flag.
       :erlang.trace(self(), false, [:all])
       :erlang.trace(self(), true, [:send, {:tracer, host_tracer}])
+      assert :send in session_flags(self())
 
       assert :ok = Tracer.stop()
+      refute traced?(self())
       assert {:flags, [:send]} = :erlang.trace_info(self(), :flags)
       assert {:tracer, ^host_tracer} = :erlang.trace_info(self(), :tracer)
       :erlang.trace(self(), false, [:all])
       Process.unregister(:tracer_test_retraced)
     end
 
-    # ROBUSTNESS, not security -- this test and the six after it forge the term, forge a
-    # claim, or squat the name; see the moduledoc.
-    test "stop/0 reads the tracer's own claim, not the public term: under a forged term it still clears first and ends on the next message",
-         %{collector: c} do
-      # Measured by the safety lane: with a term that was not the tracer's, stop/0 had no
-      # flag and no modules to clear and queued behind everything -- 9 million rows
-      # written after the call, :ok at 5 s with the tracer alive and its pattern set.
-      {:ok, pid} = start(c, modules: [Beta], max_messages: 1_000_000, max_duration_ms: 60_000)
-      ref = Process.monitor(pid)
-      true = :erlang.suspend_process(pid)
-      for _ <- 1..500, do: Traced.wrapped(1)
-      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), @marker, dead_pid()})
-      test = self()
-      spawn(fn -> send(test, {:stopped, Tracer.stop()}) end)
-      Process.sleep(50)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      true = :erlang.resume_process(pid)
-      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 5_000
-      assert_receive {:stopped, :ok}, 5_000
-      {:ok, g} = Observed.snapshot(c)
-      # The flag is read before the write: nothing lands after it is raised, and the first
-      # queued message ends the tracer without a row.
-      assert g.edges == []
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
-    end
-
-    test "a claim is honoured only from a tracer that is running: a forged well-shaped term does not keep a killed tracer's patterns set",
-         %{collector: c} do
-      # Measured by the safety lane: the companion took any well-shaped term whose flag was
-      # not its own as a newer tracer's claim, and a forged one naming its own modules
-      # left the killed tracer's pattern set with no tracer behind it.
-      {:ok, pid} = start(c, modules: [Beta])
-      {_, _, companion} = :persistent_term.get({Tracer, :running})
-      forged = {:atomics.new(1, []), [Beta], dead_pid()}
-      :persistent_term.put({Tracer, :running}, forged)
-      Process.exit(pid, :kill)
-      Process.sleep(50)
-      refute Process.alive?(companion)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      # Not its own: left for the next start or stop, which erase it.
-      assert :persistent_term.get({Tracer, :running}, nil) == forged
-      assert :ok = Tracer.stop()
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
-    end
-
-    test "a claim of another shape is no claim: a squatter under the tracer's name cannot make stop/0 raise or clear what it names",
+    # ROBUSTNESS, not security -- this test forges a claim under the tracer's name; see the
+    # moduledoc.
+    test "a claim of another shape is no claim: a squatter under the tracer's name cannot make stop/0 raise or destroy what it names",
          %{collector: _} do
-      # Found by the safety lane: the claim was read from whatever process held the name,
-      # with none of the shape check the public term gets. A process registered under the
-      # name already refuses every start; it must not turn stop/0 into a raise either.
-      :erlang.trace_pattern({Beta, :_, :_}, true, [:local])
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      # Found by the legacy safety lane: the claim was read from whatever process held the
+      # name, with no shape check. A process registered under the name already refuses
+      # every start; it must not turn stop/0 into a raise either -- and a crafted "session"
+      # in the claim is no handle: session_destroy/1 raises on one (measured).
+      host = spawn_link(fn -> Process.sleep(:infinity) end)
+      theirs = :trace.session_create(:host_session, host, [])
+      :trace.function(theirs, {Beta, :_, :_}, true, [:local])
 
       for crafted <- [
-            {:atomics.new(1, []), ["not", :atoms], []},
-            {:atomics.new(1, []), @marker, []},
-            {:not_a_reference, [Beta], []}
+            {:atomics.new(1, []), :not_a_session},
+            {:atomics.new(1, []), {make_ref(), {:beam_mcp_tracer, 0}}},
+            {:not_a_reference, theirs},
+            @marker
           ] do
         test = self()
 
@@ -657,93 +609,11 @@ defmodule BeamMCP.Connectome.TracerTest do
         ref = Process.monitor(squatter)
         assert :ok = Tracer.stop()
         assert_receive {:DOWN, ^ref, :process, ^squatter, :squatted}
-        # The host's own pattern on a module the crafted claim named is not the squatter's.
-        assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+        # The host's own session is not the squatter's to destroy, whatever the claim held.
+        assert {:traced, :local} = :trace.info(theirs, {Beta, :run, 1}, :traced)
       end
 
-      :erlang.trace_pattern({Beta, :_, :_}, false, [:local])
-    end
-
-    test "a squatter with no claim is no claim to the companion either: after a kill it clears everything its tracer set",
-         %{collector: c} do
-      {:ok, pid} = start(c, modules: [Beta])
-      {_, _, companion} = :persistent_term.get({Tracer, :running})
-      true = :erlang.suspend_process(companion)
-      ref = Process.monitor(pid)
-      Process.exit(pid, :kill)
-      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
-      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
-
-      squatter = spawn(fn -> receive do: (_ -> exit(:squatted)) end)
-      Process.register(squatter, Tracer)
-      true = :erlang.resume_process(companion)
-      Process.sleep(50)
-      refute Process.alive?(companion)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
-      assert :ok = Tracer.stop()
-      refute Process.alive?(squatter)
-    end
-
-    test "a running term of another shape is nobody's: stop/0 with no tracer erases it and answers :ok, and the next start proceeds",
-         %{collector: c} do
-      # The term is public and unowned. A lane forged it in six shapes and every one made
-      # stop/0 raise into its caller and left the term, so no later start could succeed.
-      ref = :atomics.new(1, [])
-      dead = dead_pid()
-
-      for forged <- [
-            @marker,
-            {ref, @marker, dead},
-            {ref, [@marker], dead},
-            {ref, [Beta]},
-            {ref, [Beta], dead, :extra},
-            {ref, [Beta | Beta], dead},
-            {:not_a_reference, [Beta], dead}
-          ] do
-        :persistent_term.put({Tracer, :running}, forged)
-        assert :ok = Tracer.stop()
-        assert :persistent_term.get({Tracer, :running}, nil) == nil
-
-        :persistent_term.put({Tracer, :running}, forged)
-        assert {:ok, _} = start(c, modules: [Beta])
-        assert {_, [Beta], _} = :persistent_term.get({Tracer, :running})
-        assert :ok = Tracer.stop()
-      end
-    end
-
-    test "a term forged while the tracer runs does not keep it alive: stop/0 stops it, and its own exit clears",
-         %{collector: c} do
-      # With a non-atomics flag in the term, stop/0 cleared the patterns and then raised on
-      # the flag, leaving the tracer alive; with a non-list module field it raised before
-      # anything was cleared.
-      dead = dead_pid()
-
-      for forged <- [{:not_a_reference, [Beta], dead}, {:atomics.new(1, []), @marker, dead}] do
-        {:ok, pid} = start(c, modules: [Beta])
-        :persistent_term.put({Tracer, :running}, forged)
-        assert :ok = Tracer.stop()
-        refute Process.alive?(pid)
-        assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-        assert :persistent_term.get({Tracer, :running}, nil) == nil
-      end
-    end
-
-    test "the companion clears its own patterns after a kill whatever shape the term in place has",
-         %{collector: c} do
-      # A forged non-list module field made `modules -- claimed` raise in the companion:
-      # it died with the patterns set, and neither start/1 nor stop/0 could take them away.
-      {:ok, pid} = start(c, modules: [Beta])
-      {_, _, companion} = :persistent_term.get({Tracer, :running})
-      :persistent_term.put({Tracer, :running}, {:atomics.new(1, []), @marker, dead_pid()})
-      Process.exit(pid, :kill)
-      Process.sleep(50)
-      refute Process.alive?(companion)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-
-      assert {:ok, _} = start(c, modules: [Alpha])
-      assert {_, [Alpha], _} = :persistent_term.get({Tracer, :running})
-      :ok = Tracer.stop()
+      assert :trace.session_destroy(theirs)
     end
 
     test "a registered name is identity: a secret in a name is published in the bytes, the message beside it is not",
@@ -768,10 +638,11 @@ defmodule BeamMCP.Connectome.TracerTest do
       refute inspect(Observed.rows(c), printable_limit: :infinity) =~ "the-message-"
     end
 
-    test "a process a host already traces is skipped by the call trace, silently: its calls are no edges and its flags stay the host's",
+    test "a process a host already traces under the legacy tracer is traced by the session too: its calls are edges, and its flags stay the host's",
          %{collector: c} do
-      # A consumer lane measured it: the BEAM refuses a second tracer on a process without
-      # a log line on this path; the log the page once promised never came.
+      # Under the legacy tracer the BEAM refused a second tracer on a process, silently, so
+      # such a process's calls were no edges (G-011). A session is a second tracer the BEAM
+      # allows: both received the call (measured), and the host's settings are untouched.
       host_tracer = spawn_link(fn -> Process.sleep(:infinity) end)
       test = self()
 
@@ -794,10 +665,53 @@ defmodule BeamMCP.Connectome.TracerTest do
       :ok = Tracer.stop()
 
       {:ok, g} = Observed.snapshot(c)
-      assert [%Edge{weight: 1}] = g.edges
+      # Two edges: the host-traced process's call (its caller is its own spawned fun, an
+      # anonymous function of this test module) and this test process's.
+      here = Node.id({:module, @server, __MODULE__})
+      to = Node.id({:module, @server, Beta})
+      assert [%Edge{from: ^here, to: ^to, weight: 2}] = g.edges
       assert {:tracer, ^host_tracer} = :erlang.trace_info(host_traced, :tracer)
       assert {:flags, [:call]} = :erlang.trace_info(host_traced, :flags)
       :erlang.trace(host_traced, false, [:all])
+    end
+
+    test "a host's own session beside the tracer's: its pattern is neither fed by the tracer's nor touched by its clear, and its process's calls are edges",
+         %{collector: c} do
+      # Isolation both ways, on the session API a host would use today. The host's tracer
+      # receives only what its own pattern generates -- the tracer's {caller} pattern on
+      # Beta feeds nobody else -- and reads its pattern intact after the tracer is gone.
+      test = self()
+
+      host_tracer =
+        spawn_link(fn ->
+          Stream.repeatedly(fn -> receive do: (m -> send(test, {:host_saw, m})) end)
+          |> Stream.run()
+        end)
+
+      theirs = :trace.session_create(:host_session, host_tracer, [])
+      # The host traces Alpha.run/1 with arguments, in its own session, on this process.
+      :trace.function(theirs, {Alpha, :run, 1}, true, [:local])
+      :trace.process(theirs, self(), true, [:call])
+
+      {:ok, tracer} = start(c, modules: [Beta])
+      Traced.wrapped(@marker)
+      Alpha.run(7)
+      _ = :sys.get_state(tracer)
+      :ok = Tracer.stop()
+
+      # The host saw its own pattern's message, arguments included -- its session, its
+      # choice -- and nothing of the tracer's pattern on Beta.
+      assert_receive {:host_saw, {:trace, _, :call, {Alpha, :run, [7]}}}
+      refute_receive {:host_saw, {:trace, _, :call, {Beta, :run, _}}}, 50
+      assert {:traced, :local} = :trace.info(theirs, {Alpha, :run, 1}, :traced)
+      assert {:flags, [:call]} = :trace.info(theirs, self(), :flags)
+      assert_gone({Beta, :run, 1})
+
+      {:ok, g} = Observed.snapshot(c)
+      to = Node.id({:module, @server, Beta})
+      assert Enum.any?(g.edges, &(&1.to == to and &1.kind == :invoke))
+      refute inspect(Observed.rows(c), limit: :infinity) =~ @marker
+      assert :trace.session_destroy(theirs)
     end
 
     @tag :hot_reload
@@ -814,14 +728,13 @@ defmodule BeamMCP.Connectome.TracerTest do
       :code.purge(Tracer)
 
       assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :companion_gone}}, 2_000
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
-      assert :persistent_term.get({Tracer, :running}, nil) == nil
+      assert_gone({Beta, :run, 1})
       refute Tracer.running?()
       assert {:ok, _} = start(c, modules: [Beta])
       :ok = Tracer.stop()
     end
 
-    test "the tracer runs at high priority, and a host's pattern on a traced module is cleared with the tracer's",
+    test "the tracer runs at high priority, and a host's legacy pattern on a traced module survives the tracer's clear",
          %{
            collector: c
          } do
@@ -829,13 +742,16 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert {:priority, :high} = Process.info(pid, :priority)
       :ok = Tracer.stop()
 
-      # Patterns are global and unowned: the page says a host's own pattern on a module the
-      # tracer named goes with the tracer's.
+      # Under global patterns the page had to say a host's own pattern on a module the
+      # tracer named went with the tracer's. A session's clear reaches its own (measured).
       :erlang.trace_pattern({Beta, :_, :_}, true, [:local])
       assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
       {:ok, _} = start(c, modules: [Beta])
+      assert traced?({Beta, :run, 1})
       :ok = Tracer.stop()
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
+      assert {:traced, :local} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      :erlang.trace_pattern({Beta, :_, :_}, false, [:local])
     end
 
     test "after a kill and its clear, a host's own later call tracer sees nothing for the old modules",
@@ -844,8 +760,7 @@ defmodule BeamMCP.Connectome.TracerTest do
          } do
       {:ok, pid} = start(c, modules: [Beta])
       Process.exit(pid, :kill)
-      Process.sleep(50)
-      assert {:traced, false} = :erlang.trace_info({Beta, :run, 1}, :traced)
+      assert_gone({Beta, :run, 1})
 
       test = self()
       host_tracer = spawn(fn -> receive do: (m -> send(test, {:host_saw, m})) end)
