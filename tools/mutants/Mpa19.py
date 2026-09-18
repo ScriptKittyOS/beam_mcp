@@ -4,16 +4,16 @@
 # Run by tools/mutate.sh with TARGET=test/support/public_api.ex, which passes the file to
 # mutate as argv[1]. The public-API census's population, grammar and rule live there.
 #
-# Mpa17 -- THE RELEASE STEP LETS A REMOVAL SHIP IN A PATCH.
+# Mpa19 -- MACROS ARE NOT A KIND: a documented defmacro is off the surface (a lane's Mn9).
 import sys
 
 p = sys.argv[1]
 s = open(p).read()
 
-old = '  defp refusal(%{patch: patch}, true, _any?) when patch != 0,'
-new = '  defp refusal(%{patch: patch}, true, _any?) when patch != 0 and patch < 0,'
+old = '  @kinds [:function, :macro, :callback, :type]'
+new = '  @kinds [:function, :callback, :type]'
 
 if s.count(old) != 1:
-    sys.exit("Mpa17: anchor found %d times" % s.count(old))
+    sys.exit("Mpa19: anchor found %d times" % s.count(old))
 
 open(p, "w").write(s.replace(old, new, 1))

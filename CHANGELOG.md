@@ -38,7 +38,7 @@ All notable changes to this project are documented here. The format follows
   with the how-to-tell sentence. From this release a break's heading says BREAKING and its
   section carries that sentence; the census holds the Unreleased section to it. The rule is
   one pure function, run on the tree and on literal fixtures, so every path is held on a tree
-  that has no deprecation yet; seventeen mutants on it, seventeen killed.
+  that has no deprecation yet; twenty mutants on it, twenty killed.
 - **`UPGRADING.md`**: every `0.x` break so far in one table, the rule for moving a minor, and
   what `1.0` will ask (today: nothing beyond the minors, since no entry is deprecated).
 
