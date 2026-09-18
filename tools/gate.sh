@@ -24,8 +24,8 @@ step() { # step <name> <command...>
 # the probe -- a red that reads like the tree's and is not (G-064). `mix test` sets its own
 # environment; every other step means dev; no step means a relocated build. Said here so the
 # verdict is a function of the tree and nothing else.
-unset MIX_ENV MIX_BUILD_ROOT MIX_TARGET MIX_DEPS_PATH MIX_EXS
-echo "== beam_mcp gate ==  (MIX_ENV, MIX_BUILD_ROOT, MIX_TARGET, MIX_DEPS_PATH and MIX_EXS unset by the gate; mix test sets its own env)"
+unset MIX_ENV MIX_BUILD_ROOT MIX_BUILD_PATH MIX_TARGET MIX_DEPS_PATH MIX_EXS
+echo "== beam_mcp gate ==  (MIX_ENV, MIX_BUILD_ROOT, MIX_BUILD_PATH, MIX_TARGET, MIX_DEPS_PATH and MIX_EXS unset by the gate; mix test sets its own env)"
 
 # THE FORMAT POPULATION IS THE TRACKED SET, NOT `.formatter.exs`'s GLOB. The glob once read
 # `{lib,test}/**/*.{ex,exs}`; five tracked Elixir scripts under tools/ sat outside it, a

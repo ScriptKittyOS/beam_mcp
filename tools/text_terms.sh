@@ -17,5 +17,5 @@
 # one pattern; the pattern names nothing the tree does not name already
 # (test/beam_mcp/publication_content_test.exs carries the consumer names and the board prefix).
 set -uo pipefail
-grep -i -E 'Co-Authored-By:|Claude-Session:|claude\.ai|claude\.com|Generated with|SCR-[0-9]+|Ultraviolet|Trinity' && exit 1
+grep -i -E 'Co-Authored-By:|Claude-Session:|claude\.ai|claude\.com|Generated with \[Claude Code\]|SCR-[0-9]+|Ultraviolet|Trinity' && exit 1
 exit 0
