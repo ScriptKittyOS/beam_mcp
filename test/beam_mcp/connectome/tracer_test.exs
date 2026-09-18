@@ -76,8 +76,15 @@ defmodule BeamMCP.Connectome.TracerTest do
            "the tracer's session is still there: #{inspect(sessions())}"
   end
 
-  # A companion pid, from the tracer's own state: the only other holder of the session.
-  defp companion, do: :sys.get_state(Tracer).companion
+  # The companion: the high-priority process monitoring the tracer. NOT read from the
+  # tracer's state -- `:sys.get_state/1` copies the state, session handle included, onto
+  # this process's heap, and a copy is a holder: the tests that watch a session die with
+  # its last holder held it up themselves until this process next collected (measured on
+  # OTP 29: two sessions listed 50 ms after the old companion had died).
+  defp companion do
+    {:monitored_by, pids} = Process.info(Process.whereis(Tracer), :monitored_by)
+    Enum.find(pids, &(Process.info(&1, :priority) == {:priority, :high}))
+  end
 
   describe "off by default, and guarded" do
     test "nothing is traced until a host starts the tracer: no flags on any process, no pattern on any module",

@@ -92,8 +92,11 @@ defmodule BeamMCP.Connectome.Tracer do
   that call, and so does `terminate/2` -- and a session is destroyed by the BEAM itself
   when the last copy of its handle is garbage collected (measured: the handle's only
   holder killed, the pattern was gone within 20 ms). The handle is held by the tracer and
-  by its companion and by nothing else -- never in a persistent term, which would keep a
-  dead tracer's session, and its breakpoints, alive until erased (measured). The
+  by its companion and by nothing else this module writes -- never in a persistent term,
+  which would keep a dead tracer's session, and its breakpoints, alive until erased
+  (measured); a copy anywhere is a holder too, and `:sys.get_state/1` on the tracer makes
+  one on the caller's heap that holds the session up until that process next collects
+  (measured: 50 ms after both holders had died, the session was still listed). The
   companion monitors the tracer and exits on its exit -- a kill included, which skips
   `terminate/2` -- and that exit is the clear: the last holder gone, the session goes
   with it. So the window the legacy tracer had, the companion killed and then the tracer
