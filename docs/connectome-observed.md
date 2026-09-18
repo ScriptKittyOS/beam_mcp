@@ -151,9 +151,12 @@ companion killed and then the tracer killed before it handles that death, closes
 way: both holders gone, the session with them, whatever modules it named; there is no
 running term to clear, no stale term for a next `start/1` to read, and no wait for a
 previous companion. A session whose tracer has died but whose handle is still held keeps
-its patterns set at the cost of a breakpoint on every call (measured: 200 000 calls,
-10.4 ms against 4.4 ms): a companion suspended from outside is such a holder, and
+its patterns set — the BEAM drops a dead tracer's process flags, not its patterns — at a
+cost per call into those modules (measured: 200 000 calls, from the baseline's order to
+2.4 times it, run to run): a companion suspended from outside is such a holder, and
 `terminate/2`'s own destroy is what ends the session on an orderly exit while it is; a
+start that fails part-way destroys its session before the reason leaves `init/1`, since
+the error term carries the raise's arguments, the handle among them; a
 companion that outlives its tracer that way destroys its own session and no other, since
 a handle reaches one session and a later tracer's is another. A running tracer's `stop/0`
 reads the tracer's own claim — the flag and the session handle — from the tracer's
@@ -163,8 +166,10 @@ leave, `:ok` either way; a claim of another shape — a process that took the tr
 and put one there — is no claim, and a term in it that is no handle destroys nothing.
 `stop/0` with no tracer running is `:ok` and touches no session. The collector dying
 under the tracer is met as its DOWN or as the first write into the table that is gone,
-whichever is first in the queue, and is `{:shutdown, :collector_gone}` either way. It
-never calls `:dbg`.
+whichever is first in the queue, and is `{:shutdown, :collector_gone}` either way. The
+tracer traps exits, so an exit signal from a process that is not its parent is a message
+it ignores, not a stop: tracing goes on to its limits, and `stop/0` is the way to end it
+from outside. It never calls `:dbg`.
 
 **The threat model, which is the boundary of every claim in this section.** In scope:
 accident and failure on a node running only code the host put there — crashes, kills,
