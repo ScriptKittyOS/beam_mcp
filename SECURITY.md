@@ -8,7 +8,9 @@ SPDX-License-Identifier: Apache-2.0
 ## Reporting a vulnerability
 
 Report privately through **[GitHub Security Advisories](https://github.com/ScriptKittyOS/beam_mcp/security/advisories/new)**.
-Please do not open a public issue for a suspected vulnerability.
+Please do not open a public issue for a suspected vulnerability. A report that cannot go
+through the form — no GitHub account, or a concern about the form itself — goes to
+**ayla@scriptkittyos.com**, the maintainer, and is answered on the same commitments as below.
 
 Useful in a report: the protocol revision and transport, a request that triggers it, what you
 expected and what happened. A failing test is welcome and never required.
