@@ -69,7 +69,8 @@ if [ "$rc" -eq 0 ] && [ "$found" -eq 0 ]; then
     # "Ignored" header to the end is ignored content, and nothing else is indented that way.
     n_ignored=$(printf '%s\n' "$out" | sed -n '/^Ignored \(retired\|advisories\):/,$p' | grep -cE '^  [a-z_0-9]+ [0-9][^ ]* - ' || true)
     echo "audit ok: $n_locked locked packages, none retired, no advisory ($n_ignored ignored -- hex's sections follow)"
-    printf '%s\n' "$out" | sed -n '/^Ignored /,$p'
+    printf '%s\n' "$out" | sed -n '/^Ignored /,$p' | grep -v 'can be removed'
+    printf '%s\n' "$out" | grep 'can be removed' | sed 's/\x1b\[[0-9;]*m//g' | sed 's/^/  stale ignore: /'
     exit 0
   fi
 fi

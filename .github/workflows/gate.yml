@@ -7,6 +7,9 @@ on:
   push:
     branches: ["**"]
   pull_request:
+    # `edited` so the pull-request body is re-read when it changes after the last push -- the
+    # case the pr-body job exists for; the matrix legs skip that event (the tree did not move).
+    types: [opened, synchronize, reopened, edited]
 
 # THE MATRIX: the floor pair, the pinned pair, the head pair. The floor leg is what turns
 # "beam_mcp supports OTP 27" (the compile-time floor in mix.exs) from a sentence into a
@@ -29,6 +32,7 @@ jobs:
   gate:
     name: Gate - leg (OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }}, ${{ matrix.leg }})
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.action != 'edited'
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +45,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
@@ -50,12 +55,14 @@ jobs:
           elixir --version
           cat .tool-versions
       - run: mix deps.get
-      # Dialyzer's PLT, keyed by the pair and the lock: built cold once per key (~50 s locally;
-      # measured on each leg by the first run), then restored.
+      # Dialyzer's PLT, keyed by the EXACT versions setup-beam installed (not the pair asked
+      # for: a runner image's OTP patch bump carries a dialyzer bump, and a PLT from another
+      # dialyzer is refused -- with a cache that never overwrites a key, the major alone made
+      # a permanent red) and the lock: built cold once per key (84-107 s measured), restored after.
       - uses: actions/cache@v4
         with:
           path: _build/dialyzer
-          key: dialyzer-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('mix.lock') }}
+          key: dialyzer-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock') }}
       # The leg says what it claims to be, so the gate can hold it to it: on the pinned leg a
       # format step that cannot measure (the running Elixir is not `.tool-versions`' line) is a
       # FAIL, not NOT MEASURED -- otherwise a pin moved in `.tool-versions` and not here would
@@ -99,9 +106,14 @@ jobs:
     steps:
       - name: every leg of the matrix passed, and the pull-request body where there is one
         run: |
-          echo "legs: ${{ needs.gate.result }}; pr-body: ${{ needs.pr-body.result }}"
-          [ "${{ needs.gate.result }}" = "success" ]
-          case "${{ needs.pr-body.result }}" in success|skipped) ;; *) exit 1 ;; esac
+          echo "event: ${{ github.event_name }}/${{ github.event.action }}; legs: ${{ needs.gate.result }}; pr-body: ${{ needs.pr-body.result }}"
+          # On a body edit the legs do not run (the tree did not move) and the body is the check.
+          if [ "${{ github.event.action }}" = "edited" ]; then
+            [ "${{ needs.pr-body.result }}" = "success" ]
+          else
+            [ "${{ needs.gate.result }}" = "success" ]
+            case "${{ needs.pr-body.result }}" in success|skipped) ;; *) exit 1 ;; esac
+          fi
 
   dco:
     name: Gate - DCO sign-off
