@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '          {flag, session} ->\n            :atomics.put(flag, 1, @stop)\n            destroy(session)'
-new = '          {flag, session} ->\n            _ = flag\n            destroy(session)'
+old = '  defp raise_and_destroy(flag, session) do\n    :atomics.put(flag, 1, @stop)\n    destroy(session)'
+new = '  defp raise_and_destroy(flag, session) do\n    _ = flag\n    destroy(session)'
 
 if s.count(old) != 1:
     sys.exit("Mts5: anchor found %d times" % s.count(old))

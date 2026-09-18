@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '    for name <- processes, do: :trace.process(session, Process.whereis(name), true, [:send])'
-new = '    for name <- processes, do: :erlang.trace(Process.whereis(name), true, [:send, {:tracer, self()}])'
+old = '          do: :trace.process(session, Process.whereis(name), true, [:send])'
+new = '          do: :erlang.trace(Process.whereis(name), true, [:send, {:tracer, self()}])'
 
 if s.count(old) != 1:
     sys.exit("Mts3: anchor found %d times" % s.count(old))

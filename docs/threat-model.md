@@ -78,7 +78,7 @@ module with `:code.load_binary/3`. The BEAM has no in-node isolation, and nothin
 can do makes it a boundary against that; a reader who takes it for one is in more danger than
 one who knows it is not. The shape guard on the tracer's claim is robustness — it keeps
 `stop/0` total against a claim of the wrong shape — not defence. This is the tracer's paragraph,
-package-wide: it holds for the collector's table, the server's persistent terms, and every
+package-wide: it holds for the collector's table, the tracer's claim, and every
 module here. A node-level boundary is the host's: separate nodes, or a release that runs no
 untrusted code.
 

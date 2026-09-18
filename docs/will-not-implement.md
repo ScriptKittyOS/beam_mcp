@@ -47,7 +47,7 @@ of the functions that matter most on `:erlang` — `apply/3`, `binary_to_term/1`
 pinned exactly: the modules the package calls (`:xref` itself among them: the declared
 connectome reads beams with it); on the modules through which code, names, secrets, the
 operating system, the disk, another process or another node could be reached (`:erlang`,
-`:code`, `Code`, `System`, `Application`, `:application`, `:persistent_term`, `:crypto`, `:ets`,
+`:code`, `Code`, `System`, `Application`, `:application`, `:trace`, `:crypto`, `:ets`,
 `:xref`, `:io_lib`, `:logger`, `Logger`, `:digraph`, `:atomics`, `:telemetry`, `Jason`,
 `Process`, `GenServer`, `Supervisor`, `Plug.Conn`, `Plug.Exception`, `IO`), the functions; the
 one atom the package makes from a binary, by the function that makes it; and every atom in

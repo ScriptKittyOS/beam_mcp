@@ -2,7 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 # SPDX-License-Identifier: Apache-2.0
 #
-# The opt-in pre-commit hook: the gate, on the tree about to be committed. Installed by
+# The opt-in pre-commit hook: the gate, on the WORKING tree -- not the index, so a fix left
+# unstaged reads green here and lands without it, and an unstaged red refuses a green index
+# (a lane measured both); CI runs the gate on what was pushed. Installed by
 # tools/install-hooks.sh (core.hooksPath -> tools/hooks); never installed by anything else.
 # `git commit --no-verify` is git's own bypass and is not taken away here -- a hook that could
 # not be skipped would be skipped by deleting it. A skipped gate is still run by CI.

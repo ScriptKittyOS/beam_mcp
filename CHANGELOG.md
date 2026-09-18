@@ -29,10 +29,11 @@ All notable changes to this project are documented here. The format follows
   view does not show a session's settings: a host reading it finds none of the tracer's.
   Measured before the design, on OTP 28.1.1: both tracers receive a host-traced process's
   call; a host's legacy pattern and flags survive the session's destroy; the last holder of
-  a handle dying destroys the session within 20 ms; a dead tracer's session still held costs
-  a breakpoint per call (200 000 calls: 10.4 ms against 4.4 ms); a `:send` trace copies the
-  sent term into the tracer's mailbox at its size (16 MB for a million-element list) — said
-  on the page now. 20 mutants, 20 killed; two equivalent-by-physics mutants removed as code.
+  a handle dying destroys the session within 20 ms; a dead tracer's session still held keeps
+  its patterns (the BEAM drops its flags) at a cost per call from the baseline's order to 2.4
+  times it; a `:send` trace copies the sent term into the tracer's mailbox at its size (16 MB
+  for a million-element list) — said on the page now. 22 tracer mutants, 22 killed on the tree that ships; four
+  equivalent-by-physics mutants removed as code with the reason.
 - **The OTP floor's reason is now one number.** OTP 27.0's `trace` module is the hard
   requirement and 27 is the oldest supported release; `mix.exs`'s raise text, the README and
   the floor test say so (the previous reason, the keyed `process_info` read of OTP 26.2, put
