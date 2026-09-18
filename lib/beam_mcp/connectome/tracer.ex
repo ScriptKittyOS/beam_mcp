@@ -120,11 +120,12 @@ defmodule BeamMCP.Connectome.Tracer do
   Exits: `{:shutdown, {:limit, :max_messages, n}}`, `{:shutdown, {:limit, :max_duration_ms,
   ms}}`, `:normal` from `stop/0`, `{:shutdown, :collector_gone}` when the collector dies
   under it -- met as its DOWN or as the first write into the table that is gone, whichever
-  comes first in the queue -- and `{:shutdown, :companion_gone}`. The tracer traps exits,
-  so an exit signal from a process that is not its parent -- `Process.exit(pid, :shutdown)`
-  from elsewhere, a linked process dying -- is a message it ignores, not a stop (measured):
-  tracing goes on to its limits; `stop/0` is the way to end it from outside, and a parent's
-  shutdown goes through `terminate/2`. It never calls `:dbg`.
+  comes first in the queue -- and `{:shutdown, :companion_gone}`. The tracer is started
+  unlinked and traps exits, so no process's exit signal short of an untrappable `:kill`
+  ends it -- `Process.exit(pid, :shutdown)` from the process that started it or from any
+  other, a linked process dying -- each is a message it ignores, not a stop (measured):
+  tracing goes on to its limits, and `stop/0` is the way to end it from outside. It never
+  calls `:dbg`.
 
   **The threat model, which is the boundary of every claim above.** In scope: accident and
   failure on a node running only code the host put there -- crashes, kills, restarts and the

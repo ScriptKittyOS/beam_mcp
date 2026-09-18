@@ -168,9 +168,10 @@ and put one there — is no claim, and a term in it that is no handle destroys n
 `stop/0` with no tracer running is `:ok` and touches no session. The collector dying
 under the tracer is met as its DOWN or as the first write into the table that is gone,
 whichever is first in the queue, and is `{:shutdown, :collector_gone}` either way. The
-tracer traps exits, so an exit signal from a process that is not its parent is a message
-it ignores, not a stop: tracing goes on to its limits, and `stop/0` is the way to end it
-from outside. It never calls `:dbg`.
+tracer is started unlinked and traps exits, so no process's exit signal short of an
+untrappable `:kill` ends it — the starter's included — each is a message it ignores, not
+a stop: tracing goes on to its limits, and `stop/0` is the way to end it from outside. It
+never calls `:dbg`.
 
 **The threat model, which is the boundary of every claim in this section.** In scope:
 accident and failure on a node running only code the host put there — crashes, kills,
