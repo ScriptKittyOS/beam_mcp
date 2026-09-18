@@ -46,7 +46,7 @@ removes a callable arity and is a change to the entry — then markers:
 Unreleased section; the release that ships it writes its number in
 (`MIX_ENV=test mix run -e 'BeamMCP.PublicAPI.release_markers!("0.6.0")'`, one step of cutting
 a release), and the census refuses a leftover `Unreleased` once that section is empty. That
-step is the one place that knows the release's number, so it holds the two rules the census
+step is the one place that knows the release's number, so it holds the three rules the census
 cannot: with a `removed_in=Unreleased` line in the file it refuses a patch number, and on
 `1.x` any number that is not a major. A line
 changes state; it is not deleted — with one exception, an entry that comes back after a

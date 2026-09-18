@@ -170,7 +170,7 @@ defmodule BeamMCP.PublicAPICensusTest do
   end
 
   @tag :tmp_dir
-  test "the release step refuses a removal in a patch release, and on 1.x in a minor: the two rules the census cannot check",
+  test "the release step refuses a removal in a patch release, on 1.x in a minor, and on 1.x any waiting marker in a patch: the three rules the census cannot check",
        %{tmp_dir: dir} do
     path = Path.join(dir, "public-api.txt")
     removal = "# h\nBeamMCP.Fixture.PublicAPI function plain/1 removed_in=Unreleased\n"
