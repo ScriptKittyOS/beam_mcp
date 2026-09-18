@@ -4,14 +4,14 @@
 # Run by tools/mutate.sh with TARGET=lib/beam_mcp/connectome/tracer.ex, which passes the
 # file to mutate as argv[1].
 #
-# Mtr2 -- PATTERNS ARE LEFT BEHIND on stop: the modules stay traced after the tracer is gone.
+# Mtr2 -- THE SESSION IS LEFT BEHIND on stop: terminate/2 destroys nothing, the modules stay traced after the tracer is gone.
 import sys
 
 p = sys.argv[1]
 s = open(p).read()
 
-old = "    for m <- modules, do: :erlang.trace_pattern({m, :_, :_}, false, [:local])"
-new = "    for m <- modules, do: m"
+old = '  def terminate(_reason, state) do\n    destroy(state.session)\n    send(state.companion, :cancel)'
+new = '  def terminate(_reason, state) do\n    send(state.companion, :cancel)'
 
 if s.count(old) != 1:
     sys.exit("Mtr2: anchor found %d times" % s.count(old))

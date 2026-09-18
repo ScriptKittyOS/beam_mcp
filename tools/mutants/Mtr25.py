@@ -4,14 +4,14 @@
 # Run by tools/mutate.sh with TARGET=lib/beam_mcp/connectome/tracer.ex, which passes the
 # file to mutate as argv[1].
 #
-# Mtr25 -- stop/0 READS THE PUBLIC TERM, NOT THE TRACER'S CLAIM: under a forged term nothing is cleared first and the stop is queue-ordered.
+# Mtr25 -- stop/0 FINDS NO CLAIM: the tracer's own claim is never read, so nothing is raised or destroyed first and the stop is queue-ordered.
 import sys
 
 p = sys.argv[1]
 s = open(p).read()
 
-old = "        case claim(pid) do\n          {flag, modules, _pids} ->\n            :atomics.put(flag, 1, @stop)\n            clear_patterns(modules)"
-new = "        case running_term() do\n          {flag, modules, _pids} when is_reference(flag) ->\n            :atomics.put(flag, 1, @stop)\n            clear_patterns(modules)"
+old = '    with {{:dictionary, @claim}, {flag, _session} = claim} <-'
+new = '    with {{:dictionary, @claim}, {flag, _session, :never} = claim} <-'
 
 if s.count(old) != 1:
     sys.exit("Mtr25: anchor found %d times" % s.count(old))

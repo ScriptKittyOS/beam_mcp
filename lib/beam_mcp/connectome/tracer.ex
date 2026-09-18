@@ -87,21 +87,23 @@ defmodule BeamMCP.Connectome.Tracer do
   the name, is no claim (measured: it had made `stop/0` raise).
 
   **Nothing left behind, on every path.** A session's settings are removed in one call,
-  `:trace.session_destroy/1`, and the tracer's exit for any reason removes them too: the
-  companion monitors the tracer and destroys the session on its exit -- a kill included,
-  which skips `terminate/2` -- and the session is destroyed by the BEAM itself when the last
-  copy of its handle is garbage collected (measured: the handle's only holder killed, the
-  pattern was gone within 20 ms). The handle is held by the tracer and by its companion
-  and by nothing else -- never in a persistent term, which would keep a dead tracer's
-  session, and its breakpoints, alive until erased (measured) -- so the window the legacy
-  tracer had, the companion killed and then the tracer killed before it handles that
-  death, closes by physics: both holders gone, the session goes with them, whatever
-  modules it named. A session whose tracer has died but whose handle is still held keeps
+  `:trace.session_destroy/1` -- `stop/0`, the message limit and the deadline each make
+  that call, and so does `terminate/2` -- and a session is destroyed by the BEAM itself
+  when the last copy of its handle is garbage collected (measured: the handle's only
+  holder killed, the pattern was gone within 20 ms). The handle is held by the tracer and
+  by its companion and by nothing else -- never in a persistent term, which would keep a
+  dead tracer's session, and its breakpoints, alive until erased (measured). The
+  companion monitors the tracer and exits on its exit -- a kill included, which skips
+  `terminate/2` -- and that exit is the clear: the last holder gone, the session goes
+  with it. So the window the legacy tracer had, the companion killed and then the tracer
+  killed before it handles that death, closes by physics too, whatever modules the
+  session named. A session whose tracer has died but whose handle is still held keeps
   its patterns set at the cost of a breakpoint on every call (measured: 200 000 calls,
-  10.4 ms against 4.4 ms), which is what the companion's destroy on its DOWN is for. The
-  tracer watches the companion back and leaves `{:shutdown, :companion_gone}` if it dies,
-  since it is the only enforcer of the deadline; a hot reload of this module purges the
-  companion, an anonymous function of the old code, and ends a running trace that way
+  10.4 ms against 4.4 ms): a companion suspended from outside is such a holder, and
+  `terminate/2`'s own destroy is what ends the session on an orderly exit while it is.
+  The tracer watches the companion back and leaves `{:shutdown, :companion_gone}` if it
+  dies, since it is the only enforcer of the deadline; a hot reload of this module purges
+  the companion, an anonymous function of the old code, and ends a running trace that way
   (measured), and `:code.soft_purge/1` refuses while a trace runs, for the same reason.
 
   Exits: `{:shutdown, {:limit, :max_messages, n}}`, `{:shutdown, {:limit, :max_duration_ms,
@@ -254,11 +256,12 @@ defmodule BeamMCP.Connectome.Tracer do
     flag = :atomics.new(1, [])
     Process.put(@claim, {flag, session})
 
-    # The companion is up before anything is set, so whatever this function sets is gone
-    # whatever happens next: it destroys the session on the tracer's exit, kill included,
-    # and at the deadline. It runs at high priority for the same reason the tracer does,
-    # and the tracer watches it back: a companion that died is a way out by name. Should
-    # anything below raise, this process exits, and the session goes with its holders.
+    # The companion enforces the deadline from outside this process's mailbox and is the
+    # session's other holder. It runs at high priority for the same reason the tracer
+    # does, and the tracer watches it back: a companion that died is a way out by name.
+    # Should anything below raise, this process exits and the companion follows, and the
+    # session goes with its holders -- its place in this order does not matter (a mutant
+    # that spawned it after the settings was one nothing could tell apart).
     companion = spawn_companion(self(), session, max_duration_ms, flag)
     _ = Process.monitor(companion)
 
@@ -392,10 +395,14 @@ defmodule BeamMCP.Connectome.Tracer do
   end
 
   # High priority, monitoring the tracer. At the deadline it raises the flag, destroys the
-  # session and tells the tracer to leave by name; on the tracer's exit for any reason it
-  # destroys the session -- its own and nothing else's, since a session's handle reaches
-  # only that session, and a later tracer's session is another handle. It stays until the
-  # tracer is gone, so its own death is never mistaken for the deadline.
+  # session and tells the tracer to leave by name. On the tracer's exit for any reason it
+  # exits too, and that is the clear: it is the session's last holder, and a session whose
+  # every handle is gone is destroyed by the BEAM (measured: within 20 ms of the holder's
+  # death). An explicit destroy here was a mutant nothing could tell apart -- the exit is
+  # the same event -- so there is none; the deadline's destroy is explicit because there
+  # the companion lives on. It stays until the tracer is gone, so its own death is never
+  # mistaken for the deadline. Its handle reaches its own session and nothing else's: a
+  # later tracer's session is another handle.
   defp spawn_companion(tracer, session, max_duration_ms, flag) do
     spawn(fn ->
       Process.flag(:priority, :high)
@@ -406,7 +413,7 @@ defmodule BeamMCP.Connectome.Tracer do
           :ok
 
         {:DOWN, ^ref, :process, ^tracer, _reason} ->
-          destroy(session)
+          :ok
       after
         max_duration_ms ->
           :atomics.put(flag, 1, @deadline)
