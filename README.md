@@ -30,10 +30,10 @@ writes and moves `schema_version` to `2` (in the exported bytes), and requires a
 how-to-tell sentence in the changelog. `~> 0.5` admits `0.6.0`, so it
 would carry you across the next such break on a routine `mix deps.update`; `~> 0.5.0` does
 not. The tighter form is deliberate and is not an over-pin to be tidied away. What the pin
-buys is written down: `docs/api-stability.md` says what is public (what ex_doc lists,
-`docs/public-api.txt` line by line), how a deprecation runs (three steps, three minors), and
-what a `0.x` break must say; a census holds the surface to that record. `UPGRADING.md` lists
-every break so far, one line each, and what `1.0` will ask.
+buys is written down: [`docs/api-stability.md`](docs/api-stability.md) says what is public
+(what ex_doc lists, `docs/public-api.txt` line by line), how a deprecation runs (three steps,
+three minors), and what a `0.x` break must say; a census holds the surface to that record.
+[`UPGRADING.md`](UPGRADING.md) lists every break so far, one line each, and what `1.0` will ask.
 
 **From the next release, the tarball is attested, and the attestation binds to the checksum
 hex.pm shows.** On a release tag, CI builds the tarball with `tools/release_tarball.sh` — the
