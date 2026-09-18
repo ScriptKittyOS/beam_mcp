@@ -11,6 +11,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — governance and succession stated as they are; the Scorecard measured; the workflows pinned
+
+- **`docs/governance.md`** says who decides (one maintainer, an org-owned repository, no
+  second reviewer), how every change lands (a pull request under the ruleset, the fifteen-step
+  gate on three pairs, review by tier, the merge word), and, check by check, what the OpenSSF
+  Scorecard reads of it — which checks this project keeps, which it cannot (one maintainer
+  cannot approve their own pull request) and which it has decided against (no CodeQL, no
+  GitHub Release beside the Hex release), so a low mark reads as the decision it is.
+- **`docs/succession.md`** says the bus factor is one, what survives the maintainer (the
+  org-owned repository, the Hex releases, the attestations, the promises written in the tree),
+  what does not (the private records; the off-account archive is **not in place**, said, not
+  promised), and the five things a successor needs.
+- **`CODEOWNERS`** names the maintainer for every path.
+- **The Scorecard runs** (`.github/workflows/scorecard.yml`) on every push to `main` and once a
+  week, publishing to the OpenSSF API and to the code-scanning tab; least privilege, pinned.
+- **Every workflow action is pinned by commit SHA with its version beside it** (a tag can be
+  moved), and every workflow declares top-level `permissions:` with no write — the two jobs
+  that write hold it at the job. A census (`test/beam_mcp/governance_test.exs`) holds the
+  pins, the permissions, CODEOWNERS and the pages' stated facts on every push; red first on
+  the tree as it was (seven failures: no CODEOWNERS, no pages, two workflows unpinned and
+  without permissions).
+
 ### Added — the API stability policy, the public surface pinned, and an upgrade guide
 
 - **`docs/api-stability.md`** says what a `~>` pin can rely on: public is what ex_doc lists

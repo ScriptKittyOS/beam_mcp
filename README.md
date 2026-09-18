@@ -618,7 +618,9 @@ observed graph weighted into the declared one. Multi-round-trip requests are dec
 **Scheduled.** In that order, each at the minor position while the package is `0.x`: the
 federation seam, then effective connectivity.
 `1.0.0` follows once the public API and the stated threat model have each survived a full
-minor release unchanged.
+minor release unchanged. Who decides, how a change lands, and what happens if the one
+maintainer stops: [`docs/governance.md`](docs/governance.md) and
+[`docs/succession.md`](docs/succession.md), stated as they are.
 
 **Deliberately out.** Tools, domain and policy; risk tiers, approvals, receipts and egress
 masking; authority — the verdict on an edge, the key that signs it, the decision that acts on

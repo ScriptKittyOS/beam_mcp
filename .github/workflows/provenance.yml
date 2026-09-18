@@ -51,14 +51,15 @@ jobs:
       version: ${{ steps.build.outputs.version }}
       sha256: ${{ steps.build.outputs.sha256 }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       # The pinned pair, a copy of .tool-versions' line (setup-beam does not resolve that file's
-      # spelling -- CONVENTIONS). checkout/setup-beam/upload-artifact are the mutable tags the other
-      # workflows use; the attestation action alone is pinned by commit, because it is the one
-      # whose behaviour the attestation's meaning depends on.
-      - uses: erlef/setup-beam@v1
+      # spelling -- CONVENTIONS). Every action is pinned by commit with its version beside it
+      # (test/beam_mcp/governance_test.exs holds that for every workflow); the attestation
+      # action was the first, because it is the one whose behaviour the attestation's meaning
+      # depends on.
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           otp-version: "28"
           elixir-version: "1.18"
@@ -76,7 +77,7 @@ jobs:
       # Pinned by commit (v4.2.2, 2026-08-06): the attestation's subject is the tarball's
       # sha256; the predicate is SLSA build provenance naming this repository, commit and
       # workflow; the signature is Sigstore's, the record GitHub's attestation store.
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: beam_mcp-${{ steps.build.outputs.version }}.tar
       - name: verify the attestation against the tarball this run built
@@ -115,7 +116,7 @@ jobs:
             exit 0
           fi
           gh attestation verify "published-${v}.tar" --repo "${GITHUB_REPOSITORY}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: tarball-${{ steps.build.outputs.version }}
           path: beam_mcp-${{ steps.build.outputs.version }}.tar

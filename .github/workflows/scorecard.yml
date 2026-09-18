@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# The OpenSSF Scorecard, run on every push to main and once a week, the result published to
+# the OpenSSF API (the badge at https://scorecard.dev/viewer/?uri=github.com/ScriptKittyOS/beam_mcp
+# reads it) and uploaded as SARIF to the repository's code-scanning tab. It measures what the
+# tree and the platform show -- pinned actions, token permissions, a security policy, branch
+# rules, code review, dependency updates -- and docs/governance.md says which of those this
+# project keeps, which it cannot (one maintainer cannot review themselves), and why. The
+# number is a measurement, not a target: nothing here is changed to move it that the
+# governance page does not say is worth keeping on its own account.
+#
+# Cost: this repository is public, so its minutes are free; ~2 minutes a run.
+
+name: scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard - the measurement
+    runs-on: ubuntu-latest
+    permissions:
+      # The action's documented needs: SARIF upload and the OIDC token that publish_results
+      # signs the result with. Nothing writes to the tree.
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+      - uses: github/codeql-action/upload-sarif@3ea06614dafe36dec890db3446326e0d40ce53d4 # v3.38.1
+        with:
+          sarif_file: results.sarif
