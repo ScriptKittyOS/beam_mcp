@@ -358,6 +358,22 @@ defmodule BeamMCP.Connectome.TracerTest do
       refute Enum.any?(g.edges, &(&1.to == Node.id({:process, @server, :tracer_test_fleeting})))
     end
 
+    test "a duration beyond the BEAM's timer range is refused by name, not accepted and ended at once by a dead companion",
+         %{collector: c} do
+      # Measured before it was written: `receive ... after 4_294_967_296` raises
+      # :timeout_value, so the companion died on its first instruction and the tracer left
+      # {:shutdown, :companion_gone} with an error log -- a start that answered {:ok, pid}
+      # and traced nothing. The largest duration the BEAM's timer takes is the finite bound.
+      assert {:error, {:invalid, :max_duration_ms, 4_294_967_296}} =
+               start(c, modules: [Beta], max_duration_ms: 4_294_967_296)
+
+      {:ok, pid} = start(c, modules: [Beta], max_duration_ms: 4_294_967_295)
+      Process.sleep(20)
+      assert Process.alive?(pid)
+      assert Process.alive?(companion())
+      :ok = Tracer.stop()
+    end
+
     test "negative and float limits are refused like zero", %{collector: c} do
       assert {:error, {:invalid, :max_messages, -1}} = start(c, modules: [Beta], max_messages: -1)
 
