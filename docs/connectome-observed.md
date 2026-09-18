@@ -113,9 +113,10 @@ the tests that pin this page read `:trace.session_info/1`.
 It stops itself at `max_messages` handled trace messages of any shape, a send to a dead
 process included, or at `max_duration_ms`, destroying its session — every pattern and
 flag it set, in one call — and exits `{:shutdown, {:limit, which, value}}`; `stop/0` is
-the third way out; each of the three ends the tracer on the next message it handles, and
-what was still queued behind it is discarded, not written; the collector dying under it
-is the fourth, `{:shutdown, :collector_gone}`. **What the limits bound:** `max_messages`
+the third way out; the message limit ends the tracer on the message that reaches it, the
+deadline and `stop/0` on the next message it handles, and what was still queued behind it
+is discarded, not written; the collector dying under it is the fourth,
+`{:shutdown, :collector_gone}`. **What the limits bound:** `max_messages`
 counts messages as they are handled while the BEAM queues them as they arrive, so the
 tracer runs at high priority and destroys its session the moment handled plus queued
 reaches the limit — generation stops there. The queue's size is the node-wide call rate
@@ -196,8 +197,9 @@ Three bounds, measured: a call in tail position has no frame of its own, so the 
 the caller's caller; names are resolved when a trace message is handled, so a process that
 exited or unregistered in between is dropped; and OTP's own registered processes — the
 code server, a logger handler, telemetry's table owner — are names like any other, so a
-traced process's sends to them are edges too. The tracer never traces its own writes: the
-BEAM discards an event whose tracer is the process that generated it.
+traced process's sends to them are edges too; the one registered process a send to which
+is no edge is the tracer itself (`stop/0`, a `:sys` call). The tracer never traces its own
+writes: the BEAM discards an event whose tracer is the process that generated it.
 
 ## What never enters
 

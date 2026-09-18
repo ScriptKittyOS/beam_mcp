@@ -11,7 +11,7 @@ p = sys.argv[1]
 s = open(p).read()
 
 old = '          :atomics.put(flag, 1, @deadline)\n          destroy(session)\n          send(tracer, :max_duration)'
-new = '          :atomics.put(flag, 1, @deadline)\n          send(tracer, :max_duration)'
+new = '          :atomics.put(flag, 1, @deadline)\n          _ = session\n          send(tracer, :max_duration)'
 
 if s.count(old) != 1:
     sys.exit("Mtr12: anchor found %d times" % s.count(old))

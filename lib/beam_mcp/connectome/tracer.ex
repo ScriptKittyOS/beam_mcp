@@ -27,7 +27,9 @@ defmodule BeamMCP.Connectome.Tracer do
     message is handled, not when the send happened: a process that exited or unregistered
     in between is dropped too. OTP's own registered processes -- the code server, a logger
     handler, telemetry's table owner -- are names like any other, so a traced process's
-    sends to them are edges too; a host that wants only its own graph filters them.
+    sends to them are edges too; a host that wants only its own graph filters them. The
+    one registered process a send to which is no edge is the tracer itself: `stop/0` and a
+    `:sys` call are the tracer's own business, not the graph's.
 
   **One trace session, the tracer's own.** Everything the tracer sets, it sets inside one
   OTP trace session (`:trace.session_create/3`, OTP 27) whose tracer is the tracer process:
@@ -58,8 +60,8 @@ defmodule BeamMCP.Connectome.Tracer do
   scheduled less often than the processes it traces. Two things keep that queue small: the
   tracer runs at high priority, and on the first and every 32nd handled message it compares
   handled + queued against the limit and, the moment the sum reaches it, destroys its
-  session -- generation stops there, and the tracer exits on the next message it handles;
-  what was queued behind it is discarded. So the memory bound is the node-wide call rate
+  session and exits on that message -- generation stops there, and what was queued behind
+  it is discarded. So the memory bound is the node-wide call rate
   into the named modules times the tracer's scheduling latency at high priority, not
   `max_messages` (measured: 64 hot callers against a limit of 1 000 peaked at 12.8 million
   queued messages before these two measures, and from some tens of thousands to a
@@ -222,9 +224,9 @@ defmodule BeamMCP.Connectome.Tracer do
     :exit, _ -> :ok
   end
 
-  # A claim whose flag is a reference but not an atomics reference passes the shape guard
-  # and raises out of `:atomics.put/3` (a lane found the shape): nothing to raise or
-  # destroy, and the stop itself still goes ahead.
+  # A crafted claim -- a flag that is no atomics reference, a session that is no handle --
+  # raises out of `:atomics.put/3` or `session_destroy/1` (measured, both): nothing to raise
+  # or destroy, and the stop itself still goes ahead.
   defp raise_and_destroy(flag, session) do
     :atomics.put(flag, 1, @stop)
     destroy(session)
@@ -233,30 +235,25 @@ defmodule BeamMCP.Connectome.Tracer do
   end
 
   # No claim, whether the process is gone (`Process.info/2` answers nil for a dead pid --
-  # the tracer left between the whereis and this read), has none, or holds one of another
-  # shape: the same answer. The name can be taken by any process, and one that squats it
+  # the tracer left between the whereis and this read), has none, or holds one that is not
+  # a pair: the same answer. The name can be taken by any process, and one that squats it
   # with a crafted claim already refuses every start; it must not turn `stop/0` into a
-  # raise (measured, by a lane). One key, not the whole dictionary: the keyed read costs
-  # 2 µs where the copy cost up to a millisecond on a loaded tracer (measured).
+  # raise (measured, by a lane) -- a pair of the wrong contents is `raise_and_destroy/2`'s
+  # to rescue, since the BEAM, not this module, knows what an atomics reference or a
+  # session handle looks like (an `is_reference/1` check here was a mutant nothing could
+  # tell apart once that rescue existed). One key, not the whole dictionary: the keyed read
+  # costs 2 µs where the copy cost up to a millisecond on a loaded tracer (measured).
   defp claim(pid) do
-    with {{:dictionary, @claim}, {flag, _session} = claim} <-
-           :erlang.process_info(pid, {:dictionary, @claim}),
-         true <- is_reference(flag) do
-      claim
-    else
+    case :erlang.process_info(pid, {:dictionary, @claim}) do
+      {{:dictionary, @claim}, {_flag, _session} = claim} -> claim
       _ -> nil
     end
   end
 
   # Idempotent: `false` for a session already destroyed -- by an earlier call, by the
-  # companion, or by the garbage collector -- and, since the handle's shape is the BEAM's
-  # and not this module's to check, `false` for a term that is no handle at all (a crafted
-  # claim; `session_destroy/1` raises on one, measured).
-  defp destroy(session) do
-    :trace.session_destroy(session)
-  rescue
-    ArgumentError -> false
-  end
+  # companion, or by the garbage collector. Every caller but `raise_and_destroy/2` hands it
+  # a handle this module made; that one rescues the crafted case itself.
+  defp destroy(session), do: :trace.session_destroy(session)
 
   @doc "Whether a tracer runs."
   @spec running?() :: boolean()

@@ -346,15 +346,40 @@ defmodule BeamMCP.Connectome.TracerTest do
          %{
            collector: c
          } do
-      {:ok, pid} = start(c, modules: [Observed], max_messages: 20, max_duration_ms: 60_000)
+      # Beta beside Observed: a call into Beta is one message the tracer handles, and its
+      # write is a call into Observed -- an edge from the tracer, if its own events reached
+      # it. (With Observed alone the tracer handled nothing and the pin was vacuous -- a
+      # lane found it passing under a tracer that set nothing.)
+      {:ok, pid} =
+        start(c, modules: [Beta, Observed], max_messages: 20, max_duration_ms: 60_000)
+
       Traced.wrapped(1)
-      Process.sleep(50)
-      assert Tracer.running?()
+      _ = :sys.get_state(pid)
+      assert %{seen: 1} = :sys.get_state(pid)
       :ok = Tracer.stop()
       {:ok, g} = Observed.snapshot(c)
       tracer_id = Node.id({:module, @server, Tracer})
+      from = Node.id({:module, @server, Traced})
+      to = Node.id({:module, @server, Beta})
+      assert [%Edge{from: ^from, to: ^to, kind: :invoke, weight: 1}] = g.edges
       refute Enum.any?(g.edges, &(&1.from == tracer_id))
-      _ = pid
+    end
+
+    test "a traced process's send to the tracer itself is no edge: stop/0 and a :sys call are the tracer's business",
+         %{collector: c} do
+      # The tracer is a registered process like the code server; unlike the code server, a
+      # send to it is excluded (a lane found the exclusion in code, said nowhere, pinned by
+      # nothing: a mutant that dropped it wrote two :message edges to the tracer's name).
+      Process.register(self(), :tracer_test_sender7)
+      {:ok, pid} = start(c, processes: [:tracer_test_sender7])
+      _ = :sys.get_state(pid)
+      _ = :sys.get_state(Tracer)
+      _ = :sys.get_state(pid)
+      :ok = Tracer.stop()
+      Process.unregister(:tracer_test_sender7)
+      {:ok, g} = Observed.snapshot(c)
+      tracer = Node.id({:process, @server, Tracer})
+      refute Enum.any?(g.edges, &(&1.to == tracer))
     end
 
     test "a receiver that unregistered between the send and the handling is dropped", %{

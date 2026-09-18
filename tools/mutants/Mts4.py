@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '        do: :trace.function(session, {m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [:local])'
-new = '        do: :erlang.trace_pattern({m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [:local])'
+old = '            :trace.function(session, {m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [\n              :local\n            ])'
+new = '            :erlang.trace_pattern({m, :_, :_}, [{:_, [], [{:message, {:caller}}]}], [\n              :local\n            ])'
 
 if s.count(old) != 1:
     sys.exit("Mts4: anchor found %d times" % s.count(old))

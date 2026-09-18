@@ -62,7 +62,7 @@ defmodule BeamMCP.Connectome.Surface do
   ## Read-only, by construction and by test
 
   `read/2` and `call/2` build a graph, encode it and return; they write nothing -- not to the
-  collector's table, not to the package's persistent terms, not to the disk. A test compares
+  collector's table, not to any persistent term, not to the disk. A test compares
   the package's state before and after, term for term, and holds it equal. One consequence
   a host should expect: the *tool's* call is a dispatch like any other, and a running
   collector records every dispatch, so after the first `tools/call` of the tool the observed

@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '    with {{:dictionary, @claim}, {flag, _session} = claim} <-'
-new = '    with {{:dictionary, @claim}, {flag, _session, :never} = claim} <-'
+old = '    case :erlang.process_info(pid, {:dictionary, @claim}) do'
+new = '    case :erlang.process_info(pid, {:dictionary, {__MODULE__, :nothing}}) do'
 
 if s.count(old) != 1:
     sys.exit("Mtr25: anchor found %d times" % s.count(old))
