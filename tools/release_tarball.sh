@@ -21,20 +21,21 @@
 # a stranger runs it to reproduce the checksum hex.pm shows. One instrument, three seats.
 #
 # What it does not do: pin Hex. The runner's Hex is what erlef/setup-beam installs; the
-# publisher's is theirs. Hex 2.x has packaged the same bytes across the versions measured
-# (2.5.1 here); a packaging change in Hex is caught by the workflow's checksum comparison, not
-# hidden by this script.
+# publisher's is theirs. Hex 2.4.0 and 2.5.1 packaged byte-identical tarballs of one commit
+# (a review lane measured both); a packaging change in Hex is caught by the workflow's
+# checksum comparison, not hidden by this script. Needs bash, git, and sha256sum or shasum.
 set -euo pipefail
 ref=${1:?ref (a tag or commit)}; out=${2:?output tarball path}; publish=${3:-}
 [ -z "$publish" ] || [ "$publish" = "--publish" ] || { echo "third argument is --publish or nothing" >&2; exit 2; }
-out=$(realpath -m "$out")
+case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
+sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 root=$(git rev-parse --show-toplevel)
 work=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-release.XXXXXX"); trap 'rm -rf "$work"' EXIT
 git -C "$root" -c tar.umask=022 archive --format=tar "$ref" | tar -xp -C "$work"
 cd "$work"
 mix deps.get >/dev/null
 mix hex.build -o "$out" | tee "$work/build.out"
-sha=$(sha256sum "$out" | cut -d' ' -f1)
+sha=$(sha256 "$out")
 grep -q "Package checksum: ${sha}" "$work/build.out" \
   || { echo "the tarball's sha256 ${sha} is not the checksum hex printed" >&2; exit 1; }
 echo "release tarball ${out}: sha256 ${sha} (= hex's package checksum) from ${ref} = $(git -C "$root" rev-parse "$ref")"

@@ -22,7 +22,8 @@
 # verifies the attestation against them, and on a tag any failure to fetch or to match is a
 # FAILURE -- that run is the one the binding is claimed on. On a manual run
 # (workflow_dispatch) the tarball is nobody's release; that run proves the loop, and its
-# hex.pm half reads NOT MEASURED, which is what it is.
+# hex.pm half reads NOT MEASURED -- whether hex.pm serves nothing for the version or serves
+# bytes this commit does not build -- which is what it is.
 #
 # CI is unproven until a run exists (CONVENTIONS): the first workflow_dispatch run is the
 # evidence for the attest->verify loop; the first tag after this lands is the evidence for
@@ -104,8 +105,14 @@ jobs:
           pub=$(sha256sum "published-${v}.tar" | cut -d' ' -f1)
           echo "published sha256 ${pub}; built ${{ steps.build.outputs.sha256 }}"
           if [ "${pub}" != "${{ steps.build.outputs.sha256 }}" ]; then
-            echo "FAIL: the published tarball is not the bytes this commit builds canonically -- it was not published with tools/release_tarball.sh, and this attestation does not describe what hex.pm serves"
-            exit 1
+            if [ "${ON_TAG}" = "true" ]; then
+              echo "FAIL: the published tarball is not the bytes this commit builds canonically -- it was not published with tools/release_tarball.sh, and this attestation does not describe what hex.pm serves"
+              exit 1
+            fi
+            # Off a tag the tree is not the published version's (or the published one was a
+            # working-tree build, as every release before this workflow was): nobody's release.
+            echo "NOT MEASURED: hex.pm serves ${v} but not this commit's bytes; a manual run attests nobody's release, and the binding is measured on the tag's run"
+            exit 0
           fi
           gh attestation verify "published-${v}.tar" --repo "${GITHUB_REPOSITORY}"
       - uses: actions/upload-artifact@v4

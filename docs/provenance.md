@@ -59,9 +59,10 @@ gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp
 ```
 
 `gh attestation` needs GitHub CLI 2.49 or newer (Ubuntu's packaged 2.45 does not have it —
-measured here). The attestation is a standard Sigstore bundle; the repository's *Attestations*
-tab links each one, and GitHub's documentation describes verifying a bundle without `gh`. What
-a verifier proves: the tarball's digest is the one a run of `provenance.yml` at a named commit
+measured here), and it is the verifier GitHub documents; the attestation is a Sigstore bundle
+(`gh attestation download` fetches it; the repository's *Attestations* tab links each one), so
+another Sigstore verifier can read it, but no such path is measured here and none is claimed.
+What a verifier proves: the tarball's digest is the one a run of `provenance.yml` at a named commit
 of this repository produced, signed through Sigstore at the time. What it does not prove:
 anything about that commit's contents — that is the tree's own record (the gate, the review
 record), reachable from the commit the attestation names.
@@ -75,10 +76,13 @@ git clone https://github.com/ScriptKittyOS/beam_mcp && cd beam_mcp
 tools/release_tarball.sh "v${v}" "rebuilt-${v}.tar"     # prints the sha256 = the package checksum on hex.pm
 ```
 
-The script needs Elixir, Erlang and Hex 2.x. CI builds with the pair `.tool-versions` names,
-copied into the workflow (Elixir 1.18 on OTP 28); the tarball carries no compiled code, and Hex
-2.x is what packages it — a packaging change in Hex would show as a checksum the tag's run
-fails to match, not as a silent difference.
+The script needs Elixir, Erlang, Hex 2.x, bash, git and `sha256sum` or `shasum`. CI builds
+with the pair `.tool-versions` names, copied into the workflow (Elixir 1.18 on OTP 28); the
+tarball carries no compiled code, and Hex is what packages it — 2.4.0 and 2.5.1 gave
+byte-identical tarballs of one commit (measured), and a packaging change in a later Hex would
+show as a checksum the tag's run fails to match, not as a silent difference. The canonical
+bytes assume ASCII file names: a non-ASCII name is encoded by the machine's locale, and a test
+holds every packaged name to ASCII.
 
 ## Releases before this page
 
