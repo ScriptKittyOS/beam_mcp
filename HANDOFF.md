@@ -100,7 +100,8 @@ refused.
 1. The slice PR merged to `main` by rebase (the ruleset requires two green checks).
 2. This release commit applied by the owner, then the gate on the result, every line `pass`
    (thirteen at 0.5.0; fourteen since 024), output recorded by command and exit code.
-3. Tag the release commit locally, signed (`git tag -s vX.Y.Z`); then
+3. (The next release's step; 0.5.0 was published from a working tree with `mix hex.publish`,
+   before the script existed.) Tag the release commit locally, signed (`git tag -s vX.Y.Z`); then
    `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` (the script builds the
    canonical tarball from `git archive` of that tag and publishes from that tree — a
    working-tree `mix hex.publish` ships that machine's file modes and is not what the
