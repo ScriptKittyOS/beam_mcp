@@ -23,7 +23,8 @@ All notable changes to this project are documented here. The format follows
   claims no regulatory status. The intake (private advisory form), the 7-day and 30-day
   commitments and the supported-versions table are unchanged and now held to the tree by a
   test: the intake is derived from `mix.exs`'s source URL and the table's row is the shipped
-  minor.
+  minor. **The policy ships**: `SECURITY.md` is in the Hex tarball and among the docs pages,
+  and names the maintainer's address for a report that cannot go through the advisory form.
 
 ### Added — the release tarball is attested, and the attestation binds to the checksum hex.pm shows
 
