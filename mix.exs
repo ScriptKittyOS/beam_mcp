@@ -85,7 +85,8 @@ defmodule BeamMCP.MixProject do
           "docs/will-not-implement.md",
           "docs/threat-model.md",
           "docs/crypto-posture.md",
-          "docs/fips.md"
+          "docs/fips.md",
+          "docs/provenance.md"
         ],
         # Grouped by namespace, not by a list of names: a module added under either prefix
         # lands in its group without an edit here. The core modules are the ungrouped rest.
@@ -95,7 +96,7 @@ defmodule BeamMCP.MixProject do
         ],
         groups_for_extras: [
           Connectome: ~r{^docs/connectome},
-          Policy: ~r{^docs/(will-not-implement|threat-model|crypto-posture|fips)}
+          Policy: ~r{^docs/(will-not-implement|threat-model|crypto-posture|fips|provenance)}
         ]
       ]
     ]

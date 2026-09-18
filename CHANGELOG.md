@@ -11,6 +11,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the release tarball is attested, and the attestation binds to the checksum hex.pm shows
+
+- **Build provenance on every release tag** (`.github/workflows/provenance.yml`): CI builds the
+  Hex tarball, attests its SHA-256 with GitHub's build-provenance attestation (SLSA provenance,
+  Sigstore-signed, pinned action), verifies the attestation against the tarball it built, and
+  then against the bytes hex.pm serves for that version, downloaded fresh — so the assertion is
+  about the published tarball. The owner tags and publishes; the workflow attests and never
+  publishes. `docs/provenance.md` says how to verify (`gh attestation verify`, gh ≥ 2.49) and
+  how to reproduce the bytes without trusting anyone.
+- **Why the digest is the right subject, measured:** `mix hex.build` is byte-deterministic
+  (fixed mtimes and uid inside the tar) and the outer tarball's SHA-256 is the "Package
+  checksum" hex.pm records — the tarball rebuilt from the `v0.5.0` tag is byte-identical to the
+  one hex.pm serves for 0.5.0. A test builds the tarball twice and pins both facts. Releases
+  before this one carry no attestation; their bytes reproduce from their tags.
+
 ### Added — the dependency audit is a gate step, and an answer hex gives without the registry is not a pass
 
 - **`audit`, the gate's fourteenth step:** no retired package and no package with a security
