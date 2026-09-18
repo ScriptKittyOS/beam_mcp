@@ -31,13 +31,14 @@ how-to-tell sentence in the changelog. `~> 0.5` admits `0.6.0`, so it
 would carry you across the next such break on a routine `mix deps.update`; `~> 0.5.0` does
 not. The tighter form is deliberate and is not an over-pin to be tidied away.
 
-**From the next release, the tarball hex.pm serves is attested.** On a release tag, CI builds
-the tarball and attests its SHA-256 — which is the package checksum hex.pm shows, since
-`mix hex.build` is byte-deterministic — with GitHub's build-provenance attestation, and
-verifies the attestation against the bytes hex.pm serves. `gh attestation verify
-beam_mcp-<version>.tar --repo ScriptKittyOS/beam_mcp` checks it; `0.5.0` and earlier carry no
-attestation, and reproduce from their tags instead
-([`docs/provenance.md`](docs/provenance.md)).
+**From the next release, the tarball is attested, and the attestation binds to the checksum
+hex.pm shows.** On a release tag, CI builds the tarball with `tools/release_tarball.sh` — the
+one way that gives the same bytes on every machine (`mix hex.build` on a working tree carries
+that machine's file modes and directory order) — attests its SHA-256 with GitHub's
+build-provenance attestation, and verifies the attestation against the bytes hex.pm serves. A
+release verifies when it was published with the same script; `gh attestation verify
+beam_mcp-<version>.tar --repo ScriptKittyOS/beam_mcp` checks it. `0.5.0` and earlier carry no
+attestation ([`docs/provenance.md`](docs/provenance.md)).
 
 ## Two contracts
 

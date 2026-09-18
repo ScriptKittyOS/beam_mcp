@@ -17,14 +17,18 @@ All notable changes to this project are documented here. The format follows
   Hex tarball, attests its SHA-256 with GitHub's build-provenance attestation (SLSA provenance,
   Sigstore-signed, pinned action), verifies the attestation against the tarball it built, and
   then against the bytes hex.pm serves for that version, downloaded fresh — so the assertion is
-  about the published tarball. The owner tags and publishes; the workflow attests and never
-  publishes. `docs/provenance.md` says how to verify (`gh attestation verify`, gh ≥ 2.49) and
-  how to reproduce the bytes without trusting anyone.
-- **Why the digest is the right subject, measured:** `mix hex.build` is byte-deterministic
-  (fixed mtimes and uid inside the tar) and the outer tarball's SHA-256 is the "Package
-  checksum" hex.pm records — the tarball rebuilt from the `v0.5.0` tag is byte-identical to the
-  one hex.pm serves for 0.5.0. A test builds the tarball twice and pins both facts. Releases
-  before this one carry no attestation; their bytes reproduce from their tags.
+  about the published tarball, and on a tag a tarball hex.pm does not serve is a failure. The
+  owner tags and publishes; the workflow attests and never publishes. `docs/provenance.md` says
+  how to verify (`gh attestation verify`, gh ≥ 2.49) and how to reproduce the bytes.
+- **The release tarball is built one way on every machine** (`tools/release_tarball.sh`): a
+  working-tree `mix hex.build` carries that machine's file modes and a directory's readdir
+  order — one commit gave three checksums on one day, measured — so the script `git archive`s
+  the ref with `tar.umask=022` (every file `644`, tracked files only) and `mix.exs` names its
+  `files:` as globs (sorted order). The same commit built on ext4 and on tmpfs gives one
+  tarball; a test pins the structure. The outer tarball's SHA-256 is the "Package checksum"
+  hex.pm records, so the attested subject is what the package page shows. A release verifies
+  when it was published with the script (`--publish`); `0.5.0` and earlier were built from
+  working trees and carry no attestation.
 
 ### Added — the dependency audit is a gate step, and an answer hex gives without the registry is not a pass
 
