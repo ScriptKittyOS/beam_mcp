@@ -41,9 +41,9 @@ assessment; the 30-day assessment window above is the commitment.
 
 | level | what it means here | fix window (intent) |
 |---|---|---|
-| **Critical** | A client reaches dispatch with arguments the advertised schema forbids, or reaches a tool the catalog did not advertise, or crashes the host's server process with one message. | Next release, as soon as it can be cut; no other change rides along. |
+| **Critical** | A client reaches dispatch with arguments the advertised schema forbids, or reaches a tool the catalog did not advertise, or crashes the host's server process with one message. | A patch release of the supported minor carrying only the fix, as soon as it can be cut. |
 | **High** | A client is served under a protocol revision it did not declare, or reads server internals across the wire (a stack, a path, a secret in a fault), or desynchronises the reader so one message is read as another. | The next scheduled release, or sooner if a workaround cannot be stated. |
-| **Medium** | A bound (line, body, nesting, connection) can be exceeded or evaded so the host buffers without limit, where a stated workaround exists (a lower bound, a transport option). | A scheduled release; the workaround published at assessment. |
+| **Medium** | A bound (line, body, nesting, connection) can be exceeded or evaded so the host buffers without limit, where a stated workaround exists (a transport option where one exists — the HTTP transport's timeouts — or a limit in front of the package). | A scheduled release; the workaround published at assessment. |
 | **Low** | Wrong error codes or messages, a refusal that names more than it should, a documented behaviour the package does not quite match. | With other work; recorded in the changelog when fixed. |
 
 The examples are this package's own surface (see *In scope*); a report about a host's tool or
@@ -55,9 +55,9 @@ Advisories are published from this repository's GitHub Security Advisories. GitH
 Numbering Authority (CNA) for repositories it hosts, so a CVE is requested from the advisory
 draft and assigned before publication when the defect warrants one — Critical and High always
 do; Medium when a consumer needs an identifier to act on; Low rarely. A published advisory
-reaches the GitHub Advisory Database and OSV, which is the feed hex.pm's own `mix hex.audit`
-reads, so a consumer running the audit sees it against their lock file without this project
-telling them.
+reaches the GitHub Advisory Database and OSV, the source hex.pm's registry advisories are fed
+from and `mix hex.audit` reads, so a consumer running the audit sees it against their lock
+file without this project telling them.
 
 ## In scope
 
