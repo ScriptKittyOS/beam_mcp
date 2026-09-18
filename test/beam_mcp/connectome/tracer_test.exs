@@ -315,10 +315,12 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_gone({Beta, :run, 1})
     end
 
-    test "an exit signal from a process that is not the parent is ignored, not a stop: tracing goes on to its limits",
+    test "an exit signal is ignored, not a stop -- the starter's included, since the tracer is started unlinked: tracing goes on to its limits",
          %{collector: c} do
-      # trap_exit plus the catch-all clause: the conventional gesture from elsewhere does
-      # nothing, and the moduledoc says so (a lane found it undocumented).
+      # trap_exit plus the catch-all clause, and GenServer.start/3 (no link): the conventional
+      # gesture does nothing from anywhere, and the moduledoc says so (a lane found it
+      # undocumented; a second lane found the first wording naming a parent it has not --
+      # this test process is the starter, and its signal is the one sent here).
       {:ok, pid} = start(c, modules: [Beta], max_duration_ms: 60_000)
       Process.exit(pid, :shutdown)
       Process.sleep(20)
