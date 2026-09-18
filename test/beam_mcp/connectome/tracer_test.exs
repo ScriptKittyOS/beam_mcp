@@ -496,6 +496,23 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_gone({Beta, :run, 1})
     end
 
+    test "an orderly exit destroys the session itself, without waiting for the companion to let go of its handle",
+         %{collector: c} do
+      # The companion is a holder of the handle; suspended from outside, it holds the
+      # session up for as long as it is suspended -- unless the tracer's own terminate/2
+      # destroyed it. The collector's death is an orderly exit through terminate/2 (a kill
+      # is not, and is the physics case above).
+      {:ok, pid} = start(c, modules: [Beta])
+      old_companion = companion()
+      true = :erlang.suspend_process(old_companion)
+      ref = Process.monitor(pid)
+      :ok = stop_supervised!(c)
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:shutdown, :collector_gone}}, 2_000
+      assert_gone({Beta, :run, 1})
+      assert Process.alive?(old_companion)
+      true = :erlang.resume_process(old_companion)
+    end
+
     test "stop/0 with no tracer running is :ok and touches no session of a host's", %{
       collector: _
     } do
