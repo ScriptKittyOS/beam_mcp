@@ -23,6 +23,11 @@ defmodule BeamMCP.SecurityPolicyTest do
     assert @policy =~ "ayla@scriptkittyos.com"
     assert "SECURITY.md" in Mix.Project.config()[:package][:files]
     assert "SECURITY.md" in Mix.Project.config()[:docs][:extras]
+    # ...and in the Policy group of the sidebar, where a hexdocs reader looks (G-074).
+    {_, policy_group} =
+      Mix.Project.config()[:docs][:groups_for_extras] |> List.keyfind(:Policy, 0)
+
+    assert "SECURITY.md" =~ policy_group
   end
 
   test "the commitments carry their numbers, and promise no bounty and no deadline" do
@@ -47,6 +52,13 @@ defmodule BeamMCP.SecurityPolicyTest do
           do: "#{major}.#{minor}.x"
 
     assert newer == [], "rows newer than the shipped minor: #{inspect(newer)}"
+
+    # Exactly one row is `yes`: the shipped minor. "Earlier minors are not backported" is the
+    # file's own sentence, and an older row marked yes would contradict it silently (G-074).
+    yes_rows = Regex.scan(~r/^\| `([0-9.]+x)` \| yes \|/m, @policy) |> Enum.map(&Enum.at(&1, 1))
+
+    assert yes_rows == ["#{shipped.major}.#{shipped.minor}.x"],
+           "rows marked yes: #{inspect(yes_rows)}"
   end
 
   test "the severity rubric has four levels in the package's terms, each with its fix window" do
@@ -58,6 +70,12 @@ defmodule BeamMCP.SecurityPolicyTest do
       |> Map.new(fn [_, level, meaning, window] -> {level, {meaning, window}} end)
 
     assert Map.keys(rows) |> Enum.sort() == ~w(Critical High Low Medium)
+
+    # And no fifth level: every bold-level row in the file is one of the four (G-074).
+    levels =
+      Regex.scan(~r/^\| \*\*(\w+)\*\* \|/m, @policy) |> Enum.map(&Enum.at(&1, 1)) |> Enum.sort()
+
+    assert levels == ~w(Critical High Low Medium), "severity rows: #{inspect(levels)}"
 
     # Each meaning names this package's surface -- the words the In-scope section uses for it.
     terms = %{
@@ -85,11 +103,13 @@ defmodule BeamMCP.SecurityPolicyTest do
   test "the CVE path names GitHub as the CNA and the advisory as where it starts" do
     # The sentence, not the abbreviation: a regex on "GitHub ... CNA" passed a negation and
     # failed a true sentence without the parenthetical (a lane's two plants).
+    # Through the consequence, so a negation appended after the clause fails too; \s+ between
+    # words, so a reflow of the paragraph does not (G-074).
     assert @policy =~
-             ~r/GitHub is a CVE\s+Numbering Authority( \(CNA\))? for repositories it hosts/
+             ~r/GitHub\s+is\s+a\s+CVE\s+Numbering\s+Authority(\s+\(CNA\))?\s+for\s+repositories\s+it\s+hosts,\s+so\s+a\s+CVE\s+is\s+requested\s+from\s+the\s+advisory\s+draft/
 
-    assert @policy =~ ~r/published from this repository's GitHub Security\s+Advisories/
-    assert @policy =~ ~r/reaches the GitHub Advisory Database and OSV/
+    assert @policy =~ ~r/published\s+from\s+this\s+repository's\s+GitHub\s+Security\s+Advisories/
+    assert @policy =~ ~r/reaches\s+the\s+GitHub\s+Advisory\s+Database\s+and\s+OSV/
     assert @policy =~ "`mix hex.audit`"
   end
 

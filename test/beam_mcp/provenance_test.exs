@@ -33,13 +33,27 @@ defmodule BeamMCP.ProvenanceTest do
     # step's script is lifted from the file and run, with a curl that answers 200 and bytes
     # that do not match, under each ref type. A shape pin cannot enumerate shapes (two lanes'
     # plants passed one); running the step is the exact pin, and it costs a fake curl.
-    for {on_tag, expected_exit, expected_line} <- [
-          {"false", 0, "NOT MEASURED"},
-          {"true", 1, "FAIL: the published tarball is not the bytes"}
+    # Four cases: a 200 with the wrong bytes, and a 404, each on and off a tag. The fake curl
+    # answers the code it is given; the fake gh is on the same PATH so no plant can reach the
+    # real one (a lane found the real gh reached under a plant that skipped the mismatch).
+    for {on_tag, code, expected_exit, expected_line} <- [
+          {"false", "200", 0, "NOT MEASURED: hex.pm serves"},
+          {"true", "200", 1, "FAIL: the published tarball is not the bytes"},
+          {"false", "404", 0, "NOT MEASURED: hex.pm answered 404"},
+          {"true", "404", 1, "FAIL: hex.pm answered 404"}
         ] do
-      {out, exit} = run_hex_step(wf, on_tag)
-      assert exit == expected_exit, "ON_TAG=#{on_tag}: exit #{exit}, output:\n#{out}"
+      {out, exit} = run_hex_step(wf, on_tag, code)
+      assert exit == expected_exit, "ON_TAG=#{on_tag} code=#{code}: exit #{exit}, output:\n#{out}"
       assert out =~ expected_line
+      # On a 200 the fake's bytes were read and hashed: the step compared real digests.
+      if code == "200",
+        do:
+          assert(
+            out =~
+              "published sha256 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+          )
+
+      refute out =~ "fake gh reached"
     end
 
     # The attestation permissions are the attesting job's, not the workflow's: the top-level
@@ -62,7 +76,7 @@ defmodule BeamMCP.ProvenanceTest do
   # run by bash with a fake curl on PATH that writes a file and answers 200 -- so the bytes
   # published (sha256 of "hello") never equal the built digest given, and the mismatch branch is
   # the one exercised. A fake gh is never reached on a mismatch.
-  defp run_hex_step(wf, on_tag) do
+  defp run_hex_step(wf, on_tag, code) do
     [_, rest] =
       String.split(wf, "verify the attestation against the bytes hex.pm serves for this version",
         parts: 2
@@ -82,10 +96,13 @@ defmodule BeamMCP.ProvenanceTest do
 
     File.write!(
       curl,
-      "#!/bin/sh\nwhile [ $# -gt 0 ]; do case $1 in -o) printf hello > \"$2\"; shift;; esac; shift; done; printf 200\n"
+      "#!/bin/sh\nwhile [ $# -gt 0 ]; do case $1 in -o) printf hello > \"$2\"; shift;; esac; shift; done; printf #{code}\n"
     )
 
     File.chmod!(curl, 0o755)
+    gh = Path.join([dir, "bin", "gh"])
+    File.write!(gh, "#!/bin/sh\necho \"fake gh reached: $*\"; exit 3\n")
+    File.chmod!(gh, 0o755)
     File.write!(Path.join(dir, "step.sh"), script)
 
     try do
