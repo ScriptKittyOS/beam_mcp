@@ -22,9 +22,10 @@
 # SCOPE=derived the suite is the test files whose text names the target's module -- derived from
 # the tree by grep, never hand-listed, and printed in the header -- so a tracer score costs
 # seconds, not ten minutes (G-032). The cost of a scope is a mutant killed only by a test outside
-# it (a census under test/beam_mcp/boundary, say), so a SURVIVOR under the scope is re-scored
-# against the whole suite before the row calls it one: `SURVIVED-IN-SCOPE -> all: KILLED` is a
-# kill; `-> all: SURVIVED` is a survivor. Kills are cheap; survivors are exact.
+# it (a census under test/beam_mcp/boundary, say), so a SURVIVOR under the scope -- derived or
+# an explicit TESTS list alike -- is re-scored against the whole suite before the row calls it
+# one: `SURVIVED-IN-SCOPE -> all: KILLED` is a kill; `-> all: SURVIVED` is a survivor. Kills are
+# cheap; survivors are exact.
 #
 # WHY THIS FILE EXISTS AND IS TRACKED. Slice 003's record cites its scoring instrument as
 # `$S/mut.sh <name>` where `$S` is a scratchpad directory on one machine. Nobody reading that

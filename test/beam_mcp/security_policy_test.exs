@@ -110,7 +110,7 @@ defmodule BeamMCP.SecurityPolicyTest do
 
     assert @policy =~ ~r/published\s+from\s+this\s+repository's\s+GitHub\s+Security\s+Advisories/
     assert @policy =~ ~r/reaches\s+the\s+GitHub\s+Advisory\s+Database\s+and\s+OSV/
-    assert @policy =~ "`mix hex.audit`"
+    assert @policy =~ ~r/`mix\s+hex\.audit`/
   end
 
   test "the policy claims no regulatory status" do
