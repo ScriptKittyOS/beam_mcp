@@ -16,8 +16,9 @@ All notable changes to this project are documented here. The format follows
 - **`docs/api-stability.md`** says what a `~>` pin can rely on: public is what ex_doc lists
   (`@moduledoc false` and `@doc false` are the private surface); `0.x` breaks land at the
   minor and say so; from `1.0.0` semantic versioning; a deprecation runs in three steps —
-  `@deprecated` with the replacement already shipped, three minors of warning (`0.x`; the
-  next major on `1.x`), removal on the record — and a docs-hidden flip is a removal.
+  `@deprecated` with the replacement already shipped, three minors of warning, removal on
+  the record (and, on `1.x`, the removal in a major — the release step refuses any other
+  number) — and a docs-hidden flip is a removal.
 - **`docs/public-api.txt`** is the surface itself, one line per function, macro, callback or
   type with its default-argument count — 26 modules, 128 entries at this writing — written
   by a command from the compiled application that adds, deprecates and removes lines' markers
@@ -37,7 +38,7 @@ All notable changes to this project are documented here. The format follows
   with the how-to-tell sentence. From this release a break's heading says BREAKING and its
   section carries that sentence; the census holds the Unreleased section to it. The rule is
   one pure function, run on the tree and on literal fixtures, so every path is held on a tree
-  that has no deprecation yet; fifteen mutants on it, fifteen killed.
+  that has no deprecation yet; seventeen mutants on it, seventeen killed.
 - **`UPGRADING.md`**: every `0.x` break so far in one table, the rule for moving a minor, and
   what `1.0` will ask (today: nothing beyond the minors, since no entry is deprecated).
 

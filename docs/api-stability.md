@@ -45,7 +45,10 @@ removes a callable arity and is a change to the entry — then markers:
 `R` is a release number, or the word `Unreleased` while the change waits in the CHANGELOG's
 Unreleased section; the release that ships it writes its number in
 (`MIX_ENV=test mix run -e 'BeamMCP.PublicAPI.release_markers!("0.6.0")'`, one step of cutting
-a release), and the census refuses a leftover `Unreleased` once that section is empty. A line
+a release), and the census refuses a leftover `Unreleased` once that section is empty. That
+step is the one place that knows the release's number, so it holds the two rules the census
+cannot: with a `removed_in=Unreleased` line in the file it refuses a patch number, and on
+`1.x` any number that is not a major. A line
 changes state; it is not deleted — with one exception, an entry that comes back after a
 removal, whose `removed_in` is deleted and `since` set again. The tree carries what left and
 when, and the census reads the tree, never git history. Two hand edits are invisible to a
@@ -83,8 +86,9 @@ REMOVED", `0.4.0`'s "BREAKING, and it breaks a host contract"); `UPGRADING.md` n
 its CHANGELOG heading. That is why the README recommends `~> 0.5.0` rather than `~> 0.5`: the
 tighter pin stops at the next minor, which is where the next documented break can be. A patch
 release carries no break to the public surface, the wire, the exported bytes or the host
-contract — a rule of the release, which the census cannot check (it does not know which
-number the next release will carry) and which `UPGRADING.md`'s table would expose.
+contract — a rule the census cannot check (it does not know which number the next release
+will carry) and the release step can: `release_markers!/1` refuses a patch number while a
+removal waits.
 
 **From `1.0.0`, the package follows semantic versioning:** the public surface listed in
 `docs/public-api.txt` at `1.0.0` changes incompatibly only in a major release; a minor adds
@@ -112,15 +116,16 @@ A public entry that is going to leave goes in three steps, each on the record:
    the removal ships in `0.9.0`. An entry deprecated on `0.x` and still present at `1.0.0` is
    on the `1.0.0` surface and waits like any `1.x` entry: three minors of the new major
    (`mix.exs` at `1.3.0`). The same count holds on `1.x`, where the release that carries the
-   removal is a major, and that number — as any release number — is the release's to set, not
-   the census's to check.
+   removal is a major: the census cannot check that number, and the release step does —
+   `release_markers!/1` refuses a `1.x` minor while a removal waits.
 3. **Removal, on the record.** The writer marks the line `removed_in=Unreleased`, and the
    CHANGELOG names the entry again, in the release that removes it.
 
 **A `0.x` break may skip the wait, said in so many words.** While the package is `0.x` an
 entry may be removed, renamed or have its arity or defaults changed without three minors of
 `@deprecated` if the CHANGELOG bullet that names it says it is a **documented break at the
-minor** — the README's phrase for what `0.x` does — under a **BREAKING** heading whose section
+minor** — the README's rule for `0.x`, "documents breaks at the minor position", in a fixed
+form — under a **BREAKING** heading whose section
 carries the "How to tell whether you are affected" sentence. A first-time `@deprecated` in the
 same change as the deletion does not count as the wait. From `1.0.0` there is no such skip:
 the census reads `mix.exs`'s major, so the sentence stops counting the moment `1.0.0` has
@@ -156,9 +161,9 @@ entry may change only if **all** of the following hold in the same change:
    - **still present, leaving later:** `@deprecated` on the entry and `deprecated_since` on
      its line, and the bullet that names it records a deprecation;
    - **removed, renamed, or arity or defaults changed:** `removed_in` on its line, and either
-     `deprecated_since` naming a release three minors back, or — on `0.x` only — the bullet
-     says *documented break at the minor* under a BREAKING heading with the how-to-tell
-     sentence;
+     `deprecated_since` naming a release with three minors shipped since (step 2's count),
+     or — on `0.x` only — the bullet says *documented break at the minor* under a BREAKING
+     heading with the how-to-tell sentence;
    - **docs-hidden:** as a removal.
 
 Each kind has its one condition set; there is no OR between them. This cycle's markers are
