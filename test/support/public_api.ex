@@ -425,33 +425,41 @@ defmodule BeamMCP.PublicAPI do
   end
 
   # The release step: every `Unreleased` marker becomes the release's number. Returns how
-  # many it wrote. The one place that knows the release's number is this call, so the two
-  # rules the census cannot check are held here: a removal ships in no patch release, and on
-  # 1.x in no minor either -- a `removed_in=Unreleased` line refuses any other number.
+  # many it wrote. The one place that knows the release's number is this call, so the rules
+  # the census cannot check are held here: a removal ships in no patch release, and on 1.x in
+  # no minor either; on 1.x a patch only fixes, so any Unreleased marker refuses a 1.x patch
+  # number (on 0.x an addition or a deprecation may ship in a patch: neither is a break).
   @doc false
   def release_markers!(version, path \\ @baseline) do
     parsed = Version.parse!(version)
     text = File.read!(path)
 
-    if String.contains?(text, "removed_in=#{@unreleased}") do
-      cond do
-        parsed.patch != 0 ->
-          raise ArgumentError,
-                "a patch release carries no removal: #{version} has removed_in=Unreleased lines"
-
-        parsed.major >= 1 and parsed.minor != 0 ->
-          raise ArgumentError,
-                "on 1.x a removal ships only in a major: #{version} has removed_in=Unreleased lines"
-
-        true ->
-          :ok
-      end
+    case refusal(
+           parsed,
+           String.contains?(text, "removed_in=#{@unreleased}"),
+           String.contains?(text, "=#{@unreleased}")
+         ) do
+      nil -> :ok
+      reason -> raise ArgumentError, "#{reason}: #{version} against #{path}"
     end
 
     {new, n} = replace_unreleased(text, version)
     File.write!(path, new)
     n
   end
+
+  # The release-number rules, by what waits in the file: a removal ships in no patch and, on
+  # 1.x, in no minor; on 1.x a patch only fixes, so any waiting marker refuses a patch number.
+  defp refusal(%{patch: patch}, true, _any?) when patch != 0,
+    do: "a patch release carries no removal"
+
+  defp refusal(%{major: major, minor: minor}, true, _any?) when major >= 1 and minor != 0,
+    do: "on 1.x a removal ships only in a major"
+
+  defp refusal(%{major: major, patch: patch}, _removal?, true) when major >= 1 and patch != 0,
+    do: "on 1.x a patch fixes -- a minor adds and deprecates"
+
+  defp refusal(_parsed, _removal?, _any?), do: nil
 
   defp replace_unreleased(text, version) do
     pattern = ~r/=(#{@unreleased})\b/

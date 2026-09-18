@@ -109,6 +109,7 @@ defmodule BeamMCP.PublicAPICensusTest do
              {Fixture.PublicAPI, :function, :defaulted, 3, 2},
              {Fixture.PublicAPI, :function, :old, 1, 0},
              {Fixture.PublicAPI, :function, :plain, 1, 0},
+             {Fixture.PublicAPI, :macro, :twice, 1, 0},
              {Fixture.PublicAPI, :type, :shape, 0, 0}
            ]
 
@@ -132,7 +133,8 @@ defmodule BeamMCP.PublicAPICensusTest do
 
     {total, added} = PublicAPI.write_baseline!(path, modules: @fixture)
     lines = PublicAPI.read_baseline!(path)
-    assert total == length(lines) and total == 7 and added == 3
+    assert total == length(lines) and total == 8 and added == 4
+    assert {{Fixture.PublicAPI, :macro, :twice, 1, 0}, %{"since" => "Unreleased"}} in lines
 
     # Kept as they were; the line for an entry no longer public marked, not dropped.
     assert {{Fixture.PublicAPI, :function, :gone, 1, 0},
@@ -151,10 +153,10 @@ defmodule BeamMCP.PublicAPICensusTest do
     assert File.read!(path) =~ "SPDX-License-Identifier"
     assert File.read!(path) =~ "defaulted/3 defaults=2 since=Unreleased"
     # A second write changes nothing.
-    assert PublicAPI.write_baseline!(path, modules: @fixture) == {7, 0}
+    assert PublicAPI.write_baseline!(path, modules: @fixture) == {8, 0}
 
     # The release step: every Unreleased becomes the number, nothing else changes.
-    assert PublicAPI.release_markers!("0.6.0", path) == 5
+    assert PublicAPI.release_markers!("0.6.0", path) == 6
     after_release = PublicAPI.read_baseline!(path)
 
     assert {{Fixture.PublicAPI, :function, :vanished, 3, 0}, %{"removed_in" => "0.6.0"}} in after_release
@@ -190,13 +192,22 @@ defmodule BeamMCP.PublicAPICensusTest do
     assert PublicAPI.release_markers!("0.6.0", path) == 1
     File.write!(path, removal)
     assert PublicAPI.release_markers!("2.0.0", path) == 1
-    # A deprecation or an addition ships in a patch or a 1.x minor; only removals are refused.
-    File.write!(
-      path,
+    # A deprecation or an addition ships in a 1.x minor, or in any 0.x release (neither is a
+    # break); on 1.x a patch fixes, so it refuses them too.
+    step_one =
       "# h\nBeamMCP.Fixture.PublicAPI function plain/1 since=Unreleased deprecated_since=Unreleased\n"
-    )
 
+    File.write!(path, step_one)
     assert PublicAPI.release_markers!("1.1.0", path) == 2
+    File.write!(path, step_one)
+    assert PublicAPI.release_markers!("0.6.1", path) == 2
+    File.write!(path, step_one)
+
+    assert_raise ArgumentError, ~r/a patch fixes/, fn ->
+      PublicAPI.release_markers!("1.0.1", path)
+    end
+
+    assert File.read!(path) == step_one
   end
 
   # ---- the rule, on literal fixtures ------------------------------------------------------
@@ -493,6 +504,30 @@ defmodule BeamMCP.PublicAPICensusTest do
              :unparsed_marker
            ]
 
+    # Every kind of marker, not since= alone: a removal or a deprecation dated to a number that
+    # has not shipped is the one back-date the census can see.
+    assert checks(
+             run(
+               population: [@shape],
+               baseline: "#{@m} function plain/1 removed_in=0.6.0\n#{@m} type shape/0"
+             )
+           ) == [:future_marker]
+
+    assert checks(
+             run(
+               population: [@shape],
+               baseline: "#{@m} function plain/1 removed_in=0.6\n#{@m} type shape/0"
+             )
+           ) == [:unparsed_marker]
+
+    assert checks(
+             run(
+               population: [@plain, @shape],
+               deprecated: [@plain],
+               baseline: "#{@m} function plain/1 deprecated_since=0.6.0\n#{@m} type shape/0"
+             )
+           ) == [:future_marker]
+
     # An empty Unreleased section beside an Unreleased marker: the release skipped release_markers!/1.
     assert checks(
              run(
@@ -559,6 +594,9 @@ defmodule BeamMCP.PublicAPICensusTest do
 
     assert {{BeamMCP.Cursor, :type, :key, 0, 0}, %{"deprecated_since" => "0.6.0"}} =
              PublicAPI.parse_line!("BeamMCP.Cursor type key/0 deprecated_since=0.6.0")
+
+    assert {{BeamMCP.Fixture.PublicAPI, :macro, :twice, 1, 0}, %{}} =
+             PublicAPI.parse_line!("BeamMCP.Fixture.PublicAPI macro twice/1")
 
     assert_raise ArgumentError, ~r/unknown marker/, fn ->
       PublicAPI.parse_line!("BeamMCP.Cursor function decode/2 gone=0.5.0")

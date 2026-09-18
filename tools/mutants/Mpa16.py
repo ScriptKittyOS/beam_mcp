@@ -10,8 +10,8 @@ import sys
 p = sys.argv[1]
 s = open(p).read()
 
-old = '        parsed.major >= 1 and parsed.minor != 0 ->'
-new = '        parsed.major >= 1 and parsed.minor != 0 and parsed.minor < 0 ->'
+old = '  defp refusal(%{major: major, minor: minor}, true, _any?) when major >= 1 and minor != 0,'
+new = '  defp refusal(%{major: major, minor: minor}, true, _any?) when major >= 1 and minor != 0 and minor < 0,'
 
 if s.count(old) != 1:
     sys.exit("Mpa16: anchor found %d times" % s.count(old))

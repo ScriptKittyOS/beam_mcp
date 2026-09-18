@@ -28,6 +28,13 @@ defmodule BeamMCP.Fixture.PublicAPI do
   @spec old(term()) :: term()
   def old(x), do: plain(x)
 
+  @doc "A macro the census lists."
+  defmacro twice(x) do
+    quote do
+      {unquote(x), unquote(x)}
+    end
+  end
+
   @doc false
   def hidden(x), do: x
 end
