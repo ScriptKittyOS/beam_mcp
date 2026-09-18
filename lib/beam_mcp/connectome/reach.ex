@@ -425,19 +425,22 @@ defmodule BeamMCP.Connectome.Reach do
 
   # Depth-first preorder from the root: the vertices in the order first seen, and each one's
   # DFS parent. Iterative, so a long chain costs no stack.
+  # `seen` is a plain map, not a MapSet: Dialyzer reads `MapSet.new()` as the literal struct
+  # and reports every MapSet call on it as an opaque violation (three warnings on OTP 28 and
+  # 29, a known false positive); a map of `v => true` is the same set, with nothing opaque.
   defp dfs(dg, root) do
-    walk(dg, [{root, nil}], MapSet.new(), [], %{})
+    walk(dg, [{root, nil}], %{}, [], %{})
   end
 
   defp walk(_dg, [], _seen, order, parent), do: {Enum.reverse(order), parent}
 
   defp walk(dg, [{v, p} | rest], seen, order, parent) do
-    if MapSet.member?(seen, v) do
+    if Map.has_key?(seen, v) do
       walk(dg, rest, seen, order, parent)
     else
       parent = if p, do: Map.put(parent, v, p), else: parent
-      next = for u <- :digraph.out_neighbours(dg, v), not MapSet.member?(seen, u), do: {u, v}
-      walk(dg, next ++ rest, MapSet.put(seen, v), [v | order], parent)
+      next = for u <- :digraph.out_neighbours(dg, v), not Map.has_key?(seen, u), do: {u, v}
+      walk(dg, next ++ rest, Map.put(seen, v, true), [v | order], parent)
     end
   end
 

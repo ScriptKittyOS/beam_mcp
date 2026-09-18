@@ -50,6 +50,12 @@ jobs:
           elixir --version
           cat .tool-versions
       - run: mix deps.get
+      # Dialyzer's PLT, keyed by the pair and the lock: built cold once per key (~50 s locally;
+      # measured on each leg by the first run), then restored.
+      - uses: actions/cache@v4
+        with:
+          path: _build/dialyzer
+          key: dialyzer-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('mix.lock') }}
       # The leg says what it claims to be, so the gate can hold it to it: on the pinned leg a
       # format step that cannot measure (the running Elixir is not `.tool-versions`' line) is a
       # FAIL, not NOT MEASURED -- otherwise a pin moved in `.tool-versions` and not here would

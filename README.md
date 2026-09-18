@@ -523,8 +523,9 @@ has no stdio server mode). `conformance/README.md` has the rest.
 **Reproduce it:** `tools/conformance.sh` — one command, for anyone with Node ≥ 22 and
 `python3`. **The trade, stated:** this package has two dependencies; producing this number
 costs a second toolchain, so the step runs in a CI job of its own (`conformance.yml`, Node 22
-pinned) and never in the local gate, which stays the fourteen steps a contributor with Elixir
-and Erlang runs green with nothing else installed. The gate needs hex.pm (two steps resolve
+pinned) and never in the local gate, which stays the fifteen steps a contributor with Elixir
+and Erlang runs green with nothing else installed (Dialyzer among them, on the OTP binary — its
+PLT is built once per machine, about a minute, and kept under `_build`). The gate needs hex.pm (two steps resolve
 dependencies); of those, the dependency audit is the one that refuses an answer hex gives
 without reaching the registry — it says NOT MEASURED rather than passing from the cache, and
 CI requires the measurement. The CI job fails loudly when the toolchain is absent; it never
