@@ -10,7 +10,21 @@
 #     tools/mutate.sh list                   the mutants available
 #     tools/mutate.sh check                  every mutant applies and restores, no suite run
 #
-# Environment: PASSES (default 2, for `score`), TARGET (default lib/beam_mcp/transport/http.ex).
+# Environment: PASSES (default 2, for `score`), TARGET (default lib/beam_mcp/transport/http.ex),
+# SCOPE (`all`, the default: the whole suite per mutant; or `derived`: the test files that
+# name the target's module -- see below), TESTS (an explicit file list, overriding both).
+#
+# TWO THINGS A SCORE ROW SAYS THAT IT DID NOT USED TO. (1) A mutant that orphans a helper or a
+# variable under `warnings_as_errors` fails COMPILATION: the suite exits 1 with no summary line
+# and no failing test, which read exactly like a kill (three mutants had to be re-anchored by
+# hand once that was noticed -- G-018). The row now reads `COMPILER-KILL -- not a kill`; a
+# score with one is a score whose mutant must be re-anchored, not a survivor count. (2) Under
+# SCOPE=derived the suite is the test files whose text names the target's module -- derived from
+# the tree by grep, never hand-listed, and printed in the header -- so a tracer score costs
+# seconds, not ten minutes (G-032). The cost of a scope is a mutant killed only by a test outside
+# it (a census under test/beam_mcp/boundary, say), so a SURVIVOR under the scope is re-scored
+# against the whole suite before the row calls it one: `SURVIVED-IN-SCOPE -> all: KILLED` is a
+# kill; `-> all: SURVIVED` is a survivor. Kills are cheap; survivors are exact.
 #
 # WHY THIS FILE EXISTS AND IS TRACKED. Slice 003's record cites its scoring instrument as
 # `$S/mut.sh <name>` where `$S` is a scratchpad directory on one machine. Nobody reading that
@@ -48,7 +62,22 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 
 TARGET="${TARGET:-lib/beam_mcp/transport/http.ex}"
 PASSES="${PASSES:-2}"
-MUTANTS_DIR="tools/mutants"
+SCOPE="${SCOPE:-all}"
+TESTS="${TESTS:-}"
+
+# The derived scope: every tracked test file whose text names the target's module (its first
+# `defmodule`), by full name or by its last alias segment. Printed, so the population is on the
+# record with the score.
+derive_tests() {
+  local mod last
+  mod=$(grep -m1 -oE '^defmodule [A-Za-z0-9_.]+' "$TARGET" | cut -d' ' -f2)
+  [ -n "$mod" ] || return 1
+  last=${mod##*.}
+  git ls-files -- 'test/**/*_test.exs' 'test/*_test.exs' | while read -r f; do
+    grep -qE "\b${mod//./\\.}\b|\b${last}\b" "$f" && echo "$f"
+  done
+}
+MUTANTS_DIR="${MUTANTS_DIR:-tools/mutants}"
 
 [ -f "$TARGET" ] || { echo "no such target file: $TARGET" >&2; exit 1; }
 
@@ -125,12 +154,22 @@ apply() {
 # "160 tests, 1 failure" reads the same whether the failure is the mutant's or the instrument's.
 # Slice 006 needed the names to tell those apart, so the instrument now keeps them.
 suite() {
-  local out rc
-  out=$(mix test 2>&1); rc=$?
+  local out rc summary
+  # $1: the test files to run (empty = the whole suite).
+  # shellcheck disable=SC2086
+  out=$(mix test $1 2>&1); rc=$?
   # ExUnit's summary: `658 tests, 1 failure` (with `11 properties, ` before it since the
   # property tests landed -- the anchor missed that prefix from then until 023, G-065) through
   # Elixir 1.19; `Result: 667/669 passed (11/11 properties, 656/658 tests)` from 1.20.
-  printf '%s\n' "$out" | grep -E '^([0-9]+ propert(y|ies), )?[0-9]+ tests?, |^Result: ' | tail -1
+  summary=$(printf '%s\n' "$out" | grep -E '^([0-9]+ propert(y|ies), )?[0-9]+ tests?, |^Result: ' | tail -1)
+  if [ -z "$summary" ] && [ "$rc" -ne 0 ]; then
+    # No summary and a non-zero exit: nothing ran. Under warnings_as_errors that is the mutant
+    # orphaning a symbol -- a compiler kill, which says nothing about the tests (G-018).
+    echo "COMPILER-KILL -- not a kill (no test ran)"
+    printf '%s\n' "$out" | grep -E 'warning:|error:|Compilation failed' | head -3 | sed 's/^/        /'
+    return "$rc"
+  fi
+  printf '%s\n' "$summary"
   printf '%s\n' "$out" | grep -E '^ +[0-9]+\) test ' | sed 's/^ *[0-9]*) test /        failed: /'
   # AND HOW MANY EXCHANGES PRODUCED NO MEASUREMENT. The Bandit harness repeats an exchange whose
   # response was destroyed in transit, and announces each one on stderr. Slice 006 round 1 found
@@ -176,15 +215,31 @@ case "$cmd" in
     diff -u "$pristine" "$TARGET"
     echo "(diff exit $? -- 1 means the files differ, i.e. the mutation is on disk)"
     echo "=== $name: suite ==="
-    mix test; echo "TEST_EXIT=$?"
+    out=$(mix test 2>&1); rc=$?; printf '%s\n' "$out"; echo "TEST_EXIT=$rc"
+    [ "$rc" -eq 0 ] || printf '%s\n' "$out" | grep -qE '^([0-9]+ propert(y|ies), )?[0-9]+ tests?, |^Result: ' \
+      || echo "COMPILER-KILL -- not a kill (no test ran)"
     ;;
 
   score)
     wanted="$*"
     [ -n "$wanted" ] || wanted=$(all_mutants)
     start
+    scoped=""
+    if [ -n "$TESTS" ]; then
+      scoped="$TESTS"; scope_note="explicit (TESTS): $(echo "$TESTS" | wc -w) file(s)"
+    elif [ "$SCOPE" = "derived" ]; then
+      scoped=$(derive_tests | tr '\n' ' ')
+      [ -n "$scoped" ] || { echo "SCOPE=derived: no test file names $TARGET's module; refusing to score against nothing" >&2; exit 1; }
+      scope_note="derived: $(echo "$scoped" | wc -w) test file(s) naming $(grep -m1 -oE '^defmodule [A-Za-z0-9_.]+' "$TARGET" | cut -d' ' -f2) -- a survivor is re-scored against all"
+    elif [ "$SCOPE" = "all" ]; then
+      scope_note="all (the whole suite)"
+    else
+      echo "SCOPE must be all or derived, not '$SCOPE'" >&2; exit 1
+    fi
     echo "target:  $TARGET"
     echo "passes:  $PASSES"
+    echo "scope:   $scope_note"
+    [ -z "$scoped" ] || printf '%s\n' $scoped | sed 's/^/           /'
     echo "tree:    $(git rev-parse HEAD)  dirty=$(git status --porcelain | wc -l)"
     for name in $wanted; do
       [ -f "$MUTANTS_DIR/$name.py" ] || { echo "$name  NO-SUCH-MUTANT"; continue; }
@@ -196,9 +251,16 @@ case "$cmd" in
           1) line="$line | SCRIPT-FAILED"; continue ;;
           2) line="$line | NOT-APPLIED"; continue ;;
         esac
-        out=$(suite); rc=$?
+        out=$(suite "$scoped"); rc=$?
         res=$(printf '%s\n' "$out" | head -1)
         failed="${failed}$(printf '%s\n' "$out" | tail -n +2)"$'\n'
+        if [ -n "$scoped" ] && [ "$rc" -eq 0 ]; then
+          # Survived the scope: the whole suite decides, so a test outside the scope that would
+          # have killed it is not lost to the speed-up.
+          out=$(suite ""); rc=$?
+          res="SURVIVED-IN-SCOPE -> all: $([ "$rc" -eq 0 ] && echo SURVIVED || echo KILLED) ($(printf '%s\n' "$out" | head -1))"
+          failed="${failed}$(printf '%s\n' "$out" | tail -n +2)"$'\n'
+        fi
         line="$line | $res TEST_EXIT=$rc"
       done
       echo "$line"
