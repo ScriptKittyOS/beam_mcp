@@ -11,6 +11,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the dependency audit is a gate step, and an answer hex gives without the registry is not a pass
+
+- **`audit`, the gate's fourteenth step:** no retired package and no package with a security
+  advisory in `mix.lock`. It runs `mix hex.audit` — built into Hex, no dependency of this
+  package — whose advisory feed is OSV's (each advisory carries `api.osv.dev/v1/vulns/<id>`,
+  with CVE and GHSA aliases; the EEF CNA's ids), so the one call is the retirement audit and the
+  OSV audit. Findings a project ignores by Hex's `ignore_advisories` / `ignore_retirements` come
+  back from hex as "Ignored" sections and are printed after the pass line, so a pass over an
+  ignore is never silent. Red first, in a throwaway consumer carrying a retired, advisoried
+  release; a tracked probe keeps that plant outside the tree.
+- **Hex answers from its cache when it cannot reach the registry — and exits 0.** With the
+  registry unreachable it prints "using cache instead" per package and then "No retired or
+  security advisory packages found"; in its own offline mode it prints nothing at all. The step
+  forces online mode and reads those lines, and refuses either as a measurement: locally the
+  line reads NOT MEASURED and the gate does not fail (a contributor offline is not wrong); in CI
+  every leg requires the measurement and a cached answer fails the gate.
+
 ### Added — the CI gate runs on three OTP/Elixir pairs, so the floor is a measurement
 
 - **The CI gate is a matrix:** the floor pair (OTP 27 / Elixir 1.17 — the oldest pair the
