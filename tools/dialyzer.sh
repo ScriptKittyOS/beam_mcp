@@ -4,15 +4,15 @@
 #
 # Dialyzer over the package's beams, with the OTP binary and a PLT that survives sessions.
 #
-#     tools/dialyzer.sh          builds the PLT if this OTP/Elixir pair has none, then runs
-#                                dialyzer over _build/dev/lib/beam_mcp/ebin; prints one line
+#     tools/dialyzer.sh          compiles, builds the PLT if this exact OTP/Elixir/lock has
+#                                none, runs dialyzer over _build/dev/lib/beam_mcp/ebin; one line
 #
 # WHY THE OTP BINARY AND NOT `mix dialyzer`: dialyxir was declined for its transitive
 # dependencies (CX-055); the invocation below is the one archived per slice since 010. WHY
 # THE PLT IS WHERE IT IS: it lived in one session's scratchpad under /tmp and was rebuilt or
-# forgotten on the next (G-013); now it is `_build/dialyzer/<otp>-<elixir>.plt`, keyed by the
-# pair that built it, because a PLT built for one OTP is wrong for another, and CI caches that
-# directory by the same key. The cost is the cold build, measured here on the first run of
+# forgotten on the next (G-013); now it is `_build/dialyzer/<otp>-<erts>-<dialyzer>-<elixir>-<lock>.plt`,
+# keyed by the exact versions that built it, because a PLT built for one dialyzer is refused by
+# another, and CI caches that directory by the versions setup-beam installed. The cost is the cold build, measured here on the first run of
 # every seat and printed on the line so the number is never a memory.
 #
 # `-pa` with Elixir's ebin on both calls: without it dialyzer crashes in elixir_erl:debug_info
@@ -27,7 +27,11 @@ elixir_ebin=$(elixir -e 'IO.puts(:code.lib_dir(:elixir, :ebin))' 2>/dev/null)
 # measured by a review lane) turned the same file name into a permanent failure. So the name
 # carries erts and dialyzer's own versions plus Elixir's, and a PLT that still reads as old is
 # rebuilt once rather than reported as "0 warnings, FAIL".
-otp=$(erl -noshell -eval 'io:format("~s", [erlang:system_info(otp_release)]), halt().' 2>/dev/null)
+# The full OTP version (`releases/<major>/OTP_VERSION`: 28.1.1, not 28) is in the key too, so a
+# patch that bumps neither erts nor dialyzer still builds its own PLT and --no_check_plt is
+# safe for the OTP side; the lock's hash covers the dependencies' side.
+otp=$(erl -noshell -eval 'io:format("~s", [string:trim(element(2, file:read_file(filename:join([code:root_dir(), "releases", erlang:system_info(otp_release), "OTP_VERSION"]))))]), halt().' 2>/dev/null)
+[ -n "$otp" ] || otp=$(erl -noshell -eval 'io:format("~s", [erlang:system_info(otp_release)]), halt().' 2>/dev/null)
 erts=$(erl -noshell -eval 'io:format("~s", [erlang:system_info(version)]), halt().' 2>/dev/null)
 dzv=$(erl -noshell -eval 'application:load(dialyzer), {ok, V} = application:get_key(dialyzer, vsn), io:format("~s", [V]), halt().' 2>/dev/null)
 elx=$(elixir -e 'IO.puts(System.version())' 2>/dev/null)
@@ -39,7 +43,7 @@ plt="_build/dialyzer/otp${otp}-erts${erts}-dialyzer${dzv}-elixir${elx}-lock${loc
 mkdir -p _build/dialyzer
 # Always the current beams: standalone, a stale _build/dev read as "0 warnings" over a planted
 # type error (a review lane measured it). The gate compiles --force before this step anyway.
-mix compile >/dev/null 2>&1 || { echo "dialyzer FAIL: mix compile failed"; exit 1; }
+cout=$(mix compile 2>&1) || { echo "dialyzer FAIL: mix compile failed -- nothing analysed"; printf '%s\n' "$cout" | tail -8 | sed 's/^/  /'; exit 1; }
 built=""
 build_plt() {
   t0=$(date +%s)
@@ -63,6 +67,7 @@ if printf '%s\n' "$out" | grep -qE 'Old PLT file|could not read|not a PLT'; then
   # and say so rather than fail on "0 warnings").
   built="stale PLT rebuilt; "
   build_plt
+  t0=$(date +%s)
   out=$(analyse); rc=$?
 fi
 t1=$(date +%s)

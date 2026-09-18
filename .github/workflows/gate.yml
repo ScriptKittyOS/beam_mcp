@@ -58,7 +58,7 @@ jobs:
       # Dialyzer's PLT, keyed by the EXACT versions setup-beam installed (not the pair asked
       # for: a runner image's OTP patch bump carries a dialyzer bump, and a PLT from another
       # dialyzer is refused -- with a cache that never overwrites a key, the major alone made
-      # a permanent red) and the lock: built cold once per key (84-107 s measured), restored after.
+      # a permanent red) and the lock: built cold once per key (87-116 s measured), restored after.
       - uses: actions/cache@v4
         with:
           path: _build/dialyzer
@@ -105,11 +105,26 @@ jobs:
     if: always()
     steps:
       - name: every leg of the matrix passed, and the pull-request body where there is one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -uo pipefail
           echo "event: ${{ github.event_name }}/${{ github.event.action }}; legs: ${{ needs.gate.result }}; pr-body: ${{ needs.pr-body.result }}"
-          # On a body edit the legs do not run (the tree did not move) and the body is the check.
           if [ "${{ github.event.action }}" = "edited" ]; then
-            [ "${{ needs.pr-body.result }}" = "success" ]
+            # On a body edit the legs do not run (the tree did not move), but this job carries
+            # the REQUIRED context, and a fresh green under that name on a commit whose legs
+            # this run never read would let a title edit stand a green beside a red (a review
+            # lane's finding). So the legs' verdicts for this head SHA are read from the checks
+            # API -- the latest run of each leg name -- and all three must be success.
+            [ "${{ needs.pr-body.result }}" = "success" ] || exit 1
+            legs=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
+              --jq '.check_runs[] | select(.name | startswith("Gate - leg (")) | "\(.name): \(.conclusion)"')
+            printf '%s\n' "$legs"
+            n=$(printf '%s\n' "$legs" | grep -c . || true)
+            bad=$(printf '%s\n' "$legs" | grep -vc ': success$' || true)
+            [ "$n" -ge 3 ] || { echo "FAIL: only $n leg verdict(s) exist for ${HEAD_SHA}; the tree is unmeasured"; exit 1; }
+            [ "$bad" -eq 0 ] || { echo "FAIL: a leg's latest verdict for ${HEAD_SHA} is not success"; exit 1; }
           else
             [ "${{ needs.gate.result }}" = "success" ]
             case "${{ needs.pr-body.result }}" in success|skipped) ;; *) exit 1 ;; esac
