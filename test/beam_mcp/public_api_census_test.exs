@@ -36,7 +36,6 @@ defmodule BeamMCP.PublicAPICensusTest do
   alias BeamMCP.PublicAPI
 
   @baseline PublicAPI.baseline_path()
-  @unreleased PublicAPI.unreleased()
 
   setup_all do
     {:ok,
@@ -166,6 +165,38 @@ defmodule BeamMCP.PublicAPICensusTest do
     refute File.read!(path) =~ "=Unreleased"
     assert PublicAPI.release_markers!("0.6.0", path) == 0
     assert_raise Version.InvalidVersionError, fn -> PublicAPI.release_markers!("0.6", path) end
+  end
+
+  @tag :tmp_dir
+  test "the release step refuses a removal in a patch release, and on 1.x in a minor: the two rules the census cannot check",
+       %{tmp_dir: dir} do
+    path = Path.join(dir, "public-api.txt")
+    removal = "# h\nBeamMCP.Fixture.PublicAPI function plain/1 removed_in=Unreleased\n"
+    File.write!(path, removal)
+
+    assert_raise ArgumentError, ~r/patch release carries no removal/, fn ->
+      PublicAPI.release_markers!("0.6.1", path)
+    end
+
+    assert_raise ArgumentError, ~r/patch release carries no removal/, fn ->
+      PublicAPI.release_markers!("1.0.1", path)
+    end
+
+    assert_raise ArgumentError, ~r/only in a major/, fn ->
+      PublicAPI.release_markers!("1.1.0", path)
+    end
+
+    assert File.read!(path) == removal
+    assert PublicAPI.release_markers!("0.6.0", path) == 1
+    File.write!(path, removal)
+    assert PublicAPI.release_markers!("2.0.0", path) == 1
+    # A deprecation or an addition ships in a patch or a 1.x minor; only removals are refused.
+    File.write!(
+      path,
+      "# h\nBeamMCP.Fixture.PublicAPI function plain/1 since=Unreleased deprecated_since=Unreleased\n"
+    )
+
+    assert PublicAPI.release_markers!("1.1.0", path) == 2
   end
 
   # ---- the rule, on literal fixtures ------------------------------------------------------

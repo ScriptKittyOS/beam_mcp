@@ -425,11 +425,29 @@ defmodule BeamMCP.PublicAPI do
   end
 
   # The release step: every `Unreleased` marker becomes the release's number. Returns how
-  # many it wrote.
+  # many it wrote. The one place that knows the release's number is this call, so the two
+  # rules the census cannot check are held here: a removal ships in no patch release, and on
+  # 1.x in no minor either -- a `removed_in=Unreleased` line refuses any other number.
   @doc false
   def release_markers!(version, path \\ @baseline) do
-    _ = Version.parse!(version)
+    parsed = Version.parse!(version)
     text = File.read!(path)
+
+    if String.contains?(text, "removed_in=#{@unreleased}") do
+      cond do
+        parsed.patch != 0 ->
+          raise ArgumentError,
+                "a patch release carries no removal: #{version} has removed_in=Unreleased lines"
+
+        parsed.major >= 1 and parsed.minor != 0 ->
+          raise ArgumentError,
+                "on 1.x a removal ships only in a major: #{version} has removed_in=Unreleased lines"
+
+        true ->
+          :ok
+      end
+    end
+
     {new, n} = replace_unreleased(text, version)
     File.write!(path, new)
     n
