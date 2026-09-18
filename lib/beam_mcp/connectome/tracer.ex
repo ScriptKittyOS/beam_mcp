@@ -45,7 +45,8 @@ defmodule BeamMCP.Connectome.Tracer do
 
   What it refuses: a second tracer while one runs (`{:error, :already_running}`); starting
   without a running collector (`{:error, :collector_not_started}`); a limit that is not a
-  positive integer -- there is no unbounded mode; the wildcard `:_` or a module that cannot
+  positive integer -- there is no unbounded mode -- or a duration beyond the BEAM's timer
+  range (4 294 967 295 ms, the largest a `receive ... after` takes); the wildcard `:_` or a module that cannot
   be loaded in `modules:`; a name in `processes:` that is not registered
   (`{:error, {:not_registered, name}}`); and a start that failed part-way, which leaves
   nothing set and answers `{:error, {:init_failed, reason}}` -- a name in `processes:`
@@ -133,6 +134,10 @@ defmodule BeamMCP.Connectome.Tracer do
   @session :beam_mcp_tracer
   @defaults [max_messages: 1_000, max_duration_ms: 5_000, modules: [], processes: []]
   @stop_timeout 5_000
+  # The largest timeout a `receive ... after` takes: the companion's deadline is one, and a
+  # larger value raised :timeout_value in the companion on its first instruction -- a start
+  # that answered {:ok, pid} and left {:shutdown, :companion_gone} at once (measured).
+  @max_duration_ms 4_294_967_295
   # The tracer's own claim -- the flag and the session handle -- in its process dictionary,
   # which nothing outside the tracer can write. `stop/0` reads it there; the companion
   # holds the same two in its closure.
@@ -162,6 +167,7 @@ defmodule BeamMCP.Connectome.Tracer do
 
     with :ok <- positive(opts, :max_messages),
          :ok <- positive(opts, :max_duration_ms),
+         :ok <- in_timer_range(opts, :max_duration_ms),
          :ok <- modules(opts),
          :ok <- registered_names(opts),
          :ok <- server(opts),
@@ -442,6 +448,13 @@ defmodule BeamMCP.Connectome.Tracer do
   defp positive(opts, key) do
     case Keyword.fetch!(opts, key) do
       n when is_integer(n) and n > 0 -> :ok
+      other -> {:error, {:invalid, key, other}}
+    end
+  end
+
+  defp in_timer_range(opts, key) do
+    case Keyword.fetch!(opts, key) do
+      n when n <= @max_duration_ms -> :ok
       other -> {:error, {:invalid, key, other}}
     end
   end

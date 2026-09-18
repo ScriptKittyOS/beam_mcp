@@ -38,6 +38,14 @@ All notable changes to this project are documented here. The format follows
   the floor test say so (the previous reason, the keyed `process_info` read of OTP 26.2, put
   the hard requirement one major below the floor).
 
+### Fixed — a tracer duration beyond the BEAM's timer range is refused, not accepted and ended at once
+
+- **`max_duration_ms` above 4 294 967 295** — the largest timeout a `receive … after` takes —
+  is `{:error, {:invalid, :max_duration_ms, value}}` now. It used to answer `{:ok, pid}`: the
+  companion's deadline is that `after`, so it raised `:timeout_value` on its first
+  instruction and the tracer left `{:shutdown, :companion_gone}` with an error log, having
+  traced nothing. Found while measuring the session build; red first.
+
 ### Added — opt-in git hooks that run the gate
 
 - **`tools/install-hooks.sh`** points a clone's `core.hooksPath` at the tracked `tools/hooks/`:
