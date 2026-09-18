@@ -22,7 +22,8 @@ be kept rather than one that sounds reassuring:
 
 - **Acknowledgement within 7 days.** If you have heard nothing after 7 days, assume the report
   did not arrive and open a public issue saying only that you are waiting on a security
-  response — no detail.
+  response — no detail; a reporter without a GitHub account mails the address above again,
+  which is the only fallback that route has.
 - **An assessment within 30 days** of acknowledgement: whether it is in scope, and if so a
   rough severity and intended fix window. If it will take longer, you will be told that
   instead of being left waiting.
