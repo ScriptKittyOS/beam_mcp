@@ -649,3 +649,25 @@ Consumers today: Ultraviolet, and Trinity as a candidate under its own evaluatio
 ## Licence
 
 Apache-2.0. See `LICENSE`, and `NOTICE` for attribution.
+
+## Export control
+
+A plain-language statement for the compliance reader, of fact where it is about this package
+and of the maintainer's reading where it is about the regulations; it is not legal advice, and
+it has not been reviewed by counsel — that sentence leaves this paragraph only when one has.
+
+`beam_mcp` is open-source software, published publicly under the Apache License 2.0 on GitHub
+and on hex.pm. **It contains no encryption.** Its only cryptographic operation is a SHA-2
+message digest — SHA-256 by default, SHA-384 or SHA-512 by option — computed by Erlang/OTP's
+`:crypto` (OpenSSL) at one call site, used solely for integrity hashing of canonical bytes
+(`docs/crypto-posture.md`); it holds no key material, and a census in its test suite refuses
+any other `:crypto.` call and any key by name. Under **15 CFR 734.7(a)(4)**, unclassified
+software made available to the public without restriction — "posting on the Internet on
+sites available to the public" — is published and thus not subject to the Export
+Administration Regulations; the exception in **734.7(b)** for published *encryption* software
+classified under ECCN 5D002 (which, with **742.15(b)**, keeps such software subject to the EAR
+unless its source is publicly available and, for "non-standard cryptography", notified) does
+not reach a library whose only cryptographic function is a standard message digest. This
+software is not designed or modified for a military end use and is not ITAR-controlled.
+Downstream integrators remain responsible for the export classification of the products that
+incorporate it.

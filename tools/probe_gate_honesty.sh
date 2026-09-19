@@ -133,8 +133,10 @@ unplant_all
 echo "=== P4 -- the same .yaml with a .license sidecar. Proves P1's FAIL is about the missing"
 echo "    identifier and not about the extension, and that the sidecar route actually works ==="
 plant probe-gate-honesty.yaml "key: value"
+# REUSE-IgnoreStart -- a sidecar this probe PLANTS, not this file's own header
 plant probe-gate-honesty.yaml.license "SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0"
+# REUSE-IgnoreEnd
 run_gate P4 "unheadered probe-gate-honesty.yaml + a sidecar carrying the identifier"
 unplant_all
 
@@ -190,8 +192,10 @@ echo "  filesystem test -- so an UNTRACKED sidecar covered a TRACKED file on the
 echo "  and did not exist in a fresh clone or in CI. CONVENTIONS.md instance #1, on the"
 echo "  coverage side of the same check. Measured red: logs/red-sidecar-untracked.txt."
 plant probe-gate-honesty.yaml "key: value"
+# REUSE-IgnoreStart -- a sidecar this probe PLANTS, not this file's own header
 plant_untracked probe-gate-honesty.yaml.license "SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0"
+# REUSE-IgnoreEnd
 run_gate P8 "unheadered probe-gate-honesty.yaml + a sidecar that is NOT git added"
 unplant_all
 
