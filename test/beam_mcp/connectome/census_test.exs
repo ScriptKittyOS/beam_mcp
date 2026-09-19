@@ -138,6 +138,13 @@ defmodule BeamMCP.Connectome.CensusTest do
     "xml(sign),",
     "<key id=\"sign\" for=\"edge\" attr.name=\"sign\" attr.type=\"string\"/>",
     "<data key=\"sign\">",
+    # The signer seam (033, CX-079): `sign` here is the verb -- a host-supplied module's
+    # sign/2 over the canonical bytes -- not the verdict slot. Two spellings, both in
+    # canonical.ex's signature/3, both pinned by test/beam_mcp/boundary/no_signature_test.exs.
+    "case signer.sign(bytes, opts) do",
+    "function_exported?(signer, :sign, 2)",
+    "@callback sign(canonical_bytes :: binary(), opts :: keyword()) ::",
+    "def sign(_canonical_bytes, _opts), do: {:error, :no_signer}",
     # The diff engine (014) READS both sides' signs to class an edge as changed-sign, and
     # writes none: a typespec on the changed-sign entry, and one read of a built edge's sign
     # per graph, spelled once in diff.ex.

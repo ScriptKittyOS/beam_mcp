@@ -290,6 +290,47 @@ defmodule BeamMCP.Connectome.Canonical do
     end
   end
 
+  @doc """
+  The canonical bytes of `graph` signed by `signer`, a module implementing `BeamMCP.Signer`:
+  `{:ok, %{algorithm: algorithm, signature: signature, signer: signer}}` — the bytes' digest
+  algorithm (so a verifier knows which envelope member it re-derives), the signature the signer
+  returned, and the module that made it. **The envelope's bytes do not change**: this function
+  encodes with `encode/2` and hands those bytes to the signer's `c:BeamMCP.Signer.sign/2`, with `opts` as the host gave
+  them — a key, a key id, whatever the signer reads; this package reads only `:algorithm` from
+  them, for the encode. The one site in this package that calls a signer, and a census pins it.
+
+  Refusals: an encode error as `encode/2` returns it; a `signer` that is not a module exporting
+  the callback, `{:error, {:signer, {:not_a_signer, signer}}}`; a signer's `{:error, reason}` as
+  `{:error, {:signer, reason}}` (`BeamMCP.Signer.None` gives `{:error, {:signer, :no_signer}}`);
+  a signer answering `{:ok, x}` with `x` not a binary, `{:error, {:signer, {:not_a_signature, x}}}`.
+  A signer that raises, raises — it is the host's code.
+  """
+  @spec signature(Graph.t(), module(), keyword()) ::
+          {:ok, %{algorithm: algorithm(), signature: binary(), signer: module()}}
+          | {:error, {:uncanonical, uncanonical()} | {:signer, term()}}
+  def signature(%Graph{} = graph, signer, opts \\ []) do
+    {encode_opts, _} = Keyword.split(opts, [:algorithm])
+
+    with true <- signer?(signer) || {:error, {:signer, {:not_a_signer, signer}}},
+         {:ok, bytes} <- encode(graph, encode_opts) do
+      case signer.sign(bytes, opts) do
+        {:ok, sig} when is_binary(sig) ->
+          {:ok, %{algorithm: algorithm!(encode_opts), signature: sig, signer: signer}}
+
+        {:ok, other} ->
+          {:error, {:signer, {:not_a_signature, other}}}
+
+        {:error, reason} ->
+          {:error, {:signer, reason}}
+      end
+    end
+  end
+
+  defp signer?(signer) when is_atom(signer) and not is_nil(signer),
+    do: Code.ensure_loaded?(signer) and function_exported?(signer, :sign, 2)
+
+  defp signer?(_), do: false
+
   @doc "`sidecar/1`, raising."
   @spec sidecar!(Graph.t()) :: binary()
   def sidecar!(graph), do: bang(sidecar(graph), "sidecar")

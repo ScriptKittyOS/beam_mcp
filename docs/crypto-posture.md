@@ -54,14 +54,18 @@ neither asks nor answers it.
 `plug_crypto`, which `plug` brings into the lock file, is barred by name
 ([`docs/will-not-implement.md`](will-not-implement.md), entry 2, and the census above).
 
-**It makes no signature.** No signing or MAC primitive is called under `lib/`, and no function
-named `sign` is defined there (entry 3; `test/beam_mcp/boundary/no_signature_test.exs` "no
-line under lib/ calls a signing or MAC primitive or defines a sign function"). What a
-consumer signs is the hash, or the bytes, with a key the consumer holds; the canonical bytes
-exist so that it can do so without importing this package. The seam is one function with one
-argument, `sign(canonical_bytes, opts)`, in a separate package — decided, not built; a
-post-quantum signature (ML-DSA) would live there and change nothing here, since the envelope
-already names its digest.
+**It makes no signature of its own.** No signing or MAC primitive is called under `lib/`
+(entry 3; `test/beam_mcp/boundary/no_signature_test.exs` "no line under lib/ calls a signing or
+MAC primitive"). What is signed is the canonical bytes, with a key the consumer holds, through
+one seam: `BeamMCP.Signer`, a behaviour with exactly one callback, `sign(canonical_bytes,
+opts)` — two arguments with those names, `{:ok, signature}` or `{:error, reason}`, pinned by
+census so that any widening is a visible act — and `BeamMCP.Connectome.Canonical.signature/3`,
+the one site that calls it, over the bytes `encode/2` produces, returning the signature beside
+them and moving no byte. The one implementation here, `BeamMCP.Signer.None`, signs nothing;
+the reference implementation that does, Ed25519 through OTP's `:crypto` with a key the host
+hands in, is the separate package `beam_mcp_signer`, never a dependency of this one. A
+post-quantum signature (ML-DSA) would be another module behind the same callback and change
+nothing here, since the envelope already names its digest.
 
 **It performs no cryptography on a request.** The HTTP transport's `:authorize_body` hook
 hands the host the body exactly as received so the host can verify a signature over it; the
