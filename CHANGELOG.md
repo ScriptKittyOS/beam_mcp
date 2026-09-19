@@ -18,15 +18,19 @@ All notable changes to this project are documented here. The format follows
   default and SHA-384/SHA-512 by option, for integrity hashing; no key material) and the
   maintainer's reading of 15 CFR 734.7(a)(4) — published software is not subject to the EAR —
   with 734.7(b) and 742.15(b) named for why the encryption exception does not reach a digest-only
-  library. It says it is not legal advice and has not been reviewed by counsel; that sentence
-  stays until one has. A census (`test/beam_mcp/export_control_test.exs`) holds every claim
+  library, with 772.1's definitions of "cryptography" and "encryption software" named; it says
+  what its own code contains and that the optional HTTP dependencies are the integrator's; it
+  makes no ITAR classification conclusion. It says it is not legal advice and has not been
+  reviewed by counsel; that sentence stays until one has. A census (`test/beam_mcp/export_control_test.exs`) holds every claim
   about the package to the code and refuses the stale citation the first draft carried
   (740.13(e) is "[Reserved]" in the current eCFR).
 - **The tree is REUSE-compliant by `reuse lint`** (REUSE Specification 3.3), not only by the
   gate's header check: `REUSE.toml` annotates the slice archives, the two scripts that write or
   plant header text mark those lines for the tool, and CI runs the pinned tool over the whole
-  tree in the conformance job. Measured before: four false "invalid expressions" (string
-  literals) and 198 archive files without information; after: 0 and 648 of 648.
+  tree in the conformance job. Measured before: four "invalid expressions" — two scripts'
+  string literals, and the bare licence-identifier tag quoted with nothing after it in two
+  archived files, one of them headered — and 198 archive files without information; after: 0
+  and 648 of 648. (The tag is not spelled here for the same reason.)
 
 ### Added — governance and succession stated as they are; the Scorecard measured; the workflows pinned
 

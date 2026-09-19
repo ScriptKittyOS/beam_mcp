@@ -36,11 +36,18 @@ defmodule BeamMCP.ExportControlTest do
 
     assert text =~ ~r/posting on the Internet on\s+sites available to the public/
     assert text =~ "Downstream integrators remain responsible"
+    assert text =~ "**It is not legal advice"
+
+    refute text =~ "is not ITAR-controlled",
+           "a classification conclusion the paragraph does not make"
+
+    assert text =~ ~r/no commodity-jurisdiction\s+determination has been sought/
+    assert text =~ "15 CFR 772.1"
   end
 
   test "what it says about the package is what the code shows: one digest site, the SHA-2 set, no other crypto call, no key" do
     text = section()
-    assert text =~ "It contains no encryption."
+    assert text =~ "Its own code contains no encryption."
     assert text =~ "SHA-256 by default, SHA-384 or SHA-512 by option"
     assert Canonical.algorithms() == [:sha256, :sha384, :sha512]
     assert text =~ "at one call site"
