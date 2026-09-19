@@ -33,8 +33,9 @@ happened.
   callback list, the one `def sign`, the one call site — and sixteen mutants hold it. The
   signer that holds a key, `BeamMCP.Signer.Ed25519` (Ed25519 through OTP's `:crypto`, the key
   under `opts[:private_key]`), is the separate package `beam_mcp_signer`
-  (github.com/ScriptKittyOS/beam_mcp_signer, 0.1.0 on hex.pm, depending on `~> 0.7.0`); this
-  package does not depend on it.
+  (github.com/ScriptKittyOS/beam_mcp_signer, 0.1.0 on hex.pm, depending on `~> 0.7.0` — so a
+  host on it cannot take `0.8.0` until a signer release admits it; `UPGRADING.md` says so);
+  this package does not depend on it.
 - **`0.6.0` carried everything since `0.5.0`**: the wire hardening after the threat model, the
   threat-model page, the hash-agile canonical envelope (the release's one break), the install-floor slices (the OTP floor at
   compile time, the CI matrix on three pairs, the dependency audit, build provenance, the
@@ -53,8 +54,8 @@ happened.
 - Gate on the release commit: sixteen steps, every line `pass` (the 0.5.0 gate had thirteen;
   the audit step made it fourteen in 024, Dialyzer fifteen in 027a, the baseline diff sixteen
   at 0.8.0) — format (the tracked set, not a
-  glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
-  deps, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
+  glob), compile, dialyzer, instruments, test, credo, properties (11 at 1 000 generations),
+  optional deps, audit, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
   encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
   process after a warm-up, set at roughly double the stable worst of ten runs on the release
   head; the reachability queries' cost recorded and judged by no number, but a query refused
@@ -121,7 +122,7 @@ refused.
 - The `2025-11-25` revision is served on stdio only; over HTTP the conformance row for it is
   0 / 30 by design, and the README says so beside the number.
 
-## The release steps — the runbook (followed for 0.6.0; the same for 0.7.0)
+## The release steps — the runbook (followed for 0.6.0 and 0.7.0; the same for 0.8.0)
 
 1. The release PR merged to `main` by rebase (the ruleset requires two green checks); `main`
    is then the release commit.

@@ -27,17 +27,27 @@ read_legs() {
 }
 i=0
 while :; do
-  legs=$(read_legs) || { echo "FAIL: the checks API could not be read for ${sha}"; exit 1; }
-  n=$(printf '%s\n' "$legs" | grep -c . || true)
-  pending=$(printf '%s\n' "$legs" | grep -vc ': completed/' || true)
-  if [ "$n" -ge "$min" ] && [ "$pending" -eq 0 ]; then break; fi
+  # A failed read is a poll spent, not a verdict: a transient API error during the wait must
+  # not fail the required check (a red run of this name blocks beside a later green).
+  if legs=$(read_legs); then read_ok=1; else read_ok=0; legs=""; fi
+  if [ -n "$legs" ]; then
+    n=$(printf '%s\n' "$legs" | grep -c . || true)
+    pending=$(printf '%s\n' "$legs" | grep -vc ': completed/' || true)
+  else
+    n=0; pending=0
+  fi
+  if [ "$read_ok" -eq 1 ] && [ "$n" -ge "$min" ] && [ "$pending" -eq 0 ]; then break; fi
   i=$((i + 1))
   if [ "$i" -gt "$limit" ]; then
     printf '%s\n' "$legs"
-    echo "FAIL: after $((limit * every)) s, $n leg verdict(s) exist for ${sha} and $pending are not completed; the tree is unmeasured"
+    echo "FAIL: after $((limit * every)) s, $n leg verdict(s) exist for ${sha} and $pending are not completed (last read $([ "$read_ok" -eq 1 ] && echo ok || echo failed)); the tree is unmeasured"
     exit 1
   fi
-  echo "waiting: $n leg check-run(s), $pending not completed (poll $i of $limit, every ${every}s)"
+  if [ "$read_ok" -eq 1 ]; then
+    echo "waiting: $n leg check-run(s), $pending not completed (poll $i of $limit, every ${every}s)"
+  else
+    echo "waiting: the checks API could not be read (poll $i of $limit, every ${every}s)"
+  fi
   sleep "$every"
 done
 printf '%s\n' "$legs"

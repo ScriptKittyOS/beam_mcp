@@ -46,7 +46,11 @@ renamed, hidden or changed in arity — `docs/public-api.txt` is line for line `
 release step wrote nothing into it — and no wire byte or envelope byte moved. What changed is
 instruments (the gate diffs the baseline against `origin/main`; the pull-request summary waits
 for running legs) and pages (the Scorecard's measured figures on the governance page). Raise
-the pin to `~> 0.8.0`; nothing else to do.
+the pin to `~> 0.8.0`. **A host on `beam_mcp_signer` waits for that package's release that
+admits `0.8.0`**: its `0.1.0` requires `beam_mcp ~> 0.7.0` (three numbers, by the same rule as
+this page's pin), so `{:beam_mcp, "~> 0.8.0"}` beside `{:beam_mcp_signer, "~> 0.1.0"}` does not
+resolve until it does. That is the cost of the three-number pin, paid once per minor, on the
+signer's side.
 
 ## The road to `1.0.0`, in order
 
