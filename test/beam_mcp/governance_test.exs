@@ -60,7 +60,7 @@ defmodule BeamMCP.GovernanceTest do
   end
 
   test "every workflow pins every action by a 40-hex commit SHA, with the version it stands for beside it" do
-    assert @workflows != []
+    assert length(@workflows) >= 4
 
     for wf <- @workflows,
         {line, n} <- Enum.with_index(String.split(File.read!(wf), "\n"), 1),
@@ -74,8 +74,16 @@ defmodule BeamMCP.GovernanceTest do
     for wf <- @workflows do
       text = File.read!(wf)
       assert text =~ ~r/^permissions:/m, "#{wf} declares no top-level permissions"
-      [top | _] = String.split(text, ~r/^jobs:/m, parts: 2)
-      refute top =~ ~r/^\s+\S+:\s*write/m, "#{wf} grants write at the top level"
+      [top, jobs] = String.split(text, ~r/^jobs:/m, parts: 2)
+      refute top =~ ~r/^(\s+\S+|permissions):\s*write/m, "#{wf} grants write at the top level"
+
+      # A job may write only where the record says one does: provenance's attestation and
+      # the Scorecard's SARIF upload. Any other job block that says write is a finding.
+      writers = Enum.map(["provenance.yml", "scorecard.yml"], &(".github/workflows/" <> &1))
+
+      unless wf in writers do
+        refute jobs =~ ~r/^\s+\S+:\s*write/m, "#{wf} grants write on a job"
+      end
     end
   end
 

@@ -18,17 +18,21 @@ is no signing key to inherit.
 
 ## What survives the maintainer today, and what does not
 
-**Survives:** the public repository under the organization (not under a personal account, so
-a successor is added by the organization's owners rather than by transferring a personal
-repository); the published Hex releases and their documentation on hexdocs, which stay
-fetchable whether or not anyone maintains the package; the attestations on GitHub's store
-and in Sigstore's log for every tagged release after `0.5.0`; the CHANGELOG, `UPGRADING.md`,
-`docs/api-stability.md` and `docs/public-api.txt`, which say what a consumer may rely on
-without asking anyone.
+**Survives:** the public repository under the organization — public and forkable whatever
+happens to any account; if the maintainer *stops*, they add a successor as the organization's
+owner first, which is a smaller act than transferring a personal repository; the published
+Hex releases and their documentation on hexdocs, which stay fetchable whether or not anyone
+maintains the package; the attestations on GitHub's store and in Sigstore's log for every
+tagged release after `0.5.0` (none yet — the first will be the next tag; `0.5.0` and earlier
+carry none); the CHANGELOG, `UPGRADING.md`, `docs/api-stability.md` and `docs/public-api.txt`,
+which say what a consumer may rely on without asking anyone.
 
-**Does not survive an account loss:** the private records — the slice plans, findings, review
-archives and the gap ledger — live in a second repository under the maintainer's account, and
-the **off-account archive is not in place**. A copy of the private repository outside GitHub
+**Does not survive an account loss:** write control over the repository — the organization
+has one owner, the maintainer, so if that account is lost no owner remains to add anyone and
+the path is GitHub Support's orphaned-organization process, the same class of fallback named
+below for hex.pm; and the private records — the slice plans, findings, review archives and the
+gap ledger — which live in a second repository under the maintainer's account, and the
+**off-account archive is not in place**. A copy of the private repository outside GitHub
 (an encrypted, object-locked off-site copy, with its key handling) is a decision the
 maintainer has recorded as open and not yet taken; until it is, the private history survives
 disk loss and not account loss. This page will say when that
@@ -38,9 +42,9 @@ changes, and not before.
 
 1. **Organization ownership** of `ScriptKittyOS`, granted by its current owner, which gives
    the repository, its ruleset and its Actions.
-2. **Hex package ownership**: `mix hex.owner add beam_mcp <email>` run by the current owner,
-   or hex.pm's support process for an unreachable owner, which the package's public metadata
-   (`mix.exs`, this page) supports.
+2. **Hex package ownership**: the package has one owner on hex.pm, the account `aylacroft`;
+   `mix hex.owner add beam_mcp <email>` run by that account, or hex.pm's support process for
+   an unreachable owner, which the package's public metadata (`mix.exs`, this page) supports.
 3. **The release procedure**, which is in the tree: `tools/release_tarball.sh` builds the
    canonical tarball, the tag triggers `.github/workflows/provenance.yml`, and
    `docs/api-stability.md` names the step that writes release numbers into

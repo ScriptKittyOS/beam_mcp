@@ -57,16 +57,16 @@ reader does not have to guess whether a low mark is neglect or a decision.
 | check | this repository | why |
 | --- | --- | --- |
 | Pinned-Dependencies | every workflow action pinned by commit SHA with its version beside it; Mix dependencies locked in `mix.lock` | a tag can be moved, a SHA cannot; a test holds the pins on every push |
-| Token-Permissions | every workflow declares top-level `permissions:` with no write; the two jobs that write (provenance's attestation, the Scorecard's SARIF upload) hold it at the job | least privilege, held by the same test |
+| Token-Permissions | every workflow declares top-level `permissions:` with no write; the two jobs that write (provenance's attestation, the Scorecard's SARIF upload) hold it at the job, and no other job does | least privilege, held by the same test — the top level, and which jobs may write |
 | Branch-Protection | the ruleset above: no direct push, linear history, required checks | kept; **no required reviewer** — see Code-Review |
-| Code-Review | pull requests, every one; the reviewer of record is the maintainer, after the lanes | one maintainer cannot approve their own pull request under GitHub's rules, and there is no second one; the Scorecard will score this low and that is the true state, not an omission |
+| Code-Review | pull requests, every one since the ruleset (2026-09-06; the eight bootstrap commits before it were pushed directly); the reviewer of record is the maintainer, after the lanes | one maintainer cannot approve their own pull request under GitHub's rules, and there is no second one; the Scorecard will score this low and that is the true state, not an omission |
 | Security-Policy | `SECURITY.md` | the intake, the rubric and the CVE path |
 | License | `LICENSE`, `NOTICE`, `LICENSES/`, REUSE headers on every file, held by the gate | |
 | Dependency-Update-Tool | Dependabot, weekly, Mix and GitHub Actions | |
 | Vulnerabilities | `mix hex.audit` in the gate, OSV-fed, on every push | |
 | CI-Tests | the gate on three OTP/Elixir pairs | |
 | Maintained | commits and releases as the CHANGELOG shows | |
-| Signed-Releases | releases are Hex releases: the tarball is built by CI on the tag and attested (`docs/provenance.md`); there are no GitHub Releases with assets for this check to read | the attestation binds to the checksum hex.pm shows, which is where consumers fetch from; a GitHub Release would be a copy |
+| Signed-Releases | releases are Hex releases: from the next tag on, the tarball is built by CI on the tag and attested (`docs/provenance.md`; `0.5.0` and earlier carry none — the loop is proved, no tag has run it yet); there are no GitHub Releases with assets for this check to read | the attestation binds to the checksum hex.pm shows, which is where consumers fetch from; a GitHub Release would be a copy |
 | SAST | Dialyzer and Credo in the gate; no CodeQL | the gate's analysers are what the language has; a CodeQL workflow is a separate decision and is not taken here |
 | Fuzzing | eleven property-based tests in the gate; no OSS-Fuzz | property tests are the fuzzing the suite does; OSS-Fuzz integration is not taken |
 | Dangerous-Workflow | the pull-request body is read through an environment variable, never interpolated into a script | |
