@@ -38,7 +38,7 @@ rather than merging `main` into it.
   break the property in a throwaway copy and show the test catches it.
 - **Counts quoted from command output, never typed.** Test counts, exit codes, file counts.
 - **SPDX headers** on every `.ex`, `.exs`, `.sh` and `.yml`. The gate checks it, and CI runs
-  the REUSE Specification's own lint over the whole tree (`pipx run reuse lint` locally;
+  the REUSE Specification's own lint over the whole tree (`pipx run reuse==6.2.0 lint` locally, the version CI pins;
   `REUSE.toml` covers the slice archives).
 - **Scope discipline.** One commit does one thing and says so. If a fix uncovers a second
   defect, file it rather than folding it in.

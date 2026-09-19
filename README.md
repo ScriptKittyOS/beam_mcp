@@ -653,21 +653,29 @@ Apache-2.0. See `LICENSE`, and `NOTICE` for attribution.
 ## Export control
 
 A plain-language statement for the compliance reader, of fact where it is about this package
-and of the maintainer's reading where it is about the regulations; it is not legal advice, and
-it has not been reviewed by counsel — that sentence leaves this paragraph only when one has.
+and of the maintainer's reading where it is about the regulations. **It is not legal advice,
+and it has not been reviewed by counsel** — that sentence leaves this paragraph only when one
+has.
 
 `beam_mcp` is open-source software, published publicly under the Apache License 2.0 on GitHub
-and on hex.pm. **It contains no encryption.** Its only cryptographic operation is a SHA-2
-message digest — SHA-256 by default, SHA-384 or SHA-512 by option — computed by Erlang/OTP's
-`:crypto` (OpenSSL) at one call site, used solely for integrity hashing of canonical bytes
-(`docs/crypto-posture.md`); it holds no key material, and a census in its test suite refuses
-any other `:crypto.` call and any key by name. Under **15 CFR 734.7(a)(4)**, unclassified
+and on hex.pm. **Its own code contains no encryption.** Its only cryptographic operation is a
+SHA-2 message digest — SHA-256 by default, SHA-384 or SHA-512 by option — computed by
+Erlang/OTP's `:crypto` (OpenSSL on the builds the maintainers run) at one call site, used
+solely for integrity hashing of canonical bytes ([`docs/crypto-posture.md`](docs/crypto-posture.md));
+it holds no key material, and a census in its test suite refuses any other `:crypto.` call
+and any key by name. The optional HTTP transport's dependencies (`plug`, `bandit`) bring their
+own libraries — `plug_crypto` carries AES — into an integrator's build; those are outside this
+package's tarball and are the integrator's classification, as the last sentence says. Under **15 CFR 734.7(a)(4)**, unclassified
 software made available to the public without restriction — "posting on the Internet on
 sites available to the public" — is published and thus not subject to the Export
 Administration Regulations; the exception in **734.7(b)** for published *encryption* software
 classified under ECCN 5D002 (which, with **742.15(b)**, keeps such software subject to the EAR
 unless its source is publicly available and, for "non-standard cryptography", notified) does
-not reach a library whose only cryptographic function is a standard message digest. This
-software is not designed or modified for a military end use and is not ITAR-controlled.
-Downstream integrators remain responsible for the export classification of the products that
-incorporate it.
+not reach a library whose only cryptographic function is a standard message digest — the
+maintainer's reading; the regulation's own definitions (15 CFR 772.1) limit "cryptography" to
+transformations using "secret parameters" and "encryption software" to programs providing
+"confidentiality of information", and an unkeyed digest is neither. This software is not
+designed for any article on the United States Munitions List, and no commodity-jurisdiction
+determination has been sought for it; whether it is ITAR-controlled is a classification
+conclusion this paragraph does not make. Downstream integrators remain responsible for the
+export classification of the products that incorporate it.
