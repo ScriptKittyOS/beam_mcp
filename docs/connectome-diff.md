@@ -134,7 +134,7 @@ way; nothing else. Its keys, in the order the rule gives them:
   whatever order the graphs were built in.
 - `"coverage"` — the ten counts (eight since 0.4.0; the two one-sided sign counts since 0.5.0).
 - `"schema_version"` — `3` (the record's own axis: bumped to `2` in 0.5.0 when changed-sign
-  excluded `unset` by name and two counts were added, and to `3` in the release after when
+  excluded `unset` by name and two counts were added, and to `3` in 0.6.0 when
   the algorithm joined the bytes; `1` and `2` records carry the earlier semantics, name no
   algorithm, and are SHA-256 over their bytes — a verifier reads the version first and
   hashes `1` and `2` records with SHA-256 exactly as before, as the canonical page's

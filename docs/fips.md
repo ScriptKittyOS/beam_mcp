@@ -57,8 +57,8 @@ parameters), restated; where this page and OTP's differ, OTP's is right.
    `application:start(crypto)` instead: the application must be loaded, with its
    environment, before the module is. A release does this for every application its `.app`
    files require, and this package's `.app` lists `crypto` as a required application, so a
-   release that includes `beam_mcp` loads and starts it (it did not until the release after
-   0.5.0, the one this page arrives in — an HTTP host had `crypto` only through `plug` and
+   release that includes `beam_mcp` loads and starts it (it did not until 0.6.0, the release
+   this page arrives in — an HTTP host had `crypto` only through `plug` and
    `bandit`, both optional, and a stdio-only release would have had no `:crypto.hash/2` at
    all; writing this page found it, and `test/beam_mcp/connectome/canonical_test.exs`
    "the .app the build writes depends on crypto, so a release without plug and bandit still
