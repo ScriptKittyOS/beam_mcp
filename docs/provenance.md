@@ -32,7 +32,7 @@ So the release tarball is built by one script on every seat — CI, the publishe
 reproducing it:
 
 ```sh
-tools/release_tarball.sh v0.6.0 beam_mcp-0.6.0.tar
+tools/release_tarball.sh v0.7.0 beam_mcp-0.7.0.tar
 ```
 
 It `git archive`s the ref with `tar.umask=022` (every file `644` whatever the machine's umask,
@@ -53,7 +53,7 @@ failure, not as a pass.
 ## Verify a published tarball
 
 ```sh
-v=0.6.0
+v=0.7.0
 curl -fsSLO "https://repo.hex.pm/tarballs/beam_mcp-${v}.tar"
 gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp
 ```

@@ -93,7 +93,9 @@ run_gate() { # run_gate <probe-id> <what was planted>
   printf '     licence files line:  %s\n' "$(grep -E '^  licence files ' "$W/gate.out" | sed 's/^  *//' || true)"
   printf '     licence files line count: %s   (0 means the step printed NOTHING)\n' \
          "$(grep -c '^  licence files ' "$W/gate.out")"
-  other=$(grep -E '^  (format|compile|instruments|test|credo|properties|optional deps|bench|docs|reuse|licence files|publication|messages) ' "$W/gate.out" | grep -cv ' pass$')
+  # A step line ends in `pass` or `pass (<detail>)`; the earlier `' pass$'` counted every
+  # detailed line as not-pass (G-078: 7 on every probe, P0 included).
+  other=$(grep -E '^  (format|compile|dialyzer|instruments|test|credo|properties|optional deps|audit|bench|docs|reuse|licence files|publication|baseline|messages) ' "$W/gate.out" | grep -cvE ' pass( \(|$)')
   printf '     other steps not pass: %s   (so the objection above is this step, not a side effect)\n' "$other"
   printf '     GATE_EXIT=%s\n' "$rc"
   grep -E '^ +(probe|PROBE)[^ ]*$' "$W/gate.out" | sed 's/^ */     named by the step: /'

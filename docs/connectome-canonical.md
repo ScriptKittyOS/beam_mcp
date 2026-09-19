@@ -140,7 +140,7 @@ byte but that value.
 the envelope. **`1`** (0.4.0): the sign values were `allow`, `deny`, `hold`, `unknown`.
 **`2`** (0.5.0): `unset` — no sign was supplied to the package that wrote the bytes — and
 `ungoverned`, a consumer's affirmative "no rule of my policy applies", replace `unknown`;
-nothing else moved. **`3`** (`0.6.0`, which carries this note): the envelope
+nothing else moved. **`3`** (`0.6.0`): the envelope
 names its algorithm as a fourth top-level member, `"algorithm"`, between the version and the
 nodes (rule 1), and the hash is that digest over the bytes (rule 9). The vocabulary is `2`'s,
 unchanged. **At `1`, `unknown` covers both of `2`'s new signs**: a 0.4.0 consumer that looked
