@@ -21,17 +21,19 @@ All notable changes to this project are documented here. The format follows
   GitHub Release beside the Hex release), so a low mark reads as the decision it is.
 - **`docs/succession.md`** says the bus factor is one, what survives the maintainer (the
   org-owned repository, the Hex releases, the attestations, the promises written in the tree),
-  what does not (the private records; the off-account archive is **not in place**, said, not
-  promised), and the five things a successor needs.
+  what does not (write control over the repository if the one owner's account is lost; the
+  private records; the off-account archive is **not in place**, said, not promised), and the
+  five things a successor needs, the Hex owner account named.
 - **`CODEOWNERS`** names the maintainer for every path.
 - **The Scorecard runs** (`.github/workflows/scorecard.yml`) on every push to `main` and once a
   week, publishing to the OpenSSF API and to the code-scanning tab; least privilege, pinned.
 - **Every workflow action is pinned by commit SHA with its version beside it** (a tag can be
   moved), and every workflow declares top-level `permissions:` with no write — the two jobs
-  that write hold it at the job. A census (`test/beam_mcp/governance_test.exs`) holds the
-  pins, the permissions, CODEOWNERS and the pages' stated facts on every push; red first on
-  the tree as it was (seven failures: no CODEOWNERS, no pages, two workflows unpinned and
-  without permissions).
+  that write hold it at the job, and no other job does. A census
+  (`test/beam_mcp/governance_test.exs`) holds the pins, the top-level permissions (a
+  `write-all` included), which jobs may write, CODEOWNERS and the pages' stated facts on
+  every push; red first on the tree as it was (seven failures: no CODEOWNERS, no pages, two
+  workflows unpinned and without permissions).
 
 ### Added — the API stability policy, the public surface pinned, and an upgrade guide
 
