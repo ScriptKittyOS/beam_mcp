@@ -16,10 +16,10 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
   #   - `BeamMCP.Connectome.Canonical.signature/3`, the one site that calls a signer, over the
   #     bytes `encode/2` produces, returning the signature beside them and moving no byte.
   #
-  # The key and the primitive live in a separate package (`beam_mcp_signer`); a host hands
-  # its key to that package, never to this one. The `sign` field an edge carries is the
-  # host's verdict slot, a value not an act (will-not-implement entry 1), and is outside this
-  # census. `Plug.Crypto` (`MessageVerifier.sign/2`, an HMAC) is in the lock file through
+  # The key and the primitive belong to a separate package (`beam_mcp_signer`, not in this
+  # tree and not published yet); a host hands its key to that package, never to this one. The
+  # `sign` field an edge carries is the host's verdict slot, a value not an act
+  # (will-not-implement entry 1), and is outside this census. `Plug.Crypto` (`MessageVerifier.sign/2`, an HMAC) is in the lock file through
   # `plug` and stays barred by name: a dependency's signer is still a signer.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
@@ -71,6 +71,16 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
           do: m
 
     assert Enum.sort(behaviours) == [BeamMCP.Catalog, BeamMCP.Signer]
+
+    # And each behaviour's callbacks, exactly: a `@doc false` callback of the seam's shape
+    # added to an allowed behaviour is in no docs population and on no line this file's
+    # regexes read -- measured by a review lane on the tree before this assertion: an
+    # `attest/2` on the catalog passed the whole suite.
+    assert Enum.sort(for m <- behaviours, do: {m, Enum.sort(m.behaviour_info(:callbacks))}) ==
+             [
+               {BeamMCP.Catalog, [capabilities: 0, get_prompt: 2, read_resource: 1]},
+               {BeamMCP.Signer, [sign: 2]}
+             ]
 
     hits = Boundary.hits(~r/@(macro)?callback\s+sign\b/)
 

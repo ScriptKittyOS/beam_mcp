@@ -35,9 +35,11 @@ All notable changes to this project are documented here. The format follows
   environment) -- not in this tree, not published yet, and never a dependency of this one. This package still holds no key and calls no signing
   primitive; `docs/will-not-implement.md` entry 3, `docs/crypto-posture.md` and the threat
   model now say "makes no signature of its own" and name the seam, and the no-signature
-  census pins it instead of forbidding it: red first on the tree without the seam (five of six),
-  then red on each plant — a third callback argument, a renamed argument, a second `def sign`,
-  a `:crypto.sign` call, a second signer call site, the no-op answering `{:ok, <<>>}`.
+  census pins it instead of forbidding it: red first on the tree without the seam, then red on
+  each plant — a third callback argument, a renamed argument, a second `def sign`, a
+  `:crypto.sign` call, a second signer call site, the no-op answering `{:ok, <<>>}`, and,
+  after review, a second behaviour of the seam's shape, a widened return, a `def(sign(` and a
+  hidden callback on an allowed behaviour.
 
 ## [0.6.0] — 2026-09-19
 
