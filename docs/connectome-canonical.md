@@ -196,6 +196,24 @@ constructor admits, as it is not below zero — is `-0.0`. So `0.1`, `0.0001`,
 only for a graph whose declared form encodes: what `encode/1` refuses, `sidecar/1` refuses
 with the same reason.
 
+## Signing the bytes
+
+The bytes `encode/2` produces are the bytes a signer signs, and this package signs none of
+them itself. The seam is `BeamMCP.Connectome.Canonical.signature/3`: it encodes the graph
+with `encode/2` (the `:algorithm` option and nothing else read from the options), hands
+exactly those bytes to a host-supplied module implementing `BeamMCP.Signer` — one callback,
+`sign(canonical_bytes, opts)`, two arguments with those names, the options passed through as
+the host gave them (a key, a key id: the signer's to read, never this package's) — and returns
+`{:ok, %{algorithm: algorithm, signature: signature, signer: module}}`. **The envelope does
+not move**: a signature is placed beside the bytes, never inside them, so every golden on
+this page and every verifier that re-derives the digest is untouched by whether a signer
+was attached. `BeamMCP.Signer.None`, the one implementation in this package, answers
+`{:error, :no_signer}` and `signature/3` passes it on as `{:error, {:signer, :no_signer}}`; the
+reference implementation that holds a key, Ed25519 through OTP's `:crypto`, is the separate
+package `beam_mcp_signer`. A census pins the callback's shape, the one `def sign` under `lib/`
+and the one call site (`test/beam_mcp/boundary/no_signature_test.exs`), so the seam widens
+only as a visible act.
+
 ## What the exports are
 
 `to_json/2` is the canonical bytes, under the algorithm its option names. `to_dot/1` and `to_graphml/1` are renderings of the same

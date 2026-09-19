@@ -10,7 +10,8 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   # struct pattern is the one place the module's atom may appear. The struct is defined there,
   # matched there, and never constructed there. The catalog is called through three callees,
   # `capabilities/0` at five sites, `read_resource/1` at one and `get_prompt/2` at one -- and,
-  # from the artefact, every call through a module known only at runtime is one of those seven.
+  # from the artefact, every call through a module known only at runtime is one of those seven
+  # or the signer seam's one, `sign/2` in `Canonical.signature/3` (033).
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
@@ -116,6 +117,9 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
              {{BeamMCP.Catalog, :prompts, 1}, :capabilities, 0},
              {{BeamMCP.Catalog, :tools, 1}, :capabilities, 0},
              {{BeamMCP.Catalog, :validate_shape, 1}, :capabilities, 0},
+             # The signer seam (033): the one call through a host-supplied signer module,
+             # `sign/2` over the canonical bytes, pinned by the no-signature census.
+             {{BeamMCP.Connectome.Canonical, :signature, 3}, :sign, 2},
              {{BeamMCP.Connectome.Declared, :read_catalog, 2}, :capabilities, 0},
              {{BeamMCP.Server, :get_prompt, 4}, :get_prompt, 2},
              {{BeamMCP.Server, :read_resource, 3}, :read_resource, 1}
