@@ -37,4 +37,6 @@ sed "s|^$entry\$|$entry since=9.9.9|" "$work/base.txt" > "$work/release.txt"
                                                                           run "P6 a new entry marked Unreleased (the writer)" 0 "$work/added.txt"
 { cat "$work/base.txt"; echo "BeamMCP.Probe function added/1 since=$released"; } > "$work/added-backdated.txt"
                                                                           run "P7 a new entry marked since= the last release (back-dated addition)" 1 "$work/added-backdated.txt"
+sed "s|^$entry\$|$entry removed_in=0.0.1|" "$work/base.txt" > "$work/phantom.txt"
+                                                                          run "P8 removed_in= with a phantom number below the last release" 1 "$work/phantom.txt"
 if [ "$bad" -eq 0 ]; then echo "PROBE OK: the two hand edits are red; the writer's and the release step's edits are green"; else echo "PROBE FAILED"; exit 1; fi

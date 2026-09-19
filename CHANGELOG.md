@@ -24,16 +24,18 @@ README names as `1.0.0`'s condition for the public API; `1.0.0` follows once it 
 - **The gate diffs `docs/public-api.txt` against `origin/main`** (a sixteenth step,
   `baseline`; `tools/baseline_diff.sh`, probed by `tools/probe_baseline_diff.sh`): a public
   entry's line deleted by hand, or a `since=`/`deprecated_since=`/`removed_in=` marker arriving
-  with a release number the CHANGELOG already lists, is a FAIL. The census reads the tree
+  with a release number not above the CHANGELOG's highest heading — one it lists, or a phantom
+  between two releases — is a FAIL. The census reads the tree
   alone and passed both edits green (a review lane measured it); this step reads git. Where
   `origin/main` does not resolve the line says so and is not evidence.
 - **The pull-request summary waits for running legs** on a body edit (`tools/ci_legs_verdict.sh`,
-  polling the head SHA's leg check runs until each is completed, bounded at 20 minutes, probed
-  offline by `tools/probe_ci_legs_verdict.sh` with a scripted `gh`): an edit during a
-  synchronize run no longer fails on null conclusions and blocks the merge beside a later
-  green.
+  polling the head SHA's leg check runs until each is completed, bounded at 20 minutes, a
+  failed API read a poll spent rather than a verdict, probed offline by
+  `tools/probe_ci_legs_verdict.sh` with a scripted `gh`): an edit during a synchronize run no
+  longer fails on null conclusions and blocks the merge beside a later green.
 - `tools/probe_gate_honesty.sh`'s "other steps not pass" count reads `pass (<detail>)` as pass
-  (it counted every detailed line: 10 of 16 on a green gate; 0 now).
+  (it counted every detailed line: 7 of its 13 names on a green gate, 10 of the 16 the gate
+  prints now; 0 now).
 
 ### Changed — pages (copy)
 

@@ -9,9 +9,10 @@
 #      line present at the base and absent at the head, whose entry (the text before its
 #      markers) does not reappear, is a hand deletion of a public entry;
 #   2. a marker back-dated -- a `since=`, `deprecated_since=` or `removed_in=` value ARRIVING
-#      in this change as a release number that the base CHANGELOG already lists under a
-#      `## [N]` heading: a change dressed as one that already shipped. The release commit
-#      writes its own, not-yet-listed number, and passes.
+#      in this change as a release number that is not above the base CHANGELOG's highest
+#      `## [N]` heading: one it already lists, or a phantom between two releases (a lane
+#      measured `removed_in=0.6.5` passing the first draft) -- a change dressed as one that
+#      already shipped. The release commit writes its own, higher number, and passes.
 #
 # Pure: three files in, a verdict out, so a probe can plant on copies. The gate feeds it the
 # base from `git show origin/main:...` and the head from the tree.
@@ -36,17 +37,20 @@ if [ -n "$deleted" ]; then
   fail=1
 fi
 # 2. Markers arriving with an already-released number.
-released=$(grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$changelog" | tr -d '#[] ')
+highest=$(grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$changelog" | tr -d '#[] ' | sort -V | tail -1)
 arriving=$(comm -13 <(markers "$base") <(markers "$head"))
 backdated=""
 while IFS= read -r m; do
   [ -n "$m" ] || continue
   v=${m##*=}
   [ "$v" = "Unreleased" ] && continue
-  if printf '%s\n' "$released" | grep -qx "$v"; then backdated="${backdated}${m}"$'\n'; fi
+  # Not above the highest released heading: equal to it, below it, or between two releases.
+  if [ -z "$highest" ] || [ "$v" = "$highest" ] || [ "$(printf '%s\n%s\n' "$highest" "$v" | sort -V | tail -1)" != "$v" ]; then
+    backdated="${backdated}${m}"$'\n'
+  fi
 done <<< "$arriving"
 if [ -n "$backdated" ]; then
-  echo "FAIL: markers arriving with a release number the base CHANGELOG already lists (a change dressed as one that shipped):"
+  echo "FAIL: markers arriving with a release number not above the base CHANGELOG's highest heading ($highest) -- a change dressed as one that shipped:"
   printf '%s' "$backdated" | sort -u | sed 's/^/  /'
   fail=1
 fi

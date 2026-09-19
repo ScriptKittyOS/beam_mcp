@@ -21,6 +21,7 @@ seq_dir=$PROBE_SEQ; n=$(cat "$seq_dir/n"); pages=$(ls "$seq_dir"/page.* | wc -l)
 [ "$n" -lt "$pages" ] && echo $((n + 1)) > "$seq_dir/n"
 page="$seq_dir/page.$n"; [ -f "$page" ] || page="$seq_dir/page.$((pages - 1))"
 filter=""; while [ $# -gt 0 ]; do [ "$1" = "--jq" ] && filter=$2; shift; done
+grep -q '"__fail__"' "$page" && { echo "gh: HTTP 502 (fake)" >&2; exit 1; }
 jq -r "$filter" < "$page"
 GH
 chmod +x "$work/bin/gh"
@@ -58,4 +59,16 @@ run "S4 two legs only, the skipped unexpanded name beside" 1 "$d"
 d=$work/s5; mkdir -p "$d"
 cp "$work/s1/page.2" "$d/page.0"
 run "S5 three successes on the first read" 0 "$d"
+# S6: the API fails once, then three successes -- a read spent, not a verdict.
+d=$work/s6; mkdir -p "$d"
+echo '{"__fail__":true}' > "$d/page.0"; cp "$work/s1/page.2" "$d/page.1"
+run "S6 the API fails once, then three successes" 0 "$d"
+# S7: the API fails every time -- the bound, named as a failed read.
+d=$work/s7; mkdir -p "$d"
+echo '{"__fail__":true}' > "$d/page.0"
+run "S7 the API fails every time (bound)" 1 "$d"
+# S8: an empty page -- no check runs at all; the count says 0, not 1.
+d=$work/s8; mkdir -p "$d"
+echo '{"check_runs":[]}' > "$d/page.0"
+run "S8 no check runs at all" 1 "$d"
 if [ "$bad" -eq 0 ]; then echo "PROBE OK: the read waits for running legs, then judges; red, too few, and the bound are FAIL"; else echo "PROBE FAILED"; exit 1; fi
