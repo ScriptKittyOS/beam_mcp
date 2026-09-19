@@ -99,7 +99,7 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
     {:ok, callbacks} = Code.Typespec.fetch_callbacks(BeamMCP.Signer)
     assert [{{:sign, 2}, [spec]}] = callbacks
 
-    {:type, _, :fun, [{:type, _, :product, args}, ret]} = spec
+    {:type, _, :fun, [{:type, _, :product, args}, _ret]} = spec
 
     names =
       Enum.map(args, fn

@@ -469,6 +469,26 @@ else
   fail=1
 fi
 
+# The public-API baseline against origin/main: no entry's line deleted by hand, no marker
+# arriving with a number the CHANGELOG already lists (G-076: the census reads the tree alone,
+# so both edits passed it green; tools/baseline_diff.sh is the pure check, tools/probe_baseline_diff.sh
+# its probe). Where origin/main does not resolve the line says so and is not evidence.
+if git cat-file -e origin/main:docs/public-api.txt 2>/dev/null; then
+  bl_dir=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-gate-baseline.XXXXXX")
+  git show origin/main:docs/public-api.txt > "$bl_dir/base.txt"
+  git show origin/main:CHANGELOG.md > "$bl_dir/changelog.md"
+  if bl_out=$(bash tools/baseline_diff.sh "$bl_dir/base.txt" docs/public-api.txt "$bl_dir/changelog.md" 2>&1); then
+    note "baseline" "$bl_out"
+  else
+    note "baseline" "FAIL (docs/public-api.txt against origin/main)"
+    printf '%s\n' "$bl_out" | sed 's/^/      /'
+    fail=1
+  fi
+  rm -rf "$bl_dir"
+else
+  note "baseline" "pass (origin/main does not resolve here; the baseline was not diffed -- this line is not evidence)"
+fi
+
 # Commit messages: the branch's own commits carry no attribution trailer, no session link, no
 # board identifier and no consumer name.
 #

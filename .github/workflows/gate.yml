@@ -108,12 +108,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [gate, pr-body]
     if: always()
+    # The edited path may wait up to 20 minutes for running legs (tools/ci_legs_verdict.sh's
+    # bound); the job's own ceiling sits just above it so a hang is a FAIL, not a stall.
+    timeout-minutes: 25
     # The edited path reads the legs' check runs for the head SHA: a read, granted here and
     # nowhere wider.
     permissions:
       contents: read
       checks: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: every leg of the matrix passed, and the pull-request body where there is one
         env:
           GH_TOKEN: ${{ github.token }}
@@ -126,18 +130,12 @@ jobs:
             # the REQUIRED context, and a fresh green under that name on a commit whose legs
             # this run never read would let a title edit stand a green beside a red (a review
             # lane's finding). So the legs' verdicts for this head SHA are read from the checks
-            # API -- the latest run of each leg name -- and all three must be success.
+            # API -- the latest run of each leg name -- and all three must be success. The
+            # read WAITS for legs still running (G-079: an edit during the synchronize run read
+            # null conclusions, failed, and the ruleset blocked on that red beside the later
+            # green); tools/ci_legs_verdict.sh polls to a bound, and its probe runs offline.
             [ "${{ needs.pr-body.result }}" = "success" ] || exit 1
-            # The expanded leg names only: the skipped matrix job of THIS run registers one
-            # unexpanded name ("Gate - leg (OTP ${{ '{{' }} matrix.otp ...", skipped), which is
-            # not a verdict (the first edited run measured exactly that).
-            legs=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
-              --jq '.check_runs[] | select(.name | test("^Gate - leg \\(OTP [0-9]+, Elixir [0-9.]+, [a-z]+\\)$")) | "\(.name): \(.conclusion)"')
-            printf '%s\n' "$legs"
-            n=$(printf '%s\n' "$legs" | grep -c . || true)
-            bad=$(printf '%s\n' "$legs" | grep -vc ': success$' || true)
-            [ "$n" -ge 3 ] || { echo "FAIL: only $n leg verdict(s) exist for ${HEAD_SHA}; the tree is unmeasured"; exit 1; }
-            [ "$bad" -eq 0 ] || { echo "FAIL: a leg's latest verdict for ${HEAD_SHA} is not success"; exit 1; }
+            bash tools/ci_legs_verdict.sh "${GITHUB_REPOSITORY}" "${HEAD_SHA}"
           else
             [ "${{ needs.gate.result }}" = "success" ]
             case "${{ needs.pr-body.result }}" in success|skipped) ;; *) exit 1 ;; esac

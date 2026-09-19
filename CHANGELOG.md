@@ -11,6 +11,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — instruments (no public entry moves)
+
+- **The gate diffs `docs/public-api.txt` against `origin/main`** (a sixteenth step,
+  `baseline`; `tools/baseline_diff.sh`, probed by `tools/probe_baseline_diff.sh`): a public
+  entry's line deleted by hand, or a `since=`/`deprecated_since=`/`removed_in=` marker arriving
+  with a release number the CHANGELOG already lists, is a FAIL. The census reads the tree
+  alone and passed both edits green (a review lane measured it); this step reads git. Where
+  `origin/main` does not resolve the line says so and is not evidence.
+- **The pull-request summary waits for running legs** on a body edit (`tools/ci_legs_verdict.sh`,
+  polling the head SHA's leg check runs until each is completed, bounded at 20 minutes, probed
+  offline by `tools/probe_ci_legs_verdict.sh` with a scripted `gh`): an edit during a
+  synchronize run no longer fails on null conclusions and blocks the merge beside a later
+  green.
+- `tools/probe_gate_honesty.sh`'s "other steps not pass" count reads `pass (<detail>)` as pass
+  (it counted every detailed line: 10 of 16 on a green gate; 0 now).
+
+### Changed — pages (copy)
+
+- `docs/governance.md`'s Scorecard table carries the check's own figure beside each row
+  (read 2026-09-19; aggregate 7), with the rule behind each low one — Maintained is 0 for any
+  repository under 90 days old; Signed-Releases and Packaging read GitHub Releases and a
+  publishing workflow, neither of which a Hex release has — and two rows the first result
+  added (Packaging, CII-Best-Practices).
+- `docs/provenance.md`'s example commands name `0.7.0`; `docs/connectome-canonical.md`'s
+  `schema_version` history no longer says `0.6.0` "carries this note".
+
 ## [0.7.0] — 2026-09-19
 
 The signer seam, and nothing else: three public entries added — `BeamMCP.Signer` (the
