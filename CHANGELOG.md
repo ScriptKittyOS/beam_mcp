@@ -11,6 +11,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the signer seam: one behaviour, one no-op, one call site; the key stays outside
+
+- **`BeamMCP.Signer`** is a behaviour with exactly one callback, **`c:BeamMCP.Signer.sign/2`** —
+  `sign(canonical_bytes :: binary(), opts :: keyword()) :: {:ok, binary()} | {:error, term()}`.
+  Bytes in, signature out, nothing else: two arguments with those names, and a census pins
+  the module, the callback, the arity and the names, so any widening is a visible act
+  (decided as the whole point of the seam: signing bytes publishes nothing about who decides
+  what; a richer callback would).
+- **`BeamMCP.Signer.None.sign/2`** is the one implementation in this package and signs nothing:
+  `{:error, :no_signer}`, whatever the bytes and options.
+- **`BeamMCP.Connectome.Canonical.signature/3`** — `signature(graph, signer, opts)` — is the one
+  site that calls a signer: it encodes the graph with `encode/2`, hands exactly those bytes to
+  the host-supplied module with the options as the host gave them (this package reads only
+  `:algorithm` from them), and returns `{:ok, %{algorithm: algorithm, signature: signature,
+  signer: module}}`. **The envelope's bytes do not move**; a signature sits beside them, never
+  inside, and every golden and verifier is untouched. Refusals: the encode's own; a module that
+  is no signer, `{:error, {:signer, {:not_a_signer, module}}}`; the signer's own error under
+  `{:signer, reason}`; a non-binary answer, `{:signer, {:not_a_signature, x}}`; a signer that
+  raises, raises.
+- **The reference signer that holds a key is decided as a separate package, `beam_mcp_signer`**
+  (Ed25519 through OTP's `:crypto`, the key handed in by the host, never read from the
+  environment) -- not in this tree, not published yet, and never a dependency of this one. This package still holds no key and calls no signing
+  primitive; `docs/will-not-implement.md` entry 3, `docs/crypto-posture.md` and the threat
+  model now say "makes no signature of its own" and name the seam, and the no-signature
+  census pins it instead of forbidding it: red first on the tree without the seam (five of six),
+  then red on each plant — a third callback argument, a renamed argument, a second `def sign`,
+  a `:crypto.sign` call, a second signer call site, the no-op answering `{:ok, <<>>}`.
+
 ## [0.6.0] — 2026-09-19
 
 Everything since `0.5.0`, entry by entry below: the wire hardening that followed the threat model
