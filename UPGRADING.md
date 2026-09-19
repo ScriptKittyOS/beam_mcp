@@ -13,7 +13,7 @@ says **BREAKING**, which the census requires.
 
 ## The rule for `0.x`
 
-Breaks land at the **minor** position and nowhere else. Pin `~> 0.6.0` (the current minor,
+Breaks land at the **minor** position and nowhere else. Pin `~> 0.7.0` (the current minor,
 three numbers), not `~> 0.6`: the tighter pin stops at the next minor, which is where the
 next documented break can be, so a routine `mix deps.update` never carries you across one.
 To move a minor: read the release's rows below and their CHANGELOG entries, apply each "how
@@ -34,15 +34,22 @@ tracer now runs in) — not a new floor: 27 was already the floor — and change
 does beside a host's own tracer (`docs/connectome-observed.md`); neither removes, renames or
 hides a public entry.
 
+**`0.7.0` has no row: it breaks nothing.** It adds the signer seam — `BeamMCP.Signer` (one
+callback, `sign/2`), `BeamMCP.Signer.None` and `BeamMCP.Connectome.Canonical.signature/3` —
+under "Added — the signer seam" in the CHANGELOG. A host that does not sign changes nothing;
+one that does adds the separate package `beam_mcp_signer` and passes its module and key to
+`signature/3`. Raise the pin to `~> 0.7.0` when you take it; `~> 0.6.0` stops before it by the
+rule, not because anything moved.
+
 ## The road to `1.0.0`, in order
 
 Stated here so nobody infers it from a plan's label or a folder's name:
 
-1. **`0.6.0`** — this release: everything since `0.5.0`, the assessability snapshot. One
-   documented break at the minor (the exported bytes).
-2. **`0.7.0`** — the signer package: an authority behaviour added to the public surface, the
-   last intentional addition before `1.0.0`. An addition, not a break; `~> 0.6.0` stops at it
-   all the same, by the rule.
+1. **`0.6.0`** — everything since `0.5.0`, the assessability snapshot. One documented break at
+   the minor (the exported bytes).
+2. **`0.7.0`** — this release: the signer seam, `BeamMCP.Signer` (a behaviour added to the
+   public surface; no authority passes through it), the last intentional addition before
+   `1.0.0`. An addition, not a break; `~> 0.6.0` stops at it all the same, by the rule.
 3. **`0.8.0`** — a quiet minor: documentation, the Scorecard's rows, instrument leftovers. No
    public entry added, removed, renamed or hidden — the "full minor release unchanged" the
    README's `1.0.0` condition requires, measured by `docs/public-api.txt` not moving.

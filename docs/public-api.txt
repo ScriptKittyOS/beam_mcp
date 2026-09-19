@@ -38,7 +38,7 @@ BeamMCP.Connectome.Canonical function hash_value/2 defaults=1
 BeamMCP.Connectome.Canonical function hash_value!/2 defaults=1
 BeamMCP.Connectome.Canonical function sidecar/1
 BeamMCP.Connectome.Canonical function sidecar!/1
-BeamMCP.Connectome.Canonical function signature/3 defaults=1 since=Unreleased
+BeamMCP.Connectome.Canonical function signature/3 defaults=1 since=0.7.0
 BeamMCP.Connectome.Canonical function to_dot/1
 BeamMCP.Connectome.Canonical function to_dot!/1
 BeamMCP.Connectome.Canonical function to_graphml/1
@@ -131,8 +131,8 @@ BeamMCP.Server function new/1 defaults=1
 BeamMCP.Server function shutdown?/1
 BeamMCP.Server type dispatch/0
 BeamMCP.Server type state/0
-BeamMCP.Signer callback sign/2 since=Unreleased
-BeamMCP.Signer.None function sign/2 since=Unreleased
+BeamMCP.Signer callback sign/2 since=0.7.0
+BeamMCP.Signer.None function sign/2 since=0.7.0
 BeamMCP.Stacktrace function arities/1
 BeamMCP.Stacktrace type frame/0
 BeamMCP.ToolSpec type input_schema/0
