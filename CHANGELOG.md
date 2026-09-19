@@ -13,7 +13,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.6.0] — 2026-09-19
 
-Everything since `0.5.0`, nineteen entries: the wire hardening that followed the threat model
+Everything since `0.5.0`, entry by entry below: the wire hardening that followed the threat model
 (the stdio loop and JSON nesting fixes, the HTTP body read deadline, the HTTP/2 control-frame
 residue bounded by a connection deadline), the threat-model page itself, the hash-agile
 canonical envelope, then the install-floor work (slices 022–028) — the OTP floor at compile
