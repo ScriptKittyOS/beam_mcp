@@ -83,7 +83,7 @@ From the release this page ships in, a break is a CHANGELOG heading carrying the
 census holds the Unreleased section to that — and `UPGRADING.md` lists them. Earlier releases
 documented their breaks under headings of their own wording (`0.2.0`'s "two fields are
 REMOVED", `0.4.0`'s "BREAKING, and it breaks a host contract"); `UPGRADING.md` names each with
-its CHANGELOG heading. That is why the README recommends `~> 0.5.0` rather than `~> 0.5`: the
+its CHANGELOG heading. That is why the README recommends the current minor at three numbers (`~> 0.6.0`) rather than two (`~> 0.6`): the
 tighter pin stops at the next minor, which is where the next documented break can be. A patch
 release carries no break to the public surface, the wire, the exported bytes or the host
 contract — a rule the census cannot check (it does not know which number the next release

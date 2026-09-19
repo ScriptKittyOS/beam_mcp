@@ -15,7 +15,8 @@ happened.
 
 ## State
 
-- **`0.6.0` carries everything since `0.5.0`**: the install-floor slices (the OTP floor at
+- **`0.6.0` carries everything since `0.5.0`**: the wire hardening after the threat model, the
+  threat-model page, the hash-agile canonical envelope (the release's one break), the install-floor slices (the OTP floor at
   compile time, the CI matrix on three pairs, the dependency audit, build provenance, the
   security policy, the instruments and Dialyzer, the tracer in its own trace session, the
   API-stability policy with `docs/public-api.txt` pinned by a census) and, after them,
@@ -30,7 +31,7 @@ happened.
   it pins the version the results carry. `docs/public-api.txt` carries no `Unreleased` marker
   this cycle, so `release_markers!("0.6.0")` wrote nothing, and the census says so.
 - **No head hash is written here** — a hash written into the file it describes cannot include
-  the commit that writes it. `git log main..slice/018-release-0-5-0` is the authority.
+  the commit that writes it. `git log v0.5.0..main` is the authority.
 - Gate on the release commit: fifteen steps, every line `pass` (the 0.5.0 gate had thirteen;
   the audit step made it fourteen in 024 and Dialyzer fifteen in 027a) — format (the tracked set, not a
   glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
@@ -50,11 +51,12 @@ happened.
 
 ## What is next
 
-The plan's order after this release: the federation seam (held on an answer from another
-board about who orchestrates a merge and which key registry verifies sub-graphs — nothing
-touching signing or key material is built without the owner's word), effective connectivity,
-then assessability and deployability toward `1.0.0`, which follows once the public API and the
-stated threat model have each survived a full minor release unchanged. A compiler-tracer census
+The road, as `UPGRADING.md` states it and the owner locked it: **`0.7.0`** the signer package
+(an authority behaviour added to the public surface — the last intentional addition; nothing
+touching signing or key material is built without the owner's word), **`0.8.0`** a quiet minor
+in which no public entry moves, **`1.0.0`** after it has stood — the README's condition, that
+the public API and the stated threat model have each survived a full minor release unchanged.
+The federation seam stays held on another board's answer and is not on that road. A compiler-tracer census
 (module-body code run at compile time, which neither the text censuses nor `:xref` see) is
 scheduled with its lift measured. Sign-aware reachability, if asked for, is a later slice or a
 refusal decided in the open — never a widening inside a release slice; `all_paths` stays
@@ -104,7 +106,8 @@ refused.
    is then the release commit.
 2. The gate on that commit, fifteen `pass`, output recorded by command and exit code (the
    release PR's own gate run is that record).
-3. Tag the release commit locally, signed (`git tag -s vX.Y.Z`); then
+3. Tag the release commit **as it sits on `main` after the rebase-merge** (a new SHA; the
+   bytes are a function of the tree, measured) locally, signed (`git tag -s vX.Y.Z`); then
    `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` (the script builds the
    canonical tarball from `git archive` of that tag and publishes from that tree — a
    working-tree `mix hex.publish` ships that machine's file modes and is not what the

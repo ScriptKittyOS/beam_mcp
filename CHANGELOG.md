@@ -13,12 +13,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.6.0] — 2026-09-19
 
-Everything since `0.5.0`: the install-floor work (slices 022–028) — the OTP floor at compile time, the CI
-matrix, the dependency audit, build provenance, the security policy, the instruments, the
-tracer in its own trace session, the API-stability policy with the public surface pinned — and
-governance, the export-control statement and REUSE compliance after it. **One documented break
-at the minor**, in the exported bytes: the canonical envelope names its algorithm and
-`schema_version` is `3` (its entry below, with the how-to-tell sentence). **The road from here,
+Everything since `0.5.0`, nineteen entries: the wire hardening that followed the threat model
+(the stdio loop and JSON nesting fixes, the HTTP body read deadline, the HTTP/2 control-frame
+residue bounded by a connection deadline), the threat-model page itself, the hash-agile
+canonical envelope, then the install-floor work (slices 022–028) — the OTP floor at compile
+time, the CI matrix, the dependency audit, build provenance, the security policy, the
+instruments, the tracer in its own trace session, the API-stability policy with the public
+surface pinned — and governance, the export-control statement and REUSE compliance after it.
+**One documented break at the minor**, in the exported bytes: the canonical envelope names its
+algorithm and `schema_version` is `3` (its entry below, with the how-to-tell sentence). **The road from here,
 as `UPGRADING.md` states it:** `0.7.0` carries the signer package's authority behaviour, the
 last intentional addition to the public API; `0.8.0` is a quiet minor in which no public entry
 is added, removed, renamed or hidden; `1.0.0` follows once that minor has stood.
