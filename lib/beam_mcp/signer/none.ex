@@ -8,8 +8,8 @@ defmodule BeamMCP.Signer.None do
   The one implementation of `BeamMCP.Signer` in this package, and the one `sign/2` a census
   allows under `lib/`, spelled exactly as it is here. It exists so that a host's wiring can
   name a signer before it has one, and so that the seam is exercised by a module that holds no
-  key -- the one that holds a key is the separate package `beam_mcp_signer`, not in this tree
-  and not published yet.
+  key -- the one that holds a key is in the separate package `beam_mcp_signer`, which the
+  host attaches.
   """
   @behaviour BeamMCP.Signer
 

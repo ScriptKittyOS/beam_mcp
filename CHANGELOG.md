@@ -11,6 +11,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-09-19
+
+The signer seam, and nothing else: three public entries added — `BeamMCP.Signer` (the
+behaviour, `c:BeamMCP.Signer.sign/2`), `BeamMCP.Signer.None.sign/2` and
+`BeamMCP.Connectome.Canonical.signature/3` — the last intentional addition to the public API
+before `1.0.0`. **No break**: no public entry is removed, renamed or hidden, no wire byte and
+no envelope byte moves. The signer that holds a key is the separate package `beam_mcp_signer`;
+this package does not depend on it. The road from here, as `UPGRADING.md` states it: `0.8.0`
+is a quiet minor in which no public entry is added, removed, renamed or hidden; `1.0.0`
+follows once that minor has stood.
+
 ### Added — the signer seam: one behaviour, one no-op, one call site; the key stays outside
 
 - **`BeamMCP.Signer`** is a behaviour with exactly one callback, **`c:BeamMCP.Signer.sign/2`** —
@@ -30,10 +41,13 @@ All notable changes to this project are documented here. The format follows
   is no signer, `{:error, {:signer, {:not_a_signer, module}}}`; the signer's own error under
   `{:signer, reason}`; a non-binary answer, `{:signer, {:not_a_signature, x}}`; a signer that
   raises, raises.
-- **The reference signer that holds a key is decided as a separate package, `beam_mcp_signer`**
-  (Ed25519 through OTP's `:crypto`, the key handed in by the host, never read from the
-  environment) -- not in this tree, not published yet, and never a dependency of this one. This package still holds no key and calls no signing
-  primitive; `docs/will-not-implement.md` entry 3, `docs/crypto-posture.md` and the threat
+- **The reference signer that holds a key is the separate package `beam_mcp_signer`**
+  ([github.com/ScriptKittyOS/beam_mcp_signer](https://github.com/ScriptKittyOS/beam_mcp_signer)):
+  `BeamMCP.Signer.Ed25519`, Ed25519 through OTP's `:crypto`, the 32-byte private key handed in
+  by the host under `opts[:private_key]` on every call and read from nowhere else — no
+  environment variable, no file, no application config. A host that wants signatures adds that
+  package and attaches the module; this package does not depend on it and never will. This
+  package still holds no key and calls no signing primitive; `docs/will-not-implement.md` entry 3, `docs/crypto-posture.md` and the threat
   model now say "makes no signature of its own" and name the seam, and the no-signature
   census pins it instead of forbidding it: red first on the tree without the seam, then red on
   each plant — a third callback argument, a renamed argument, a second `def sign`, a
@@ -52,9 +66,10 @@ instruments, the tracer in its own trace session, the API-stability policy with 
 surface pinned — and governance, the export-control statement and REUSE compliance after it.
 **One documented break at the minor**, in the exported bytes: the canonical envelope names its
 algorithm and `schema_version` is `3` (its entry below, with the how-to-tell sentence). **The road from here,
-as `UPGRADING.md` states it:** `0.7.0` carries the signer package's authority behaviour, the
-last intentional addition to the public API; `0.8.0` is a quiet minor in which no public entry
-is added, removed, renamed or hidden; `1.0.0` follows once that minor has stood.
+as `UPGRADING.md` states it:** `0.7.0` carries the signer seam — `BeamMCP.Signer`, a behaviour
+added to the public surface, and no authority — the last intentional addition to the public
+API; `0.8.0` is a quiet minor in which no public entry is added, removed, renamed or hidden;
+`1.0.0` follows once that minor has stood.
 
 ### Added — an export-control statement, and REUSE compliance by the specification's own tool
 

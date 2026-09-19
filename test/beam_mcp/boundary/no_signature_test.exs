@@ -16,10 +16,12 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
   #   - `BeamMCP.Connectome.Canonical.signature/3`, the one site that calls a signer, over the
   #     bytes `encode/2` produces, returning the signature beside them and moving no byte.
   #
-  # The key and the primitive belong to a separate package (`beam_mcp_signer`, not in this
-  # tree and not published yet); a host hands its key to that package, never to this one. The
+  # The key and the primitive belong to a separate package, `beam_mcp_signer` (Ed25519 through
+  # OTP's `:crypto`, the key under `opts[:private_key]`); a host hands its key to that package,
+  # never to this one. The
   # `sign` field an edge carries is the host's verdict slot, a value not an act
-  # (will-not-implement entry 1), and is outside this census. `Plug.Crypto` (`MessageVerifier.sign/2`, an HMAC) is in the lock file through
+  # (will-not-implement entry 1), and is outside this census. `Plug.Crypto`
+  # (`MessageVerifier.sign/2`, an HMAC) is in the lock file through
   # `plug` and stays barred by name: a dependency's signer is still a signer.
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary

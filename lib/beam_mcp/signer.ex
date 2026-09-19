@@ -9,9 +9,10 @@ defmodule BeamMCP.Signer do
   hands it the canonical bytes `BeamMCP.Connectome.Canonical.encode/2` produces for a graph -- the bytes whose digest the
   envelope names, the bytes a verifier re-derives -- and places what comes back beside them.
   This package holds no key and calls no signing primitive; the reference implementation that
-  does, Ed25519 through OTP's `:crypto` with a key the host hands in, is decided as a separate
-  package, `beam_mcp_signer`, not in this tree and not published yet. `BeamMCP.Signer.None` is
-  the one implementation here, and it signs nothing.
+  does -- Ed25519 through OTP's `:crypto`, the key handed in by the host in the options on
+  every call -- is the separate package `beam_mcp_signer`
+  (github.com/ScriptKittyOS/beam_mcp_signer), which a host adds and attaches; this package does
+  not depend on it. `BeamMCP.Signer.None` is the one implementation here, and it signs nothing.
 
   **The callback is exactly this shape, and a census pins it** (`test/beam_mcp/boundary/no_signature_test.exs`):
   two arguments, named `canonical_bytes` and `opts`; `{:ok, signature}` or `{:error, reason}`.

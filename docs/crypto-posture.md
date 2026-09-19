@@ -63,8 +63,8 @@ census so that any widening is a visible act — and `BeamMCP.Connectome.Canonic
 the one site that calls it, over the bytes `encode/2` produces, returning the signature beside
 them and moving no byte. The one implementation here, `BeamMCP.Signer.None`, signs nothing;
 the reference implementation that does, Ed25519 through OTP's `:crypto` with a key the host
-hands in, is decided as a separate package, `beam_mcp_signer` -- not in this tree, not
-published yet, and never a dependency of this one. A
+hands in under `opts[:private_key]`, is the separate package `beam_mcp_signer`, which a host
+attaches; it is never a dependency of this one. A
 post-quantum signature (ML-DSA) would be another module behind the same callback and change
 nothing here, since the envelope already names its digest.
 
