@@ -23,8 +23,7 @@ happens to any account; if the maintainer *stops*, they add a successor as the o
 owner first, which is a smaller act than transferring a personal repository; the published
 Hex releases and their documentation on hexdocs, which stay fetchable whether or not anyone
 maintains the package; the attestations on GitHub's store and in Sigstore's log for every
-tagged release after `0.5.0` (none yet — the first will be the next tag; `0.5.0` and earlier
-carry none); the CHANGELOG, `UPGRADING.md`, `docs/api-stability.md` and `docs/public-api.txt`,
+tagged release from `0.6.0` on (`0.5.0` and earlier carry none); the CHANGELOG, `UPGRADING.md`, `docs/api-stability.md` and `docs/public-api.txt`,
 which say what a consumer may rely on without asking anyone.
 
 **Does not survive an account loss:** write control over the repository — the organization

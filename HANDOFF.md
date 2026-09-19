@@ -3,10 +3,11 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF — beam_mcp, after release 0.5.0
+# HANDOFF — beam_mcp, release 0.6.0 prepared; publish and tag are the owner's
 
 Tag and publish are owner steps — never `mix hex.publish`, never push a tag, never bump the
-version in `mix.exs`. Those were done for 0.5.0 by the owner, as for 0.4.0.
+version in `mix.exs`. For 0.6.0 the version bump is this release commit, reviewed like any
+other change; publishing and tagging remain the owner's, in the order the runbook below gives.
 
 The slice records — plans, findings, lane reports, signoffs, archived gate runs — live in the
 project's internal tree, not in this repository. Nothing here summarises a review that has not
@@ -14,32 +15,34 @@ happened.
 
 ## State
 
-- **`0.5.0` carries everything since `0.4.0`**, with a paragraph under its heading saying
-  what moved on the wire and citing the recording that holds the connectome surface to having
-  moved nothing. Eight slices landed by rebase: reachability (`BeamMCP.Connectome.Reach`), the
-  conformance harness and the four wire fixes it forced (one a break: `params._meta`), the
-  will-not-implement page with its censuses, the sign vocabulary (a break in the bytes), the
-  pages in the tarball, the resources primitive and the cursor, the prompts primitive, and the
-  connectome on the wire (`BeamMCP.Connectome.Surface`). Four breaks — one on the wire, one in
-  the exported bytes, two in the host contract — each with a how-to-tell sentence in its entry.
-- `mix.exs` says `0.5.0`. The README recommends `~> 0.5.0` (a fourth use of the minor
-  position, the paragraph beside it naming the three kinds of break), and a test binds that
-  requirement to the version and refuses `0.4.0` across them. The wire recording was re-taken
-  at this version, since it pins the version the results carry; the fixture catalog without
-  the surface's entries is still what "before" means.
+- **`0.6.0` carries everything since `0.5.0`**: the install-floor slices (the OTP floor at
+  compile time, the CI matrix on three pairs, the dependency audit, build provenance, the
+  security policy, the instruments and Dialyzer, the tracer in its own trace session, the
+  API-stability policy with `docs/public-api.txt` pinned by a census) and, after them,
+  governance and succession, the export-control statement and REUSE compliance by the
+  specification's tool. **One break at the minor**, in the exported bytes (the canonical
+  envelope's algorithm member and `schema_version` 3), with its how-to-tell sentence. **The
+  road from here is written in `UPGRADING.md`** — `0.7.0` the signer package, `0.8.0` a quiet
+  minor, `1.0.0` after it — so nobody reads it off a plan's label.
+- `mix.exs` says `0.6.0`. The README recommends `~> 0.6.0` (a fifth use of the minor
+  position), and a test binds that requirement to the version and refuses `0.5.0` across the
+  bytes break. The wire recording was re-taken at this version (its ten version lines), since
+  it pins the version the results carry. `docs/public-api.txt` carries no `Unreleased` marker
+  this cycle, so `release_markers!("0.6.0")` wrote nothing, and the census says so.
 - **No head hash is written here** — a hash written into the file it describes cannot include
   the commit that writes it. `git log main..slice/018-release-0-5-0` is the authority.
-- Gate on the release commit: thirteen steps (the audit step made it fourteen in 024 and Dialyzer fifteen in 027a, after
-  this release), every line `pass` — format (the tracked set, not a
+- Gate on the release commit: fifteen steps, every line `pass` (the 0.5.0 gate had thirteen;
+  the audit step made it fourteen in 024 and Dialyzer fifteen in 027a) — format (the tracked set, not a
   glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
   deps, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
   encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
   process after a warm-up, set at roughly double the stable worst of ten runs on the release
   head; the reachability queries' cost recorded and judged by no number, but a query refused
   on the fixture fails the step by name), docs, reuse, licence files, publication, messages.
-  **11 properties, 604 tests, 0 failures**: 599 at the head 018 opened on, plus the three of
-  the README split census and the two that hold the will-not-implement page's row count to
-  the README's spelled count and to the page's own placement sentence.
+  **11 properties, 692 tests, 0 failures** on the release tree (604 at 0.5.0; the difference is
+  the slices' own pins — the floor, the provenance and security-policy pins, the tracer's
+  session suite, the public-API census on the tree and on fixtures, the governance and
+  export-control censuses).
 - The README's four-way split is held by census to the modules compiled from `lib/` (the
   beams whose source is under `lib/`, not the test build's `.app`, which also lists
   `test/support`): every module named under *shipping now* is among them, every module named
@@ -95,13 +98,13 @@ refused.
 - The `2025-11-25` revision is served on stdio only; over HTTP the conformance row for it is
   0 / 30 by design, and the README says so beside the number.
 
-## The release steps — the record of 0.5.0, and the runbook for the next
+## The release steps — the runbook for 0.6.0 (0.5.0 was published from a working tree, before the script)
 
-1. The slice PR merged to `main` by rebase (the ruleset requires two green checks).
-2. This release commit applied by the owner, then the gate on the result, every line `pass`
-   (thirteen at 0.5.0; fourteen since 024; fifteen since 027a), output recorded by command and exit code.
-3. (The next release's step; 0.5.0 was published from a working tree with `mix hex.publish`,
-   before the script existed.) Tag the release commit locally, signed (`git tag -s vX.Y.Z`); then
+1. The release PR merged to `main` by rebase (the ruleset requires two green checks); `main`
+   is then the release commit.
+2. The gate on that commit, fifteen `pass`, output recorded by command and exit code (the
+   release PR's own gate run is that record).
+3. Tag the release commit locally, signed (`git tag -s vX.Y.Z`); then
    `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` (the script builds the
    canonical tarball from `git archive` of that tag and publishes from that tree — a
    working-tree `mix hex.publish` ships that machine's file modes and is not what the

@@ -66,7 +66,7 @@ reader does not have to guess whether a low mark is neglect or a decision.
 | Vulnerabilities | `mix hex.audit` in the gate, OSV-fed, on every push | |
 | CI-Tests | the gate on three OTP/Elixir pairs | |
 | Maintained | commits and releases as the CHANGELOG shows | |
-| Signed-Releases | releases are Hex releases: from the next tag on, the tarball is built by CI on the tag and attested (`docs/provenance.md`; `0.5.0` and earlier carry none — the loop is proved, no tag has run it yet); there are no GitHub Releases with assets for this check to read | the attestation binds to the checksum hex.pm shows, which is where consumers fetch from; a GitHub Release would be a copy |
+| Signed-Releases | releases are Hex releases: from `0.6.0` on, the tarball is built by CI on the tag and attested (`docs/provenance.md`; `0.5.0` and earlier carry none); there are no GitHub Releases with assets for this check to read | the attestation binds to the checksum hex.pm shows, which is where consumers fetch from; a GitHub Release would be a copy |
 | SAST | Dialyzer and Credo in the gate; no CodeQL | the gate's analysers are what the language has; a CodeQL workflow is a separate decision and is not taken here |
 | Fuzzing | eleven property-based tests in the gate; no OSS-Fuzz | property tests are the fuzzing the suite does; OSS-Fuzz integration is not taken |
 | Dangerous-Workflow | the pull-request body is read through an environment variable, never interpolated into a script | |
