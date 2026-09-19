@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# REUSE Specification 3.3 annotations for the slice archives under slices/: tool output and
+# review reports, the project's own records, kept as written. "override": this file's values
+# stand for every file under slices/ -- the 45 that carry a header carry these same values,
+# and one archived gate log quotes the text "SPDX-License-Identifier:" with nothing after it,
+# which the tool would otherwise read from the file as an empty expression (measured). Nothing
+# else in the tree needs this file: every source file carries its header, and the gate holds
+# that.
+
+version = 1
+
+[[annotations]]
+path = ["slices/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Sudo Apt Holdings LLC"
+SPDX-License-Identifier = "Apache-2.0"

@@ -11,6 +11,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — an export-control statement, and REUSE compliance by the specification's own tool
+
+- **The README's "Export control" section** says, for the compliance reader, what the package
+  is (public, Apache-2.0, on GitHub and hex.pm; no encryption; one SHA-2 digest site, SHA-256
+  default and SHA-384/SHA-512 by option, for integrity hashing; no key material) and the
+  maintainer's reading of 15 CFR 734.7(a)(4) — published software is not subject to the EAR —
+  with 734.7(b) and 742.15(b) named for why the encryption exception does not reach a digest-only
+  library. It says it is not legal advice and has not been reviewed by counsel; that sentence
+  stays until one has. A census (`test/beam_mcp/export_control_test.exs`) holds every claim
+  about the package to the code and refuses the stale citation the first draft carried
+  (740.13(e) is "[Reserved]" in the current eCFR).
+- **The tree is REUSE-compliant by `reuse lint`** (REUSE Specification 3.3), not only by the
+  gate's header check: `REUSE.toml` annotates the slice archives, the two scripts that write or
+  plant header text mark those lines for the tool, and CI runs the pinned tool over the whole
+  tree in the conformance job. Measured before: four false "invalid expressions" (string
+  literals) and 198 archive files without information; after: 0 and 648 of 648.
+
 ### Added — governance and succession stated as they are; the Scorecard measured; the workflows pinned
 
 - **`docs/governance.md`** says who decides (one maintainer, an org-owned repository, no

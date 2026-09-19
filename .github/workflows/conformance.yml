@@ -45,6 +45,14 @@ jobs:
           node --version
           python3 --version
           OUT="$RUNNER_TEMP/conformance" ./tools/conformance.sh
+      # REUSE, by the specification's own tool -- CI-ONLY like the conformance number: the
+      # gate's REUSE step reads headers and excludes the slice archives; this reads the whole
+      # tree under REUSE.toml and is the compliance claim CONTRIBUTING makes. The runner's
+      # pipx installs it; the version is pinned so the verdict is a function of the tree.
+      - name: REUSE - the specification's lint over the whole tree
+        if: always()
+        run: pipx run reuse==6.2.0 lint
+
       - name: the suite's results, kept with the run
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

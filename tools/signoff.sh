@@ -178,7 +178,9 @@ if [ "$cmd" = "record" ]; then
     # let a sidecar in would widen it for everything else too. Measured red before this line
     # existed: slices/004-gate-honesty/logs/red-signoff-records-unheadered.txt.
     echo "# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC"
+    # REUSE-IgnoreStart -- the header this tool WRITES, not this file's own
     echo "# SPDX-License-Identifier: Apache-2.0"
+    # REUSE-IgnoreEnd
     echo "#"
     echo "# A review verdict and the tree it is about, in one file, because this repository has"
     echo "# shipped 16 verdicts bound to no tree and 2 trees carrying no verdict. Written by"
