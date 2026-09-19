@@ -137,7 +137,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
   describe "the dependency requirement the README hands a consumer" do
     test "it does not span the wire break this release documents" do
-      requirement = "~> 0.7.0"
+      requirement = "~> 0.8.0"
       claims("{:beam_mcp, \"#{requirement}\"}")
 
       version = Mix.Project.config()[:version]
@@ -145,10 +145,13 @@ defmodule BeamMCP.ReadmeClaimsTest do
       assert Version.match?(version, requirement),
              "the README's requirement must admit the version being shipped"
 
-      refute Version.match?("0.6.0", requirement),
-             "0.6.0 is the minor before this one; 0.7.0 adds the signer seam and breaks " <>
-               "nothing, and the pin still stops at the current minor by the 0.x rule -- " <>
+      refute Version.match?("0.7.0", requirement),
+             "0.7.0 is the minor before this one; 0.8.0 is a quiet minor that moves no public " <>
+               "entry, and the pin still stops at the current minor by the 0.x rule -- " <>
                "the next minor is where the next documented break can be."
+
+      refute Version.match?("0.6.0", requirement),
+             "0.6.0 is two minors back; 0.7.0 added the signer seam and broke nothing."
 
       refute Version.match?("0.5.0", requirement),
              "0.5.0 is on the far side of the break 0.6.0 documented in the exported " <>

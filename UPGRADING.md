@@ -13,8 +13,8 @@ says **BREAKING**, which the census requires.
 
 ## The rule for `0.x`
 
-Breaks land at the **minor** position and nowhere else. Pin `~> 0.7.0` (the current minor,
-three numbers), not `~> 0.7`: the tighter pin stops at the next minor, which is where the
+Breaks land at the **minor** position and nowhere else. Pin `~> 0.8.0` (the current minor,
+three numbers), not `~> 0.8`: the tighter pin stops at the next minor, which is where the
 next documented break can be, so a routine `mix deps.update` never carries you across one.
 To move a minor: read the release's rows below and their CHANGELOG entries, apply each "how
 to tell" sentence to your host, then raise the pin.
@@ -41,18 +41,26 @@ one that does adds the separate package `beam_mcp_signer` and passes its module 
 `signature/3`. Raise the pin to `~> 0.7.0` when you take it; `~> 0.6.0` stops before it by the
 rule, not because anything moved.
 
+**`0.8.0` has no row either: it is the quiet minor.** No public entry was added, removed,
+renamed, hidden or changed in arity — `docs/public-api.txt` is line for line `0.7.0`'s, and the
+release step wrote nothing into it — and no wire byte or envelope byte moved. What changed is
+instruments (the gate diffs the baseline against `origin/main`; the pull-request summary waits
+for running legs) and pages (the Scorecard's measured figures on the governance page). Raise
+the pin to `~> 0.8.0`; nothing else to do.
+
 ## The road to `1.0.0`, in order
 
 Stated here so nobody infers it from a plan's label or a folder's name:
 
 1. **`0.6.0`** — everything since `0.5.0`, the assessability snapshot. One documented break at
    the minor (the exported bytes).
-2. **`0.7.0`** — this release: the signer seam, `BeamMCP.Signer` (a behaviour added to the
-   public surface; no authority passes through it), the last intentional addition before
-   `1.0.0`. An addition, not a break; `~> 0.6.0` stops at it all the same, by the rule.
-3. **`0.8.0`** — a quiet minor: documentation, the Scorecard's rows, instrument leftovers. No
-   public entry added, removed, renamed or hidden — the "full minor release unchanged" the
-   README's `1.0.0` condition requires, measured by `docs/public-api.txt` not moving.
+2. **`0.7.0`** — the signer seam, `BeamMCP.Signer` (a behaviour added to the public
+   surface; no authority passes through it), the last intentional addition before `1.0.0`.
+   An addition, not a break; `~> 0.6.0` stops at it all the same, by the rule.
+3. **`0.8.0`** — this release: the quiet minor. Documentation, the Scorecard's rows,
+   instrument leftovers. No public entry added, removed, renamed or hidden — the "full minor
+   release unchanged" the README's `1.0.0` condition requires, measured by
+   `docs/public-api.txt` not moving (the gate now diffs it against `origin/main` on every run).
 4. **`1.0.0`** — after `0.8.0` has stood: the surface frozen as `docs/api-stability.md` says.
 
 ## What `1.0` will ask
