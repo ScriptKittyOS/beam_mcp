@@ -209,8 +209,9 @@ not move**: a signature is placed beside the bytes, never inside them, so every 
 this page and every verifier that re-derives the digest is untouched by whether a signer
 was attached. `BeamMCP.Signer.None`, the one implementation in this package, answers
 `{:error, :no_signer}` and `signature/3` passes it on as `{:error, {:signer, :no_signer}}`; the
-reference implementation that holds a key, Ed25519 through OTP's `:crypto`, is the separate
-package `beam_mcp_signer`. A census pins the callback's shape, the one `def sign` under `lib/`
+reference implementation that holds a key, Ed25519 through OTP's `:crypto`, is decided as a
+separate package, `beam_mcp_signer`, not in this tree and not published yet. A census pins the
+callback's shape, the one `def sign` under `lib/`
 and the one call site (`test/beam_mcp/boundary/no_signature_test.exs`), so the seam widens
 only as a visible act.
 

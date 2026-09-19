@@ -9,8 +9,9 @@ defmodule BeamMCP.Signer do
   hands it the canonical bytes `BeamMCP.Connectome.Canonical.encode/2` produces for a graph -- the bytes whose digest the
   envelope names, the bytes a verifier re-derives -- and places what comes back beside them.
   This package holds no key and calls no signing primitive; the reference implementation that
-  does, Ed25519 through OTP's `:crypto` with a key the host hands in, is the separate package
-  `beam_mcp_signer`. `BeamMCP.Signer.None` is the one implementation here, and it signs nothing.
+  does, Ed25519 through OTP's `:crypto` with a key the host hands in, is decided as a separate
+  package, `beam_mcp_signer`, not in this tree and not published yet. `BeamMCP.Signer.None` is
+  the one implementation here, and it signs nothing.
 
   **The callback is exactly this shape, and a census pins it** (`test/beam_mcp/boundary/no_signature_test.exs`):
   two arguments, named `canonical_bytes` and `opts`; `{:ok, signature}` or `{:error, reason}`.
@@ -21,8 +22,10 @@ defmodule BeamMCP.Signer do
 
   @doc """
   Signs the canonical bytes. `opts` is whatever the host passed to
-  `BeamMCP.Connectome.Canonical.signature/3` -- a key, a
-  key id, an algorithm choice -- read by the signer alone; this package reads none of it.
+  `BeamMCP.Connectome.Canonical.signature/3` -- a key, a key id, an algorithm choice -- handed
+  on whole. `BeamMCP.Connectome.Canonical.signature/3` may read `:algorithm` from it, for the
+  encode, and reads nothing else; the callback is promised none of those keys. A signer reads
+  what its host agreed to pass.
   """
   @callback sign(canonical_bytes :: binary(), opts :: keyword()) ::
               {:ok, binary()} | {:error, term()}

@@ -30,9 +30,9 @@ All notable changes to this project are documented here. The format follows
   is no signer, `{:error, {:signer, {:not_a_signer, module}}}`; the signer's own error under
   `{:signer, reason}`; a non-binary answer, `{:signer, {:not_a_signature, x}}`; a signer that
   raises, raises.
-- **The reference signer that holds a key is a separate package, `beam_mcp_signer`** (Ed25519
-  through OTP's `:crypto`, the key handed in by the host, never read from the environment),
-  never a dependency of this one. This package still holds no key and calls no signing
+- **The reference signer that holds a key is decided as a separate package, `beam_mcp_signer`**
+  (Ed25519 through OTP's `:crypto`, the key handed in by the host, never read from the
+  environment) -- not in this tree, not published yet, and never a dependency of this one. This package still holds no key and calls no signing
   primitive; `docs/will-not-implement.md` entry 3, `docs/crypto-posture.md` and the threat
   model now say "makes no signature of its own" and name the seam, and the no-signature
   census pins it instead of forbidding it: red first on the tree without the seam (five of six),
