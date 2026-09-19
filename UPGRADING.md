@@ -8,13 +8,13 @@ SPDX-License-Identifier: Apache-2.0
 From any `0.x` to the next, and what `1.0` will ask. The policy this follows is
 `docs/api-stability.md`; the surface it applies to is `docs/public-api.txt`; every break below
 has its full entry in `CHANGELOG.md` under the heading the table names — from `0.5.0` on with
-a "how to tell whether you are affected" sentence, and from the next release on under a
-heading that says **BREAKING**, which the census now requires.
+a "how to tell whether you are affected" sentence, and from `0.6.0` on under a heading that
+says **BREAKING**, which the census requires.
 
 ## The rule for `0.x`
 
-Breaks land at the **minor** position and nowhere else. Pin `~> 0.5.0` (the current minor,
-three numbers), not `~> 0.5`: the tighter pin stops at the next minor, which is where the
+Breaks land at the **minor** position and nowhere else. Pin `~> 0.6.0` (the current minor,
+three numbers), not `~> 0.6`: the tighter pin stops at the next minor, which is where the
 next documented break can be, so a routine `mix deps.update` never carries you across one.
 To move a minor: read the release's rows below and their CHANGELOG entries, apply each "how
 to tell" sentence to your host, then raise the pin.
@@ -27,12 +27,26 @@ to tell" sentence to your host, then raise the pin.
 | `0.3.0` | the wire, on `tools/list` — and an addition placed at the minor by policy | "Added — `ttlMs` and `cacheScope` on `tools/list`" and "Added — stateless Streamable HTTP transport" | `tools/list` results carry the `ttlMs`/`cacheScope` fields `2026-07-28` requires; the HTTP transport arrives as an optional dependency pair (`plug`, `bandit`) — a stdio-only host changes nothing, an HTTP host supplies the two options that have no defaults |
 | `0.4.0` | the host contract | "Changed — BREAKING, and it breaks a host contract rather than the wire" | `BeamMCP.ToolCatalog` is replaced by `BeamMCP.Catalog`, `all/0` by `capabilities/0`; every catalog implementation changes |
 | `0.5.0` | the wire, the exported bytes, the host contract | "Changed — BREAKING: the request `_meta` …", "Changed — BREAKING: the sign vocabulary …", and the structs requirement under the "Added — the resources primitive" and "Added — the prompts primitive" entries | a request's `_meta` is read at `params._meta` and refused at the top level; the sign vocabulary renames the one sign the package writes and `schema_version` becomes `2`; a catalog's `resources` and `prompts` lists must hold the package's structs |
-| next minor (unreleased) | the exported bytes | "Changed — BREAKING (the exported bytes): the canonical envelope names its algorithm; `schema_version` 3 …" | a verifier that pins `schema_version: 2` or hashes without reading the algorithm must be updated (`docs/connectome-canonical.md`, "Versions") |
+| `0.6.0` | the exported bytes | "Changed — BREAKING (the exported bytes): the canonical envelope names its algorithm; `schema_version` 3 …" | a verifier that pins `schema_version: 2` or hashes without reading the algorithm must be updated (`docs/connectome-canonical.md`, "Versions") |
 
-The next minor also raises the OTP floor's stated reason (OTP 27's trace sessions, which the
-connectome tracer now runs in) — not a new floor: 27 was already the floor — and changes what
-the tracer does beside a host's own tracer (`docs/connectome-observed.md`); neither removes,
-renames or hides a public entry.
+`0.6.0` also restates the OTP floor's reason (OTP 27's trace sessions, which the connectome
+tracer now runs in) — not a new floor: 27 was already the floor — and changes what the tracer
+does beside a host's own tracer (`docs/connectome-observed.md`); neither removes, renames or
+hides a public entry.
+
+## The road to `1.0.0`, in order
+
+Stated here so nobody infers it from a plan's label or a folder's name:
+
+1. **`0.6.0`** — this release: everything since `0.5.0`, the assessability snapshot. One
+   documented break at the minor (the exported bytes).
+2. **`0.7.0`** — the signer package: an authority behaviour added to the public surface, the
+   last intentional addition before `1.0.0`. An addition, not a break; `~> 0.6.0` stops at it
+   all the same, by the rule.
+3. **`0.8.0`** — a quiet minor: documentation, the Scorecard's rows, instrument leftovers. No
+   public entry added, removed, renamed or hidden — the "full minor release unchanged" the
+   README's `1.0.0` condition requires, measured by `docs/public-api.txt` not moving.
+4. **`1.0.0`** — after `0.8.0` has stood: the surface frozen as `docs/api-stability.md` says.
 
 ## What `1.0` will ask
 

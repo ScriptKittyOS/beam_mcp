@@ -137,7 +137,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
   describe "the dependency requirement the README hands a consumer" do
     test "it does not span the wire break this release documents" do
-      requirement = "~> 0.5.0"
+      requirement = "~> 0.6.0"
       claims("{:beam_mcp, \"#{requirement}\"}")
 
       version = Mix.Project.config()[:version]
@@ -145,8 +145,14 @@ defmodule BeamMCP.ReadmeClaimsTest do
       assert Version.match?(version, requirement),
              "the README's requirement must admit the version being shipped"
 
+      refute Version.match?("0.5.0", requirement),
+             "0.5.0 is on the far side of the break this release documents in the exported " <>
+               "bytes: a verifier that pins schema_version 2, or hashes without reading the " <>
+               "algorithm member, carried across it by a routine deps.update would read every " <>
+               "0.6.0 envelope as tampered, which is what the minor bump was chosen to prevent."
+
       refute Version.match?("0.4.0", requirement),
-             "0.4.0 is on the far side of the breaks this release documents: a client that " <>
+             "0.4.0 is on the far side of the breaks 0.5.0 documented: a client that " <>
                "put _meta beside method, or a catalog whose resources or prompts list held " <>
                "maps, carried across them by a routine deps.update would be refused by name, " <>
                "which is what the minor bump was chosen to prevent."
