@@ -36,7 +36,7 @@ happened.
   governance and succession, the export-control statement and REUSE compliance by the
   specification's tool. **One break at the minor**, in the exported bytes (the canonical
   envelope's algorithm member and `schema_version` 3), with its how-to-tell sentence. **The
-  road from here is written in `UPGRADING.md`** — `0.7.0` the signer package, `0.8.0` a quiet
+  road from here is written in `UPGRADING.md`** — `0.7.0` the signer seam, `0.8.0` a quiet
   minor, `1.0.0` after it — so nobody reads it off a plan's label.
 - At `0.6.0` the README recommended `~> 0.6.0` (a fifth use of the minor position) and
   `docs/public-api.txt` carried no `Unreleased` marker, so `release_markers!("0.6.0")` wrote

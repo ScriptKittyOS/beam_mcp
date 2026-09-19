@@ -14,7 +14,7 @@ says **BREAKING**, which the census requires.
 ## The rule for `0.x`
 
 Breaks land at the **minor** position and nowhere else. Pin `~> 0.7.0` (the current minor,
-three numbers), not `~> 0.6`: the tighter pin stops at the next minor, which is where the
+three numbers), not `~> 0.7`: the tighter pin stops at the next minor, which is where the
 next documented break can be, so a routine `mix deps.update` never carries you across one.
 To move a minor: read the release's rows below and their CHANGELOG entries, apply each "how
 to tell" sentence to your host, then raise the pin.
