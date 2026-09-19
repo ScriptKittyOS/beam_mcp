@@ -4,7 +4,7 @@
 defmodule BeamMCP.MixProject do
   use Mix.Project
 
-  @version "0.7.0"
+  @version "0.8.0"
   @source_url "https://github.com/ScriptKittyOS/beam_mcp"
 
   # The oldest OTP this project supports. Mix has an `elixir:` key but none for OTP, so the

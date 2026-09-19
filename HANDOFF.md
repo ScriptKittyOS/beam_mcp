@@ -3,10 +3,10 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF — beam_mcp, release 0.7.0 prepared; publish and tag are the owner's
+# HANDOFF — beam_mcp, release 0.8.0 prepared; publish and tag are the owner's
 
 Tag and publish are owner steps — never `mix hex.publish`, never push a tag, never bump the
-version in `mix.exs`. For 0.7.0 the version bump is this release commit, reviewed like any
+version in `mix.exs`. For 0.8.0 the version bump is this release commit, reviewed like any
 other change; publishing and tagging remain the owner's, in the order the runbook below gives.
 
 The slice records — plans, findings, lane reports, signoffs, archived gate runs — live in the
@@ -15,7 +15,16 @@ happened.
 
 ## State
 
-- **`0.7.0` carries the signer seam and nothing else**: `BeamMCP.Signer` (one callback,
+- **`0.8.0` is the quiet minor**: no public entry added, removed, renamed, hidden or changed
+  in arity — `docs/public-api.txt` is `0.7.0`'s line for line, `release_markers!("0.8.0")`
+  wrote nothing — and no wire or envelope byte moved. Instruments: the gate's sixteenth step
+  diffs the baseline against `origin/main` (G-076); the pull-request summary waits for running
+  legs on a body edit (G-079); the honesty probe's discriminator reads detailed pass lines
+  (G-078); each with an offline probe. Pages: the governance table carries the Scorecard's
+  measured figures with the rule behind each low one. `mix.exs` says `0.8.0`; the README
+  recommends `~> 0.8.0` and the requirement test refuses `0.7.0` and `0.6.0`; the wire
+  recording's ten version lines are re-taken. `1.0.0` is next, after this minor has stood.
+- **`0.7.0` carried the signer seam and nothing else**: `BeamMCP.Signer` (one callback,
   `sign/2`, two arguments with pinned names), `BeamMCP.Signer.None` (the one no-op under
   `lib/`) and `BeamMCP.Connectome.Canonical.signature/3` (the one call site, over `encode/2`'s
   bytes, moving no envelope byte). Three public entries added, none removed, renamed or
@@ -24,10 +33,8 @@ happened.
   callback list, the one `def sign`, the one call site — and sixteen mutants hold it. The
   signer that holds a key, `BeamMCP.Signer.Ed25519` (Ed25519 through OTP's `:crypto`, the key
   under `opts[:private_key]`), is the separate package `beam_mcp_signer`
-  (github.com/ScriptKittyOS/beam_mcp_signer, unpublished until this release is on hex.pm);
-  this package does not depend on it. `mix.exs` says `0.7.0`; the README recommends
-  `~> 0.7.0` and the requirement test refuses `0.6.0` and `0.5.0`; the wire recording's ten
-  version lines are re-taken.
+  (github.com/ScriptKittyOS/beam_mcp_signer, 0.1.0 on hex.pm, depending on `~> 0.7.0`); this
+  package does not depend on it.
 - **`0.6.0` carried everything since `0.5.0`**: the wire hardening after the threat model, the
   threat-model page, the hash-agile canonical envelope (the release's one break), the install-floor slices (the OTP floor at
   compile time, the CI matrix on three pairs, the dependency audit, build provenance, the
@@ -42,18 +49,20 @@ happened.
   `docs/public-api.txt` carried no `Unreleased` marker, so `release_markers!("0.6.0")` wrote
   nothing; at `0.7.0` it wrote three.
 - **No head hash is written here** — a hash written into the file it describes cannot include
-  the commit that writes it. `git log v0.6.0..main` is the authority.
-- Gate on the release commit: fifteen steps, every line `pass` (the 0.5.0 gate had thirteen;
-  the audit step made it fourteen in 024 and Dialyzer fifteen in 027a) — format (the tracked set, not a
+  the commit that writes it. `git log v0.7.0..main` is the authority.
+- Gate on the release commit: sixteen steps, every line `pass` (the 0.5.0 gate had thirteen;
+  the audit step made it fourteen in 024, Dialyzer fifteen in 027a, the baseline diff sixteen
+  at 0.8.0) — format (the tracked set, not a
   glob), compile, instruments, test, credo, properties (11 at 1 000 generations), optional
   deps, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
   encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
   process after a warm-up, set at roughly double the stable worst of ten runs on the release
   head; the reachability queries' cost recorded and judged by no number, but a query refused
-  on the fixture fails the step by name), docs, reuse, licence files, publication, messages.
-  **11 properties, 705 tests, 0 failures** on the release tree (692 at 0.6.0, 604 at 0.5.0;
-  the differences are the slices' own pins — at 0.7.0 the signer seam's census and behaviour
-  tests; before it the floor, the provenance and security-policy pins, the tracer's session
+  on the fixture fails the step by name), docs, reuse, licence files, publication, baseline,
+  messages.
+  **11 properties, 705 tests, 0 failures** on the release tree (705 at 0.7.0 — 0.8.0 adds no
+  test, its instruments are probed by shell — 692 at 0.6.0, 604 at 0.5.0; the differences are
+  the slices' own pins — at 0.7.0 the signer seam's census and behaviour tests; before it the floor, the provenance and security-policy pins, the tracer's session
   suite, the public-API census on the tree and on fixtures, the governance and export-control
   censuses).
 - The README's four-way split is held by census to the modules compiled from `lib/` (the
@@ -63,10 +72,10 @@ happened.
 
 ## What is next
 
-The road, as `UPGRADING.md` states it and the owner locked it: **`0.7.0`** this release, the
-signer seam (`BeamMCP.Signer`, a behaviour added to the public surface and no authority — the
-last intentional addition), **`0.8.0`** a quiet minor in which no public entry moves,
-**`1.0.0`** after it has stood — the README's condition, that
+The road, as `UPGRADING.md` states it and the owner locked it: **`0.7.0`** the signer seam
+(`BeamMCP.Signer`, a behaviour added to the public surface and no authority — the last
+intentional addition), **`0.8.0`** this release, the quiet minor in which no public entry
+moves, **`1.0.0`** after it has stood — the README's condition, that
 the public API and the stated threat model have each survived a full minor release unchanged.
 The federation seam stays held on another board's answer and is not on that road. A compiler-tracer census
 (module-body code run at compile time, which neither the text censuses nor `:xref` see) is
@@ -116,7 +125,7 @@ refused.
 
 1. The release PR merged to `main` by rebase (the ruleset requires two green checks); `main`
    is then the release commit.
-2. The gate on that commit, fifteen `pass`, output recorded by command and exit code (the
+2. The gate on that commit, sixteen `pass`, output recorded by command and exit code (the
    release PR's own gate run is that record).
 3. Tag the release commit **as it sits on `main` after the rebase-merge** (a new SHA; the
    bytes are a function of the tree, measured) locally, signed (`git tag -s vX.Y.Z`); then

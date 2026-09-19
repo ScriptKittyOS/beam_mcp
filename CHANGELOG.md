@@ -11,6 +11,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-09-19
+
+The quiet minor: **no public entry added, removed, renamed, hidden or changed in arity** —
+`docs/public-api.txt` is line for line `0.7.0`'s, `release_markers!("0.8.0")` wrote nothing,
+and the census holds an empty Unreleased section to that. No wire byte and no envelope byte
+moves. Instruments and pages only, below. This is the "full minor release unchanged" the
+README names as `1.0.0`'s condition for the public API; `1.0.0` follows once it has stood.
+
 ### Changed — instruments (no public entry moves)
 
 - **The gate diffs `docs/public-api.txt` against `origin/main`** (a sixteenth step,
