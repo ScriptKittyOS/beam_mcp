@@ -673,8 +673,8 @@ classified under ECCN 5D002 (which, with **742.15(b)**, keeps such software subj
 unless its source is publicly available and, for "non-standard cryptography", notified) does
 not reach a library whose only cryptographic function is a standard message digest — the
 maintainer's reading; the regulation's own definitions (15 CFR 772.1) limit "cryptography" to
-transformations using "secret parameters" and "encryption software" to programs providing
-"confidentiality of information", and an unkeyed digest is neither. This software is not
+transformations using "secret parameters" and "encryption software" to programs that provide
+"encryption functions or confidentiality of information", and an unkeyed digest is neither. This software is not
 designed for any article on the United States Munitions List, and no commodity-jurisdiction
 determination has been sought for it; whether it is ITAR-controlled is a classification
 conclusion this paragraph does not make. Downstream integrators remain responsible for the
