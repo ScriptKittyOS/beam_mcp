@@ -30,6 +30,8 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
   @none_line "def sign(_canonical_bytes, _opts), do: {:error, :no_signer}"
   @seam_file "lib/beam_mcp/connectome/canonical.ex"
   @seam_call "signer.sign(bytes, opts)"
+  @signer_file "lib/beam_mcp/signer.ex"
+  @callback_line "@callback sign(canonical_bytes :: binary(), opts :: keyword()) ::"
 
   test "no line under lib/ calls a signing or MAC primitive" do
     hits = Boundary.hits(@primitive)
@@ -37,7 +39,9 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
   end
 
   test "exactly one `def sign` under lib/: the no-op, spelled as pinned, in its own file" do
-    hits = Boundary.hits(~r/\bdefp?\s+sign\b/)
+    # `def(sign(`, `defdelegate sign`, `defmacro sign`, `Kernel.def(sign(` are all a definition of
+    # `sign`; whitespace is not where the pin lives.
+    hits = Boundary.hits(~r/\bdef(p|delegate|macrop?)?\b[\s(]*sign\b/)
 
     assert [{@none_file, _, line}] = hits,
            "def sign sites under lib/:\n  " <> Boundary.format(hits)
@@ -52,6 +56,28 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
            "signer behaviours under lib/:\n  " <> Boundary.format(hits)
 
     assert String.trim(line) == "@behaviour BeamMCP.Signer"
+  end
+
+  test "the behaviours under lib/ are exactly the catalog's and the signer's, and one line declares a sign callback" do
+    # A second behaviour of the seam's shape -- `BeamMCP.Signer2`, any name, `@moduledoc false`
+    # or not -- is a second seam. Measured by a review lane on the tree before this test: such a
+    # module passed the whole suite. Two pins: the set of modules under lib/ that export
+    # `behaviour_info/1` (what the compiler makes of `@callback`, whatever the module is called
+    # or documents), and the one `@callback sign` line under lib/.
+    behaviours =
+      for m <- Boundary.lib_modules(),
+          Code.ensure_loaded?(m),
+          function_exported?(m, :behaviour_info, 1),
+          do: m
+
+    assert Enum.sort(behaviours) == [BeamMCP.Catalog, BeamMCP.Signer]
+
+    hits = Boundary.hits(~r/@(macro)?callback\s+sign\b/)
+
+    assert [{@signer_file, _, line}] = hits,
+           "sign callbacks under lib/:\n  " <> Boundary.format(hits)
+
+    assert String.trim(line) == @callback_line
   end
 
   test "the behaviour has exactly one callback, sign/2, with the pinned argument names and return" do
@@ -72,8 +98,10 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
 
     assert names == [:canonical_bytes, :opts]
 
-    assert Macro.to_string(Code.Typespec.type_to_quoted({:t, ret, []})) =~
-             ~r/\{:ok, binary\(\)\} \| \{:error, term\(\)\}/
+    # The whole spec, exactly: the argument types and the return. A substring match let the
+    # return widen (`| {:ok, binary(), map()}`) with no red -- measured by a review lane.
+    assert Macro.to_string(Code.Typespec.spec_to_quoted(:sign, spec)) ==
+             "sign(canonical_bytes :: binary(), opts :: keyword()) :: {:ok, binary()} | {:error, term()}"
   end
 
   test "exactly one call of a signer under lib/: signature/3's, over encode/2's bytes" do
