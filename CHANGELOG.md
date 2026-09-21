@@ -11,6 +11,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-09-21
+
+Two additions placed at the minor by policy, and **no break**: the `:server` seam on both
+transports (a module option, default `BeamMCP.Server`, and `BeamMCP.Server` a behaviour a wrapper
+implements) and `scheme:` and `key_id:` beside the signature `BeamMCP.Connectome.Canonical.signature/3`
+returns. No public entry is removed, renamed, hidden or changed in arity; no wire byte and no
+canonical byte moves — the `0.8.0` wire recording and the canonical goldens are the same
+bytes. Four public entries added, each `since=0.9.0` in `docs/public-api.txt`. A host that passes
+no `:server` and reads no `scheme:` changes nothing. The stand at `0.8.0` ends here because a
+consumer's composed system needs the seam from this package and nothing else; the road from
+here, as `UPGRADING.md` states it: `0.10.0` a quiet minor in which no public entry moves
+(instruments and pages: a FIPS leg, the SBOM at release), `1.0.0` after it has stood.
+
 ### Added — the server seam: `:server` on both transports, a module above the core
 
 - **`:server`**, a module option on the `BeamMCP.Transport.HTTP` Plug (its `init/1`) and on

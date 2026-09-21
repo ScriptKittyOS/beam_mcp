@@ -44,7 +44,7 @@ removes a callable arity and is a change to the entry — then markers:
 
 `R` is a release number, or the word `Unreleased` while the change waits in the CHANGELOG's
 Unreleased section; the release that ships it writes its number in
-(`MIX_ENV=test mix run -e 'BeamMCP.PublicAPI.release_markers!("0.8.0")'`, one step of cutting
+(`MIX_ENV=test mix run -e 'BeamMCP.PublicAPI.release_markers!("0.9.0")'`, one step of cutting
 a release), and the census refuses a leftover `Unreleased` once that section is empty. That
 step is the one place that knows the release's number, so it holds the three rules the census
 cannot: with a `removed_in=Unreleased` line in the file it refuses a patch number, and on
@@ -83,7 +83,7 @@ From the release this page ships in, a break is a CHANGELOG heading carrying the
 census holds the Unreleased section to that — and `UPGRADING.md` lists them. Earlier releases
 documented their breaks under headings of their own wording (`0.2.0`'s "two fields are
 REMOVED", `0.4.0`'s "BREAKING, and it breaks a host contract"); `UPGRADING.md` names each with
-its CHANGELOG heading. That is why the README recommends the current minor at three numbers (`~> 0.8.0`) rather than two (`~> 0.8`): the
+its CHANGELOG heading. That is why the README recommends the current minor at three numbers (`~> 0.9.0`) rather than two (`~> 0.9`): the
 tighter pin stops at the next minor, which is where the next documented break can be. A patch
 release carries no break to the public surface, the wire, the exported bytes or the host
 contract — a rule the census cannot check (it does not know which number the next release
