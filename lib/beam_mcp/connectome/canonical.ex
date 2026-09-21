@@ -53,8 +53,8 @@ defmodule BeamMCP.Connectome.Canonical do
 
   @typedoc """
   The signature schemes the vocabulary names (`docs/connectome.md`, "Scheme"): what a host
-  asserts under `scheme:` when it calls `signature/3`, and what the separate signer package
-  answers to. Asserted by the host, copied by this package, verified by neither: the check that
+  asserts under `scheme:` when it calls `signature/3`. Asserted by the host, copied by this
+  package, verified by neither (a name outside the three is copied too): the check that
   a key id and a scheme belong together is the consumer's key registry's. The scheme is not in
   the canonical bytes -- they are complete before they are signed -- so it rides beside the
   signature, where `algorithm` (the digest, which IS in the bytes) does not need to.
@@ -313,8 +313,10 @@ defmodule BeamMCP.Connectome.Canonical do
   reads nothing else. The scheme and the key id are **asserted by the host, not verified here**:
   the digest algorithm is inside the bytes because it is part of what is hashed; a signature
   scheme cannot be, since the bytes are signed after they are complete, and whether a key id
-  and a scheme belong together is the consumer's key registry's to say (`t:scheme/0` names the
-  vocabulary). The one site in this package that calls a signer, and a census pins it.
+  and a scheme belong together is the consumer's key registry's to say. `t:scheme/0` names the
+  vocabulary; a value outside it -- another atom, a string -- is copied as given, which is why
+  the spec admits `term()` beside it. The one site in this package that calls a signer, and a
+  census pins it.
 
   Refusals: an encode error as `encode/2` returns it; a `signer` that is not a module exporting
   the callback, `{:error, {:signer, {:not_a_signer, signer}}}`; a signer's `{:error, reason}` as
@@ -328,7 +330,7 @@ defmodule BeamMCP.Connectome.Canonical do
              algorithm: algorithm(),
              signature: binary(),
              signer: module(),
-             scheme: scheme() | nil,
+             scheme: scheme() | term() | nil,
              key_id: term() | nil
            }}
           | {:error, {:uncanonical, uncanonical()} | {:signer, term()}}

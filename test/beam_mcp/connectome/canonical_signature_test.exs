@@ -5,8 +5,9 @@ defmodule BeamMCP.Connectome.CanonicalSignatureTest do
   @moduledoc """
   The seam: `Canonical.signature/3` hands `encode/2`'s bytes to a host-supplied signer and
   returns what comes back beside them. The bytes it hands over are exactly the bytes a
-  verifier re-derives; the envelope does not move; the package reads only `:algorithm` from
-  the options and the signer reads the rest.
+  verifier re-derives; the envelope does not move; the package reads `:algorithm` from the
+  options for the encode, copies `:scheme` and `:key_id` beside the result, and reads nothing
+  else -- the signer reads the rest.
   """
   use ExUnit.Case, async: true
 
