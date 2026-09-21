@@ -60,8 +60,9 @@ All notable changes to this project are documented here. The format follows
   and the registry is the stronger check).
 - **`t:BeamMCP.Connectome.Canonical.scheme/0`**, the vocabulary: `:ed25519`, `:ecdsa_p384_sha384`,
   `:mldsa87`, each defined in `docs/connectome.md` ("Scheme"), which the vocabulary test holds
-  the type to. The names are what the separate signer package answers to; this package copies
-  what the host asserts and refuses no name.
+  the type to. The names are the vocabulary a host asserts its scheme in (the released signer
+  package implements the first); this package copies what the host asserts and refuses no
+  name, so the spec admits `term()` beside `t:BeamMCP.Connectome.Canonical.scheme/0`.
 
 ## [0.8.0] — 2026-09-19
 

@@ -200,10 +200,11 @@ with the same reason.
 
 The bytes `encode/2` produces are the bytes a signer signs, and this package signs none of
 them itself. The seam is `BeamMCP.Connectome.Canonical.signature/3`: it encodes the graph
-with `encode/2` (the `:algorithm` option and nothing else read from the options), hands
-exactly those bytes to a host-supplied module implementing `BeamMCP.Signer` — one callback,
-`sign(canonical_bytes, opts)`, two arguments with those names, the options passed through as
-the host gave them (a key, a key id, a scheme: the signer's to read, never this package's) —
+with `encode/2` (`:algorithm` the one option the encode reads), hands exactly those bytes to a
+host-supplied module implementing `BeamMCP.Signer` — one callback, `sign(canonical_bytes, opts)`,
+two arguments with those names, the options passed through whole as the host gave them (a key:
+the signer's to read, never this package's; `:scheme` and `:key_id` this package copies beside
+the result and reads for nothing else) —
 and returns `{:ok, %{algorithm: algorithm, signature: signature, signer: module, scheme: scheme,
 key_id: key_id}}`. The last two are copied from the host's options, `nil` where it passed none,
 and are **asserted by the host, not verified by the package**: the digest `algorithm` is inside
