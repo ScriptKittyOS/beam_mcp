@@ -3,10 +3,10 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF — beam_mcp, release 0.8.0 prepared; publish and tag are the owner's
+# HANDOFF — beam_mcp, release 0.9.0 prepared; publish and tag are the owner's
 
 Tag and publish are owner steps — never `mix hex.publish`, never push a tag, never bump the
-version in `mix.exs`. For 0.8.0 the version bump is this release commit, reviewed like any
+version in `mix.exs`. For 0.9.0 the version bump is this release commit, reviewed like any
 other change; publishing and tagging remain the owner's, in the order the runbook below gives.
 
 The slice records — plans, findings, lane reports, signoffs, archived gate runs — live in the
@@ -15,7 +15,23 @@ happened.
 
 ## State
 
-- **`0.8.0` is the quiet minor**: no public entry added, removed, renamed, hidden or changed
+- **`0.9.0` carries two additions and no break**, and ends the stand at `0.8.0`: the `:server`
+  seam — a module option on `BeamMCP.Transport.HTTP`'s Plug and `BeamMCP.Transport.Stdio.run/1`,
+  default `BeamMCP.Server`, the transports reaching `new/1`, `handle_message/2` and (stdio)
+  `shutdown?/1` through it and never by name, `BeamMCP.Server` now the behaviour a wrapper
+  implements (`shutdown?/1` optional; HTTP never asks it) — and `scheme:` and `key_id:` beside
+  the signature `BeamMCP.Connectome.Canonical.signature/3` returns, copied from the host's
+  options and verified by nothing here, the canonical bytes unmoved. Four public entries added,
+  each `since=0.9.0`; none removed, renamed, hidden or changed in arity; the `0.8.0` wire
+  recording re-taken with its ten version lines moving and nothing else; every canonical golden
+  the same blob as at `0.8.0`. Censuses: a new one (the transports never name the core — three
+  readings over the whole of `lib/`), two moved (the variable-module call list, the behaviour
+  list), one vocabulary section (`Scheme`). Will-not-implement entry 12 is unchanged, its two
+  tests untouched: the seam carries no state and decides no authority. `mix.exs` says `0.9.0`;
+  the README recommends `~> 0.9.0` and the requirement test refuses `0.8.0`, `0.7.0` and
+  `0.6.0`. `0.10.0` is next, the quiet minor (a FIPS leg, the SBOM at release — instruments
+  and pages, no public entry), then `1.0.0` after it has stood.
+- **`0.8.0` was the quiet minor**: no public entry added, removed, renamed, hidden or changed
   in arity — `docs/public-api.txt` is `0.7.0`'s line for line, `release_markers!("0.8.0")`
   wrote nothing — and no wire or envelope byte moved. Instruments: the gate's sixteenth step
   diffs the baseline against `origin/main` (G-076); the pull-request summary waits for running
@@ -50,7 +66,7 @@ happened.
   `docs/public-api.txt` carried no `Unreleased` marker, so `release_markers!("0.6.0")` wrote
   nothing; at `0.7.0` it wrote three.
 - **No head hash is written here** — a hash written into the file it describes cannot include
-  the commit that writes it. `git log v0.7.0..main` is the authority.
+  the commit that writes it. `git log v0.8.0..main` is the authority.
 - Gate on the release commit: sixteen steps, every line `pass` (the 0.5.0 gate had thirteen;
   the audit step made it fourteen in 024, Dialyzer fifteen in 027a, the baseline diff sixteen
   at 0.8.0) — format (the tracked set, not a
@@ -61,9 +77,10 @@ happened.
   head; the reachability queries' cost recorded and judged by no number, but a query refused
   on the fixture fails the step by name), docs, reuse, licence files, publication, baseline,
   messages.
-  **11 properties, 705 tests, 0 failures** on the release tree (705 at 0.7.0 — 0.8.0 adds no
-  test, its instruments are probed by shell — 692 at 0.6.0, 604 at 0.5.0; the differences are
-  the slices' own pins — at 0.7.0 the signer seam's census and behaviour tests; before it the floor, the provenance and security-policy pins, the tracer's session
+  **11 properties, 729 tests, 0 failures** on the release tree (705 at 0.8.0 and 0.7.0 — 0.8.0
+  added no test, its instruments are probed by shell — 692 at 0.6.0, 604 at 0.5.0; the
+  differences are the slices' own pins — at 0.9.0 the server seam's census and by-effect tests
+  and the scheme's tests; at 0.7.0 the signer seam's census and behaviour tests; before it the floor, the provenance and security-policy pins, the tracer's session
   suite, the public-API census on the tree and on fixtures, the governance and export-control
   censuses).
 - The README's four-way split is held by census to the modules compiled from `lib/` (the
@@ -74,10 +91,14 @@ happened.
 ## What is next
 
 The road, as `UPGRADING.md` states it and the owner locked it: **`0.7.0`** the signer seam
-(`BeamMCP.Signer`, a behaviour added to the public surface and no authority — the last
-intentional addition), **`0.8.0`** this release, the quiet minor in which no public entry
-moves, **`1.0.0`** after it has stood — the README's condition, that
-the public API and the stated threat model have each survived a full minor release unchanged.
+(`BeamMCP.Signer`, a behaviour added to the public surface and no authority — called the last
+intentional addition, and superseded there by an appended sentence), **`0.8.0`** the quiet
+minor in which no public entry moved, **`0.9.0`** this release — the `:server` seam and the
+scheme beside the signature, two additions a consumer's composed system needed before `1.0.0`
+could be an honest freeze — **`0.10.0`** the quiet minor again (instruments and pages: a FIPS
+leg, the SBOM at release; no public entry), **`1.0.0`** after it has stood — the README's
+condition, that the public API and the stated threat model have each survived a full minor
+release unchanged.
 The federation seam stays held on another board's answer and is not on that road. A compiler-tracer census
 (module-body code run at compile time, which neither the text censuses nor `:xref` see) is
 scheduled with its lift measured. Sign-aware reachability, if asked for, is a later slice or a
@@ -122,7 +143,7 @@ refused.
 - The `2025-11-25` revision is served on stdio only; over HTTP the conformance row for it is
   0 / 30 by design, and the README says so beside the number.
 
-## The release steps — the runbook (followed for 0.6.0 and 0.7.0; the same for 0.8.0)
+## The release steps — the runbook (followed for 0.6.0, 0.7.0 and 0.8.0; the same for 0.9.0)
 
 1. The release PR merged to `main` by rebase (the ruleset requires two green checks); `main`
    is then the release commit.

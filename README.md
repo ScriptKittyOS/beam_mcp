@@ -14,11 +14,11 @@ and refuses one that is not; what a tool *does* is the host's business.
 
 ```elixir
 def deps do
-  [{:beam_mcp, "~> 0.8.0"}]
+  [{:beam_mcp, "~> 0.9.0"}]
 end
 ```
 
-**`~> 0.8.0`, not the more usual `~> 0.8`.** While this package is `0.x` it documents breaks
+**`~> 0.9.0`, not the more usual `~> 0.9`.** While this package is `0.x` it documents breaks
 at the **minor** position, and it has used that position five times: `0.2.0` removed two
 fields from results for legacy-declared requests, `0.3.0` added the HTTP transport and the
 `ttlMs`/`cacheScope` fields `2026-07-28` requires on `tools/list`, `0.4.0` replaced the
@@ -29,9 +29,10 @@ writes and moves `schema_version` to `2` (in the exported bytes), and requires a
 `resources` and `prompts` lists to hold the package's structs (the host contract), and `0.6.0`
 names the canonical envelope's algorithm in its bytes and moves `schema_version` to `3` (in the
 exported bytes), each with a how-to-tell sentence in the changelog (`0.7.0` is an addition at
-the minor, the signer seam, and `0.8.0` a quiet minor in which no public entry moved; neither
-a break). `~> 0.8` would admit a `0.9.0`, so it
-would carry you across the next such break on a routine `mix deps.update`; `~> 0.8.0` does not. The tighter form is deliberate and is not an over-pin to be tidied away. What the pin
+the minor, the signer seam; `0.8.0` a quiet minor in which no public entry moved; `0.9.0` two
+additions at the minor, the `:server` seam and the scheme beside the signature; none a break).
+`~> 0.9` would admit a `0.10.0`, so it
+would carry you across the next such break on a routine `mix deps.update`; `~> 0.9.0` does not. The tighter form is deliberate and is not an over-pin to be tidied away. What the pin
 buys is written down: [`docs/api-stability.md`](docs/api-stability.md) says what is public
 (what ex_doc lists, `docs/public-api.txt` line by line), how a deprecation runs (three steps,
 three minors), and what a `0.x` break must say; a census holds the surface to that record.
@@ -611,7 +612,9 @@ tools, resources and prompts declared by the host (`BeamMCP.ToolSpec`, `BeamMCP.
 and `BeamMCP.ResourceTemplateSpec`, `BeamMCP.PromptSpec`), tools dispatched through the host's
 function, resources read and prompts rendered through its two optional callbacks, the resource
 and prompt lists paginated by one keyset cursor (`BeamMCP.Cursor`; `tools/list` is not yet);
-the connectome spine above — declared, observed, canonical bytes, diff — with the Livebook
+the `:server` seam on both transports — a module above the core, `BeamMCP.Server` the default
+and the behaviour a wrapper implements — and, beside a signature, the `scheme:` and `key_id:`
+the host asserts (`BeamMCP.Connectome.Canonical.signature/3`); the connectome spine above — declared, observed, canonical bytes, diff — with the Livebook
 that renders it and the read-only surface a host puts on the wire
 (`BeamMCP.Connectome.Surface`); and reachability queries over a graph
 (`BeamMCP.Connectome.Reach`: can an entry reach an effect, can it do so without crossing a
