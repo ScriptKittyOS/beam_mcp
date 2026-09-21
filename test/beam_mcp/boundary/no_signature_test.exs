@@ -125,7 +125,10 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
 
   test "exactly one call of a signer under lib/: signature/3's, over encode/2's bytes" do
     # `Edge.sign()` in a typespec is the verdict slot's type, not a call: the pattern wants
-    # arguments between the parentheses.
+    # arguments between the parentheses. The pin holds the line's spelling; what reaches the
+    # signer through `opts` -- rebound a line above, the pinned line would not move -- is the
+    # by-effect tests' to hold (test/beam_mcp/connectome/canonical_signature_test.exs asserts
+    # the signer receives the host's options whole, scheme and key id among them).
     hits = Boundary.hits(~r/\.sign\((?!\))/)
     assert [{@seam_file, _, line}] = hits, ".sign( sites under lib/:\n  " <> Boundary.format(hits)
     assert String.contains?(line, @seam_call)
