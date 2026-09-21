@@ -99,9 +99,10 @@ One census under the same reader pins a seam rather than barring an act. Entry 1
 host that wants a multi-round-trip request owns its state *above this core*; where that is, is
 the `:server` option of both transports — a module, `BeamMCP.Server` by default, through which
 the transports reach `new/1`, `handle_message/2` and (stdio) `shutdown?/1` and never by name,
-so a wrapper the host passes is what answers. Read from the text of `lib/beam_mcp/transport/`
-and from the artefact's call edges:
-`test/beam_mcp/boundary/no_server_literal_test.exs` "no line under lib/beam_mcp/transport/ calls BeamMCP.Server by name" "from the artefact: no transport module calls a function of BeamMCP.Server".
+so a wrapper the host passes is what answers. Read three ways over the whole of `lib/`, no path
+or module listed — the text, the artefact's call edges, and the artefact's atom sites (where the
+core's name may appear in another module exactly once per transport, as the default value):
+`test/beam_mcp/boundary/no_server_literal_test.exs` "no line under lib/ calls BeamMCP.Server by name, but the core's own moduledoc example" "from the artefact: no module under lib/ but BeamMCP.Server itself calls a function of it" "from the artefact: BeamMCP.Server appears in another module's compiled forms exactly once per transport, as the default value".
 The core itself is unchanged by the seam: entry 12's two tests hold as they stood.
 
 ## The entries
