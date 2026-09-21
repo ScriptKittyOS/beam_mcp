@@ -35,10 +35,13 @@ All notable changes to this project are documented here. The format follows
   already public: the behaviour names a commitment that existed. `BeamMCP.Server` does not
   declare it on itself. No public entry removed, renamed, hidden or changed in arity; no wire
   byte moves.
-- **Censuses.** A new one, `test/beam_mcp/boundary/no_server_literal_test.exs`: under
-  `lib/beam_mcp/transport/` the only mentions of `BeamMCP.Server` are the alias and the default
-  value, and the compiled artefact carries no call edge from a transport to it — red on the
-  tree before the seam, where the four literal call sites were the plant. Two moved: the
+- **Censuses.** A new one, `test/beam_mcp/boundary/no_server_literal_test.exs`, three readings
+  over the whole of `lib/` with no path or module listed: no line calls `BeamMCP.Server` by name
+  but the core's own moduledoc example; no module but `BeamMCP.Server` itself has a call edge into
+  it in the compiled artefact; and the atom `BeamMCP.Server` appears in another module's compiled
+  forms exactly once per transport, as the default value (the reading that catches
+  `Server |> then(& &1.new(x))`, which the other two pass — a review lane measured it). Red on
+  the tree before the seam, where the four literal call sites were the plant. Two moved: the
   variable-module call list in `no_catalog_test.exs` gains the five calls through `:server`;
   the behaviour list in `no_signature_test.exs` gains `BeamMCP.Server` with its exact
   callbacks, so a fourth is a visible act.
