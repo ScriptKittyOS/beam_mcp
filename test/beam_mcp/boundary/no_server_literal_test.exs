@@ -57,12 +57,17 @@ defmodule BeamMCP.Boundary.NoServerLiteralTest do
   end
 
   test "from the artefact: BeamMCP.Server appears in another module's compiled forms exactly once per transport, as the default value" do
-    # Every site of the atom outside its own module (whose generated sites carry location 0).
-    # A second site in a transport is a second way to reach the core, whatever it is spelled.
+    # Every site of the atom outside its own module -- generated ones included: an `if`'s
+    # clauses carry `generated: true` and a bare literal body inherits it, so a filter on the
+    # mark let `(if x, do: Server) |> then(& &1.new(x))` through (a review lane measured it,
+    # and measured that the core's own four location-0 sites are already removed by the module
+    # test). A second site in a transport is a second way to reach the core, however spelled.
+    # Outside every static reading, stated: a module name built at runtime
+    # (`Module.concat(["BeamMCP", "Server"]).new(x)`) leaves no site, no edge and no text hit;
+    # the by-effect tests in transport/server_seam_test.exs are what hold that.
     sites =
-      for {m, loc, ctx} = site <- Boundary.atom_sites(BeamMCP.Server),
+      for {m, _loc, ctx} = site <- Boundary.atom_sites(BeamMCP.Server),
           m != BeamMCP.Server,
-          not Boundary.generated?(loc),
           do: {site, ctx}
 
     modules = sites |> Enum.map(fn {{m, _, _}, _} -> m end) |> Enum.sort()
@@ -71,8 +76,11 @@ defmodule BeamMCP.Boundary.NoServerLiteralTest do
            "BeamMCP.Server at more than one site in a module:\n  " <>
              Enum.map_join(sites, "\n  ", &inspect/1)
 
-    # The transports are derived from the text: the files carrying the default line. Each of
-    # them is one of the modules above, and the modules above are exactly them.
+    # The transports are derived from the text: the files carrying the default line, in the
+    # one spelling `@default` names (`opts`, the alias `Server`). A transport spelling it
+    # otherwise is not in this set but its forms carry the atom, so the mismatch reads red,
+    # never green; the fix is to spell the default as the two do, or to widen `@default` here.
+    # Each of them is one of the modules above, and the modules above are exactly them.
     default_files = for {path, _, _} <- Boundary.hits(@default), uniq: true, do: path
 
     transports =
