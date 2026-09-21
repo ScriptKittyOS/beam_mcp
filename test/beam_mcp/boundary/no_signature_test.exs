@@ -60,19 +60,23 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
     assert String.trim(line) == "@behaviour BeamMCP.Signer"
   end
 
-  test "the behaviours under lib/ are exactly the catalog's and the signer's, and one line declares a sign callback" do
+  test "the behaviours under lib/ are exactly the catalog's, the server's and the signer's, and one line declares a sign callback" do
     # A second behaviour of the seam's shape -- `BeamMCP.Signer2`, any name, `@moduledoc false`
     # or not -- is a second seam. Measured by a review lane on the tree before this test: such a
     # module passed the whole suite. Two pins: the set of modules under lib/ that export
     # `behaviour_info/1` (what the compiler makes of `@callback`, whatever the module is called
-    # or documents), and the one `@callback sign` line under lib/.
+    # or documents), and the one `@callback sign` line under lib/. The server seam (036) is the
+    # third behaviour: `BeamMCP.Server` declares the three functions the transports reach
+    # through the `:server` option -- its own public functions, restated as callbacks so a
+    # wrapper above the core has a contract to implement; `shutdown?/1` optional, since the HTTP
+    # transport never asks it. Pinned exactly here so a fourth callback is a visible act.
     behaviours =
       for m <- Boundary.lib_modules(),
           Code.ensure_loaded?(m),
           function_exported?(m, :behaviour_info, 1),
           do: m
 
-    assert Enum.sort(behaviours) == [BeamMCP.Catalog, BeamMCP.Signer]
+    assert Enum.sort(behaviours) == [BeamMCP.Catalog, BeamMCP.Server, BeamMCP.Signer]
 
     # And each behaviour's callbacks, exactly: a `@doc false` callback of the seam's shape
     # added to an allowed behaviour is in no docs population and on no line this file's
@@ -81,8 +85,11 @@ defmodule BeamMCP.Boundary.NoSignatureTest do
     assert Enum.sort(for m <- behaviours, do: {m, Enum.sort(m.behaviour_info(:callbacks))}) ==
              [
                {BeamMCP.Catalog, [capabilities: 0, get_prompt: 2, read_resource: 1]},
+               {BeamMCP.Server, [handle_message: 2, new: 1, shutdown?: 1]},
                {BeamMCP.Signer, [sign: 2]}
              ]
+
+    assert BeamMCP.Server.behaviour_info(:optional_callbacks) == [shutdown?: 1]
 
     hits = Boundary.hits(~r/@(macro)?callback\s+sign\b/)
 

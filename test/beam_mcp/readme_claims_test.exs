@@ -424,6 +424,45 @@ defmodule BeamMCP.ReadmeClaimsTest do
     end
   end
 
+  describe "the :server README claims" do
+    test "every behavioural sentence about the seam is pinned to the sentence that states it, and to the code" do
+      # Fragments within one wrapped line, checked against the file first.
+      claims("**Both transports take `:server`, a module above the core.**")
+      claims("Pass nothing and nothing changes")
+
+      claims(
+        "the transport checks the exports at init, not the declaration, and raises naming them"
+      )
+
+      claims("carries no state and decides no authority")
+
+      # Held to the code: the default IS BeamMCP.Server (a default-option request and one
+      # naming the module explicitly answer alike), the exports are what is checked (a module
+      # exporting the two names at the right arities passes without `@behaviour`), and the
+      # refusal names them.
+      body = fn conn -> Jason.decode!(conn.resp_body) end
+      implicit = http_request([]) |> body.()
+      explicit = http_request(server: BeamMCP.Server) |> body.()
+      assert implicit == explicit
+      assert implicit["result"]["content"] == [%{"type" => "text", "text" => "{}"}]
+
+      defmodule ReadmeUndeclaredWrapper do
+        def new(opts), do: BeamMCP.Server.new(opts)
+        def handle_message(state, message), do: BeamMCP.Server.handle_message(state, message)
+      end
+
+      assert http_request(server: ReadmeUndeclaredWrapper) |> body.() == implicit
+
+      error = assert_raise ArgumentError, fn -> http_request(server: Enum) end
+      assert error.message =~ "new/1"
+      assert error.message =~ "handle_message/2"
+
+      # The behaviour is declared where the README says: on BeamMCP.Server, the three callbacks.
+      assert Enum.sort(BeamMCP.Server.behaviour_info(:callbacks)) ==
+               [handle_message: 2, new: 1, shutdown?: 1]
+    end
+  end
+
   describe "the :authorize_body README claims" do
     test "every behavioural sentence about the hook is pinned to the sentence that states it" do
       # FRAGMENTS ARE CHOSEN TO SIT WITHIN ONE WRAPPED LINE. The README is hard-wrapped, and

@@ -95,6 +95,15 @@ The dependency set is pinned beside it by name, as declared and as locked (a `pa
 The text census for the same acts stays beside it, for the line it names:
 `test/beam_mcp/boundary/no_dynamic_evaluation_test.exs` "no line under lib/ evaluates code or builds a name at runtime, beyond the argument-key atoms".
 
+One census under the same reader pins a seam rather than barring an act. Entry 12 says the
+host that wants a multi-round-trip request owns its state *above this core*; where that is, is
+the `:server` option of both transports — a module, `BeamMCP.Server` by default, through which
+the transports reach `new/1`, `handle_message/2` and (stdio) `shutdown?/1` and never by name,
+so a wrapper the host passes is what answers. Read from the text of `lib/beam_mcp/transport/`
+and from the artefact's call edges:
+`test/beam_mcp/boundary/no_server_literal_test.exs` "no line under lib/beam_mcp/transport/ calls BeamMCP.Server by name" "from the artefact: no transport module calls a function of BeamMCP.Server".
+The core itself is unchanged by the seam: entry 12's two tests hold as they stood.
+
 ## The entries
 
 | # | The package will never | Why | Enforced by |

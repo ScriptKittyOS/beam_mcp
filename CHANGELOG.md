@@ -11,6 +11,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — the server seam: `:server` on both transports, a module above the core
+
+- **`:server`**, a module option on the `BeamMCP.Transport.HTTP` Plug (its `init/1`) and on
+  `BeamMCP.Transport.Stdio.run/1`, default `BeamMCP.Server`. The transports reach the core
+  through it and through no literal: HTTP calls `new/1` and `handle_message/2` per request,
+  stdio those two once and per message and `shutdown?/1` after each (its loop must know when
+  it ends, and a wrapper's state is the wrapper's). A host that puts a wrapper above the core
+  — one that answers a method itself, or holds the state of a multi-round-trip request this
+  core refuses to hold — passes its module; a host that passes nothing changes nothing, and
+  the `0.8.0` wire recording holds that on both transports. Validated at init as `:catalog`
+  is, structurally — `Code.ensure_compiled/1`, then the exports the transport reaches, or an
+  `ArgumentError` naming them; not the behaviour, since a host may wrap without declaring.
+  `:server` is the transport's own option and is not passed on to the module's `new/1`. **The
+  seam carries no state and decides no authority**; will-not-implement entry 12 is unchanged
+  and its two tests stand as they were.
+- **`BeamMCP.Server` is a behaviour**: **`c:BeamMCP.Server.new/1`**,
+  **`c:BeamMCP.Server.handle_message/2`** and **`c:BeamMCP.Server.shutdown?/1`** (optional —
+  the HTTP transport never asks it), typed as the three functions' own `@spec`s with the state
+  left to the implementer, so a wrapper writes `@behaviour BeamMCP.Server` and `@impl true`
+  and Dialyzer checks its shapes. Three public entries added, callbacks on functions that were
+  already public: the behaviour names a commitment that existed. `BeamMCP.Server` does not
+  declare it on itself. No public entry removed, renamed, hidden or changed in arity; no wire
+  byte moves.
+- **Censuses.** A new one, `test/beam_mcp/boundary/no_server_literal_test.exs`: under
+  `lib/beam_mcp/transport/` the only mentions of `BeamMCP.Server` are the alias and the default
+  value, and the compiled artefact carries no call edge from a transport to it — red on the
+  tree before the seam, where the four literal call sites were the plant. Two moved: the
+  variable-module call list in `no_catalog_test.exs` gains the five calls through `:server`;
+  the behaviour list in `no_signature_test.exs` gains `BeamMCP.Server` with its exact
+  callbacks, so a fourth is a visible act.
+
 ## [0.8.0] — 2026-09-19
 
 The quiet minor: **no public entry added, removed, renamed, hidden or changed in arity** —

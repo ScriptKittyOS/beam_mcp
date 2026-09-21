@@ -206,6 +206,15 @@ validator.
 endpoint: no sessions, no `Mcp-Session-Id`, no SSE resumability. `plug` and `bandit` are optional
 dependencies; a stdio-only host does not pull them in.
 
+**Both transports take `:server`, a module above the core.** Default `BeamMCP.Server`; the
+transports call `new/1` and `handle_message/2` through it (stdio `shutdown?/1` too, since its
+loop must know when it ends) and never by name, so a host can put a wrapper above the core — one
+that answers a method itself and hands the rest to `BeamMCP.Server`, or holds the state of a
+multi-round-trip request the core will never hold. Pass nothing and nothing changes. The
+callbacks are declared on `BeamMCP.Server`, so a wrapper writes `@behaviour BeamMCP.Server`;
+the transport checks the exports at init, not the declaration, and raises naming them. The seam
+carries no state and decides no authority: what the wrapper does is the wrapper's business.
+
 **If you add `plug` to a host that already has this package compiled, run
 `mix deps.compile beam_mcp --force`.** The module is guarded by `Code.ensure_loaded?(Plug)`,
 which is evaluated once at compile time and is not a tracked compile-time dependency, so adding

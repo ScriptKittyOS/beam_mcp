@@ -10,8 +10,9 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
   # struct pattern is the one place the module's atom may appear. The struct is defined there,
   # matched there, and never constructed there. The catalog is called through three callees,
   # `capabilities/0` at five sites, `read_resource/1` at one and `get_prompt/2` at one -- and,
-  # from the artefact, every call through a module known only at runtime is one of those seven
-  # or the signer seam's one, `sign/2` in `Canonical.signature/3` (033).
+  # from the artefact, every call through a module known only at runtime is one of those seven,
+  # the signer seam's one, `sign/2` in `Canonical.signature/3` (033), or the server seam's five,
+  # the transports reaching the core through the `:server` option (036).
   use ExUnit.Case, async: true
   alias BeamMCP.Boundary
 
@@ -122,7 +123,16 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
              {{BeamMCP.Connectome.Canonical, :signature, 3}, :sign, 2},
              {{BeamMCP.Connectome.Declared, :read_catalog, 2}, :capabilities, 0},
              {{BeamMCP.Server, :get_prompt, 4}, :get_prompt, 2},
-             {{BeamMCP.Server, :read_resource, 3}, :read_resource, 1}
+             {{BeamMCP.Server, :read_resource, 3}, :read_resource, 1},
+             # The server seam (036): the transports reach the core through the `:server`
+             # option's module, `BeamMCP.Server` by default -- HTTP's `new/1` and
+             # `handle_message/2` per request, stdio's the same plus `shutdown?/1` after each
+             # message -- and never by name, pinned by the no-server-literal census.
+             {{BeamMCP.Transport.HTTP, :do_dispatch, 3}, :handle_message, 2},
+             {{BeamMCP.Transport.HTTP, :do_dispatch, 3}, :new, 1},
+             {{BeamMCP.Transport.Stdio, :answer, 3}, :handle_message, 2},
+             {{BeamMCP.Transport.Stdio, :loop, 2}, :shutdown?, 1},
+             {{BeamMCP.Transport.Stdio, :run, 1}, :new, 1}
            ],
            "calls through a variable module:\n  " <> Enum.map_join(named, "\n  ", &inspect/1)
 

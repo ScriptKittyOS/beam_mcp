@@ -126,6 +126,9 @@ BeamMCP.ResourceSpec type t/0
 BeamMCP.ResourceTemplateSpec type t/0
 BeamMCP.Schema function validate/2
 BeamMCP.Schema type result/0
+BeamMCP.Server callback handle_message/2 since=Unreleased
+BeamMCP.Server callback new/1 since=Unreleased
+BeamMCP.Server callback shutdown?/1 since=Unreleased
 BeamMCP.Server function handle_message/2
 BeamMCP.Server function new/1 defaults=1
 BeamMCP.Server function shutdown?/1
