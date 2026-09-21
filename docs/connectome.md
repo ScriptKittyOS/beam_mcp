@@ -203,6 +203,23 @@ and its hash is that digest over exactly those bytes; a verifier reads the name 
 other name at the option, before a byte is written. The package holds no key and makes no
 signature; which of the three a consumer accepts is the consumer's policy.
 
+## Scheme
+
+| scheme | the signature scheme a host asserts beside a signature; not in the bytes, not verified here |
+| -- | -- |
+| `:ed25519` | Ed25519 (RFC 8032), the companion signer package's default |
+| `:ecdsa_p384_sha384` | ECDSA over P-384 with SHA-384 — one name for curve and digest together, since a verifier needs both and OTP has no single atom for the pair; the FIPS-mode choice, host-selected |
+| `:mldsa87` | ML-DSA-87 (FIPS 204), OTP's own atom; available where the runtime's OpenSSL provides it |
+
+`BeamMCP.Connectome.Canonical.signature/3` returns `scheme:` and `key_id:` beside the signature,
+copied from the options the host passed and `nil` where it passed none. Neither is in the
+canonical bytes: the digest **algorithm** is, because it is part of what is hashed; a
+signature **scheme** cannot be, because the bytes are signed after they are complete. Neither is
+verified by this package — it holds no key and makes no signature — the binding of a key id to a
+scheme is the consumer's key registry's, and which schemes a consumer accepts is its policy. The
+three names are the vocabulary the separate signer package answers to; this package copies what
+the host asserts, whatever the name.
+
 ## Weight
 
 An edge may carry a weight — an observed call count, a latency summary. Weights are measurements.

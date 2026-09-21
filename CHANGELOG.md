@@ -46,6 +46,23 @@ All notable changes to this project are documented here. The format follows
   the behaviour list in `no_signature_test.exs` gains `BeamMCP.Server` with its exact
   callbacks, so a fourth is a visible act.
 
+### Added — the scheme beside the signature: `scheme:` and `key_id:` in `signature/3`'s return
+
+- **`BeamMCP.Connectome.Canonical.signature/3` returns five members**, the three since `0.7.0`
+  and `scheme:` and `key_id:` copied from the host's `opts` — `nil` for each the host did not
+  pass. **The canonical bytes do not change**: no `schema_version` bump, every golden the same
+  blob, the bytes the signer receives identical with or without a scheme. The digest algorithm
+  is inside the bytes because it is part of what is hashed; a signature scheme cannot be, since
+  the bytes are signed after they are complete, so it rides beside them. Both members are
+  **asserted by the host, not verified by the package** — the binding of a key id to a scheme is
+  the consumer's key registry's. `BeamMCP.Signer` stays one callback: a signer asserting its own
+  scheme was the rejected alternative (the behaviour's moduledoc says a widening stops and asks,
+  and the registry is the stronger check).
+- **`t:BeamMCP.Connectome.Canonical.scheme/0`**, the vocabulary: `:ed25519`, `:ecdsa_p384_sha384`,
+  `:mldsa87`, each defined in `docs/connectome.md` ("Scheme"), which the vocabulary test holds
+  the type to. The names are what the separate signer package answers to; this package copies
+  what the host asserts and refuses no name.
+
 ## [0.8.0] — 2026-09-19
 
 The quiet minor: **no public entry added, removed, renamed, hidden or changed in arity** —
