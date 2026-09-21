@@ -24,9 +24,10 @@ defmodule BeamMCP.Signer do
   @doc """
   Signs the canonical bytes. `opts` is whatever the host passed to
   `BeamMCP.Connectome.Canonical.signature/3` -- a key, a key id, an algorithm choice -- handed
-  on whole. `BeamMCP.Connectome.Canonical.signature/3` may read `:algorithm` from it, for the
-  encode, and reads nothing else. No key is guaranteed to be present: a signer reads what its
-  host agreed to pass.
+  on whole. `BeamMCP.Connectome.Canonical.signature/3` reads `:algorithm` from it, for the
+  encode, copies `:scheme` and `:key_id` beside the signature it returns (asserted by the host,
+  verified by neither), and reads nothing else. No key is guaranteed to be present: a signer
+  reads what its host agreed to pass.
   """
   @callback sign(canonical_bytes :: binary(), opts :: keyword()) ::
               {:ok, binary()} | {:error, term()}

@@ -46,6 +46,7 @@ BeamMCP.Connectome.Canonical function to_graphml!/1
 BeamMCP.Connectome.Canonical function to_json/2 defaults=1
 BeamMCP.Connectome.Canonical function to_json!/2 defaults=1
 BeamMCP.Connectome.Canonical type algorithm/0
+BeamMCP.Connectome.Canonical type scheme/0 since=Unreleased
 BeamMCP.Connectome.Canonical type uncanonical/0
 BeamMCP.Connectome.Declared function build/1
 BeamMCP.Connectome.Declared.Bound type mfa_t/0

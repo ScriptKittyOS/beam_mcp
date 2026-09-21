@@ -203,11 +203,18 @@ them itself. The seam is `BeamMCP.Connectome.Canonical.signature/3`: it encodes 
 with `encode/2` (the `:algorithm` option and nothing else read from the options), hands
 exactly those bytes to a host-supplied module implementing `BeamMCP.Signer` — one callback,
 `sign(canonical_bytes, opts)`, two arguments with those names, the options passed through as
-the host gave them (a key, a key id: the signer's to read, never this package's) — and returns
-`{:ok, %{algorithm: algorithm, signature: signature, signer: module}}`. **The envelope does
+the host gave them (a key, a key id, a scheme: the signer's to read, never this package's) —
+and returns `{:ok, %{algorithm: algorithm, signature: signature, signer: module, scheme: scheme,
+key_id: key_id}}`. The last two are copied from the host's options, `nil` where it passed none,
+and are **asserted by the host, not verified by the package**: the digest `algorithm` is inside
+the bytes because it is part of what is hashed; a signature `scheme` cannot be, since the bytes
+are signed after they are complete, so it rides beside the signature with the `key_id`, and
+whether the two belong together is the consumer's key registry's to say. The names
+(`:ed25519`, `:ecdsa_p384_sha384`, `:mldsa87`) are the vocabulary's (`docs/connectome.md`,
+"Scheme"). **The envelope does
 not move**: a signature is placed beside the bytes, never inside them, so every golden on
 this page and every verifier that re-derives the digest is untouched by whether a signer
-was attached. `BeamMCP.Signer.None`, the one implementation in this package, answers
+was attached, or under what scheme. `BeamMCP.Signer.None`, the one implementation in this package, answers
 `{:error, :no_signer}` and `signature/3` passes it on as `{:error, {:signer, :no_signer}}`; the
 reference implementation that holds a key (Ed25519 through OTP's `:crypto`, the key under
 `opts[:private_key]`) is the separate package `beam_mcp_signer`, which a host attaches. A census pins the callback's shape, the one `def sign` under `lib/`

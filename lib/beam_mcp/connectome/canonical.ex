@@ -51,6 +51,16 @@ defmodule BeamMCP.Connectome.Canonical do
   @typedoc "The digest the envelope names in its bytes and the hash is computed with."
   @type algorithm :: :sha256 | :sha384 | :sha512
 
+  @typedoc """
+  The signature schemes the vocabulary names (`docs/connectome.md`, "Scheme"): what a host
+  asserts under `scheme:` when it calls `signature/3`, and what the separate signer package
+  answers to. Asserted by the host, copied by this package, verified by neither: the check that
+  a key id and a scheme belong together is the consumer's key registry's. The scheme is not in
+  the canonical bytes -- they are complete before they are signed -- so it rides beside the
+  signature, where `algorithm` (the digest, which IS in the bytes) does not need to.
+  """
+  @type scheme :: :ed25519 | :ecdsa_p384_sha384 | :mldsa87
+
   @algorithms [:sha256, :sha384, :sha512]
   @default_algorithm :sha256
 
@@ -292,12 +302,19 @@ defmodule BeamMCP.Connectome.Canonical do
 
   @doc """
   The canonical bytes of `graph` signed by `signer`, a module implementing `BeamMCP.Signer`:
-  `{:ok, %{algorithm: algorithm, signature: signature, signer: signer}}` — the bytes' digest
-  algorithm (so a verifier knows which envelope member it re-derives), the signature the signer
-  returned, and the module that made it. **The envelope's bytes do not change**: this function
-  encodes with `encode/2` and hands those bytes to the signer's `c:BeamMCP.Signer.sign/2`, with `opts` as the host gave
-  them — a key, a key id, whatever the signer reads; this package reads only `:algorithm` from
-  them, for the encode. The one site in this package that calls a signer, and a census pins it.
+  `{:ok, %{algorithm: algorithm, signature: signature, signer: signer, scheme: scheme, key_id: key_id}}`
+  — the bytes' digest algorithm (so a verifier knows which envelope member it re-derives), the
+  signature the signer returned, the module that made it, and, beside them, the signature
+  `scheme:` and the `key_id:` the host passed in `opts`, copied through as given and `nil` for
+  each the host did not pass. **The envelope's bytes do not change**: this function encodes with
+  `encode/2` and hands those bytes to the signer's `c:BeamMCP.Signer.sign/2`, with `opts` as the
+  host gave them — a key, a key id, a scheme, whatever the signer reads; this package reads
+  `:algorithm` from them for the encode, copies `:scheme` and `:key_id` beside the result, and
+  reads nothing else. The scheme and the key id are **asserted by the host, not verified here**:
+  the digest algorithm is inside the bytes because it is part of what is hashed; a signature
+  scheme cannot be, since the bytes are signed after they are complete, and whether a key id
+  and a scheme belong together is the consumer's key registry's to say (`t:scheme/0` names the
+  vocabulary). The one site in this package that calls a signer, and a census pins it.
 
   Refusals: an encode error as `encode/2` returns it; a `signer` that is not a module exporting
   the callback, `{:error, {:signer, {:not_a_signer, signer}}}`; a signer's `{:error, reason}` as
@@ -306,16 +323,32 @@ defmodule BeamMCP.Connectome.Canonical do
   A signer that raises, raises — it is the host's code.
   """
   @spec signature(Graph.t(), module(), keyword()) ::
-          {:ok, %{algorithm: algorithm(), signature: binary(), signer: module()}}
+          {:ok,
+           %{
+             algorithm: algorithm(),
+             signature: binary(),
+             signer: module(),
+             scheme: scheme() | nil,
+             key_id: term() | nil
+           }}
           | {:error, {:uncanonical, uncanonical()} | {:signer, term()}}
   def signature(%Graph{} = graph, signer, opts \\ []) do
+    # Only `:algorithm` reaches the encode: the bytes are the same whatever scheme or key id
+    # the host names, and a golden holds that.
     {encode_opts, _} = Keyword.split(opts, [:algorithm])
 
     with true <- signer?(signer) || {:error, {:signer, {:not_a_signer, signer}}},
          {:ok, bytes} <- encode(graph, encode_opts) do
       case signer.sign(bytes, opts) do
         {:ok, sig} when is_binary(sig) ->
-          {:ok, %{algorithm: algorithm!(encode_opts), signature: sig, signer: signer}}
+          {:ok,
+           %{
+             algorithm: algorithm!(encode_opts),
+             signature: sig,
+             signer: signer,
+             scheme: Keyword.get(opts, :scheme),
+             key_id: Keyword.get(opts, :key_id)
+           }}
 
         {:ok, other} ->
           {:error, {:signer, {:not_a_signature, other}}}
