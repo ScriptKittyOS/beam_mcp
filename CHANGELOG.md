@@ -19,8 +19,9 @@ All notable changes to this project are documented here. The format follows
   stdio those two once and per message and `shutdown?/1` after each (its loop must know when
   it ends, and a wrapper's state is the wrapper's). A host that puts a wrapper above the core
   — one that answers a method itself, or holds the state of a multi-round-trip request this
-  core refuses to hold — passes its module; a host that passes nothing changes nothing, and
-  the `0.8.0` wire recording holds that on both transports. Validated at init as `:catalog`
+  core refuses to hold — passes its module; a host that passes nothing changes nothing — the
+  `0.8.0` wire recording holds that on the core and through HTTP, and the seam's own tests
+  hold it on stdio. Validated at init as `:catalog`
   is, structurally — `Code.ensure_compiled/1`, then the exports the transport reaches, or an
   `ArgumentError` naming them; not the behaviour, since a host may wrap without declaring.
   `:server` is the transport's own option and is not passed on to the module's `new/1`. **The

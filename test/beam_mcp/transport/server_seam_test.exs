@@ -149,6 +149,15 @@ defmodule BeamMCP.Transport.ServerSeamTest do
       end
     end
 
+    test "each function is checked on its own: a module lacking only new/1, or only handle_message/2, is refused" do
+      # Both fixtures export shutdown?/1 and one of the two HTTP reaches, so only the check for
+      # the missing one can refuse them; a list that drops a name lets one of them through.
+      for server <- [ServerWrapper.NewOnly, ServerWrapper.HandleOnly] do
+        error = assert_raise ArgumentError, fn -> http_init(server: server) end
+        assert error.message =~ inspect(server)
+      end
+    end
+
     test "a value that is not a module is refused at init" do
       assert_raise ArgumentError, ~r/:server/, fn -> http_init(server: "BeamMCP.Server") end
       assert_raise ArgumentError, ~r/:server/, fn -> http_init(server: nil) end
@@ -237,6 +246,15 @@ defmodule BeamMCP.Transport.ServerSeamTest do
     test "a module with the names at the wrong arities is refused at init" do
       assert_raise ArgumentError, ~r/new\/1/, fn ->
         drive("", core_opts() ++ [server: ServerWrapper.WrongArity])
+      end
+    end
+
+    test "each function is checked on its own: a module lacking only new/1, or only handle_message/2, is refused" do
+      for server <- [ServerWrapper.NewOnly, ServerWrapper.HandleOnly] do
+        error =
+          assert_raise ArgumentError, fn -> drive("", core_opts() ++ [server: server]) end
+
+        assert error.message =~ inspect(server)
       end
     end
   end

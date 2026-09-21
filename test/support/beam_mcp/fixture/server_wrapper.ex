@@ -8,7 +8,10 @@ defmodule BeamMCP.Fixture.ServerWrapper do
   # hands every other message to `BeamMCP.Server`; its state is its own map, with the core's
   # state inside it, so a transport that reads anything of the state shows here. `TwoOnly`
   # exports `new/1` and `handle_message/2` and no `shutdown?/1` -- what a wrapper for the HTTP
-  # transport alone needs. `WrongArity` and `NotAServer` are refused at init.
+  # transport alone needs. `NewOnly` and `HandleOnly` each lack exactly one of the two every
+  # transport reaches, so each per-function check is pinned on its own (a lane measured that
+  # dropping any one name from a transport's list survived the suite with only `WrongArity`,
+  # which fails every check at once). `WrongArity` and `NotAServer` are refused at init.
   defmodule Answers do
     @moduledoc false
     @behaviour BeamMCP.Server
@@ -49,6 +52,18 @@ defmodule BeamMCP.Fixture.ServerWrapper do
     def new(opts), do: BeamMCP.Server.new(opts)
     @impl true
     def handle_message(state, message), do: BeamMCP.Server.handle_message(state, message)
+  end
+
+  defmodule NewOnly do
+    @moduledoc false
+    def new(opts), do: BeamMCP.Server.new(opts)
+    def shutdown?(state), do: BeamMCP.Server.shutdown?(state)
+  end
+
+  defmodule HandleOnly do
+    @moduledoc false
+    def handle_message(state, message), do: BeamMCP.Server.handle_message(state, message)
+    def shutdown?(state), do: BeamMCP.Server.shutdown?(state)
   end
 
   defmodule WrongArity do
