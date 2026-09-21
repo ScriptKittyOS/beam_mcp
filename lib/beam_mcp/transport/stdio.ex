@@ -6,8 +6,8 @@ defmodule BeamMCP.Transport.Stdio do
   The stdio transport: newline-delimited JSON-RPC on standard input and output.
 
   This is the transport an MCP client launches as a child process, and `run/1` is the whole of
-  its public surface. It reads one JSON message per line, hands it to `BeamMCP.Server`, and
-  writes the response as one line. A message that cannot be decoded is answered `-32700` and the
+  its public surface. It reads one JSON message per line, hands it to the server module (the
+  `:server` option, `BeamMCP.Server` by default), and writes the response as one line. A message that cannot be decoded is answered `-32700` and the
   loop continues; end of input ends it.
 
   Responses are always newline-delimited. A request may arrive under the older `Content-Length`
@@ -24,7 +24,22 @@ defmodule BeamMCP.Transport.Stdio do
         server_name: "my-app"
       )
 
-  Options are `BeamMCP.Server.new/1`'s; `:catalog` is required.
+  Options are `BeamMCP.Server.new/1`'s, and one of this transport's own; `:catalog` is required.
+
+  ## The `:server` option: a module above the core
+
+    * `:server` — a module, default `BeamMCP.Server`. The loop calls `c:BeamMCP.Server.new/1`
+      once with the other options, `c:BeamMCP.Server.handle_message/2` per message and
+      `c:BeamMCP.Server.shutdown?/1` after each, through the module and through no literal. A host that puts a wrapper above the core — one that
+      answers a method itself, or holds the state of a multi-round-trip request the core will
+      never hold — passes it here; `BeamMCP.Transport.HTTP` takes the same module. The
+      callbacks are declared on `BeamMCP.Server`, so a wrapper writes `@behaviour BeamMCP.Server`.
+
+  The check is structural, at the start of `run/1`, before a byte is read: the module compiles
+  and exports the three functions, or `run/1` raises naming them. Not the behaviour — a host may
+  wrap without declaring it. This transport reaches one function more than the HTTP transport
+  because its loop must know when it ends, and a wrapper's state is the wrapper's: only it can
+  say. The seam carries no state and decides no authority.
   """
 
   alias BeamMCP.Server
@@ -35,32 +50,63 @@ defmodule BeamMCP.Transport.Stdio do
   @max_line_bytes 1_048_576
   @max_body_bytes 1_048_576
 
+  # The functions this transport reaches through `:server`, and only these. Three where the
+  # HTTP transport reaches two: the loop asks the server whether it has ended, and a wrapper's
+  # state is opaque here, so the wrapper answers. Structural, before the first read, for the
+  # reasons the HTTP transport's `:catalog` check gives (`Code.ensure_compiled/1`; the export,
+  # not the behaviour); the fault names every function so a host reads what a server must be
+  # from the error.
+  @server_functions [new: 1, handle_message: 2, shutdown?: 1]
+
   @doc """
   Runs the read/answer loop on standard input and output until end of input.
 
-  Blocks the calling process. Options are passed to `BeamMCP.Server.new/1`.
+  Blocks the calling process. Options are passed to the server module's `c:BeamMCP.Server.new/1`
+  -- by default `BeamMCP.Server.new/1` -- all but `:server`, which names that module.
   """
   @spec run(keyword()) :: :ok
   def run(opts \\ []) do
-    loop(Server.new(opts))
+    {server, server_opts} = Keyword.pop(opts, :server, Server)
+    validate_server!(server)
+    loop(server, server.new(server_opts))
   end
 
-  defp loop(state) do
+  defp validate_server!(server) do
+    compiled? =
+      is_atom(server) and server != nil and match?({:module, _}, Code.ensure_compiled(server))
+
+    unless compiled? and
+             Enum.all?(@server_functions, fn {f, a} -> function_exported?(server, f, a) end) do
+      raise ArgumentError, """
+      BeamMCP.Transport.Stdio's :server option must be a module exporting new/1,
+      handle_message/2 and shutdown?/1 -- BeamMCP.Server, the default, or a module above it
+      implementing the BeamMCP.Server behaviour.
+
+      Got: #{inspect(server)}
+      """
+    end
+
+    server
+  end
+
+  # Through `server` and no literal: a call naming BeamMCP.Server in this loop would serve the
+  # default whatever the host passed, and a census over the transports refuses one.
+  defp loop(server, state) do
     case read_message() do
       :eof ->
         :ok
 
       {:ok, %{} = message} ->
-        {next_state, response} = answer(state, message)
+        {next_state, response} = answer(server, state, message)
 
         if response do
           write_message(response)
         end
 
-        if Server.shutdown?(next_state) do
+        if server.shutdown?(next_state) do
           :ok
         else
-          loop(next_state)
+          loop(server, next_state)
         end
 
       {:ok, other} ->
@@ -68,11 +114,11 @@ defmodule BeamMCP.Transport.Stdio do
           error(nil, -32_600, "Expected a JSON object, got #{BeamMCP.JSON.type_of(other)}")
         )
 
-        loop(state)
+        loop(server, state)
 
       {:error, reason} ->
         write_message(refusal(reason))
-        loop(state)
+        loop(server, state)
     end
   end
 
@@ -80,8 +126,8 @@ defmodule BeamMCP.Transport.Stdio do
   # -- is answered -32603 with the request's id and the loop goes on, as the HTTP transport
   # answers it 500: a fault in one request is not the end of the pipe. The log line carries
   # arities, never arguments (the same frames the :telemetry exception event carries).
-  defp answer(state, message) do
-    Server.handle_message(state, message)
+  defp answer(server, state, message) do
+    server.handle_message(state, message)
   catch
     kind, reason ->
       Logger.error(Exception.format(kind, reason, BeamMCP.Stacktrace.arities(__STACKTRACE__)))

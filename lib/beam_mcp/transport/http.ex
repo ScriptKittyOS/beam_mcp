@@ -126,6 +126,25 @@ if Code.ensure_loaded?(Plug) do
     > build time; a host using `init_mode: :runtime` gets it on first request instead. The
     > guarantee is "before any message is handled", which holds in both.
 
+    ## The `:server` option: a module above the core
+
+      * `:server` — a module, default `BeamMCP.Server`. Every message this Plug dispatches goes
+        `server.handle_message(server.new(server_opts), message)` through it and through no
+        literal; `server_opts` are the options that are not this Plug's own. A host that puts a
+        wrapper above the core — one that answers a method itself, or holds the state of a
+        multi-round-trip request the core will never hold — passes it here, and both transports
+        take the same module (`BeamMCP.Transport.Stdio.run/1` reaches
+        `c:BeamMCP.Server.shutdown?/1` through it too; this Plug builds one state per request
+        and never asks). The callbacks are declared on `BeamMCP.Server` itself, so a wrapper
+        writes `@behaviour BeamMCP.Server`.
+
+    The check at `init/1` is structural, as `:catalog`'s is: the module compiles and exports
+    `c:BeamMCP.Server.new/1` and `c:BeamMCP.Server.handle_message/2`, or `init/1` raises
+    naming both. It does not ask whether the behaviour is declared — a host may wrap without
+    declaring, and an option contract that rejects a correct configuration is worse than the
+    check it replaced (the `:catalog` comment in `init/1` records the measurement). The seam
+    carries no state and decides no authority: what a wrapper is for is the wrapper's business.
+
     ## What it enforces
 
     The list lives in **one place**: the README's "What of `2026-07-28` this transport
@@ -195,10 +214,44 @@ if Code.ensure_loaded?(Plug) do
     # different revision's version number, while the README said it was not implemented.
     @removed_in_modern ["ping", "initialize", "notifications/initialized"]
 
-    # This Plug's own options; everything else in the keyword list belongs to Server.new/1.
-    # Derived by exclusion rather than by naming what to keep: a `Keyword.take` list silently
-    # dropped `tools_ttl_ms` and `tools_cache_scope` when they were added, and a test caught it.
-    @plug_opts [:authorize, :allowed_origins, :authorize_body, :read_timeout, :connection_timeout]
+    # This Plug's own options; everything else in the keyword list belongs to the server's
+    # new/1. Derived by exclusion rather than by naming what to keep: a `Keyword.take` list
+    # silently dropped `tools_ttl_ms` and `tools_cache_scope` when they were added, and a test
+    # caught it. `:server` is the Plug's: the module it dispatches through is not an option of
+    # that module.
+    @plug_opts [
+      :authorize,
+      :allowed_origins,
+      :authorize_body,
+      :read_timeout,
+      :connection_timeout,
+      :server
+    ]
+
+    # The functions this Plug reaches through `:server`, and only these: one state per request,
+    # so `shutdown?/1` is never asked here (stdio asks it, and validates it). Structural, at
+    # init, for the reasons the `:catalog` check below gives -- `Code.ensure_compiled/1`, not
+    # `ensure_loaded?/1`; the export, not the behaviour -- and a fault names both functions so
+    # a host reads what a server must be from the error, not from a second document.
+    @server_functions [new: 1, handle_message: 2]
+
+    defp validate_server!(server) do
+      compiled? =
+        is_atom(server) and server != nil and match?({:module, _}, Code.ensure_compiled(server))
+
+      unless compiled? and
+               Enum.all?(@server_functions, fn {f, a} -> function_exported?(server, f, a) end) do
+        raise ArgumentError, """
+        BeamMCP.Transport.HTTP's :server option must be a module exporting new/1 and
+        handle_message/2 -- BeamMCP.Server, the default, or a module above it implementing
+        the BeamMCP.Server behaviour.
+
+        Got: #{inspect(server)}
+        """
+      end
+
+      server
+    end
 
     # Extracted from `init/1` rather than inlined, and not for tidiness: adding this check
     # inline took `init/1` to a cyclomatic complexity of 11 against a limit of 9, and the gate
@@ -304,6 +357,7 @@ if Code.ensure_loaded?(Plug) do
         allowed_origins: origins,
         read_timeout: read_timeout,
         connection_timeout: connection_timeout,
+        server: validate_server!(Keyword.get(opts, :server, Server)),
         # This transport serves the 2026-07-28 stateless model and refuses every other
         # revision on every POST, so the core it builds advertises exactly that -- in
         # server/discover's supportedVersions and in -32022's supported. Dual-era is a
@@ -1594,7 +1648,9 @@ if Code.ensure_loaded?(Plug) do
     defp do_dispatch(conn, message, opts) do
       # Nothing is stamped: `check_headers/3` has held the body's `params._meta` to the header
       # and to the schema, so the core reads the era from the message the client actually sent.
-      case Server.handle_message(Server.new(opts.server_opts), message) do
+      # Through `opts.server` and no literal: a call naming BeamMCP.Server here would serve the
+      # default whatever the host passed, and a census over the transports refuses one.
+      case opts.server.handle_message(opts.server.new(opts.server_opts), message) do
         {_state, nil} ->
           send_resp(conn, 202, "")
 

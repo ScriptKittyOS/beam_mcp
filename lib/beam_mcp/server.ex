@@ -38,7 +38,23 @@ defmodule BeamMCP.Server do
   here ever asked for input. The reason is the first sentence of this page: no process, no
   state of its own; an input-required round trip is state between two messages, and the
   host that wants one owns exactly that state, above this core. Stated on the
-  will-not-implement page (entry 12) with the census that holds it.
+  will-not-implement page (entry 12) with the census that holds it. Where "above this core"
+  is: the `:server` option of both transports, below.
+
+  ## A module above the core: the behaviour
+
+  Both transports reach the core through a module option, `:server`, whose default is this
+  module: `BeamMCP.Transport.HTTP` calls `new/1` and `handle_message/2` through it and
+  `BeamMCP.Transport.Stdio` those two and `shutdown?/1`, none by name. A host that puts a
+  wrapper above the core -- answering one method itself and handing the rest here, or holding
+  the state of a round trip this core refuses to hold -- implements those functions and passes
+  its module. The callbacks are declared on this module, so the wrapper writes
+  `@behaviour BeamMCP.Server` and `@impl true`, and Dialyzer checks its shapes against the
+  specs below; `shutdown?/1` is optional, because the HTTP transport never asks it. Their
+  types are the three functions' own `@spec`s with the state left to the implementer: the
+  transports hand the state back and read nothing of it. The check a transport makes at init
+  is structural -- the exports, not the declaration -- so a module that wraps without
+  declaring is accepted too. This module does not declare the behaviour on itself.
 
   ## What the host supplies
 
@@ -111,6 +127,38 @@ defmodule BeamMCP.Server do
           prompts_ttl_ms: non_neg_integer(),
           page_size: pos_integer()
         }
+
+  # The behaviour a module above the core implements, and the reason it is declared here and
+  # not on a module of its own: the three functions are already public API, so the callbacks
+  # name a commitment that exists rather than adding one, and every other seam in this package
+  # is a behaviour (`BeamMCP.Catalog`, `BeamMCP.Signer`). The shapes are the `@spec`s below
+  # with `state` a variable; a wrapper's state is its own.
+
+  @doc """
+  The state a transport hands to `c:handle_message/2`, from the options the host gave it (all
+  but the transport's own). Called once per request by the HTTP transport, once per process by
+  stdio. The shape is `new/1`'s.
+  """
+  @callback new(opts :: keyword()) :: state when state: term()
+
+  @doc """
+  One message in, the next state and one response out -- or `nil` where the protocol defines
+  no reply (a notification), the `{state, nil}` shape `handle_message/2` returns. A batch (a
+  list) is refused by the core; a wrapper decides its own answer to one. The shape is
+  `handle_message/2`'s.
+  """
+  @callback handle_message(state, message :: map() | list()) :: {state, map() | nil}
+            when state: term()
+
+  @doc """
+  Whether the loop ends: `true` after `shutdown` or `exit`. Asked by the stdio transport after
+  every message, and validated by it; never asked by the HTTP transport, which builds one
+  state per request -- so it is optional, and a wrapper for HTTP alone need not export it.
+  The shape is `shutdown?/1`'s.
+  """
+  @callback shutdown?(state :: term()) :: boolean()
+
+  @optional_callbacks shutdown?: 1
 
   # Every option `new/1` accepts, with the shape it must have. Read as a table so that a
   # wrong option is refused HERE, by name, the way the catalog is -- not held and raised on
