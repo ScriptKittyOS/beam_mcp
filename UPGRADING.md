@@ -51,7 +51,9 @@ the pin to `~> 0.8.0`. **A host on `beam_mcp_signer` waits for that package's re
 admits `0.8.0`**: its `0.1.0` requires `beam_mcp ~> 0.7.0` (three numbers, by the same rule as
 this page's pin), so `{:beam_mcp, "~> 0.8.0"}` beside `{:beam_mcp_signer, "~> 0.1.0"}` does not
 resolve until it does. That is the cost of the three-number pin, paid once per minor, on the
-signer's side.
+signer's side. *Appended 2026-09-21:* that release exists — `beam_mcp_signer` `0.1.1`
+(2026-09-19) requires `~> 0.7`, two numbers, so it resolves beside `~> 0.8.0` and `~> 0.9.0`
+alike; the paragraph above is history and the cost it names was paid once.
 
 **`0.9.0` has a row above, and it is not a break.** Two additions at the minor: `:server` on
 `BeamMCP.Transport.HTTP` and `BeamMCP.Transport.Stdio.run/1` (default `BeamMCP.Server`, which is
