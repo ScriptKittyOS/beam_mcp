@@ -128,11 +128,11 @@ if Code.ensure_loaded?(Plug) do
 
     ## The `:server` option: a module above the core
 
-      * `:server` — a module, default `BeamMCP.Server`. Every message this Plug dispatches goes
+      * `:server`, a module, default `BeamMCP.Server`. Every message this Plug dispatches goes
         `server.handle_message(server.new(server_opts), message)` through it and through no
         literal; `server_opts` are the options that are not this Plug's own. A host that puts a
-        wrapper above the core — one that answers a method itself, or holds the state of a
-        multi-round-trip request the core will never hold — passes it here, and both transports
+        wrapper above the core (one that answers a method itself, or holds the state of a
+        multi-round-trip request the core will never hold) passes it here, and both transports
         take the same module (`BeamMCP.Transport.Stdio.run/1` reaches
         `c:BeamMCP.Server.shutdown?/1` through it too; this Plug builds one state per request
         and never asks). The callbacks are declared on `BeamMCP.Server` itself, so a wrapper
@@ -140,7 +140,7 @@ if Code.ensure_loaded?(Plug) do
 
     The check at `init/1` is structural, as `:catalog`'s is: the module compiles and exports
     `c:BeamMCP.Server.new/1` and `c:BeamMCP.Server.handle_message/2`, or `init/1` raises
-    naming both. It does not ask whether the behaviour is declared — a host may wrap without
+    naming both. It does not ask whether the behaviour is declared: a host may wrap without
     declaring, and an option contract that rejects a correct configuration is worse than the
     check it replaced (the `:catalog` comment in `init/1` records the measurement). The seam
     carries no state and decides no authority: what a wrapper is for is the wrapper's business.

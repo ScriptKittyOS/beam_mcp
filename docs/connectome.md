@@ -207,15 +207,15 @@ signature; which of the three a consumer accepts is the consumer's policy.
 
 | scheme | the signature scheme a host asserts beside a signature; not in the bytes, not verified here |
 | -- | -- |
-| `:ed25519` | Ed25519 (RFC 8032) — the scheme the released signer package `beam_mcp_signer` implements, through OTP's `:crypto` |
-| `:ecdsa_p384_sha384` | ECDSA over P-384 with SHA-384 — one name for curve and digest together, since a verifier needs both and OTP has no single atom for the pair; the curve CNSA 1.0 permits, so a host under that policy asserts this one |
-| `:mldsa87` | ML-DSA-87 (FIPS 204) — OTP's own atom (`:crypto`'s `mldsa()` type); OTP signs with it only where the runtime's OpenSSL provides the algorithm, and on OpenSSL 3.0 it is absent from `:crypto.supports(:public_keys)` |
+| `:ed25519` | Ed25519 (RFC 8032): the scheme the released signer package `beam_mcp_signer` implements, through OTP's `:crypto` |
+| `:ecdsa_p384_sha384` | ECDSA over P-384 with SHA-384: one name for curve and digest together, since a verifier needs both and OTP has no single atom for the pair; the curve CNSA 1.0 permits, so a host under that policy asserts this one |
+| `:mldsa87` | ML-DSA-87 (FIPS 204): OTP's own atom (`:crypto`'s `mldsa()` type); OTP signs with it only where the runtime's OpenSSL provides the algorithm, and on OpenSSL 3.0 it is absent from `:crypto.supports(:public_keys)` |
 
 `BeamMCP.Connectome.Canonical.signature/3` returns `scheme:` and `key_id:` beside the signature,
 copied from the options the host passed and `nil` where it passed none. Neither is in the
 canonical bytes: the digest **algorithm** is, because it is part of what is hashed; a
 signature **scheme** cannot be, because the bytes are signed after they are complete. Neither is
-verified by this package — it holds no key and makes no signature — the binding of a key id to a
+verified by this package (it holds no key and makes no signature); the binding of a key id to a
 scheme is the consumer's key registry's, and which schemes a consumer accepts is its policy. The
 three names are the vocabulary a host names its scheme in; this package copies what the host
 asserts, whatever the name, and a signer package attached here is what makes any of them true.

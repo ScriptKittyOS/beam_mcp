@@ -11,38 +11,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.9.0] — 2026-09-21
+## [0.9.0] - 2026-09-21
 
 Two additions placed at the minor by policy, and **no break**: the `:server` seam on both
 transports (a module option, default `BeamMCP.Server`, and `BeamMCP.Server` a behaviour a wrapper
 implements) and `scheme:` and `key_id:` beside the signature `BeamMCP.Connectome.Canonical.signature/3`
 returns. No public entry is removed, renamed, hidden or changed in arity; no wire byte and no
-canonical byte moves — the `0.8.0` wire recording and the canonical goldens are the same
+canonical byte moves: the `0.8.0` wire recording and the canonical goldens are the same
 bytes. Four public entries added, each `since=0.9.0` in `docs/public-api.txt`. A host that passes
 no `:server` and reads no `scheme:` changes nothing. The stand at `0.8.0` ends here because a
 consumer's composed system needs the seam from this package and nothing else; the road from
 here, as `UPGRADING.md` states it: `0.10.0` a quiet minor in which no public entry moves
 (instruments and pages: a FIPS leg, the SBOM at release), `1.0.0` after it has stood.
 
-### Added — the server seam: `:server` on both transports, a module above the core
+### Added: the server seam, `:server` on both transports, a module above the core
 
 - **`:server`**, a module option on the `BeamMCP.Transport.HTTP` Plug (its `init/1`) and on
   `BeamMCP.Transport.Stdio.run/1`, default `BeamMCP.Server`. The transports reach the core
   through it and through no literal: HTTP calls `new/1` and `handle_message/2` per request,
   stdio those two once and per message and `shutdown?/1` after each (its loop must know when
   it ends, and a wrapper's state is the wrapper's). A host that puts a wrapper above the core
-  — one that answers a method itself, or holds the state of a multi-round-trip request this
-  core refuses to hold — passes its module; a host that passes nothing changes nothing — the
+  (one that answers a method itself, or holds the state of a multi-round-trip request this
+  core refuses to hold) passes its module; a host that passes nothing changes nothing: the
   `0.8.0` wire recording holds that on the core and through HTTP, and the seam's own tests
   hold it on stdio. Validated at init as `:catalog`
-  is, structurally — `Code.ensure_compiled/1`, then the exports the transport reaches, or an
+  is, structurally: `Code.ensure_compiled/1`, then the exports the transport reaches, or an
   `ArgumentError` naming them; not the behaviour, since a host may wrap without declaring.
   `:server` is the transport's own option and is not passed on to the module's `new/1`. **The
   seam carries no state and decides no authority**; will-not-implement entry 12 is unchanged
   and its two tests stand as they were.
 - **`BeamMCP.Server` is a behaviour**: **`c:BeamMCP.Server.new/1`**,
-  **`c:BeamMCP.Server.handle_message/2`** and **`c:BeamMCP.Server.shutdown?/1`** (optional —
-  the HTTP transport never asks it), typed as the three functions' own `@spec`s with the state
+  **`c:BeamMCP.Server.handle_message/2`** and **`c:BeamMCP.Server.shutdown?/1`** (optional,
+  since the HTTP transport never asks it), typed as the three functions' own `@spec`s with the state
   left to the implementer, so a wrapper writes `@behaviour BeamMCP.Server` and `@impl true`
   and Dialyzer checks its shapes. Three public entries added, callbacks on functions that were
   already public: the behaviour names a commitment that existed. `BeamMCP.Server` does not
@@ -53,21 +53,21 @@ here, as `UPGRADING.md` states it: `0.10.0` a quiet minor in which no public ent
   but the core's own moduledoc example; no module but `BeamMCP.Server` itself has a call edge into
   it in the compiled artefact; and the atom `BeamMCP.Server` appears in another module's compiled
   forms exactly once per transport, as the default value (the reading that catches
-  `Server |> then(& &1.new(x))`, which the other two pass — a review lane measured it). Red on
+  `Server |> then(& &1.new(x))`, which the other two pass; a review lane measured it). Red on
   the tree before the seam, where the four literal call sites were the plant. Two moved: the
   variable-module call list in `no_catalog_test.exs` gains the five calls through `:server`;
   the behaviour list in `no_signature_test.exs` gains `BeamMCP.Server` with its exact
   callbacks, so a fourth is a visible act.
 
-### Added — the scheme beside the signature: `scheme:` and `key_id:` in `signature/3`'s return
+### Added: the scheme beside the signature, `scheme:` and `key_id:` in `signature/3`'s return
 
 - **`BeamMCP.Connectome.Canonical.signature/3` returns five members**, the three since `0.7.0`
-  and `scheme:` and `key_id:` copied from the host's `opts` — `nil` for each the host did not
+  and `scheme:` and `key_id:` copied from the host's `opts`, `nil` for each the host did not
   pass. **The canonical bytes do not change**: no `schema_version` bump, every golden the same
   blob, the bytes the signer receives identical with or without a scheme. The digest algorithm
   is inside the bytes because it is part of what is hashed; a signature scheme cannot be, since
   the bytes are signed after they are complete, so it rides beside them. Both members are
-  **asserted by the host, not verified by the package** — the binding of a key id to a scheme is
+  **asserted by the host, not verified by the package**; the binding of a key id to a scheme is
   the consumer's key registry's. `BeamMCP.Signer` stays one callback: a signer asserting its own
   scheme was the rejected alternative (the behaviour's moduledoc says a widening stops and asks,
   and the registry is the stronger check).
