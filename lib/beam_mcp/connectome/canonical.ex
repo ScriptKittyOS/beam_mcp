@@ -302,13 +302,13 @@ defmodule BeamMCP.Connectome.Canonical do
 
   @doc """
   The canonical bytes of `graph` signed by `signer`, a module implementing `BeamMCP.Signer`:
-  `{:ok, %{algorithm: algorithm, signature: signature, signer: signer, scheme: scheme, key_id: key_id}}`
-  — the bytes' digest algorithm (so a verifier knows which envelope member it re-derives), the
-  signature the signer returned, the module that made it, and, beside them, the signature
-  `scheme:` and the `key_id:` the host passed in `opts`, copied through as given and `nil` for
-  each the host did not pass. **The envelope's bytes do not change**: this function encodes with
+  `{:ok, %{algorithm: algorithm, signature: signature, signer: signer, scheme: scheme, key_id: key_id}}`,
+  where `algorithm` is the bytes' digest algorithm (so a verifier knows which envelope member it
+  re-derives), `signature` what the signer returned, `signer` the module that made it, and,
+  beside them, the signature `scheme:` and the `key_id:` the host passed in `opts`, copied
+  through as given and `nil` for each the host did not pass. **The envelope's bytes do not change**: this function encodes with
   `encode/2` and hands those bytes to the signer's `c:BeamMCP.Signer.sign/2`, with `opts` as the
-  host gave them — a key, a key id, a scheme, whatever the signer reads; this package reads
+  host gave them (a key, a key id, a scheme, whatever the signer reads); this package reads
   `:algorithm` from them for the encode, copies `:scheme` and `:key_id` beside the result, and
   reads nothing else. The scheme and the key id are **asserted by the host, not verified here**:
   the digest algorithm is inside the bytes because it is part of what is hashed; a signature

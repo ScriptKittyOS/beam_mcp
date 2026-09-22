@@ -105,12 +105,12 @@ entry says so when it does.
 | version | supported |
 |---|---|
 | `0.9.x` | yes |
-| `0.8.x` | no — superseded |
-| `0.7.x` | no — superseded |
-| `0.6.x` | no — superseded |
-| `0.5.x` | no — superseded |
-| `0.4.x` | no — superseded |
-| `0.3.x` | no — superseded |
+| `0.8.x` | no, superseded |
+| `0.7.x` | no, superseded |
+| `0.6.x` | no, superseded |
+| `0.5.x` | no, superseded |
+| `0.4.x` | no, superseded |
+| `0.3.x` | no, superseded |
 | `0.2.x` | no — superseded |
 | `0.1.x` | no — superseded |
 

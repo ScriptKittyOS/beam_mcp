@@ -209,7 +209,7 @@ dependencies; a stdio-only host does not pull them in.
 
 **Both transports take `:server`, a module above the core.** Default `BeamMCP.Server`; the
 transports call `new/1` and `handle_message/2` through it (stdio `shutdown?/1` too, since its
-loop must know when it ends) and never by name, so a host can put a wrapper above the core — one
+loop must know when it ends) and never by name, so a host can put a wrapper above the core: one
 that answers a method itself and hands the rest to `BeamMCP.Server`, or holds the state of a
 multi-round-trip request the core will never hold. Pass nothing and nothing changes. The
 callbacks are declared on `BeamMCP.Server`, so a wrapper writes `@behaviour BeamMCP.Server`;
@@ -612,9 +612,9 @@ tools, resources and prompts declared by the host (`BeamMCP.ToolSpec`, `BeamMCP.
 and `BeamMCP.ResourceTemplateSpec`, `BeamMCP.PromptSpec`), tools dispatched through the host's
 function, resources read and prompts rendered through its two optional callbacks, the resource
 and prompt lists paginated by one keyset cursor (`BeamMCP.Cursor`; `tools/list` is not yet);
-the `:server` seam on both transports — a module above the core, `BeamMCP.Server` the default
-and the behaviour a wrapper implements — and, beside a signature, the `scheme:` and `key_id:`
-the host asserts (`BeamMCP.Connectome.Canonical.signature/3`); the connectome spine above — declared, observed, canonical bytes, diff — with the Livebook
+the `:server` seam on both transports (a module above the core, `BeamMCP.Server` the default
+and the behaviour a wrapper implements) and, beside a signature, the `scheme:` and `key_id:`
+the host asserts (`BeamMCP.Connectome.Canonical.signature/3`); the connectome spine above (declared, observed, canonical bytes, diff) with the Livebook
 that renders it and the read-only surface a host puts on the wire
 (`BeamMCP.Connectome.Surface`); and reachability queries over a graph
 (`BeamMCP.Connectome.Reach`: can an entry reach an effect, can it do so without crossing a

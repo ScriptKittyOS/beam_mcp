@@ -28,15 +28,15 @@ defmodule BeamMCP.Transport.Stdio do
 
   ## The `:server` option: a module above the core
 
-    * `:server` — a module, default `BeamMCP.Server`. The loop calls `c:BeamMCP.Server.new/1`
+    * `:server`, a module, default `BeamMCP.Server`. The loop calls `c:BeamMCP.Server.new/1`
       once with the other options, `c:BeamMCP.Server.handle_message/2` per message and
-      `c:BeamMCP.Server.shutdown?/1` after each, through the module and through no literal. A host that puts a wrapper above the core — one that
+      `c:BeamMCP.Server.shutdown?/1` after each, through the module and through no literal. A host that puts a wrapper above the core (one that
       answers a method itself, or holds the state of a multi-round-trip request the core will
-      never hold — passes it here; `BeamMCP.Transport.HTTP` takes the same module. The
+      never hold) passes it here; `BeamMCP.Transport.HTTP` takes the same module. The
       callbacks are declared on `BeamMCP.Server`, so a wrapper writes `@behaviour BeamMCP.Server`.
 
   The check is structural, at the start of `run/1`, before a byte is read: the module compiles
-  and exports the three functions, or `run/1` raises naming them. Not the behaviour — a host may
+  and exports the three functions, or `run/1` raises naming them. Not the behaviour: a host may
   wrap without declaring it. This transport reaches one function more than the HTTP transport
   because its loop must know when it ends, and a wrapper's state is the wrapper's: only it can
   say. The seam carries no state and decides no authority.
