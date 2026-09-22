@@ -50,7 +50,8 @@ happened.
   signer that holds a key, `BeamMCP.Signer.Ed25519` (Ed25519 through OTP's `:crypto`, the key
   under `opts[:private_key]`), is the separate package `beam_mcp_signer`
   (github.com/ScriptKittyOS/beam_mcp_signer, 0.1.0 on hex.pm, depending on `~> 0.7.0` — so a
-  host on it cannot take `0.8.0` until a signer release admits it; `UPGRADING.md` says so);
+  host on it cannot take `0.8.0` until a signer release admits it; `UPGRADING.md` says so —
+  and `0.1.1`, released 2026-09-19 with `~> 0.7`, is that release: it resolves beside `0.9.0`);
   this package does not depend on it.
 - **`0.6.0` carried everything since `0.5.0`**: the wire hardening after the threat model, the
   threat-model page, the hash-agile canonical envelope (the release's one break), the install-floor slices (the OTP floor at
