@@ -30,9 +30,8 @@ No public entry moves, no wire byte and no envelope byte; `lib/` changes by one 
   tests in the same pull request, written as a rule.
 - **`docs/provenance.md`**: how to verify a release tag's OpenPGP signature, with the key's
   fingerprint and where to fetch it.
-- **`docs/governance.md`**: the CII-Best-Practices row reads the badge: passing since
-  2026-09-23, silver at 98% with continuity of access the one Unmet, and the Scorecard's
-  figure from its last run. **README**: the badge, at the top.
+- **`docs/governance.md`**: the CII-Best-Practices row reads the badge: silver since
+  2026-09-23 (passing the same day), and the Scorecard's figure from its last run. **README**: the badge, at the top.
 - **`docs/succession.md`** and **`docs/governance.md`**: two people with access for continuity,
   `znmead` (Maintain on this repository) and Mike Hostetler (`maintainer` on hex.pm; invited
   to Maintain), the same on `beam_mcp_signer`; what that access covers and what it does not;
