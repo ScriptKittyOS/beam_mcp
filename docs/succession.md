@@ -10,11 +10,38 @@ can weigh it, and so a successor knows where everything is.
 
 ## The bus factor is one
 
-There is one maintainer (`docs/governance.md`). They hold the ScriptKittyOS organization
-that owns the repository, the Hex package's owner account, the address in `SECURITY.md`, and
-the key that signs nothing — this package signs no bytes of its own (`docs/crypto-posture.md`);
-release attestations are made by GitHub's workflow identity, not by a personal key, so there
-is no signing key to inherit.
+There is one maintainer (`docs/governance.md`): one person has written and reviewed this code,
+and that knowledge is not held twice. They hold the ScriptKittyOS organization that owns the
+repository, the Hex package's `full` ownership, the address in `SECURITY.md`, and the OpenPGP
+key that signs release tags (`docs/provenance.md`). The package itself signs no bytes
+(`docs/crypto-posture.md`) and release attestations are made by GitHub's workflow identity, so
+the tag key is the only personal key, and a successor signs with their own rather than
+inheriting it. **Access is no longer held by one person alone**: see the next section.
+
+## Two people with access
+
+From 2026-09-23 the project can go on within a week if the maintainer cannot, through two
+people, each holding one half:
+
+- **`znmead`** holds the **Maintain** role on this repository: he can triage, label and close
+  issues, rebase-merge a pull request once the ruleset's required checks are green (the ruleset
+  requires no approving review), and push a release tag, which runs
+  `.github/workflows/provenance.yml`.
+- **Mike Hostetler** (`mikehostetler` on hex.pm and GitHub) holds **maintainer** ownership of
+  `beam_mcp` on hex.pm: he can publish a release, from the tag with `tools/release_tarball.sh`
+  and `--publish`, and retire one. He has been invited to the Maintain role here as well; this
+  page says so when he holds it.
+
+Both hold the same on `beam_mcp_signer`. A release tag they sign is signed with their own
+OpenPGP key, and the first such tag is announced in the CHANGELOG with its fingerprint, as
+`docs/provenance.md` says of any change of key.
+
+What their access does not reach, stated so it is not assumed: the repository's settings and
+ruleset, adding collaborators, and adding owners on hex.pm stay with the maintainer (the
+organization's owner, the package's `full` owner), and so does the security intake
+`SECURITY.md` names. If the maintainer's account were lost for good, the two of them keep
+issues, merges and releases going, and extending access to anyone else goes through GitHub
+Support and hex.pm's support process.
 
 ## What survives the maintainer today, and what does not
 
@@ -26,11 +53,12 @@ maintains the package; the attestations on GitHub's store and in Sigstore's log 
 tagged release from `0.6.0` on (`0.5.0` and earlier carry none); the CHANGELOG, `UPGRADING.md`, `docs/api-stability.md` and `docs/public-api.txt`,
 which say what a consumer may rely on without asking anyone.
 
-**Does not survive an account loss:** write control over the repository — the organization
-has one owner, the maintainer, so if that account is lost no owner remains to add anyone and
-the path is GitHub Support's orphaned-organization process, the same class of fallback named
-below for hex.pm; and the private records — the slice plans, findings, review archives and the
-gap ledger — which live in a second repository under the maintainer's account, and the
+**Does not survive an account loss:** control of the repository's settings and of who else
+may write (write itself survives, above): the organization has one owner, the maintainer, so
+if that account is lost no owner remains to add anyone and the path is GitHub Support's
+orphaned-organization process, the same class of fallback named below for hex.pm; and the
+private records (the slice plans, findings, review archives and the gap ledger), which live
+in a second repository under the maintainer's account, and the
 **off-account archive is not in place**. A copy of the private repository outside GitHub
 (an encrypted, object-locked off-site copy, with its key handling) is a decision the
 maintainer has recorded as open and not yet taken; until it is, the private history survives
@@ -41,9 +69,10 @@ changes, and not before.
 
 1. **Organization ownership** of `ScriptKittyOS`, granted by its current owner, which gives
    the repository, its ruleset and its Actions.
-2. **Hex package ownership**: the package has one owner on hex.pm, the account `aylacroft`;
-   `mix hex.owner add beam_mcp <email>` run by that account, or hex.pm's support process for
-   an unreachable owner, which the package's public metadata (`mix.exs`, this page) supports.
+2. **Hex package ownership**: the package has two owners on hex.pm, `aylacroft` (`full`) and
+   `mikehostetler` (`maintainer`, who can publish but not add owners);
+   `mix hex.owner add beam_mcp <email>` run by the `full` owner, or hex.pm's support process
+   for an unreachable one, which the package's public metadata (`mix.exs`, this page) supports.
 3. **The release procedure**, which is in the tree: `tools/release_tarball.sh` builds the
    canonical tarball, the tag triggers `.github/workflows/provenance.yml`, and
    `docs/api-stability.md` names the step that writes release numbers into
