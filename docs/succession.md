@@ -21,16 +21,21 @@ inheriting it. **Access is no longer held by one person alone**: see the next se
 ## Two people with access
 
 From 2026-09-23 the project can go on within a week if the maintainer cannot, through two
-people, each holding one half:
+people:
 
-- **`znmead`** holds the **Maintain** role on this repository: he can triage, label and close
-  issues, rebase-merge a pull request once the ruleset's required checks are green (the ruleset
+- **`znmead`** holds the **Maintain** role on this repository (re-invited on 2026-09-23 when
+  the organization began requiring secure two-factor methods; pending his acceptance): he can
+  triage, label and close issues, rebase-merge a pull request once the ruleset's required checks are green (the ruleset
   requires no approving review), and push a release tag, which runs
   `.github/workflows/provenance.yml`.
-- **Mike Hostetler** (`mikehostetler` on hex.pm and GitHub) holds **maintainer** ownership of
-  `beam_mcp` on hex.pm: he can publish a release, from the tag with `tools/release_tarball.sh`
-  and `--publish`, and retire one. He has been invited to the Maintain role here as well; this
-  page says so when he holds it.
+- **Mike Hostetler** (`mikehostetler` on GitHub and hex.pm) holds the same **Maintain** role
+  here, and **maintainer** ownership of `beam_mcp` on hex.pm: he can publish a release, from the
+  tag with `tools/release_tarball.sh` and `--publish`, and retire one. He alone can therefore
+  carry every step from issue to published release.
+
+The organization requires two-factor authentication with secure methods only (an
+authenticator app, a security key or a passkey; not SMS) for everyone who can change the
+repository.
 
 Both hold the same on `beam_mcp_signer`. A release tag they sign is signed with their own
 OpenPGP key, and the first such tag is announced in the CHANGELOG with its fingerprint, as
