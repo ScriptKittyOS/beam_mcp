@@ -411,7 +411,7 @@ done
 # below are root-anchored: a nested `lib/.internal/` is neither ignored nor detected.
 internal_dir=".internal"
 allowlist="tools/publication-allowlist.txt"
-allowlist_sha="ee5dc25859a7ccc153b25a1216ba65abfa3d576117d5b7c327e9b37296dde5c3"
+allowlist_sha="75e2d09087c73b87dc7201a7bce548736c9b41bb0adbc1d172efe0eaac6ae351"
 pub_fail=0
 # TWO QUESTIONS, TWO COMMANDS. `-q` answers "is the path ignored?" with its exit status alone.
 # `-v` answers "which rule matched?" -- and under -v the exit status means something else:

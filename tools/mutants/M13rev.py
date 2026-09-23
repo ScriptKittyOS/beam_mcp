@@ -5,7 +5,7 @@
 # a path here: a mutant that names one machine's worktree is the unresolvable
 # `$S/mut.sh` that slice 003's record cites, in another file.
 # M13rev -- the (c) fix removed: `spec.input_schema` and the annotation walk go back OUTSIDE
-# `host_call/1`, which is exactly mutant M13 from slices/002-streamable-http/logs/mutation-round7.txt.
+# `host_call/1`, which is exactly mutant M13 from slice 002's record `mutation-round7.txt` (internal).
 import io
 import sys
 p = sys.argv[1]

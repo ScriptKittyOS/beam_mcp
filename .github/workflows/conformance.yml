@@ -46,8 +46,8 @@ jobs:
           python3 --version
           OUT="$RUNNER_TEMP/conformance" ./tools/conformance.sh
       # REUSE, by the specification's own tool -- CI-ONLY like the conformance number: the
-      # gate's REUSE step reads headers and excludes the slice archives; this reads the whole
-      # tree under REUSE.toml and is the compliance claim CONTRIBUTING makes. The runner's
+      # gate's REUSE step reads headers; this reads the whole tree by the specification's rules
+      # and is the compliance claim CONTRIBUTING makes. The runner's
       # pipx installs it; the version is pinned so the verdict is a function of the tree.
       - name: REUSE - the specification's lint over the whole tree
         if: always()

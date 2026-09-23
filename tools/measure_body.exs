@@ -3,7 +3,7 @@
 #
 # Settles the README's read-before-refusal sentence by measuring the two quantities it used to
 # state as one. Run with `mix run tools/measure_body.exs`; the archive it produced is
-# slices/002-streamable-http/logs/measure-read-before-refusal.txt.
+# slice 002's record `measure-read-before-refusal.txt` (internal).
 #
 # The sentence has been wrong twice -- first a single exact byte count no lane could reproduce,
 # then a 1.02-1.50 MiB range attributed to the client's send buffer. It is a script rather than

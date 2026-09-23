@@ -11,6 +11,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed: the slice records leave the public tree; SLICES.md says what each slice committed
+
+- The `slices/` archive (243 files: the plans, review logs and gate runs of slices 001 to 007)
+  is removed from the public tree; the team's records live in its internal repository, where
+  these were copied byte for byte first. `SLICES.md` takes its place: every slice that has
+  landed, one line on what it committed, and its pull request. The publication step's
+  allowlist is now empty, so the gate refuses any tracked path under `slices/`; `REUSE.toml`,
+  which only annotated that archive, goes with it (the REUSE lint: 461 of 461 files carry
+  copyright and licence information without it). Comments in `lib/` and the tests that cited a
+  slice file now say which slice's record holds the measurement. Nothing is rewritten in the
+  history: the files remain in earlier commits. Two tools whose only input was that archive
+  (`tools/archive_sweep.sh`, `tools/probe_archive_tally.sh`) are removed.
+
 ## [0.10.0] - 2026-09-23
 
 The quiet minor again: **no public entry added, removed, renamed, hidden or changed in arity**

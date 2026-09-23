@@ -197,7 +197,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
                  "minor and therefore the next documented wire break. That is the defect a " <>
                  "reviewer found in `~> 0.1` during 0.2.0, reproduced one release forward. " <>
                  "Demonstrated before this assertion existed: with the version set to the next " <>
-                 "minor, this file passed green -- see slices/001c-dependency-pin/logs/red.txt."
+                 "minor, this file passed green -- see slice 001c's record `red.txt` (internal)."
       else
         # NOT an empty branch. An `if` whose else asserts nothing switches the test off rather
         # than switching policy, and a lane showed the consequence: at 1.0.0 with a README

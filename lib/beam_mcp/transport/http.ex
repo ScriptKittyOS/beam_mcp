@@ -330,7 +330,7 @@ if Code.ensure_loaded?(Plug) do
       # COMPILE time, and a correct catalog that reads config or ETS would fail there -- the
       # same class as the `ensure_loaded?` defect this check already carries a comment about.
       # The map's SHAPE is refused by `BeamMCP.Server.new/1`, which is runtime. Recorded in
-      # slices/008-catalog-generalization/FINDINGS.md as the one place "refuse at init" is
+      # slice 008's findings (internal) as the one place "refuse at init" is
       # answered with "as much as is safe here".
       unless is_atom(catalog) and catalog != nil and
                match?({:module, _}, Code.ensure_compiled(catalog)) and
@@ -432,7 +432,7 @@ if Code.ensure_loaded?(Plug) do
     # `connection: close` is how a response declines both. Bandit reads it in
     # `handle_keepalive/3`, sets `keepalive: false`, and `ensure_completed/1` then returns
     # without reading anything. Measured both ways in
-    # `slices/003-release-0-3-1/logs/probe-d-bandit-drain-limits.txt`.
+    # slice 003's record `probe-d-bandit-drain-limits.txt` (internal).
     #
     # WHY THIS SHAPE AND NOT `close_after/1` AT EACH SITE. The population is the steps of this
     # function, derived rather than listed. Two commands, and what each is for:
@@ -1235,7 +1235,7 @@ if Code.ensure_loaded?(Plug) do
     # not. So a host catalog that RAISED kept the request's id, and the same host catalog
     # returning MALFORMED DATA -- a map where a `%ToolSpec{}` was promised -- raised `KeyError`
     # one line later, escaped to `call/2`'s rescue and answered `id: null`. Measured in
-    # `slices/002-streamable-http/logs/probe-fault-ids.txt`:
+    # slice 002's record `probe-fault-ids.txt` (internal):
     #
     #   host catalog RAISES (header validation)        500  -32603  id=4242
     #   host catalog returns a malformed spec          500  -32603  id=nil
@@ -1247,7 +1247,7 @@ if Code.ensure_loaded?(Plug) do
     # DEFECT-DRIVEN, said here because the first version of this comment claimed more than had
     # been measured. Its inputs are the annotation names, paths and types the host wrote, so it
     # belongs on the host's side of the boundary on principle -- but the mutant that leaves it
-    # outside SURVIVES the suite: `Mc2` in `slices/003-release-0-3-1/logs/mutation-round3.txt`,
+    # outside SURVIVES the suite: `Mc2` in slice 003's record `mutation-round3.txt` (internal),
     # 158 tests, 0 failures, twice, re-scored on the tree that ships rather than carried forward
     # from the round it was first run in. It survives because reaching a raise needs a
     # `properties` map whose KEY

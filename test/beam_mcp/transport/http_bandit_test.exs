@@ -8,7 +8,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   Everything else in this suite drives `call/2` through `Plug.Test`, which builds a conn from an
   in-memory binary: there is no connection, so there is nothing that can be left in a state the
   next request inherits, and `read_body/2` is a `:binary.part` that can neither block nor fail.
-  Two gaps in `slices/002-streamable-http/FINDINGS.md` are recorded there as not closable
+  Two gaps in slice 002's findings (internal) are recorded there as not closable
   without this instrument. This file stands it up and closes the one the owner scoped in.
 
   WHAT IS ACTUALLY WRONG, measured on this tree rather than carried over. A refusal issued
@@ -20,7 +20,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   refused, on a path `authorize/1` may leave unauthenticated. Above the cap the drain fails and
   the connection is dropped with nothing said to the client.
 
-  Both halves are measured in `slices/003-release-0-3-1/logs/probe-d-bandit-drain-limits.txt`:
+  Both halves are measured in slice 003's record `probe-d-bandit-drain-limits.txt` (internal):
 
       authorize 403, 9000160-byte body            responses=1  socket=closed
         ...with  ** (Bandit.HTTPError) Unable to read remaining data in request body
@@ -37,7 +37,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   Slice 002 lane s3 measured `second-request-answered=False` for a pre-read refusal. On
   bandit 1.12.5 / thousand_island 1.5.0 that does NOT reproduce at ordinary body sizes: the
   drain succeeds and the second pipelined request IS answered
-  (`slices/003-release-0-3-1/logs/probe-d-bandit-drain.txt`, three body sizes up to 1 MB,
+  (slice 003's record `probe-d-bandit-drain.txt` (internal), three body sizes up to 1 MB,
   all `responses=2`). The defect
   is real; the symptom named for it was not the one this adapter shows.
 
@@ -119,7 +119,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # The 9 MB case: the server refuses on the headers, writes a 297-byte 403, and closes with
   # ~9 MB still unread, so the peer sends an RST. What that RST destroys is the question.
   #
-  # `slices/006-harness-honesty/logs/probe-drain-mechanism.txt`, 40 runs per variant, reporting
+  # slice 006's record `probe-drain-mechanism.txt` (internal), 40 runs per variant, reporting
   # `{bytes received, recv reason, send result, saw the 403?}`:
   #
   #     A  send everything, then read (what this file did)   29x {297, :closed, :ok, true}
@@ -137,7 +137,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # `show_econnreset: true` only renames the error (B); it does not save the data.
   #
   # Reading concurrently with the write (C, D) lost nothing in 80 idle runs. It was NOT enough:
-  # `slices/006-harness-honesty/logs/probe-rate-mc8-load32-passive.txt` is 40 suites at `--max-cases 8` with 32 busy loops
+  # slice 006's record `probe-rate-mc8-load32-passive.txt` (internal) is 40 suites at `--max-cases 8` with 32 busy loops
   # alongside, and 6 of them still ended with `0 complete response(s)` and `0 byte(s) read`. A
   # PASSIVE socket keeps received bytes inside the port, and a failing `gen_tcp:send` destroys
   # the port -- so a reader that has not yet been SCHEDULED to call `recv` loses them, which is
@@ -157,7 +157,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # from 11/40 to 3/60 and did not remove it, because the last of it is not on this side of the
   # wire at all.
   #
-  # `slices/006-harness-honesty/logs/probe-loss-site.txt` separates the three places the 297 bytes could go. The plug's
+  # slice 006's record `probe-loss-site.txt` (internal) separates the three places the 297 bytes could go. The plug's
   # `authorize` callback messages the test process, so "the server never answered" is
   # distinguishable from "the answer did not arrive". 60 runs under 32 busy loops:
   #
@@ -167,7 +167,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # The server decided and wrote its refusal in 60 of 60. Three of those refusals never reached
   # the client. The server closes with ~9 MB unread, which makes Linux abort the connection with
   # an RST instead of a FIN, and an RST discards whatever of the response had not yet been
-  # transmitted. `slices/006-harness-honesty/logs/probe-write-shape.txt` shows the write shape does not govern it either --
+  # transmitted. slice 006's record `probe-write-shape.txt` (internal) shows the write shape does not govern it either --
   # 120 runs in one 9 MB send lost 0, 120 runs in 64 KB chunks lost 5, on the same loaded machine.
   #
   # So the residue is a lost segment, and NO read logic can recover it. What the harness can do
@@ -180,7 +180,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # repeat is announced on stderr rather than hidden. This is not a retry of a failed assertion:
   # the predicate is protocol-determined -- the connection ended with fewer than `expect`
   # complete responses -- and it is decided before any assertion runs. A server that genuinely
-  # never answers fails every attempt and raises, so nothing is masked; `slices/006-harness-honesty/logs/green-mutation-under-load.txt`
+  # never answers fails every attempt and raises, so nothing is masked; slice 006's record `green-mutation-under-load.txt` (internal)
   # is the check that says so, with every killed mutant still scoring what the record scores.
   #
   # @attempts is derived from the measured loss: 5% at its worst leaves 5 attempts at 3e-7.
@@ -300,7 +300,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
   # A FIN and an RST are different statements and the harness now reads them as different. The
   # server closing cleanly having answered nothing is the server saying it has nothing to say:
   # a measurement, and a damning one. Only an ABORT can destroy a response that was written,
-  # which is what `slices/006-harness-honesty/logs/probe-loss-reason.txt` measures against the
+  # which is what slice 006's record `probe-loss-reason.txt` (internal) measures against the
   # real listener -- every genuine loss arrives as `:econnreset`, never as a clean close.
   defp unanswered(acc, expect) do
     """
@@ -557,7 +557,7 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       # drain fails, the adapter logs `Unable to read remaining data in request body` and drops
       # the connection -- pipelined request lost, no `connection: close` in the response that
       # preceded it. Measured before the fix in
-      # `slices/003-release-0-3-1/logs/probe-d-bandit-drain-limits.txt`:
+      # slice 003's record `probe-d-bandit-drain-limits.txt` (internal):
       #
       #     authorize 403, 9000160-byte body   responses=1  socket=closed
       #
