@@ -11,6 +11,90 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-23
+
+A security release. Found by the project's own security review (three independent review
+lanes, their findings reproduced before any fix). No public entry added, removed, renamed,
+hidden or changed in arity (`docs/public-api.txt` did not move). Two behaviours change because
+the old ones were the defects; each entry says how to tell whether you are affected. Take the
+patch: `~> 0.10.0` already admits it. `beam_mcp_signer` `0.2.1` is released beside it.
+
+### Security: JSON `true`, `false` and `null` reach dispatch as themselves
+
+- A tool argument of JSON `false` reached `dispatch` as the string `"false"`, `true` as
+  `"true"` and `null` as `"nil"`, at any depth; a string is truthy, so a host testing
+  `if args.dry_run` ran the non-dry path on `"dry_run": false`. They now arrive as `false`,
+  `true` and `nil`, and a host result carrying them goes out as JSON booleans and `null`.
+  **How to tell whether you are affected:** a tool that takes a boolean or a nullable argument.
+  A host that compared against the strings (`args.flag == "true"`) must compare against the
+  booleans.
+
+### Security: the advertised schema is enforced at every depth; a keyword it would not enforce is refused
+
+- `BeamMCP.Schema` checked `type`, `required` and `additionalProperties` at the top level
+  only; nested objects, `enum`, `items`, `maxItems`, `maxLength`, `pattern` and the rest were
+  advertised by `tools/list` and not held at `tools/call`. Every keyword of the subset the
+  README lists is now enforced at every depth, a refusal naming the path (`opts.mode`,
+  `tags[1]`). A keyword outside the subset (`oneOf`, `anyOf`, `$ref`, `if`, `not` and the
+  rest) is refused when the catalog is loaded (`BeamMCP.Server.new/1` raises, naming the tool
+  and the keyword) rather than advertised and ignored; annotations (`title`, `description`,
+  `default`, `examples`, `format` and the like, and `x-` keys) remain allowed. **How to tell
+  whether you are affected:** a tool whose `input_schema` nests objects or uses any keyword
+  beyond `type`, `properties`, `required` and `additionalProperties`. A catalog using an
+  unsupported keyword now fails at startup: express the constraint in the subset, or check it
+  in the host's dispatch.
+- How the subset reads, stated in `BeamMCP.Schema`'s moduledoc: `pattern` uses ECMA-262's
+  character classes and anchors (`\d`, `\w`, `\s` ASCII; `$` never before a trailing
+  newline), so `^[a-z]+$` refuses `"abc\n"`; `enum`, `const` and `uniqueItems` compare as JSON
+  (`1` equals `1.0`); `integer` refuses `1.0`, stricter than JSON Schema, so a host typed for
+  integers never receives a float. A property name that is not a string, and an `enum` or
+  `const` value that is not JSON, are refused when the catalog is loaded.
+
+### Security: on stdio, nothing but protocol messages reaches standard output
+
+- The stdio transport logged a host fault through `Logger`, whose default console handler
+  writes to standard output, the protocol's stream: the report (a stacktrace, a raise's
+  message) reached the client as a line of the protocol. It now writes the report, with
+  arities in place of arguments, to standard error. A response the encoder refuses (a host
+  term that is not valid JSON) is answered `-32603` with its id, and the loop goes on where it
+  had ended. The README now says to route a stdio host's own `Logger` to standard error.
+
+### Security: a client-facing `-32603` names the contract, never the host's term
+
+- A `read_resource/1` or `get_prompt/2` answer of the wrong shape was answered with a message
+  that inspected the host's module and the term it returned. The message now names the
+  callback and the defect only; the host's module and term stay on the host's side.
+
+### Fixed: faults in the HTTP transport are logged with arities, never arguments
+
+- A fault in a host hook, the catalog or the transport itself was logged with its raw
+  stacktrace, whose top frame can carry the call's arguments: the `Plug.Conn` (its
+  `Authorization` header) and the body. Every such log now goes through
+  `BeamMCP.Stacktrace.arities/1`, as the telemetry event already did. The exception's own
+  message is still logged as raised: a host hook whose `MatchError` prints the conn is the
+  host's code writing to the host's log.
+
+### Fixed: the pagination cursor is read by the wire's one JSON reader
+
+- A cursor was decoded by `Jason` directly, outside the nesting bound and the repeated-key
+  refusal every message is held to. It now goes through `BeamMCP.JSON`; a cursor that the
+  reader refuses is malformed.
+
+### Fixed: a `method` or tool `name` that is not a string is refused by name
+
+- A request whose `method` was not a string, or a `tools/call` whose `name` was not (JSON
+  `true` among them), raised inside the core and was answered as a host fault. They are now
+  `-32600 Invalid Request` and `-32602 Invalid params`. `initialize` with `params` that are
+  not an object is answered, not raised on.
+
+### Changed: the pages
+
+- The threat model, the assurance case and the README say what the fixes above hold, and
+  correct three claims that were broader than the code: the tracer's limits have defaults
+  (bounded, never unbounded) rather than being required; a request with no `Origin` is
+  admitted, and why; `BeamMCP.Catalog`'s moduledoc no longer says a stdio fault ends the loop.
+  `docs/provenance.md`'s verify command pins `--signer-workflow`.
+
 ### Changed: the bus factor is two (copy)
 
 - `docs/succession.md` and `docs/governance.md`: `znmead` knows the code (the maintainer's word,

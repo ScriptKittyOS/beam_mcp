@@ -189,21 +189,35 @@ A tool's schema lives on its `BeamMCP.ToolSpec`. `tools/list` advertises **that*
 `tools/call` enforces **that** schema, so the contract a client is shown and the contract it is
 held to cannot drift apart. Argument keys are derived from the schema's `properties` and reach
 `dispatch` as **atoms**: a tool declaring `"place"` is dispatched `%{place: "Oslo"}`, not
-`%{"place" => "Oslo"}`. Values are passed through unchanged, because turning a string into a
-domain term is the host's job and a generic layer that guesses has acquired someone else's
-domain.
+`%{"place" => "Oslo"}`. Values are passed through unchanged (JSON `true`, `false` and `null`
+arrive as `true`, `false` and `nil`), because turning a string into a domain term is the host's
+job and a generic layer that guesses has acquired someone else's domain.
 
 A `BeamMCP.ToolSpec` that omits `input_schema` is a tool with no arguments: it advertises an open
 empty object, so `tools/call` refuses nothing and dispatch is handed `%{}` whatever the client
 sent.
 
-Validation is a deliberately small subset of JSON Schema: `type`, `properties`, `required`,
-`additionalProperties`, and bounds. It refuses rather than guesses, and it is not a general
-validator.
+Dispatch receives the declared properties only: a property outside `properties` is held to
+`additionalProperties` (refused when it is `false`, checked when it is a schema) and is not
+passed on.
+
+Validation is a deliberately small subset of JSON Schema, enforced at every depth: `type`,
+`enum`, `const`, `properties`, `required`, `additionalProperties`, `items`, the size bounds
+(`minProperties`, `maxProperties`, `minItems`, `maxItems`, `uniqueItems`, `minLength`,
+`maxLength`), `pattern`, and the numeric bounds (`minimum`, `maximum`, `exclusiveMinimum`,
+`exclusiveMaximum`). Annotations (`title`, `description`, `default`, `examples`, `format` and
+the like, and any `x-` key) are allowed and not enforced. Any other keyword (`oneOf`, `$ref`,
+`if` and the rest) is refused when the catalog is loaded, naming the tool and the keyword: a
+server that advertised a keyword it did not enforce would hold the client to less than it
+showed. It refuses rather than guesses, and it is not a general validator.
 
 ## Transports
 
-**stdio**: `BeamMCP.Transport.Stdio.run/1`, newline-delimited JSON-RPC over a pipe.
+**stdio**: `BeamMCP.Transport.Stdio.run/1`, newline-delimited JSON-RPC over a pipe. Standard
+output is the protocol's: the transport writes nothing else there, and reports a host fault on
+standard error. A host running stdio must keep its own output off standard output too, which
+for Elixir's `Logger` means its console handler writing to standard error
+(`config :logger, :default_handler, config: [type: :standard_error]`).
 
 **HTTP**: `BeamMCP.Transport.HTTP`, a `Plug` serving the `2026-07-28` stateless model at one
 endpoint: no sessions, no `Mcp-Session-Id`, no SSE resumability. `plug` and `bandit` are optional

@@ -58,8 +58,11 @@ defmodule BeamMCP.Cursor do
   @spec decode(kind(), term()) :: {:ok, key()} | {:error, :malformed | {:kind, String.t()}}
   def decode(kind, cursor) when is_atom(kind) and is_binary(cursor) do
     with {:ok, json} <- Base.url_decode64(cursor, padding: false),
+         # The wire's one JSON reader (the nesting bound, then the repeated-key refusal), not a
+         # bare Jason.decode/1: the cursor is client bytes like any other. Before 0.10.1 a
+         # cursor carried a nest the body itself would have been refused for.
          {:ok, %{"v" => @version, "k" => k, "a" => key}} when is_binary(k) and is_binary(key) <-
-           Jason.decode(json) do
+           BeamMCP.JSON.decode(json) do
       if k == Atom.to_string(kind), do: {:ok, key}, else: {:error, {:kind, k}}
     else
       _ -> {:error, :malformed}

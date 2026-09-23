@@ -64,13 +64,15 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :xref
   ]
 
-  # The eight atoms that name a loadable module and occur in the compiled forms other than as
+  # The nine atoms that name a loadable module and occur in the compiled forms other than as
   # a call target: `-file`/`-compile` attributes and the compiler's own (`:file`, `:compile`,
   # `:elixir`), export lists (`:init`), a handler's message
   # tag (`:error_logger`), a tuple tag in the canonical encoder (`:array`), `:json` -- a local
   # function name that OTP 28 turned into a module's name, the collision this census is loud
   # about -- and `Jason.OrderedObject`, the struct the decoder hands back for ordered objects,
-  # matched by `BeamMCP.JSON` to read each object's keys once and never called. Exact for the
+  # matched by `BeamMCP.JSON` to read each object's keys once and never called, and
+  # `:standard_error`, the registered name of the VM's standard-error device, which the stdio
+  # transport writes its reports to (standard output is the protocol's). Exact for the
   # OTP the gate runs; an older OTP without `json` reads one fewer.
   @named_not_called [
     :array,
@@ -80,6 +82,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     :file,
     :init,
     :json,
+    :standard_error,
     Jason.OrderedObject
   ]
 
@@ -131,6 +134,8 @@ defmodule BeamMCP.Boundary.PackageReachTest do
       send: 2,
       spawn: 1,
       system_time: 0,
+      # A float with no fraction to the integer it equals, so 1.0 compares as 1 (Schema.json_form/1).
+      trunc: 1,
       tuple_size: 1,
       # A tuple error reason to a JSON array (Server.to_json_value/1); reads nothing.
       tuple_to_list: 1
@@ -172,7 +177,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     ],
     :atomics => [get: 2, new: 2, put: 3],
     :telemetry => [attach_many: 4, detach: 1, execute: 3],
-    Jason => [decode: 1, decode: 2, encode!: 1, encode!: 2],
+    Jason => [decode: 2, encode!: 1, encode!: 2],
     Logger => [__do_log__: 4, __should_log__: 2],
     Process => [delete: 1, info: 2, put: 2, whereis: 1],
     GenServer => [format_report: 1, start: 3, start_link: 3, stop: 3],
@@ -257,7 +262,7 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     assert diffs == [], Enum.join(diffs, "\n")
   end
 
-  test "every atom in the compiled forms that names a module is a called module or one of the nine named as data",
+  test "every atom in the compiled forms that names a module is a called module or one of the ten named as data",
        %{lib: lib, edges: edges} do
     called = for {_, {m, _, _}} <- edges, m not in lib, uniq: true, do: m
     named = Boundary.module_atoms()

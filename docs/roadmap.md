@@ -10,7 +10,12 @@ gathers what `UPGRADING.md`, the README and `docs/will-not-implement.md` already
 place. The order is firm; the dates are not promised. When this page and one of those
 disagree, those are the record and this page is corrected.
 
-## Now: `0.10.0`, the quiet minor
+## Now: `0.10.1`, a security patch on `0.10.0`
+
+The fixes from the project's own security review (the CHANGELOG's 0.10.1 entry); no public
+entry moved, so `0.10.0`'s standing toward `1.0.0` is unchanged.
+
+## Before: `0.10.0`, the quiet minor
 
 Instruments and pages, no public entry added, removed or changed: the suite in FIPS mode in CI
 on the validated OpenSSL FIPS provider (`docs/fips.md`, "Measured"); a CycloneDX SBOM

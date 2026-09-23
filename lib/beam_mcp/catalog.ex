@@ -63,7 +63,8 @@ defmodule BeamMCP.Catalog do
 
   `read_resource/1` and `get_prompt/2` are called as a tool's dispatch is: an exception in
   them is not caught by the core. Over HTTP the transport answers `-32603 Internal error`
-  with the request's id and logs the exception; on stdio the loop ends. The shape the reader
+  with the request's id and logs the exception; on stdio the same answer is written, the
+  exception is reported on standard error, and the loop goes on. The shape the reader
   must return is checked, and a wrong shape is `-32603` by name; a raise is the host's.
 
   ## Why `capabilities/0` and not `BeamMCP.ToolCatalog.all/0`
@@ -323,6 +324,9 @@ defmodule BeamMCP.Catalog do
       not Enum.all?(caps.tools, &match?(%BeamMCP.ToolSpec{}, &1)) ->
         {:error, "#{inspect(catalog)}.capabilities/0's :tools must all be %BeamMCP.ToolSpec{}"}
 
+      (bad = Enum.find_value(caps.tools, &unenforceable_schema/1)) != nil ->
+        {:error, "#{inspect(catalog)}.capabilities/0's #{bad}"}
+
       not is_list(caps.resources) ->
         {:error, "#{inspect(catalog)}.capabilities/0's :resources must be a list"}
 
@@ -332,6 +336,15 @@ defmodule BeamMCP.Catalog do
       true ->
         with :ok <- validate_resources(catalog, caps.resources),
              do: validate_prompts(catalog, caps.prompts)
+    end
+  end
+
+  # A tool's input schema must be one BeamMCP.Schema enforces in full: a keyword it would not
+  # enforce is refused here, at startup, by name, never advertised and then ignored.
+  defp unenforceable_schema(%BeamMCP.ToolSpec{name: name, input_schema: schema}) do
+    case BeamMCP.Schema.check_schema(schema) do
+      :ok -> nil
+      {:error, reason} -> "tool #{name}: #{reason}"
     end
   end
 

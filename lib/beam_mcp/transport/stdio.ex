@@ -44,8 +44,6 @@ defmodule BeamMCP.Transport.Stdio do
 
   alias BeamMCP.Server
 
-  require Logger
-
   # One line, and one legacy Content-Length frame, are each bounded at 1 MiB, as the HTTP body is.
   @max_line_bytes 1_048_576
   @max_body_bytes 1_048_576
@@ -130,7 +128,7 @@ defmodule BeamMCP.Transport.Stdio do
     server.handle_message(state, message)
   catch
     kind, reason ->
-      Logger.error(Exception.format(kind, reason, BeamMCP.Stacktrace.arities(__STACKTRACE__)))
+      report(Exception.format(kind, reason, BeamMCP.Stacktrace.arities(__STACKTRACE__)))
       {state, error(Map.get(message, "id"), -32_603, "Internal error")}
   end
 
@@ -330,7 +328,29 @@ defmodule BeamMCP.Transport.Stdio do
   # Always newline-delimited, per the MCP stdio binding. Jason never emits a raw
   # newline inside a JSON scalar, so the "MUST NOT contain embedded newlines"
   # requirement holds.
+  #
+  # A response the encoder refuses (a host's error reason carrying non-UTF-8 bytes or a pid,
+  # a resource text that is not UTF-8) is answered -32603 with the request's id, and the loop
+  # goes on: before 0.10.1 the encoder's raise ended the loop with nothing written.
   defp write_message(message) do
-    IO.binwrite(:stdio, [Jason.encode!(message), "\n"])
+    line =
+      try do
+        Jason.encode!(message)
+      rescue
+        e ->
+          # The exception's name, not its message: the encoder's message quotes the bytes it
+          # refused, and those are the host's.
+          report("a response could not be encoded as JSON (#{inspect(e.__struct__)})")
+          Jason.encode!(error(Map.get(message, "id"), -32_603, "Internal error"))
+      end
+
+    IO.binwrite(:stdio, [line, "\n"])
   end
+
+  # Everything this transport reports goes to standard error, never to standard output: on
+  # stdio, standard output is the protocol, and the MCP stdio binding gives a server standard
+  # error for its logging. Before 0.10.1 these went through Logger, whose default handler
+  # writes to standard output, so a client that made the core fault received the report --
+  # a stack, file paths, its own bytes -- as non-JSON lines on the protocol channel.
+  defp report(text), do: IO.binwrite(:standard_error, ["beam_mcp: ", text, "\n"])
 end

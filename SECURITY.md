@@ -115,5 +115,8 @@ entry says so when it does.
 | `0.2.x` | no, superseded |
 | `0.1.x` | no, superseded |
 
+Within `0.10.x`, take `0.10.1` or later: `0.10.0` and earlier carry the defects its CHANGELOG
+entry lists.
+
 This table names what a single maintainer can actually keep. Read it with the acknowledgement
 and assessment windows above, which are the commitments that matter more.

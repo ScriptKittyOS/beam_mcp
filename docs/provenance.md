@@ -32,7 +32,7 @@ So the release tarball is built by one script on every seat: CI, the publisher, 
 reproducing it:
 
 ```sh
-tools/release_tarball.sh v0.10.0 beam_mcp-0.10.0.tar
+tools/release_tarball.sh v0.10.1 beam_mcp-0.10.1.tar
 ```
 
 It `git archive`s the ref with `tar.umask=022` (every file `644` whatever the machine's umask,
@@ -53,10 +53,14 @@ failure, not as a pass.
 ## Verify a published tarball
 
 ```sh
-v=0.10.0
+v=0.10.1
 curl -fsSLO "https://repo.hex.pm/tarballs/beam_mcp-${v}.tar"
-gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp
+gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp \
+  --signer-workflow ScriptKittyOS/beam_mcp/.github/workflows/provenance.yml
 ```
+
+`--signer-workflow` holds the attestation to this repository's provenance workflow, not merely
+to any workflow in the repository.
 
 `gh attestation` needs GitHub CLI 2.49 or newer (Ubuntu's packaged 2.45 does not have it,
 measured here), and it is the verifier GitHub documents; the attestation is a Sigstore bundle

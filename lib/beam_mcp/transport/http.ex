@@ -386,7 +386,7 @@ if Code.ensure_loaded?(Plug) do
         fault_response(conn, exception, __STACKTRACE__, nil)
     catch
       kind, reason ->
-        Logger.error(Exception.format(kind, reason, __STACKTRACE__))
+        Logger.error(Exception.format(kind, reason, arities(__STACKTRACE__)))
         crash_response(conn)
     end
 
@@ -491,7 +491,7 @@ if Code.ensure_loaded?(Plug) do
     # only case this transport should be answering for.
     defp fault_response(conn, exception, stacktrace, id) do
       if Plug.Exception.status(exception) == 500 do
-        Logger.error(Exception.format(:error, exception, stacktrace))
+        Logger.error(Exception.format(:error, exception, arities(stacktrace)))
         send_json(conn, 500, error(id, -32_603, "Internal error"))
       else
         reraise exception, stacktrace
@@ -1621,12 +1621,18 @@ if Code.ensure_loaded?(Plug) do
     # return contract is open: a host returning a bare `{:host_fault, _, _, _}` was read as an
     # internal fault and answered 500, where it had previously hit the `other` branch and been
     # refused 403 with a log naming the contract.
+    # Every stacktrace this transport logs is rewritten to arities first: the top frame of a
+    # function_clause carries the call's arguments, and here those are the whole Plug.Conn
+    # (the Authorization header among its headers) and the raw body. Before 0.10.1 the hook,
+    # catalog and catch-all sites logged the raw stacktrace; host_fault/5 alone did not.
+    defp arities(stacktrace), do: BeamMCP.Stacktrace.arities(stacktrace)
+
     defp host_call(fun) do
       fun.()
     rescue
-      exception -> {__MODULE__, :host_fault, :error, exception, __STACKTRACE__}
+      exception -> {__MODULE__, :host_fault, :error, exception, arities(__STACKTRACE__)}
     catch
-      kind, reason -> {__MODULE__, :host_fault, kind, reason, __STACKTRACE__}
+      kind, reason -> {__MODULE__, :host_fault, kind, reason, arities(__STACKTRACE__)}
     end
 
     # The frames with arities, never the caller's arguments: the BEAM puts a call's argument

@@ -45,8 +45,10 @@ trust changes at three places:
    it, a message is plain data with bounded nesting and no repeated key.
 3. **The core, into the host.** The catalog and the dispatch function are the host's and are
    trusted; a call reaches dispatch only after `BeamMCP.Schema` has checked it against the
-   schema that same catalog advertised. A fault inside the host is answered as a fault and its
-   details stay on the host's side.
+   schema that same catalog advertised, at every depth. A fault inside the host is answered as
+   a fault naming the broken contract, and its details stay on the host's side: the host's
+   module and term never reach the client, and the transport's report (on standard error over
+   stdio) carries a stacktrace of arities, never arguments.
 
 A fourth boundary is named and not crossed: the BEAM node. The package does not claim to
 protect against code running in the same node, because the runtime offers no isolation there.
@@ -59,9 +61,9 @@ The principles are Saltzer and Schroeder's, as the criterion suggests.
 
 | principle | how it is applied here | evidence |
 |---|---|---|
-| Economy of mechanism | One JSON reader for both transports; one declaration serves both advertising and accepting; one cursor for every list; one digest call site. The core is a function with no process and no state. | `BeamMCP.JSON`; `BeamMCP.Catalog`; `BeamMCP.Cursor`; `lib/beam_mcp/connectome/canonical.ex` (the one `:crypto.hash/2`) |
-| Fail-safe defaults | `allowed_origins:` has no default and `init/1` raises without it. An absent catalog key is a malformed catalog, refused at startup. An undeclared tool is refused. The tracer and collector are off unless started, and their limits are required. The only built-in signer signs nothing. | `test/beam_mcp/transport/http_test.exs` "init/1 raises without :allowed_origins"; `BeamMCP.Server.new/1`; `BeamMCP.Signer.None` |
-| Complete mediation | Every `tools/call` is validated against the advertised schema; every HTTP request's `Mcp-*` headers are matched to its body; no session exists, so no request inherits a check made for another. | `test/beam_mcp/tool_spec_schema_test.exs`; `test/beam_mcp/boundary/no_session_test.exs` |
+| Economy of mechanism | One JSON reader for both transports and the pagination cursor; one declaration serves both advertising and accepting; one cursor for every list; one digest call site. The core is a function with no process and no state. | `BeamMCP.JSON`; `BeamMCP.Catalog`; `BeamMCP.Cursor`; `lib/beam_mcp/connectome/canonical.ex` (the one `:crypto.hash/2`) |
+| Fail-safe defaults | `allowed_origins:` has no default and `init/1` raises without it. An absent catalog key is a malformed catalog, refused at startup. An undeclared tool is refused. The tracer and collector are off unless started, and bounded when started: the tracer's limits have finite defaults and refuse an unbounded value. The only built-in signer signs nothing. | `test/beam_mcp/transport/http_test.exs` "init/1 raises without :allowed_origins"; `BeamMCP.Server.new/1`; `BeamMCP.Signer.None` |
+| Complete mediation | Every `tools/call` is validated against the advertised schema, at every depth, and a keyword the server would not enforce is refused at startup rather than advertised; every HTTP request's `Mcp-*` headers are matched to its body; no session exists, so no request inherits a check made for another. | `test/beam_mcp/tool_spec_schema_test.exs`; `test/beam_mcp/boundary/no_session_test.exs` |
 | Open design | Source is Apache-2.0; the canonical byte format is specified so a verifier needs nothing from this package; nothing depends on an attacker not knowing how it works. | `docs/connectome-canonical.md` |
 | Separation of privilege | Deciding (a verdict, a key, an approval) is kept out of the package and with the host or a separate package; the signer that holds a key is a separate package the host attaches. | `docs/will-not-implement.md` entries 1 to 4; `BeamMCP.Signer` |
 | Least privilege | The package holds no key, opens no outbound connection, runs no command and evaluates no code. The modules and functions it may call are pinned by a census over the compiled code. CI workflows hold write permission only in the two jobs that need it. | `test/beam_mcp/boundary/package_reach_test.exs`; `test/beam_mcp/boundary/no_key_holding_test.exs`; `docs/governance.md` (Token-Permissions) |
@@ -69,7 +71,7 @@ The principles are Saltzer and Schroeder's, as the criterion suggests.
 | Psychological acceptability | A refusal names its cause (`-32600` "Request body nests deeper than 64 levels") and carries structured fields, so a host developer can act on it without reading package source. | `test/beam_mcp/error_payload_test.exs` |
 
 Beyond the eight: **input is validated against an allowlist** (the schema the host declared,
-with `additionalProperties` honoured) rather than screened for known-bad values, and
+with `additionalProperties` honoured at every depth) rather than screened for known-bad values, and
 **resources are bounded** at every place a client controls a size or a duration.
 
 ## Common implementation weaknesses countered
@@ -80,7 +82,7 @@ library. Entries that cannot arise here are listed at the end with the reason.
 | weakness | how it is countered | evidence |
 |---|---|---|
 | CWE-20 Improper input validation | Arguments checked against the advertised JSON Schema before dispatch; headers held to the body; non-object JSON refused by type. | `test/beam_mcp/tool_spec_schema_test.exs`; `docs/threat-model.md` rows "Tool arguments the schema does not admit" and "Header injection" |
-| CWE-400 / CWE-770 Uncontrolled resource consumption | 1 MiB body and line cap; nesting refused past 64 levels before decoding; whole-body read deadline and connection deadline; chunked bodies refused; tracer limits required. | `docs/threat-model.md` rows "Oversized body", "Deeply nested JSON", "Slow clients", "A body that does not declare its length" |
+| CWE-400 / CWE-770 Uncontrolled resource consumption | 1 MiB body and line cap; nesting refused past 64 levels before decoding; whole-body read deadline and connection deadline; chunked bodies refused; the tracer bounded by default. | `docs/threat-model.md` rows "Oversized body", "Deeply nested JSON", "Slow clients", "A body that does not declare its length" |
 | Atom-table exhaustion (a CWE-400 case specific to the BEAM) | No atom is created from a client's key; the one `String.to_atom/1` runs over keys the host declared. Credo's `UnsafeToAtom` check runs on `lib/` in the gate. | `test/beam_mcp/argument_interning_test.exs`; `.credo.exs` |
 | CWE-502 Deserialization of untrusted data | Input is decoded by `Jason` to plain data only; no `binary_to_term`, no evaluator, no module or function named from input. | `test/beam_mcp/boundary/no_dynamic_evaluation_test.exs` |
 | CWE-94 / CWE-78 Code and command injection | No code evaluation and no OS command under `lib/`; the functions the package may call on modules that could reach code or the OS are pinned. | `test/beam_mcp/boundary/no_dynamic_evaluation_test.exs`; `test/beam_mcp/boundary/package_reach_test.exs` |

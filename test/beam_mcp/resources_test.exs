@@ -529,8 +529,9 @@ defmodule BeamMCP.ResourcesTest do
     test "a malformed reader answer is -32603 naming the defect, never a crash or a reshaped payload" do
       r = call(state(Malformed), "resources/read", %{"uri" => "mal://x"})
       assert r["error"]["code"] == -32_603
-      assert r["error"]["message"] =~ "#{inspect(Malformed)}.read_resource/1"
+      assert r["error"]["message"] =~ "read_resource/1"
       assert r["error"]["message"] =~ "uri"
+      refute r["error"]["message"] =~ inspect(Malformed)
     end
 
     test "a missing or non-string uri is invalid params, and so is a request with no params at all" do

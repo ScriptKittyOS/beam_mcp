@@ -72,6 +72,14 @@ dashes, the CHANGELOG's released headings included (the quotations below and abo
 Raise the pin to `~> 0.10.0`. `beam_mcp_signer` `0.1.1` and `0.2.0` (requirement `~> 0.7`)
 resolve beside it without a signer release.
 
+**`0.10.1` is a security patch, and two behaviours change because the old ones were the
+defects.** JSON `true`, `false` and `null` reach `dispatch` as `true`, `false` and `nil` (they
+arrived as strings); a host that compared against `"true"` compares against `true`. A tool's
+`input_schema` is enforced at every depth, and a keyword outside the README's subset (`oneOf`,
+`$ref` and the rest) makes `BeamMCP.Server.new/1` raise at startup, naming the tool and the
+keyword, where it had been advertised and ignored. No public entry moved; `~> 0.10.0` admits
+the patch. Take `beam_mcp_signer` `0.2.1` beside it.
+
 ## The road to `1.0.0`, in order
 
 Stated here so nobody infers it from a plan's label or a folder's name:

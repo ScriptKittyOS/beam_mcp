@@ -3,10 +3,10 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF: beam_mcp, release 0.10.0 prepared; publish and tag are the owner's
+# HANDOFF: beam_mcp, release 0.10.1 prepared (a security patch); publish and tag are the owner's
 
 Tag and publish are owner steps: never `mix hex.publish`, never push a tag, never bump the
-version in `mix.exs`. For 0.10.0 the version bump is this release commit, reviewed like any
+version in `mix.exs`. For 0.10.1 the version bump is this release commit, reviewed like any
 other change; publishing and tagging remain the owner's, in the order the runbook below gives.
 
 The slice records (plans, findings, lane reports, signoffs, archived gate runs) live in the
@@ -15,6 +15,26 @@ happened.
 
 ## State
 
+- **`0.10.1` is a security patch on `0.10.0`**: the project's own security review (three
+  independent lanes, every finding reproduced first) found JSON booleans and `null` reaching
+  dispatch as strings, the advertised schema enforced at the top level only, stdio fault
+  reports on standard output, host terms in client-facing `-32603` messages, raw stacktraces
+  in the HTTP transport's logs, the cursor outside the JSON reader, and non-string `method` or
+  tool `name` raising in the core. Each is fixed with a test seen failing on `0.10.0` first
+  (`test/beam_mcp/arguments_schema_and_faults_test.exs`); the pages that claimed more than the
+  code are corrected. No public entry moved; two behaviours change (booleans preserved, an
+  unsupported schema keyword refused at startup), each in the CHANGELOG with how to tell
+  whether a host is affected. Handled privately under `SECURITY.md`: the advisories are
+  published after the release. `beam_mcp_signer` `0.2.1` ships beside it.
+  **A patch, not `0.11.0`, by `SECURITY.md`'s own table** (Critical: "a patch release of the
+  supported minor carrying only the fix"; the package bytes since `0.10.0` are the fixes and
+  comments), and because the README's `~> 0.10.0` pin admits `0.10.1` on a plain
+  `mix deps.update` where it would stop short of a `0.11.0`. Go's and Rust's compatibility
+  promises keep the same exception for security fixes. **After publishing, retire the affected
+  releases** so every `mix deps.get` names the fix:
+  `mix hex.retire beam_mcp 0.10.0 security --message "Security fixes in 0.10.1; see its CHANGELOG entry"`
+  (and the same for earlier supported versions the advisory lists), and
+  `mix hex.retire beam_mcp_signer 0.2.0 security --message "Key could be printed; fixed in 0.2.1"`.
 - **`0.10.0` is the quiet minor again**: no public entry added, removed, renamed, hidden or
   changed in arity (`docs/public-api.txt` did not move; `release_markers!("0.10.0")` wrote
   nothing), no wire or envelope byte (the recording's ten version lines re-taken and nothing

@@ -297,7 +297,13 @@ defmodule BeamMCP.Server do
 
   # An initialize request selects legacy semantics, whatever else it carries.
   def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "initialize"} = message) do
-    requested = get_in(message, ["params", "protocolVersion"]) || @legacy_version
+    # Read without assuming params is an object (get_in/2 raised on a list or a string); the
+    # value itself is judged below exactly as before.
+    requested =
+      case message do
+        %{"params" => %{} = params} -> Map.get(params, "protocolVersion") || @legacy_version
+        _ -> @legacy_version
+      end
 
     if requested in state.supported_versions do
       response =
@@ -511,7 +517,8 @@ defmodule BeamMCP.Server do
           "method" => "tools/call",
           "params" => %{"name" => name} = params
         }
-      ) do
+      )
+      when is_binary(name) do
     arguments = Map.get(params, "arguments", %{})
 
     case find_tool(state, name) do
@@ -532,6 +539,14 @@ defmodule BeamMCP.Server do
     end
   end
 
+  # A tools/call with no params, or a name that is not a string, is invalid params, as
+  # prompts/get and resources/read answer theirs. Before 0.10.1 a missing name was "Method not
+  # found", a JSON true/false/null name was looked up as the tool "true"/"false"/"nil", and an
+  # object name raised inside the core.
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "tools/call"}) do
+    {state, error(id, -32_602, "Invalid params: tools/call requires a string name")}
+  end
+
   def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => "shutdown"}) do
     {%{state | shutdown?: true}, result(id, %{})}
   end
@@ -540,7 +555,10 @@ defmodule BeamMCP.Server do
     {%{state | shutdown?: true}, nil}
   end
 
-  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => method}) do
+  # A method that is not a string falls through to Invalid Request below: before 0.10.1 an
+  # object method raised in this interpolation.
+  def handle_message(state, %{"jsonrpc" => "2.0", "id" => id, "method" => method})
+      when is_binary(method) do
     {state, error(id, -32_601, "Method not found: #{method}")}
   end
 
@@ -615,7 +633,7 @@ defmodule BeamMCP.Server do
         })
 
       {:error, defect} ->
-        error(id, -32_603, "Internal error: #{inspect(state.catalog)}.read_resource/1 " <> defect)
+        error(id, -32_603, "Internal error: the catalog's read_resource/1 " <> defect)
     end
   end
 
@@ -626,12 +644,12 @@ defmodule BeamMCP.Server do
     })
   end
 
-  defp answer_read(state, id, _uri, other) do
+  defp answer_read(_state, id, _uri, _other) do
     error(
       id,
       -32_603,
-      "Internal error: #{inspect(state.catalog)}.read_resource/1 answered #{inspect(other)}, " <>
-        "not {:ok, contents} or {:error, reason}"
+      "Internal error: the catalog's read_resource/1 answered something other than " <>
+        "{:ok, contents} or {:error, reason}"
     )
   end
 
@@ -669,7 +687,7 @@ defmodule BeamMCP.Server do
     end
   end
 
-  defp answer_prompt(id, _name, catalog, {:ok, %{messages: messages} = rendered})
+  defp answer_prompt(id, _name, _catalog, {:ok, %{messages: messages} = rendered})
        when is_list(messages) do
     case Enum.reduce_while(messages, {:ok, []}, &encode_message/2) do
       {:ok, encoded} ->
@@ -683,7 +701,7 @@ defmodule BeamMCP.Server do
         )
 
       {:error, defect} ->
-        error(id, -32_603, "Internal error: #{inspect(catalog)}.get_prompt/2 " <> defect)
+        error(id, -32_603, "Internal error: the catalog's get_prompt/2 " <> defect)
     end
   end
 
@@ -694,12 +712,12 @@ defmodule BeamMCP.Server do
     })
   end
 
-  defp answer_prompt(id, _name, catalog, other) do
+  defp answer_prompt(id, _name, _catalog, _other) do
     error(
       id,
       -32_603,
-      "Internal error: #{inspect(catalog)}.get_prompt/2 answered #{inspect(other)}, " <>
-        "not {:ok, %{messages: ...}} or {:error, reason}"
+      "Internal error: the catalog's get_prompt/2 answered something other than " <>
+        "{:ok, %{messages: ...}} or {:error, reason}"
     )
   end
 
@@ -715,12 +733,10 @@ defmodule BeamMCP.Server do
       ]}}
   end
 
-  defp encode_message(message, _acc),
+  defp encode_message(_message, _acc),
     do:
       {:halt,
-       {:error,
-        "returned a message without a role of :user or :assistant and a string :text: " <>
-          inspect(message)}}
+       {:error, "returned a message without a role of :user or :assistant and a string :text"}}
 
   defp prompt_definition(%PromptSpec{} = p) do
     %{"name" => p.name}
@@ -754,8 +770,8 @@ defmodule BeamMCP.Server do
     end
   end
 
-  defp encode_contents(item, _acc),
-    do: {:halt, {:error, "returned an item without a string :uri: #{inspect(item)}"}}
+  defp encode_contents(_item, _acc),
+    do: {:halt, {:error, "returned an item without a string :uri"}}
 
   defp contents_item(uri, item, key, value) do
     %{"uri" => uri, key => value} |> put_present("mimeType", Map.get(item, :mime_type))
@@ -998,6 +1014,11 @@ defmodule BeamMCP.Server do
   # implementation for a tuple (measured: the request crashed before this clause existed --
   # in the core for a tool error, at the transport's encode for a read or render refusal).
   defp to_json_value(value) when is_tuple(value), do: value |> Tuple.to_list() |> to_json_value()
+  # true, false and nil are atoms in Elixir and JSON values on the wire: they pass through as
+  # themselves. Before 0.10.1 the clause below turned them into the strings "true", "false"
+  # and "nil", so an argument validated as a JSON boolean reached dispatch as a string, and
+  # "false" is truthy.
+  defp to_json_value(value) when is_boolean(value) or is_nil(value), do: value
   defp to_json_value(value) when is_atom(value), do: Atom.to_string(value)
   defp to_json_value(value), do: value
 
