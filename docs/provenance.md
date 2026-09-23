@@ -68,6 +68,28 @@ time. What it does not prove:
 anything about that commit's contents — that is the tree's own record (the gate, the review
 record), reachable from the commit the attestation names.
 
+## Verify a release tag's signature
+
+Every release tag, `v0.1.0` on, is an annotated tag signed with the maintainer's OpenPGP key.
+The key is published on the maintainer's GitHub account (the login `CODEOWNERS` names), and
+its fingerprint is:
+
+```text
+24FE 4F05 E3E8 EC26 1462  A0C7 82A6 7035 D628 7F15
+```
+
+```sh
+curl -fsSL https://github.com/HackTuah.gpg | gpg --import
+gpg --fingerprint 24FE4F05E3E8EC261462A0C782A67035D6287F15   # compare with the line above
+git fetch --tags origin && git tag -v "v${v}"                  # "Good signature" or it did not verify
+```
+
+A tag signature says the maintainer named that commit as the release; the attestation above
+says which bytes CI built from it; the two together connect the source you can read to the
+tarball hex.pm serves. The private key is held on the maintainer's own machine, not on GitHub
+or hex.pm, which only distribute. If the key is ever replaced, this page and the CHANGELOG
+say so in the same commit, with the new fingerprint.
+
 ## Reproduce the bytes
 
 Trust nothing above; build it:

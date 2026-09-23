@@ -11,6 +11,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added: pages for the OpenSSF Best Practices badge, and Credo's two security warnings on `lib/`
+
+No public entry moves, no wire byte and no envelope byte; `lib/` changes by one comment.
+
+- **`docs/architecture.md`**: the high-level design, the parts, the request path, and the
+  properties the arrangement keeps. **`docs/assurance-case.md`**: the security claim, the
+  threat model and trust boundaries it is made against (pointing at `docs/threat-model.md`),
+  Saltzer and Schroeder's principles as applied, and the CWE weaknesses countered, each with
+  its evidence. **`docs/roadmap.md`**: the next year in order (`0.10.0`, `1.0.0`, then the
+  additive minors) and what the project will not do, gathered from `UPGRADING.md`, the README
+  and `docs/will-not-implement.md`. All three are in the docs extras.
+- **`CODE_OF_CONDUCT.md`**: the Contributor Covenant 2.1, under its own licence
+  (`LICENSES/CC-BY-4.0.txt`); reports go to the address `SECURITY.md` names. Not in the
+  tarball.
+- **`CONTRIBUTING.md`**: how to set up, the coding style named (the formatter and Credo
+  `--strict`, the community Elixir Style Guide), and the rule that behaviour arrives with its
+  tests in the same pull request, written as a rule.
+- **`docs/provenance.md`**: how to verify a release tag's OpenPGP signature, with the key's
+  fingerprint and where to fetch it.
+- **`docs/governance.md`**: the CII-Best-Practices row reads the registration (project 14774).
+  **README**: the badge.
+- **`.credo.exs`**: Credo's defaults plus `UnsafeToAtom` and `LeakyEnvironment`, which its
+  defaults leave off, on `lib/` only. The one site either flags, the argument-key atoms in
+  `BeamMCP.Server` (keys the host declared, held by `argument_interning_test`), carries an
+  inline disable with the reason; a planted `String.to_atom/1` elsewhere under `lib/` is red.
+
 ## [0.9.0] - 2026-09-21
 
 Two additions placed at the minor by policy, and **no break**: the `:server` seam on both
