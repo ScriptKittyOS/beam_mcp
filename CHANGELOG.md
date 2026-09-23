@@ -11,6 +11,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added: an SBOM at every release, attested to the tarball (no public entry moves)
+
+- `tools/sbom.sh` and the release workflow: a CycloneDX 1.6 SBOM of the runtime dependency set,
+  generated from the tag's tree outside `mix.exs` with the EEF's `mix_sbom` 0.11.0 (pinned by
+  version and the release asset's SHA-256; nothing added to `mix.exs` or `mix.lock`), and
+  attested to the tarball's digest beside the build provenance. The workflow verifies it and
+  downloads it back the way `docs/provenance.md` tells a consumer to, comparing the result with
+  what it generated. One workaround is named in the script: `mix_sbom` 0.11.0 cannot read the
+  `tools: :optional` entry in `mix.exs`, so its scratch copy reads `:tools`; a fix is offered
+  upstream. Measured locally: 15 components, the nine runtime Hex packages at their locked
+  versions and six OTP/Elixir applications, no development or test dependency.
+- `docs/threat-model.md`'s supply-chain row reads what shipped (provenance from `0.6.0`, the
+  SBOM from `0.10.0`) in place of "scheduled slices, not shipped". A status corrected, not a
+  change to what the model defends.
+
 ### Added: the suite in FIPS mode, in CI (no public entry moves)
 
 - `.github/workflows/fips.yml`: the suite on Erlang/OTP 28.1.1 built with `--enable-fips`, over
