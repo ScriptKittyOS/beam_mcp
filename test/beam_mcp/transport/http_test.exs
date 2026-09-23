@@ -1388,7 +1388,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       # catalog returning MALFORMED DATA -- a spec-shaped map that is not a `%ToolSpec{}` --
       # used to raise `KeyError` on the `spec.input_schema` read one line later, escape to
       # `call/2`'s rescue and answer `id: null`. Measured before the fix, in
-      # `slices/002-streamable-http/logs/probe-fault-ids.txt`:
+      # slice 002's record `probe-fault-ids.txt` (internal):
       #
       #   host catalog RAISES (header validation)   500  -32603  id=4242
       #   host catalog returns a malformed spec     500  -32603  id=nil
@@ -1527,12 +1527,12 @@ defmodule BeamMCP.Transport.HTTPTest do
     #     :binary.part of an in-memory binary.
     #
     #   Both, twice, with their diffs against the pristine file:
-    #     slices/003-release-0-3-1/logs/mutation-round3.txt and the per-mutant logs beside it.
+    #     slice 003's record `mutation-round3.txt` (internal) and the per-mutant logs beside it.
     #
     # So the answer branch is pinned above and the re-raise branch is not. Closing the re-raise
     # branch needs a Bandit-backed test. Slice 003 stands one up for the `connection: close`
     # work and still does not close this, because the owner scoped the re-raise pin out of that
-    # slice; it is recorded in slices/003-release-0-3-1/FINDINGS.md under "Open, recorded rather
+    # slice; it is recorded in slice 003's findings (internal) under "Open, recorded rather
     # than fixed", not described here as filed -- the last time this comment said something was
     # filed, grep found exactly one hit and it was the comment.
 
@@ -1585,7 +1585,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       # `Jason.encode!(Jason.decode!(body))` rejects every correct signature and presents as a
       # fault in the host's cryptography rather than in this transport. Demonstrated red before
       # it passed, by making the call site do exactly that -- see
-      # slices/007-authorize-body/FINDINGS.md for the failure output.
+      # slice 007's findings (internal) for the failure output.
       me = self()
 
       o =
