@@ -35,6 +35,8 @@ Decided, in this order, each additive so no `1.x` consumer is broken by it:
 1. **A federation seam**, for merging connectome graphs from several nodes. The trust
    questions it must answer first are listed in `docs/threat-model.md` ("Federation").
 2. **Effective connectivity**: the observed graph weighted into the declared one.
+3. **The Tasks extension** of the `2026-07-28` revision: not built today and not refused
+   either; an addition, like the two above.
 
 Throughout: security fixes on the latest minor as `SECURITY.md` commits, dependency updates
 through Dependabot, and the protocol revisions the MCP specification publishes, tracked as
