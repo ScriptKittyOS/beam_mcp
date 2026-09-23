@@ -40,7 +40,9 @@ No public entry moves, no wire byte and no envelope byte; `lib/` changes by one 
 - **`docs/succession.md`** and **`docs/governance.md`**: two people with access for continuity,
   `znmead` (Maintain on this repository) and Mike Hostetler (`maintainer` on hex.pm; invited
   to Maintain), the same on `beam_mcp_signer`; what that access covers and what it does not;
-  the bus factor stays one for knowledge. The succession page's "no signing key to inherit" is corrected: release tags
+  the bus factor stays one for knowledge. Mike Hostetler has since accepted Maintain here too,
+  so he alone covers every step from issue to published release; the organization requires
+  secure two-factor authentication. The succession page's "no signing key to inherit" is corrected: release tags
   are signed with the maintainer's OpenPGP key, and a successor signs with their own.
 - **`.credo.exs`**: Credo's defaults plus `UnsafeToAtom` and `LeakyEnvironment`, which its
   defaults leave off, on `lib/` only. The one site either flags, the argument-key atoms in

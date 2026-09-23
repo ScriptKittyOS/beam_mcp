@@ -16,8 +16,8 @@ organization; its one administrator is the maintainer, who is also the Hex packa
 and the address `SECURITY.md` names. `CODEOWNERS` names that login for every path. There is
 no steering group, no second reviewer, and no vote: a decision is the maintainer's, recorded
 in the tree (a CHANGELOG entry, a page, a test) or it was not made. **For continuity**, two
-people hold access: `znmead` the Maintain role here, Mike Hostetler maintainer ownership on
-hex.pm, so issues, merges and releases can go on without the maintainer; neither is a reviewer
+people hold access: Mike Hostetler the Maintain role here and maintainer ownership on hex.pm,
+and `znmead` the Maintain role (re-invited, pending), so issues, merges and releases can go on without the maintainer; neither is a reviewer
 of record, and neither decides anything while the maintainer can. The **bus factor is one** for knowledge,
 and `docs/succession.md` says what that means, what their access covers, and what a successor
 would need.
