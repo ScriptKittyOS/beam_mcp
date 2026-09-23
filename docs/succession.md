@@ -8,10 +8,12 @@ SPDX-License-Identifier: Apache-2.0
 What happens to this package if its one maintainer stops. Stated as it is, so a consumer
 can weigh it, and so a successor knows where everything is.
 
-## The bus factor is one
+## The bus factor is two
 
-There is one maintainer (`docs/governance.md`): one person has written and reviewed this code,
-and that knowledge is not held twice. They hold the ScriptKittyOS organization that owns the
+There is one maintainer (`docs/governance.md`), and a second person who knows this code:
+`znmead`, on the maintainer's word (2026-09-23), who holds the Maintain role (next section) and
+reviews pull requests from that date, so his reviews are the public record of it. The
+knowledge to carry the project is held twice. The maintainer holds the ScriptKittyOS organization that owns the
 repository, the Hex package's `full` ownership, the address in `SECURITY.md`, and the OpenPGP
 key that signs release tags (`docs/provenance.md`). The package itself signs no bytes
 (`docs/crypto-posture.md`) and release attestations are made by GitHub's workflow identity, so

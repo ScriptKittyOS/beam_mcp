@@ -11,6 +11,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed: the bus factor is two (copy)
+
+- `docs/succession.md` and `docs/governance.md`: `znmead` knows the code (the maintainer's word,
+  2026-09-23) and reviews pull requests from that date, so the knowledge to carry the project
+  is held twice; his reviews are the public record of it. The Scorecard row's bus-factor note
+  follows.
+
 ### Changed: the slice records leave the public tree; SLICES.md says what each slice committed
 
 - The `slices/` archive (243 files: the plans, review logs and gate runs of slices 001 to 007)
