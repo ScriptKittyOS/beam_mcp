@@ -21,7 +21,9 @@ package calls is disallowed in FIPS mode: it uses no MD5, no SHA-1, no cipher, n
 key derivation and no random source: `:crypto.hash/2` at one site is its whole use of the
 library (`test/beam_mcp/boundary/no_key_holding_test.exs`, both tests). A host that has
 enabled FIPS mode therefore runs this package unchanged, and a graph hashed under FIPS mode
-has the same bytes and the same hash as one hashed outside it: the digest is the digest.
+has the same bytes and the same hash as one hashed outside it: the digest is the digest. Both
+are measured, not only reasoned: the whole suite passes in FIPS mode, the canonical-hash
+goldens included (below, "Measured").
 
 ## What a FIPS-mode host needs, and this package does not provide
 
@@ -48,9 +50,17 @@ parameters), restated; where this page and OTP's differ, OTP's is right.
    available at run time the nif module and thus the crypto module will fail to load. This
    mechanism prevents the accidental use of non-validated algorithms."** So a host that sets
    the parameter on a runtime without a validated provider does not get `:not_enabled`; it
-   gets no `crypto` at all: `application:start(crypto)` fails, and a release whose `.app`
-   requires `crypto` (this package's does) does not boot. That is the failure a FIPS host
-   wants, and it comes before any check this page could suggest. (This page's own inference
+   gets no `crypto` module at all. **Measured (2026-09-23, OTP 28.1.1 built with FIPS
+   support, the provider configuration withheld): the module's `on_load` fails ("Library
+   load-call unsuccessful") and an error report says so, but `application:start(crypto)` and
+   `application:ensure_all_started(crypto)` still answer `ok`**, since the `crypto`
+   application has no callback module to fail. So a release whose `.app` requires `crypto`
+   (this package's does) boots, and the first `:crypto` call raises `UndefinedFunctionError`:
+   this package's `:crypto.hash/2` raises then, and nothing is hashed without the provider.
+   An earlier version of this page said the application fails to start and the release does
+   not boot; that was reasoned from OTP's words and the measurement corrected it. The
+   refusal is real but arrives at the first call, not at boot, which is why the check in
+   step 3 matters. (This page's own inference
    from OTP's `on_load`, not OTP's words: the parameter is read once, when the module loads,
    so a value set after that changes nothing until the module is loaded again.) This is
    why OTP says `crypto:start/0` "does not work if FIPS mode is to be enabled" and to use
@@ -63,10 +73,12 @@ parameters), restated; where this page and OTP's differ, OTP's is right.
    all; writing this page found it, and `test/beam_mcp/connectome/canonical_test.exs`
    "the .app the build writes depends on crypto, so a release without plug and bandit still
    hashes" holds it).
-3. **A check at start, for the belt beside OTP's braces.** `:crypto.info_fips/0` answers
-   `:enabled` once the parameter took; a host that requires FIPS mode may check it at start
-   and refuse to serve otherwise, though under the parameter OTP's own refusal (the module
-   not loading) comes first. The
+3. **A check at start.** `:crypto.info_fips/0` answers `:enabled` once the parameter took; a
+   host that requires FIPS mode checks it at start and refuses to serve otherwise, because
+   OTP's own refusal (the module not loading) surfaces only at the first `:crypto` call, not
+   at boot (measured, step 2). Load `crypto` before the check and apart from it: in Elixir,
+   expanding a remote call to `:crypto` loads the module, so a check written in the same
+   expression as the load can read a `crypto` loaded before `fips_mode` applied. The
    older way, `:crypto.enable_fips_mode(true)` at runtime (`true` when it took, `false`
    when it did not), **is deprecated in OTP 28** ("use config parameter fips_mode", in
    the deprecation's own words) and is named here only so a host reading older guidance
@@ -81,6 +93,29 @@ FIPS mode by accident or on purpose, and cannot report on it; the host's configu
 start-up are where that lives. Nothing here is a claim that this package, or a host running
 it, is FIPS-validated: validation is a property of a cryptographic module (the OpenSSL FIPS
 provider) and of the process that certified it, and this package holds no such module.
+
+## Measured: this package in FIPS mode
+
+`.github/workflows/fips.yml` runs the suite on every push to `main`, on each pull request that
+touches the code, and weekly, on this toolchain: Erlang/OTP 28.1.1 (the pinned line) built
+with `--enable-fips`, over OpenSSL 3.5.8's libcrypto with the FIPS provider built from
+OpenSSL 3.1.2, the source that CMVP certificate #4985 (FIPS 140-3) validates, following its
+security policy (`enable-fips`, `make install_fips`, `openssl fipsinstall` on the machine
+that runs it). Before any test runs, the same VM asserts `:crypto.info_fips()` is `:enabled`
+and the provider reports build `3.1.2`; a negative control shows that without the provider
+configuration `fips_mode true` gives no working `crypto`.
+
+Measured 2026-09-23 on that toolchain: `:crypto.info_fips()` answers `:enabled`,
+`fips_provider_available: true`, `fips_provider_buildinfo: "3.1.2"`, the linked library
+OpenSSL 3.5.8; `:crypto.hash(:md5, _)` raises `notsup` ("Bad digest type in FIPS");
+SHA-256, SHA-384 and SHA-512 answer, SHA-256 of `abc` being the FIPS 180-4 test vector; and
+the suite passes, 11 properties and 729 tests, 0 failures. A FIPS-built OTP started without
+`fips_mode` answers `:not_enabled`, as step 1 says.
+
+**This is not a validation claim.** Validation belongs to a cryptographic module and the
+operational environments its certificate names; the CI runner (ubuntu-24.04) is not one of
+#4985's, and a host's FIPS posture is its own build of OTP and OpenSSL on its own platform.
+What the job proves is that this package's behaviour does not change in FIPS mode.
 
 ## What FIPS mode changes for a consumer
 
