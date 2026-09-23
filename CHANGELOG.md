@@ -30,8 +30,9 @@ No public entry moves, no wire byte and no envelope byte; `lib/` changes by one 
   tests in the same pull request, written as a rule.
 - **`docs/provenance.md`**: how to verify a release tag's OpenPGP signature, with the key's
   fingerprint and where to fetch it.
-- **`docs/governance.md`**: the CII-Best-Practices row reads the registration (project 14774).
-  **README**: the badge.
+- **`docs/governance.md`**: the CII-Best-Practices row reads the badge: passing since
+  2026-09-23, silver at 98% with continuity of access the one Unmet, and the Scorecard's
+  figure from its last run. **README**: the badge, at the top.
 - **`.credo.exs`**: Credo's defaults plus `UnsafeToAtom` and `LeakyEnvironment`, which its
   defaults leave off, on `lib/` only. The one site either flags, the argument-key atoms in
   `BeamMCP.Server` (keys the host declared, held by `argument_interning_test`), carries an
