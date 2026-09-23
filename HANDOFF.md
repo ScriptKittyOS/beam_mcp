@@ -3,10 +3,10 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# HANDOFF: beam_mcp, release 0.9.0 prepared; publish and tag are the owner's
+# HANDOFF: beam_mcp, release 0.10.0 prepared; publish and tag are the owner's
 
 Tag and publish are owner steps: never `mix hex.publish`, never push a tag, never bump the
-version in `mix.exs`. For 0.9.0 the version bump is this release commit, reviewed like any
+version in `mix.exs`. For 0.10.0 the version bump is this release commit, reviewed like any
 other change; publishing and tagging remain the owner's, in the order the runbook below gives.
 
 The slice records (plans, findings, lane reports, signoffs, archived gate runs) live in the
@@ -15,6 +15,22 @@ happened.
 
 ## State
 
+- **`0.10.0` is the quiet minor again**: no public entry added, removed, renamed, hidden or
+  changed in arity (`docs/public-api.txt` did not move; `release_markers!("0.10.0")` wrote
+  nothing), no wire or envelope byte (the recording's ten version lines re-taken and nothing
+  else; every canonical golden the same blob as at `0.9.0`). Instruments: the suite in FIPS
+  mode in CI (`.github/workflows/fips.yml`: OTP 28.1.1 `--enable-fips` over OpenSSL 3.5.8 with
+  the 3.1.2 FIPS provider, CMVP #4985; 11 properties, 729 tests, 0 failures in FIPS mode,
+  measured locally on that toolchain and in CI), and an attested CycloneDX SBOM at every
+  release (`tools/sbom.sh`, the EEF's `mix_sbom` pinned by digest, outside `mix.exs`; bound to
+  the tarball's digest by a second attestation that the workflow downloads back and compares).
+  Pages: the OpenSSF Best Practices badge's (architecture, assurance case, roadmap, code of
+  conduct, code review, security-review procedure, continuity), `docs/fips.md` measured and
+  corrected (a missing provider fails at the first `:crypto` call, not at boot), the
+  supply-chain row's status, README's "Scheduled" after `1.0.0`, and no em dash left outside
+  `slices/`. `mix.exs` says `0.10.0`; the README recommends `~> 0.10.0` and the requirement
+  test refuses `0.9.0`, `0.8.0`, `0.7.0` and `0.6.0`. `1.0.0` is next, after this minor has
+  stood.
 - **`0.9.0` carries two additions and no break**, and ends the stand at `0.8.0`: the `:server`
   seam (a module option on `BeamMCP.Transport.HTTP`'s Plug and `BeamMCP.Transport.Stdio.run/1`,
   default `BeamMCP.Server`, the transports reaching `new/1`, `handle_message/2` and (stdio)
@@ -67,7 +83,7 @@ happened.
   `docs/public-api.txt` carried no `Unreleased` marker, so `release_markers!("0.6.0")` wrote
   nothing; at `0.7.0` it wrote three.
 - **No head hash is written here**: a hash written into the file it describes cannot include
-  the commit that writes it. `git log v0.8.0..main` is the authority.
+  the commit that writes it. `git log v0.9.0..main` is the authority.
 - Gate on the release commit: sixteen steps, every line `pass` (the 0.5.0 gate had thirteen;
   the audit step made it fourteen in 024, Dialyzer fifteen in 027a, the baseline diff sixteen
   at 0.8.0): format (the tracked set, not a
@@ -78,7 +94,8 @@ happened.
   head; the reachability queries' cost recorded and judged by no number, but a query refused
   on the fixture fails the step by name), docs, reuse, licence files, publication, baseline,
   messages.
-  **11 properties, 729 tests, 0 failures** on the release tree (705 at 0.8.0 and 0.7.0, since 0.8.0
+  **11 properties, 729 tests, 0 failures** on the release tree (729 at 0.9.0 as well: 0.10.0's
+  instruments are workflows, measured by their CI runs, and add no test; 705 at 0.8.0 and 0.7.0, since 0.8.0
   added no test and its instruments are probed by shell; 692 at 0.6.0, 604 at 0.5.0; the
   differences are the slices' own pins: at 0.9.0 the server seam's census and by-effect tests
   and the scheme's tests; at 0.7.0 the signer seam's census and behaviour tests; before it the floor, the provenance and security-policy pins, the tracer's session
@@ -91,20 +108,16 @@ happened.
 
 ## What is next
 
-The road, as `UPGRADING.md` states it and the owner locked it: **`0.7.0`** the signer seam
-(`BeamMCP.Signer`, a behaviour added to the public surface and no authority; called the last
-intentional addition, and superseded there by an appended sentence), **`0.8.0`** the quiet
-minor in which no public entry moved, **`0.9.0`** this release (the `:server` seam and the
-scheme beside the signature, two additions a consumer's composed system needed before `1.0.0`
-could be an honest freeze), **`0.10.0`** the quiet minor again (instruments and pages: a FIPS
-leg, the SBOM at release; no public entry), **`1.0.0`** after it has stood, the README's
-condition, that the public API and the stated threat model have each survived a full minor
-release unchanged.
-The federation seam stays held on another board's answer and is not on that road. A compiler-tracer census
-(module-body code run at compile time, which neither the text censuses nor `:xref` see) is
-scheduled with its lift measured. Sign-aware reachability, if asked for, is a later slice or a
-refusal decided in the open, never a widening inside a release slice; `all_paths` stays
-refused.
+**`1.0.0`**, once this minor has stood: the README's condition, that the public API and the
+stated threat model have each survived a full minor release unchanged. `0.10.0` moved no public
+entry, and its one threat-model edit corrects a status (provenance and the SBOM shipped), not
+what the model defends. The freeze is `docs/public-api.txt` as it stands; `docs/api-stability.md`'s
+1.x rules take effect. After it, as additions at the minor: the federation seam (held on
+another board's answer), effective connectivity, the Tasks extension. A compiler-tracer census
+(module-body code run at compile time) is scheduled with its lift measured. Sign-aware
+reachability, if asked for, is a later slice or a refusal decided in the open; `all_paths`
+stays refused. Outside the package: `mix_sbom`'s reading of `tools: :optional` (the named
+workaround in `tools/sbom.sh` goes when an upstream release reads it).
 
 ## Owner decisions still open
 
@@ -144,7 +157,7 @@ refused.
 - The `2025-11-25` revision is served on stdio only; over HTTP the conformance row for it is
   0 / 30 by design, and the README says so beside the number.
 
-## The release steps, the runbook (followed for 0.6.0, 0.7.0 and 0.8.0; the same for 0.9.0)
+## The release steps, the runbook (followed for 0.6.0 to 0.9.0; the same for 0.10.0)
 
 1. The release PR merged to `main` by rebase (the ruleset requires two green checks); `main`
    is then the release commit.
