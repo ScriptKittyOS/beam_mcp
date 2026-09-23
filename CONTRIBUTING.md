@@ -63,6 +63,38 @@ before the fix (below). A change to the wire or to the host contract is also mea
 mutation, as `CONVENTIONS.md`'s tier rule says. A pull request without its tests is sent
 back, whoever wrote it.
 
+## Code review
+
+**How it is done.** Every change reaches `main` through a pull request, the maintainer's
+included, and is merged by rebase only after CI is green on all three OTP/Elixir pairs. The
+reviewer reads the diff, the commit messages and the CI results, and runs the change locally
+when it touches the wire or the host contract. `CONVENTIONS.md`'s tier rule sets the depth: a
+contract change (behaviour a consumer can hit) gets two independent review passes and mutation
+testing against every pin it adds; a measurement change (CI, gates, pins) gets one pass; prose
+gets the gate and a self-review. Automated review passes and the censuses assist; they do not
+replace the reviewer's judgement.
+
+**What must be checked.**
+- The change does what its message says, and nothing else (one change per commit).
+- New or changed behaviour has tests; a fix has a test that was seen failing first.
+- Wire-facing input stays bounded and validated: a new path through `BeamMCP.JSON`, the
+  transports or `BeamMCP.Server` keeps the size, nesting, header and schema checks, and adds no
+  atom, evaluation, file or network access driven by a client
+  (`docs/threat-model.md`, `docs/assurance-case.md`).
+- Nothing crosses the boundary `docs/will-not-implement.md` draws; the censuses under
+  `test/beam_mcp/boundary/` still pass for the right reason.
+- The public surface: if `docs/public-api.txt` moves, the CHANGELOG names the exact entry and
+  the break rules in `docs/api-stability.md` are followed.
+- Pages that describe the changed behaviour (README, threat model, assurance case) change in
+  the same pull request.
+- Sign-off on every commit, no attribution trailers, no secret in the diff.
+
+**What is acceptable.** All of the above hold, CI is green, and the reviewer can say why the
+change is correct. Anything short of that is sent back with the reason. **Who reviews:** the
+maintainer reviews every pull request; the continuity holders named in `docs/succession.md`
+may review as well. A review by a person other than the author on at least half of all changes
+is the project's aim; the pull requests show who reviewed each one.
+
 ## What a change is expected to carry
 
 - **A red before a fix.** Show the failure first, in the commit message, with its output. A
