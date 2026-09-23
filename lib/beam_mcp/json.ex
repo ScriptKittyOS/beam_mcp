@@ -47,11 +47,11 @@ defmodule BeamMCP.JSON do
   Repeated keys are refused rather than resolved because two parsers resolve them two ways:
   Jason keeps the first, most others the last. A hop in front of this server that routes on
   the last `"name"` while this server executes the first is two sources of truth inside one
-  body — the disagreement the header–body match exists to close. Jason is asked for ordered
+  body: the disagreement the header–body match exists to close. Jason is asked for ordered
   objects, which keep every pair, so the repeat is visible; the objects are then read once
   into maps, which is what every caller expects. The repeat is found in the decoded objects
   and not in the bytes on purpose: a key is compared after unescaping, as every decoder
-  compares it — `"a"` and `"\\u0061"` are one key — and a byte walk that compared raw keys
+  compares it (`"a"` and `"\\u0061"` are one key), and a byte walk that compared raw keys
   would miss exactly the pair a hop in front would merge. What that costs, per shape, is
   measured on `docs/threat-model.md`: a request-sized body twice a 2 µs decode; a 1 MiB body
   2.0–2.6× the decoder's own time, the key-dense shapes at the top of that band.

@@ -7,7 +7,7 @@ defmodule BeamMCP.Catalog do
 
   The server holds no catalog of its own. It advertises what `capabilities/0` returns and
   accepts a `tools/call` only for a tool `capabilities/0` names, so one implementation governs
-  both — a tool advertised by `tools/list` and refused by `tools/call` is the defect this
+  both: a tool advertised by `tools/list` and refused by `tools/call` is the defect this
   behaviour exists to make impossible.
 
   ## The shape
@@ -23,7 +23,7 @@ defmodule BeamMCP.Catalog do
   a key, and every host that had written `capabilities/0` with an empty list kept working.
   `prompts` holds `BeamMCP.PromptSpec` structs, read by `prompts/list` and `prompts/get`.
 
-  A key that is absent is a malformed catalog, not an empty one — the two are different claims
+  A key that is absent is a malformed catalog, not an empty one; the two are different claims
   and only one of them is checkable.
 
   ## Resources: advertise and read from one reader, as tools do
@@ -71,7 +71,7 @@ defmodule BeamMCP.Catalog do
   This behaviour replaces `BeamMCP.ToolCatalog`, whose callback was `BeamMCP.ToolCatalog.all/0`,
   returning a list.
   Keeping the name while changing the return from a list to a map would compile against every
-  existing host and fail at the first request with a `BadMapError` — a silent shape change,
+  existing host and fail at the first request with a `BadMapError`, a silent shape change,
   which is the defect class this repository keeps finding. Renaming makes the break arrive at
   compile time as an unimplemented callback, which is the loudest place it can arrive.
   """
@@ -142,7 +142,7 @@ defmodule BeamMCP.Catalog do
   **This is the single reader, and that is the point rather than a convenience.** Both paths go
   through it: `tools/list` advertises what it returns, and `fetch/2` decides callability from
   the same call. Slice 002 fixed a real defect where advertising honoured an injected catalog
-  and calling ignored it — two readers, two answers. One function is how that stays fixed, and
+  and calling ignored it: two readers, two answers. One function is how that stays fixed, and
   a mutant that gives the two paths different sources is scored in the repository's record
   of the catalog generalisation (a slice archive; not in the package).
   """
@@ -246,7 +246,7 @@ defmodule BeamMCP.Catalog do
   ## This function raises on a malformed catalog, and the `@spec` does not say so
 
   Stated rather than caught, and the reason is the guarantee above. A host bug turned into
-  `:error` is indistinguishable from "no such tool" — so a catalog that is broken would present
+  `:error` is indistinguishable from "no such tool", so a catalog that is broken would present
   exactly as a catalog that is working and simply does not have that tool. That is the
   advertise-versus-call disagreement this behaviour exists to prevent, reintroduced by the
   error handling meant to be defensive.

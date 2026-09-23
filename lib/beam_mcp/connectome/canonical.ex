@@ -322,7 +322,7 @@ defmodule BeamMCP.Connectome.Canonical do
   the callback, `{:error, {:signer, {:not_a_signer, signer}}}`; a signer's `{:error, reason}` as
   `{:error, {:signer, reason}}` (`BeamMCP.Signer.None` gives `{:error, {:signer, :no_signer}}`);
   a signer answering `{:ok, x}` with `x` not a binary, `{:error, {:signer, {:not_a_signature, x}}}`.
-  A signer that raises, raises — it is the host's code.
+  A signer that raises, raises; it is the host's code.
   """
   @spec signature(Graph.t(), module(), keyword()) ::
           {:ok,

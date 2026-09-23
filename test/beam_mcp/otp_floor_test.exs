@@ -11,7 +11,7 @@ defmodule BeamMCP.OTPFloorTest do
 
   This file demonstrates the raise and its message on this OTP (a synthetic below-floor string),
   and pins the floor number and the reason equal across `mix.exs` and the README. It does NOT
-  compile the package under a real below-floor OTP — none is installed here; 023's CI matrix
+  compile the package under a real below-floor OTP: none is installed here; 023's CI matrix
   floor leg runs the package on the floor release itself, and a real below-floor compile is
   named as a gap in the slice record.
   """

@@ -10,7 +10,7 @@ How this package is developed. Short, and each entry exists because something we
 ## The gate takes no baseline
 
 `--strict` means what it says. There is no ratchet file, no tolerated count, and no generated
-`.credo.exs` — credo runs on its own defaults so that a check cannot be switched off in a
+`.credo.exs`; credo runs on its own defaults so that a check cannot be switched off in a
 config nobody reads. A non-zero count is a failure, not a number to hold.
 
 This is deliberate and it is the opposite of the tree this package was extracted from, which
@@ -28,13 +28,13 @@ Measured, twice in one day:
    The check derives its population from `git ls-files`, so the file was invisible. The gate
    failed for an unrelated reason while the `reuse` line read `pass`. Adding the file first
    turns it genuinely red.
-2. **The sibling tree's link check.** Its source enumeration had no probe that could fail —
+2. **The sibling tree's link check.** Its source enumeration had no probe that could fail:
    three mutations survived, including removing the `match_dot: true` that the file's own
    comment cites as its reason for existing. The probes guarded target resolution; the
    enumeration was unguarded.
 
 So: **read the step's line, not just the exit code**, and derive the probe's input the way the
-mechanism derives its own — same command, same source of truth.
+mechanism derives its own: same command, same source of truth.
 
 ## CI is unproven until a run exists
 
@@ -98,7 +98,7 @@ Two halves, and the second is what makes the first survive.
 
 **The README moves in the slice that changes the behaviour**, not after it. A slice that changes
 what the package does and leaves the README describing the old behaviour has shipped a false
-statement to the artifact a consumer reads first — `mix.exs` puts `README.md` in the Hex package
+statement to the artifact a consumer reads first: `mix.exs` puts `README.md` in the Hex package
 `files:` list and makes it the ex_doc landing page, so after `mix.exs` it is the most-read live
 file in the tree.
 
@@ -112,13 +112,13 @@ guarding nothing.
 **Derivation, and it is two failures rather than one.**
 
 The first is the ordinary one. A slice fixed a version-blind clause and updated the inline
-comment, and left the `@moduledoc` — the module's published documentation — still stating the
+comment, and left the `@moduledoc`, the module's published documentation, still stating the
 rule the change deleted. A reviewer made it a blocking finding. The same slice then replaced a
 README paragraph that overstated a rule with another paragraph that overstated it, in the fix
 for the first.
 
-The second is the one that produced this rule. Releasing that work as `0.2.0` — a minor bump
-chosen specifically so a consumer *could* pin away from a documented wire break — the README
+The second is the one that produced this rule. Releasing that work as `0.2.0` (a minor bump
+chosen specifically so a consumer *could* pin away from a documented wire break), the README
 still recommended `{:beam_mcp, "~> 0.1"}`. Measured with Elixir's own `Version` module rather
 than recalled:
 
@@ -126,7 +126,7 @@ than recalled:
     ~> 0.2     0.1.0=false  0.2.0=true      <- does not
 
 Nothing was broken: a new user copying the snippet installs the right version. The defect is the
-other direction — a consumer who copied it at `0.1.0` is carried across the break by a routine
+other direction: a consumer who copied it at `0.1.0` is carried across the break by a routine
 `mix deps.update`, with no change to their own requirement and no signal. **The release shipped
 the version signal and the advice defeating it in the same commit.**
 
@@ -137,7 +137,7 @@ than grepping for the *string*: a grep finds what you already thought of.
 ## A report owed only at the end is a report a crash deletes
 
 The record is written when each **round** closes, not when the run does. A session that is
-terminated mid-work — a rate limit, a crash, a compaction — takes every unwritten conclusion with
+terminated mid-work (a rate limit, a crash, a compaction) takes every unwritten conclusion with
 it, and the work then has to be redone from the tree rather than read from the record.
 
 This is not about diligence. It is about where the finding lives: in the run's memory, it is lost
@@ -149,11 +149,11 @@ A test that pins a fix must be able to **fail** when the fix is removed. Two sha
 look identical to a passing suite:
 
 - **The contained anchor.** Asserting `old_count == 0` proves nothing when the replacement embeds
-  the original — the old string is still there, inside the new one. Assert `new_count == 1`, and
+  the original: the old string is still there, inside the new one. Assert `new_count == 1`, and
   prove application **by effect**: the mutant must change an observable outcome, not a substring.
 - **The compiler kill.** A mutant that leaves a function or attribute unused is rejected by
   `--warnings-as-errors` before the suite runs. The build failed; no test did anything. Complete
-  the mutation — remove what it orphans — and re-run, or the table records a kill that never
+  the mutation (remove what it orphans) and re-run, or the table records a kill that never
   happened.
 
 A survivor that is genuinely equivalent is recorded as a survivor, with the argument for why. The
@@ -161,7 +161,7 @@ alternative is writing a test that asserts an implementation detail so the table
 all-killed, which is worse than the survivor: it looks like evidence and is not.
 
 **A partial result is reported as partial.** A mutant expected to kill five tests that kills three
-is recorded as killing three, with the reason — in the case this rule came from, two of the five
+is recorded as killing three, with the reason: in the case this rule came from, two of the five
 reads did not route their comparison through the mutated helper, because one compares set
 membership and the other has a second check that fires first. The pull is to describe it as "the
 class mutant killed everything", which is the false version and the easier sentence. The number in
@@ -170,7 +170,7 @@ the table is what the run printed; the explanation goes beside it.
 ## Every place a mechanism reads the same kind of input is one mechanism
 
 When a defect is "this read handles the input wrongly", the fix is not that read. Derive the set
-of places that read that input — with a command, recorded, so the derivation is repeatable — and
+of places that read that input (with a command, recorded, so the derivation is repeatable) and
 change all of them, through one path if the comparison allows it. Then say in the record **how the
 set was derived**, so the next reader can re-derive it rather than trust the list.
 
@@ -188,21 +188,21 @@ checked, which is the thing being defended against, wearing the shape of the fix
 
 The instance this rule comes from: `Mcp-Param-{Name}` headers mirror tool arguments, and the
 transport derived the set to validate by sweeping the `mcp-param-*` headers **the caller sent**.
-That looks like a derivation — no hand-written list, a new header inherits the behaviour — and it
+That looks like a derivation (no hand-written list, a new header inherits the behaviour), and it
 made the specification's own requirement unenforceable by construction. The rule is *"client omits
 the header but the value is in the body → server MUST reject"*, and a server whose population
 comes from the caller's headers can never see an omission: the caller simply sends nothing and is
 never checked. Two review rounds and a passing suite did not notice, because every test sent the
 header it was testing.
 
-The population had to come from the **tool's `inputSchema`** — the side of the exchange the host
+The population had to come from the **tool's `inputSchema`**: the side of the exchange the host
 controls and the client cannot influence. The test to apply:
 
 > If a hostile caller can change what gets validated by changing what it sends, the set was not
 > derived. It was requested.
 
 The same question applies to any set built from headers, query parameters, body keys, filenames or
-metadata: derive from the schema, the manifest, the catalog, the code — the authority — and use
+metadata: derive from the schema, the manifest, the catalog, the code, which are the authority, and use
 the request only as the thing measured against it.
 
 ## Slice directories own the numbers; features have names and a rank
@@ -213,48 +213,48 @@ order, never a number.**
 
 The rule exists because the two namespaces were shared for two days and collided twice in that
 time. `003` named both `slices/003-release-0-3-1/` and an unstarted feature issue titled
-*"003 — provenance-bound tool identity"*. Hours later `004` named both `slices/004-gate-honesty/`,
-which was on a pushed branch with work in it, and a newly filed *"004 — auth as a resource
+*"003: provenance-bound tool identity"*. Hours later `004` named both `slices/004-gate-honesty/`,
+which was on a pushed branch with work in it, and a newly filed *"004: auth as a resource
 server"*.
 
-Neither collision was a mistake in the moment. Both were the same reasonable act — reaching for
-the next free number — performed against two lists that each thought they owned the sequence. That
+Neither collision was a mistake in the moment. Both were the same reasonable act (reaching for
+the next free number), performed against two lists that each thought they owned the sequence. That
 is what makes it a convention rather than an incident: **the second collision was committed by
 someone who had just been told about the first**, and it will keep happening as long as two things
 can claim the same number.
 
 The asymmetry is what settles which side keeps the numbers. A slice number is **load-bearing**: it
 is a directory path, a branch name, and a string inside commit messages and archived logs that
-cannot be revised without falsifying the record. A feature's number is **decorative** — the
+cannot be revised without falsifying the record. A feature's number is **decorative**: the
 ordering is the real content, and a rank expresses it without consuming a name. So the numbers stay
 where they cost something to move, and the ordering lives in the record that can be edited.
 
 A consequence worth stating, because it looks like an omission: **the ranked order lives on the
 board, not in a filename.** Anyone wanting to know what comes next reads the ranking, and a
-reordering is a comment rather than a rename. That is the point — a rename would have to reach into
+reordering is a comment rather than a rename. That is the point: a rename would have to reach into
 the one namespace this rule protects.
 
 ## A slice's review tier is declared before the work, by what it changes for a stranger
 
 Three tiers, chosen in the PLAN before the first commit, by what the slice changes for someone who
-consumes the package — not by which files it touches. `mix.exs` can carry a consumer-visible hard
+consumes the package, not by which files it touches. `mix.exs` can carry a consumer-visible hard
 stop; a README sentence can carry nothing.
 
-1. **Contract** — new or changed behaviour a consumer can hit: a raise, the wire, the catalog, reach,
+1. **Contract**: new or changed behaviour a consumer can hit: a raise, the wire, the catalog, reach,
    a sign slot, an authority boundary, a host contract. **Two lanes.** Mutants if there is a pin to
    kill.
-2. **Measurement** — CI, gates, pins that make an existing claim true. **One lane, one round.**
-3. **Prose and records** — this file, FINDINGS, gap notes, README sentences that change no behaviour.
+2. **Measurement**: CI, gates, pins that make an existing claim true. **One lane, one round.**
+3. **Prose and records**: this file, FINDINGS, gap notes, README sentences that change no behaviour.
    **The gate and a self-review. No lanes.**
 
 Three limits sit beside the tiers. **A copy edit never opens a review round:** a claim about
-behaviour gets a round; a sentence about the same behaviour gets a commit. **Instrument gaps** —
-archive drift, `MIX_ENV` inheritance, a count field the harness stopped reading, signoff tooling —
+behaviour gets a round; a sentence about the same behaviour gets a commit. **Instrument gaps**
+(archive drift, `MIX_ENV` inheritance, a count field the harness stopped reading, signoff tooling)
 batch into one tools slice or wait until they block a slice; they do not ride along. **The tier
 cannot be chosen after the result is known.**
 
-Two measurements produced this. Slice 022 set the OTP floor in `mix.exs` — a contract, `project/0`
-raises and a dependent has no bypass — and then spent a third review round on "where" against
+Two measurements produced this. Slice 022 set the OTP floor in `mix.exs` (a contract, `project/0`
+raises and a dependent has no bypass) and then spent a third review round on "where" against
 "whereas", and on a `.tool-versions` pointer that dangles for a hex consumer: three rounds of the
 maximum ceremony, one of them for wording. Uniform maximum ceremony was the tax. Slice 023, the CI
 matrix, was the test: a measurement, so it ran one lane, and that is the shape this rule exists to

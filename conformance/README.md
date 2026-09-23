@@ -9,9 +9,9 @@ Runs the official MCP conformance suite (`@modelcontextprotocol/conformance`, pi
 version in `tools/conformance.sh`) against this package's HTTP transport and publishes two rows
 per revision, derived from the suite's own `checks.json` and never typed:
 
-- **suite totals** — scored scenarios passed / scored, over the revision's frozen requirement
+- **suite totals**: scored scenarios passed / scored, over the revision's frozen requirement
   set; the failures are not hidden.
-- **claimed-surface totals** — the same, over only the scenarios whose methods and tool names
+- **claimed-surface totals**: the same, over only the scenarios whose methods and tool names
   this package says it implements; a reader does not conclude the package fails what it never
   claimed. The set, by name (`CLAIMED` in `tools/conformance.sh`): `server-stateless`
   (`server/discover` and the stateless rules), `tools-list`, `tools-call-simple-text`,
@@ -22,13 +22,13 @@ per revision, derived from the suite's own `checks.json` and never typed:
 
 **The rule the rows use** is the suite's own under `--expected-failures`: a scenario passes
 when none of its checks is `FAILURE` or `WARNING`; `SKIPPED` and `INFO` do not fail it. The
-suite's plain console summary ticks a WARNING-only scenario; the baseline verdict — the one
-that can exit 1 — does not, so a hand count of the console's scored ticks reads two higher
+suite's plain console summary ticks a WARNING-only scenario; the baseline verdict (the one
+that can exit 1) does not, so a hand count of the console's scored ticks reads two higher
 (18 / 37 on 2026-09-15, the day the prompt scenarios passed) than the rows. The rows follow
 the verdict.
 
 `baseline-<revision>.yml` lists every expected failure with a reason word in the comment beside
-it — `deliberately-out`, `decided-not-built`, `not-implemented`, `harness` (the suite needs a
+it: `deliberately-out`, `decided-not-built`, `not-implemented`, `harness` (the suite needs a
 diagnostic tool this package cannot honestly serve), `design` (the legacy revision over HTTP:
 the transport serves `2026-07-28` only, and `2025-11-25` lives on stdio, which the suite cannot
 drive). The suite exits 1 on an unexpected failure AND on a baselined scenario that now passes,

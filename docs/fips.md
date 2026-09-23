@@ -18,7 +18,7 @@ Only that `:crypto.hash/2` answer for `:sha256`, `:sha384` and `:sha512`. Those 
 digests of FIPS 180-4, approved under FIPS 140-3, and they are the only three names the
 canonical envelope may carry ([`docs/crypto-posture.md`](crypto-posture.md)). Nothing this
 package calls is disallowed in FIPS mode: it uses no MD5, no SHA-1, no cipher, no MAC, no
-key derivation and no random source — `:crypto.hash/2` at one site is its whole use of the
+key derivation and no random source: `:crypto.hash/2` at one site is its whole use of the
 library (`test/beam_mcp/boundary/no_key_holding_test.exs`, both tests). A host that has
 enabled FIPS mode therefore runs this package unchanged, and a graph hashed under FIPS mode
 has the same bytes and the same hash as one hashed outside it: the digest is the digest.
@@ -35,19 +35,19 @@ parameters), restated; where this page and OTP's differ, OTP's is right.
    validated** on that machine. `:crypto.info/0` reports `fips_provider_available: true`
    when the provider is there. `:crypto.info_fips/0` answers, in OTP's words, `:enabled`
    when running in FIPS mode or `:not_enabled` if `crypto` was built with FIPS support, and
-   "for other builds this value is always `:not_supported`" — so `:not_supported` names the
+   "for other builds this value is always `:not_supported`", so `:not_supported` names the
    build, not the provider: a FIPS-built `crypto` over a library with no provider answers
-   `:not_enabled` — when FIPS mode was not requested; when it was, see the next step, since
+   `:not_enabled`, when FIPS mode was not requested; when it was, see the next step, since
    OTP does not load at all. Measured on the development runtime that wrote this page (OTP 28.1.1,
    OpenSSL 3.0.13, no FIPS provider): `:not_supported`, `fips_provider_available: false`,
    and `:crypto.enable_fips_mode(true)` answers `false`.
 2. **The `crypto` configuration parameter `fips_mode: true`, in the application environment
-   before the `crypto` module is first loaded** — in `sys.config` or the release's
+   before the `crypto` module is first loaded**, in `sys.config` or the release's
    configuration, not set at runtime after the fact. In OTP's words, "this setting will
    take effect when the nif module is loaded", and: **"if FIPS mode is requested but not
    available at run time the nif module and thus the crypto module will fail to load. This
    mechanism prevents the accidental use of non-validated algorithms."** So a host that sets
-   the parameter on a runtime without a validated provider does not get `:not_enabled` — it
+   the parameter on a runtime without a validated provider does not get `:not_enabled`; it
    gets no `crypto` at all: `application:start(crypto)` fails, and a release whose `.app`
    requires `crypto` (this package's does) does not boot. That is the failure a FIPS host
    wants, and it comes before any check this page could suggest. (This page's own inference
@@ -58,7 +58,7 @@ parameters), restated; where this page and OTP's differ, OTP's is right.
    environment, before the module is. A release does this for every application its `.app`
    files require, and this package's `.app` lists `crypto` as a required application, so a
    release that includes `beam_mcp` loads and starts it (it did not until 0.6.0, the release
-   this page arrives in — an HTTP host had `crypto` only through `plug` and
+   this page arrives in: an HTTP host had `crypto` only through `plug` and
    `bandit`, both optional, and a stdio-only release would have had no `:crypto.hash/2` at
    all; writing this page found it, and `test/beam_mcp/connectome/canonical_test.exs`
    "the .app the build writes depends on crypto, so a release without plug and bandit still
@@ -68,16 +68,16 @@ parameters), restated; where this page and OTP's differ, OTP's is right.
    and refuse to serve otherwise, though under the parameter OTP's own refusal (the module
    not loading) comes first. The
    older way, `:crypto.enable_fips_mode(true)` at runtime (`true` when it took, `false`
-   when it did not), **is deprecated in OTP 28** — "use config parameter fips_mode", in
-   the deprecation's own words — and is named here only so a host reading older guidance
+   when it did not), **is deprecated in OTP 28** ("use config parameter fips_mode", in
+   the deprecation's own words) and is named here only so a host reading older guidance
    knows what replaced it.
 
 This package calls none of `:crypto.enable_fips_mode/1`, `:crypto.info_fips/0` or
-`:crypto.info/0` — the three are barred from `lib/` by the same census that bars every
-`:crypto.` function but `hash/2` — and it sets no application environment: the
+`:crypto.info/0` (the three are barred from `lib/` by the same census that bars every
+`:crypto.` function but `hash/2`), and it sets no application environment: the
 package-reach census (`test/beam_mcp/boundary/package_reach_test.exs`) pins the functions
 called on `Application` to `load/1` and `spec/2`, reads only, so the package cannot enable
-FIPS mode by accident or on purpose, and cannot report on it — the host's configuration and
+FIPS mode by accident or on purpose, and cannot report on it; the host's configuration and
 start-up are where that lives. Nothing here is a claim that this package, or a host running
 it, is FIPS-validated: validation is a property of a cryptographic module (the OpenSSL FIPS
 provider) and of the process that certified it, and this package holds no such module.
@@ -87,5 +87,5 @@ provider) and of the process that certified it, and this package holds no such m
 Nothing about the bytes or the hash. A verifier in FIPS mode and one outside it compute the
 same digest over the same bytes; the algorithm the envelope names is one the FIPS provider
 serves. A consumer whose policy accepts only SHA-384 or SHA-512 asks the host for that
-`algorithm:` and refuses envelopes naming another — the consumer's policy, stated in the
+`algorithm:` and refuses envelopes naming another: the consumer's policy, stated in the
 consumer ([`docs/connectome-canonical.md`](connectome-canonical.md), rule 9).

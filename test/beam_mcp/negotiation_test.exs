@@ -88,7 +88,7 @@ defmodule BeamMCP.NegotiationTest do
     )
   end
 
-  describe "server/discover — mandatory in 2026-07-28" do
+  describe "server/discover: mandatory in 2026-07-28" do
     test "it exists and advertises the supported versions, capabilities and identity" do
       r = send_msg(%{"jsonrpc" => "2.0", "id" => 1, "method" => "server/discover"})
 
@@ -348,7 +348,7 @@ defmodule BeamMCP.NegotiationTest do
     end
   end
 
-  describe "ping — answered at legacy, absent at modern" do
+  describe "ping: answered at legacy, absent at modern" do
     test "a legacy ping is answered" do
       r = send_msg(%{"jsonrpc" => "2.0", "id" => 1, "method" => "ping"})
 
@@ -368,8 +368,8 @@ defmodule BeamMCP.NegotiationTest do
       assert r["result"] == %{},
              "ping exists in 2025-11-25. This server advertises 2025-11-25 in " <>
                "server/discover and lists it in the -32022 `supported` payload, and the " <>
-               "specification tells a client to pick from that list and retry the request " <>
-               "— which produces this message. Refusing it refuses a revision we advertise."
+               "specification tells a client to pick from that list and retry the request, " <>
+               "which produces this message. Refusing it refuses a revision we advertise."
     end
   end
 
@@ -414,7 +414,7 @@ defmodule BeamMCP.NegotiationTest do
     end
   end
 
-  describe "JSON-RPC batching — required in exactly one revision, and not ours" do
+  describe "JSON-RPC batching: required in exactly one revision, and not ours" do
     test "a batch is refused rather than processed" do
       batch = [
         %{"jsonrpc" => "2.0", "id" => 1, "method" => "ping"},

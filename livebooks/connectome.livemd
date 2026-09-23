@@ -18,7 +18,7 @@ beam_mcp exports a composed MCP system's call graph twice -- **declared** (what 
 happen, from the catalog and `:xref`) and **observed** (what did happen, from a
 telemetry span on the one dispatch site) -- and diffs the two into four classes. Every
 export is canonical JSON (`docs/connectome-canonical.md`): the same graph gives the same
-bytes and the same hash — the digest the bytes name, SHA-256 here — whoever wrote it.
+bytes and the same hash (the digest the bytes name, SHA-256 here), whoever wrote it.
 
 This notebook renders those exports and nothing else. It does not install `beam_mcp`, and
 no cell names it: a reader with only the JSON -- a reviewer, an auditor, a consumer on
@@ -250,7 +250,7 @@ Kino.DataTable.new(
 ## Into Neo4j, without a fourth exporter
 
 The package stops at canonical JSON: its two other renderings (DOT, GraphML) are already the
-largest surface no hash covers — the hash is over the canonical bytes alone — and a Cypher
+largest surface no hash covers (the hash is over the canonical bytes alone), and a Cypher
 exporter would be a third such place for the next escaping defect, verifiable by nobody
 against the hash. A Neo4j user loads the canonical bytes directly with APOC's JSON loader --
 one statement over the

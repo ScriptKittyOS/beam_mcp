@@ -18,7 +18,7 @@ defmodule BeamMCP.Schema do
   So this module refuses rather than guesses, and the server enforces the same schema it
   advertised rather than a second one compiled in beside it.
 
-  This is a deliberately small subset of JSON Schema — the keywords the server actually
+  This is a deliberately small subset of JSON Schema: the keywords the server actually
   uses. It is not a general validator, and it refuses rather than guesses.
   """
 

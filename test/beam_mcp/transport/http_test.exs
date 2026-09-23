@@ -268,7 +268,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
   end
 
-  describe "MCP-Protocol-Version — the header that makes the stdio no-era path impossible here" do
+  describe "MCP-Protocol-Version: the header that makes the stdio no-era path impossible here" do
     test "a POST without the header is rejected" do
       # "Every POST request to the MCP endpoint MUST include an MCP-Protocol-Version header."
       conn = post(msg("tools/list"), [{"mcp-method", "tools/list"}])
@@ -336,7 +336,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
   end
 
-  describe "Origin — MUST be validated to prevent DNS rebinding" do
+  describe "Origin: MUST be validated to prevent DNS rebinding" do
     test "a disallowed Origin gets 403" do
       o = opts(allowed_origins: ["https://good.example"])
 
@@ -743,7 +743,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     # is the only `get_req_header` call site, and the `mcp-param-` sweep is the only other read
     # of `conn.req_headers`. Each of these dies under its own mutant; see logs/mutation.md.
 
-    test "Origin — a second, disallowed Origin is not ignored" do
+    test "Origin: a second, disallowed Origin is not ignored" do
       o = opts(allowed_origins: ["https://ok.example"])
       body = msg("tools/list")
 
@@ -755,7 +755,7 @@ defmodule BeamMCP.Transport.HTTPTest do
              ).status == 403
     end
 
-    test "MCP-Protocol-Version — a second, unsupported version is not ignored" do
+    test "MCP-Protocol-Version: a second, unsupported version is not ignored" do
       body = msg("tools/list")
 
       conn =
@@ -764,7 +764,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert conn.status == 400
     end
 
-    test "Mcp-Method — a second, disagreeing method is not ignored" do
+    test "Mcp-Method: a second, disagreeing method is not ignored" do
       me = self()
       o = opts(dispatch: fn n, a, _ -> send(me, {:dispatched, n}) && {:ok, a} end)
       body = msg("tools/list")
@@ -781,7 +781,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       refute_receive {:dispatched, _}, 50
     end
 
-    test "Mcp-Name — a second, disagreeing name is not ignored" do
+    test "Mcp-Name: a second, disagreeing name is not ignored" do
       body = msg("tools/call", %{"params" => %{"name" => "echo", "arguments" => %{}}})
 
       conn =
@@ -796,7 +796,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       assert body!(conn)["error"]["code"] == -32_020
     end
 
-    test "Mcp-Param-{Name} — a second, disagreeing value is not ignored" do
+    test "Mcp-Param-{Name}: a second, disagreeing value is not ignored" do
       body =
         msg("tools/call", %{
           "params" => %{"name" => "echo", "arguments" => %{"region" => "eu-west1"}}
@@ -1557,7 +1557,7 @@ defmodule BeamMCP.Transport.HTTPTest do
     end
   end
 
-  describe ":authorize_body/2 — the post-read hook, and the bytes it is handed" do
+  describe ":authorize_body/2: the post-read hook, and the bytes it is handed" do
     # `authorize/1` runs before the body is read, which is what lets it refuse an
     # unauthenticated caller without buffering megabytes for them. The cost is that it cannot
     # see the body, so body-signature auth is structurally impossible through it. This hook is

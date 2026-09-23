@@ -225,7 +225,7 @@ defmodule BeamMCP.PublicAPICensusTest do
   defp changelog(unreleased_body) do
     "# Changelog\n\n## [Unreleased]\n\n" <>
       unreleased_body <>
-      "\n\n## [0.5.0] — 2026-09-16\n\n### Changed — BREAKING: old\n\n- old text.\n"
+      "\n\n## [0.5.0] - 2026-09-16\n\n### Changed (BREAKING): old\n\n- old text.\n"
   end
 
   defp run(opts) do
@@ -375,7 +375,7 @@ defmodule BeamMCP.PublicAPICensusTest do
     named = "### Removed\n\n- **Removed** `BeamMCP.Fixture.PublicAPI.plain/1`."
 
     breaking =
-      "### Changed — BREAKING: plain/1 goes\n\n- **Removed** `BeamMCP.Fixture.PublicAPI.plain/1` — a 0.x documented break at the minor.\n  **How to tell whether you are affected:** you called it."
+      "### Changed (BREAKING): plain/1 goes\n\n- **Removed** `BeamMCP.Fixture.PublicAPI.plain/1`: a 0.x documented break at the minor.\n  **How to tell whether you are affected:** you called it."
 
     # Silent; named but nothing else; named, first-time deprecated in the same change.
     assert checks(run(population: [@shape], baseline: gone.("removed_in=Unreleased"))) == [
@@ -420,7 +420,7 @@ defmodule BeamMCP.PublicAPICensusTest do
              run(
                population: [@shape],
                baseline: gone.("removed_in=Unreleased"),
-               changelog: String.replace(breaking, "BREAKING: ", "")
+               changelog: String.replace(breaking, " (BREAKING)", "")
              )
            ) == [:removed_unjustified]
 
@@ -443,7 +443,7 @@ defmodule BeamMCP.PublicAPICensusTest do
 
     # The phrase on a bullet naming a different entry does not count for this one.
     other =
-      "### Changed — BREAKING: shape goes\n\n- `t:BeamMCP.Fixture.PublicAPI.shape/0` — a 0.x documented break at the minor.\n- **Removed** `BeamMCP.Fixture.PublicAPI.plain/1`.\n  **How to tell whether you are affected:** you called it."
+      "### Changed (BREAKING): shape goes\n\n- `t:BeamMCP.Fixture.PublicAPI.shape/0`: a 0.x documented break at the minor.\n- **Removed** `BeamMCP.Fixture.PublicAPI.plain/1`.\n  **How to tell whether you are affected:** you called it."
 
     assert checks(
              run(population: [@shape], baseline: gone.("removed_in=Unreleased"), changelog: other)
@@ -541,23 +541,23 @@ defmodule BeamMCP.PublicAPICensusTest do
   end
 
   test "the rule: a BREAKING heading in the Unreleased section carries the how-to-tell sentence" do
-    assert checks(run(changelog: "### Changed — BREAKING: something\n\n- a bullet.")) == [
+    assert checks(run(changelog: "### Changed (BREAKING): something\n\n- a bullet.")) == [
              :breaking_without_how_to_tell
            ]
 
     assert run(
              changelog:
-               "### Changed — BREAKING: something\n\n- a bullet. **How to tell whether you are affected:** thus."
+               "### Changed (BREAKING): something\n\n- a bullet. **How to tell whether you are affected:** thus."
            ) == []
   end
 
   test "sections/1 reads the Unreleased section only, heading by heading, bullet by bullet" do
     text =
-      "# C\n\n## [Unreleased]\n\n### A\n\n- one\n  continued\n- two\n\n### B — BREAKING\n\nprose\n\n- three\n\n## [0.5.0]\n\n### Z\n\n- zed\n"
+      "# C\n\n## [Unreleased]\n\n### A\n\n- one\n  continued\n- two\n\n### B: BREAKING\n\nprose\n\n- three\n\n## [0.5.0]\n\n### Z\n\n- zed\n"
 
     assert [
              {"### A", _, ["- one\n  continued", "- two"]},
-             {"### B — BREAKING", body, ["- three"]}
+             {"### B: BREAKING", body, ["- three"]}
            ] = PublicAPI.sections(text)
 
     assert body =~ "prose"

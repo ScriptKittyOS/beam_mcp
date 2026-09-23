@@ -5,11 +5,11 @@ SPDX-License-Identifier: Apache-2.0
 
 # HANDOFF: beam_mcp, release 0.9.0 prepared; publish and tag are the owner's
 
-Tag and publish are owner steps — never `mix hex.publish`, never push a tag, never bump the
+Tag and publish are owner steps: never `mix hex.publish`, never push a tag, never bump the
 version in `mix.exs`. For 0.9.0 the version bump is this release commit, reviewed like any
 other change; publishing and tagging remain the owner's, in the order the runbook below gives.
 
-The slice records — plans, findings, lane reports, signoffs, archived gate runs — live in the
+The slice records (plans, findings, lane reports, signoffs, archived gate runs) live in the
 project's internal tree, not in this repository. Nothing here summarises a review that has not
 happened.
 
@@ -32,8 +32,8 @@ happened.
   `0.6.0`. `0.10.0` is next, the quiet minor (a FIPS leg, the SBOM at release: instruments
   and pages, no public entry), then `1.0.0` after it has stood.
 - **`0.8.0` was the quiet minor**: no public entry added, removed, renamed, hidden or changed
-  in arity — `docs/public-api.txt` is `0.7.0`'s line for line, `release_markers!("0.8.0")`
-  wrote nothing — and no wire or envelope byte moved. Instruments: the gate's sixteenth step
+  in arity (`docs/public-api.txt` is `0.7.0`'s line for line, `release_markers!("0.8.0")`
+  wrote nothing), and no wire or envelope byte moved. Instruments: the gate's sixteenth step
   diffs the baseline against `origin/main` (G-076); the pull-request summary waits for running
   legs on a body edit (G-079); the honesty probe's discriminator reads detailed pass lines
   (G-078); each with an offline probe. Pages: the governance table carries the Scorecard's
@@ -45,11 +45,11 @@ happened.
   `lib/`) and `BeamMCP.Connectome.Canonical.signature/3` (the one call site, over `encode/2`'s
   bytes, moving no envelope byte). Three public entries added, none removed, renamed or
   hidden; `docs/public-api.txt` marks them `since=0.7.0` (the release step wrote three). The
-  no-signature census pins the seam — the callback's whole spec, each behaviour's exact
-  callback list, the one `def sign`, the one call site — and sixteen mutants hold it. The
+  no-signature census pins the seam (the callback's whole spec, each behaviour's exact
+  callback list, the one `def sign`, the one call site), and sixteen mutants hold it. The
   signer that holds a key, `BeamMCP.Signer.Ed25519` (Ed25519 through OTP's `:crypto`, the key
   under `opts[:private_key]`), is the separate package `beam_mcp_signer`
-  (github.com/ScriptKittyOS/beam_mcp_signer, 0.1.0 on hex.pm, depending on `~> 0.7.0` — so a
+  (github.com/ScriptKittyOS/beam_mcp_signer, 0.1.0 on hex.pm, depending on `~> 0.7.0`, so a
   host on it cannot take `0.8.0` until a signer release admits it; `UPGRADING.md` says so;
   and `0.1.1`, released 2026-09-19 with `~> 0.7`, is that release: it resolves beside `0.9.0`);
   this package does not depend on it.
@@ -61,19 +61,19 @@ happened.
   governance and succession, the export-control statement and REUSE compliance by the
   specification's tool. **One break at the minor**, in the exported bytes (the canonical
   envelope's algorithm member and `schema_version` 3), with its how-to-tell sentence. **The
-  road from here is written in `UPGRADING.md`** — `0.7.0` the signer seam, `0.8.0` a quiet
-  minor, `1.0.0` after it — so nobody reads it off a plan's label.
+  road from here is written in `UPGRADING.md`** (`0.7.0` the signer seam, `0.8.0` a quiet
+  minor, `1.0.0` after it), so nobody reads it off a plan's label.
 - At `0.6.0` the README recommended `~> 0.6.0` (a fifth use of the minor position) and
   `docs/public-api.txt` carried no `Unreleased` marker, so `release_markers!("0.6.0")` wrote
   nothing; at `0.7.0` it wrote three.
-- **No head hash is written here** — a hash written into the file it describes cannot include
+- **No head hash is written here**: a hash written into the file it describes cannot include
   the commit that writes it. `git log v0.8.0..main` is the authority.
 - Gate on the release commit: sixteen steps, every line `pass` (the 0.5.0 gate had thirteen;
   the audit step made it fourteen in 024, Dialyzer fifteen in 027a, the baseline diff sixteen
-  at 0.8.0) — format (the tracked set, not a
+  at 0.8.0): format (the tracked set, not a
   glob), compile, dialyzer, instruments, test, credo, properties (11 at 1 000 generations),
   optional deps, audit, bench (the collector's overhead under the 1.5 µs ceiling; **the diff engine's run and
-  encode each under its own ceiling now** — 245 ms and 260 ms, medians of five in a fresh
+  encode each under its own ceiling now**: 245 ms and 260 ms, medians of five in a fresh
   process after a warm-up, set at roughly double the stable worst of ten runs on the release
   head; the reachability queries' cost recorded and judged by no number, but a query refused
   on the fixture fails the step by name), docs, reuse, licence files, publication, baseline,
@@ -103,7 +103,7 @@ release unchanged.
 The federation seam stays held on another board's answer and is not on that road. A compiler-tracer census
 (module-body code run at compile time, which neither the text censuses nor `:xref` see) is
 scheduled with its lift measured. Sign-aware reachability, if asked for, is a later slice or a
-refusal decided in the open — never a widening inside a release slice; `all_paths` stays
+refusal decided in the open, never a widening inside a release slice; `all_paths` stays
 refused.
 
 ## Owner decisions still open
@@ -113,7 +113,7 @@ refused.
    is advertised with `subscribe: false`. Whether to build `subscriptions/listen` on stdio, the
    legacy pair on the legacy era only, or neither and say so on the will-not-implement page.
 2. **A resource template in the declared connectome.** The builder reads a `uri` per entry; a
-   template has a `uri_template` and is enumerated as unreadable — true and unflattering.
+   template has a `uri_template` and is enumerated as unreadable: true and unflattering.
    Whether a template is a node, and of what kind.
 3. **`tools/list` pagination.** The cursor exists and both resource lists and `prompts/list`
    use it; adopting it on `tools/list` changes an existing result and waits for the word.
@@ -153,10 +153,10 @@ refused.
 3. Tag the release commit **as it sits on `main` after the rebase-merge** (a new SHA; the
    bytes are a function of the tree, measured) locally, signed (`git tag -s vX.Y.Z`); then
    `tools/release_tarball.sh vX.Y.Z beam_mcp-X.Y.Z.tar --publish` (the script builds the
-   canonical tarball from `git archive` of that tag and publishes from that tree — a
+   canonical tarball from `git archive` of that tag and publishes from that tree; a
    working-tree `mix hex.publish` ships that machine's file modes and is not what the
    provenance workflow attests); **then** push the tag. The tag's run downloads what hex.pm
    serves and verifies the attestation against it, and treats a version hex.pm does not serve
-   yet as a failure — so the push comes last. (A tag and its commit build the same bytes;
+   yet as a failure, so the push comes last. (A tag and its commit build the same bytes;
    measured.) The GitHub ruleset targets **branches, not tags**, so a tag push is
    unprotected: what is tagged is what was read.

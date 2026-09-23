@@ -11,7 +11,7 @@ defmodule BeamMCP.Transport.Stdio do
   loop continues; end of input ends it.
 
   Responses are always newline-delimited. A request may arrive under the older `Content-Length`
-  framing and is read, because a client that speaks it is not wrong to try — but nothing is
+  framing and is read, because a client that speaks it is not wrong to try, but nothing is
   written back in that form.
 
   Whoever can write to this transport already has the host's privileges, which is why the
