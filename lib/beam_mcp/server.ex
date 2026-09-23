@@ -979,6 +979,9 @@ defmodule BeamMCP.Server do
     schema
     |> Map.get("properties", %{})
     |> Map.keys()
+    # The keys are the host's declared schema properties, never a caller's, so the atoms are
+    # bounded by the catalog (argument_interning_test holds it); Credo's check cannot see that.
+    # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
     |> Map.new(fn key -> {key, String.to_atom(key)} end)
   end
 

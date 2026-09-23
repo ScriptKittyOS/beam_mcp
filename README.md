@@ -5,6 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # BeamMCP
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14774/badge)](https://www.bestpractices.dev/projects/14774)
+
 A Model Context Protocol server core for the BEAM. Protocol handling, two transports — stdio and
 a stateless Streamable HTTP `Plug` — and JSON Schema validation, with the tool catalog and the
 dispatch function injected by the host.

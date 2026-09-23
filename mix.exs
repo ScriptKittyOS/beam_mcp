@@ -88,6 +88,9 @@ defmodule BeamMCP.MixProject do
           "docs/fips.md",
           "docs/provenance.md",
           "docs/api-stability.md",
+          "docs/architecture.md",
+          "docs/assurance-case.md",
+          "docs/roadmap.md",
           "UPGRADING.md",
           "docs/governance.md",
           "docs/succession.md",
@@ -102,7 +105,7 @@ defmodule BeamMCP.MixProject do
         groups_for_extras: [
           Connectome: ~r{^docs/connectome},
           Policy:
-            ~r{^(docs/(will-not-implement|threat-model|crypto-posture|fips|provenance|api-stability|governance|succession)|SECURITY|UPGRADING)}
+            ~r{^(docs/(will-not-implement|threat-model|crypto-posture|fips|provenance|api-stability|architecture|assurance-case|roadmap|governance|succession)|SECURITY|UPGRADING)}
         ]
       ]
     ]
