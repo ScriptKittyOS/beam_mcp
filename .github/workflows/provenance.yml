@@ -25,6 +25,13 @@
 # hex.pm half reads NOT MEASURED -- whether hex.pm serves nothing for the version or serves
 # bytes this commit does not build -- which is what it is.
 #
+# THE SBOM (from 0.10.0). tools/sbom.sh generates a CycloneDX 1.6 SBOM of the runtime
+# dependency set from the same tree, outside mix.exs (the EEF's mix_sbom binary, pinned by
+# version and digest; one named workaround, G-087), and actions/attest binds it to the
+# tarball's digest as a second attestation (predicate https://cyclonedx.org/bom). A consumer
+# verifies it with `gh attestation verify <tarball> --predicate-type https://cyclonedx.org/bom`
+# and fetches it with `gh attestation download` (docs/provenance.md).
+#
 # CI is unproven until a run exists (CONVENTIONS): the first workflow_dispatch run is the
 # evidence for the attest->verify loop; the first tag after this lands is the evidence for
 # the hex.pm binding. Both are quoted in the slice record when they exist.
@@ -80,6 +87,39 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: beam_mcp-${{ steps.build.outputs.version }}.tar
+      - name: the SBOM, generated outside mix.exs from the same tree (tools/sbom.sh)
+        run: tools/sbom.sh "${GITHUB_SHA}" "beam_mcp-${{ steps.build.outputs.version }}.cdx.json"
+      # Pinned by commit (v4.2.2, 2026-08-04): the SBOM attestation's subject is the same
+      # tarball digest; the predicate is the CycloneDX document itself.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: beam_mcp-${{ steps.build.outputs.version }}.tar
+          sbom-path: beam_mcp-${{ steps.build.outputs.version }}.cdx.json
+      - name: verify the SBOM attestation against the tarball this run built
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "beam_mcp-${{ steps.build.outputs.version }}.tar" --repo "${GITHUB_REPOSITORY}" \
+            --predicate-type https://cyclonedx.org/bom
+      # docs/provenance.md tells a consumer to fetch the SBOM this way; this step is that
+      # command, run, and its result compared with the file this run generated.
+      - name: the SBOM a consumer downloads is the document this run generated
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${{ steps.build.outputs.version }}"
+          mkdir -p fetched && cd fetched
+          gh attestation download "../beam_mcp-${v}.tar" --repo "${GITHUB_REPOSITORY}" --predicate-type https://cyclonedx.org/bom
+          jq -S . "../beam_mcp-${v}.cdx.json" > generated.json
+          found=no
+          while IFS= read -r line; do
+            printf '%s' "$line" | jq -r '.dsseEnvelope.payload' | base64 -d | jq -S '.predicate' > candidate.json
+            if cmp -s candidate.json generated.json; then found=yes; fi
+          done < <(cat sha256:*.jsonl)
+          [ "$found" = yes ] || { echo "FAIL: no downloaded SBOM attestation carries the document this run generated"; exit 1; }
+          echo "the downloaded SBOM predicate equals the generated document"
       - name: verify the attestation against the tarball this run built
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,5 +159,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tarball-${{ steps.build.outputs.version }}
-          path: beam_mcp-${{ steps.build.outputs.version }}.tar
+          path: |
+            beam_mcp-${{ steps.build.outputs.version }}.tar
+            beam_mcp-${{ steps.build.outputs.version }}.cdx.json
           if-no-files-found: error

@@ -90,6 +90,31 @@ tarball hex.pm serves. The private key is held on the maintainer's own machine, 
 or hex.pm, which only distribute. If the key is ever replaced, this page and the CHANGELOG
 say so in the same commit, with the new fingerprint.
 
+## The SBOM
+
+From `0.10.0` each release also carries a software bill of materials: CycloneDX 1.6, JSON, the
+runtime dependency set (the Hex packages at their locked versions, and the OTP and Elixir
+applications), generated from the tag's tree by `tools/sbom.sh` with the EEF's `mix_sbom`
+(pinned by version and by the release asset's SHA-256; nothing is added to `mix.exs` or
+`mix.lock`) and attested to the same tarball digest as the provenance. `plug` and `bandit`
+appear although they are optional dependencies of this package: the tool has no notion of an
+optional dependency. One workaround is named in the script (G-087 in this project's records:
+the tool's 0.11.0 cannot read the `tools: :optional` entry in `mix.exs`, so its scratch copy
+reads `:tools`; the component list is the same).
+
+```sh
+gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp \
+  --predicate-type https://cyclonedx.org/bom
+gh attestation download "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp \
+  --predicate-type https://cyclonedx.org/bom        # writes sha256:<digest>.jsonl
+jq -r '.dsseEnvelope.payload' sha256:*.jsonl | base64 -d | jq '.predicate' > "beam_mcp-${v}.cdx.json"
+```
+
+The release workflow runs the download and the extraction above on every tag and compares the
+result with the document it generated, so the commands are the ones measured. The SBOM is not
+byte-reproducible (CycloneDX gives each document a fresh serial number and timestamp); what
+binds it to the package is the attestation over the tarball's digest.
+
 ## Reproduce the bytes
 
 Trust nothing above; build it:
