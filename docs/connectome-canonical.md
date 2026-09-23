@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# The connectome — canonical bytes
+# The connectome: canonical bytes
 
 This page is the contract for the bytes a connectome is hashed and signed over. It is complete
 enough that a verifier can be written in another language from this page alone, without
@@ -12,7 +12,7 @@ two disagree, the page is right and the code is the defect.
 
 Vocabulary is in `docs/connectome.md`. What is hashed is the **declared form** of a graph:
 its schema version, the algorithm it is hashed with, its nodes and its edges. Weights are
-not in it — a weight is a measurement, and the declared hash is a claim about wiring — and
+not in it (a weight is a measurement, and the declared hash is a claim about wiring) and
 travel in a separate **sidecar** that is never hashed with the declared bytes.
 
 ## Layout
@@ -23,8 +23,8 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    `"schema_version"`, then `"algorithm"`, then `"nodes"`, then `"edges"`. This is the one
    place the order is fixed rather than sorted, so the version is the first thing a reader
    meets and the digest the second. The schema version is the integer `3` (see *Versions*
-   below). The algorithm is one of the three strings `"sha256"`, `"sha384"`, `"sha512"` —
-   the name under which the digest is known to `:crypto`, lowercase, no hyphen — and it is
+   below). The algorithm is one of the three strings `"sha256"`, `"sha384"`, `"sha512"`
+   (the name under which the digest is known to `:crypto`, lowercase, no hyphen), and it is
    what rule 9 hashes the bytes with. **The nodes and edges members do not depend on the
    algorithm:** two envelopes of one graph under two digests differ in that member's value
    and in nothing else, so the bytes under another digest are derived from the bytes under
@@ -33,20 +33,20 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    changed. A name outside the three is not a canonical form: the
    package refuses it at the option before writing a byte, and a verifier meeting one
    refuses the record rather than guessing a digest.
-2. **`"nodes"` is an array sorted by `"id"`** — by the bytes of the UTF-8 id, which is the
+2. **`"nodes"` is an array sorted by `"id"`**: by the bytes of the UTF-8 id, which is the
    same as by code point. Each node is an object with exactly `"id"`, `"kind"`, `"labels"`,
-   `"level"` — in that order, which is their sorted order.
+   `"level"`, in that order, which is their sorted order.
 3. **`"edges"` is an array sorted by the tuple** (`from`, `to`, `kind`, `provenance`), each
    compared as in rule 2, left to right. Each edge is an object with exactly `"from"`,
-   `"kind"`, `"provenance"`, `"sign"`, `"to"` — in that order, which is their sorted order.
+   `"kind"`, `"provenance"`, `"sign"`, `"to"`, in that order, which is their sorted order.
    **No weight.** That tuple is an edge's identity: `BeamMCP.Connectome.Graph.new/1` refuses
    two edges with the same tuple and an edge whose `from` or `to` names no node, so the
    canonical form never meets either; it neither merges nor drops. The sign is not part of
-   the identity — one edge carries one sign. A graph struct built by literal, bypassing
+   the identity: one edge carries one sign. A graph struct built by literal, bypassing
    `BeamMCP.Connectome.Graph.new/1`, is read against the same refusals before a byte is written
    (`BeamMCP.Connectome.Graph.check/1`) and refused as `{:invalid_graph, reason}` under the
    graph's own name for the fault.
-4. **Every other object** — `"labels"` and anything nested in it — **sorts its keys by UTF-16
+4. **Every other object** (`"labels"` and anything nested in it) **sorts its keys by UTF-16
    code unit**, the order [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (the JSON
    Canonicalization Scheme) uses. For keys within the Basic Multilingual Plane this is code
    point order; a key containing a character above U+FFFF sorts by its surrogate pair, so
@@ -57,13 +57,13 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    arrive as an atom or a string and is written as the same string either way; the three
    atoms `nil`, `true` and `false` are the JSON literals `null`, `true` and `false` as
    values, and are refused as keys.
-6. **Strings are NFC-normalised** before anything else — ids, edge endpoints, label keys and
+6. **Strings are NFC-normalised** before anything else: ids, edge endpoints, label keys and
    label values, whether they arrived as strings or as atoms. NFC, not NFKC: canonical
    equivalents fold (a combining sequence and its precomposed form, U+212B and U+00C5), and
    compatibility equivalents stay distinct (`ﬁ` U+FB01 and `fi` are two strings). Two nodes
    whose ids coincide after normalisation are refused, never merged; so are two label keys in
    one object that coincide after normalisation, or an atom and a string spelling one key.
-   **A string that is not well-formed UTF-8 is refused** — well-formed as Unicode defines it:
+   **A string that is not well-formed UTF-8 is refused**, well-formed as Unicode defines it:
    no overlong form, no encoded surrogate, nothing past U+10FFFF, no truncated sequence;
    noncharacters such as U+FFFE and a byte-order mark are well-formed and written literally.
    The refusal names the node and the field for an id or a top-level label; inside a nested
@@ -82,10 +82,10 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    objects of these (sorted by rule 4). An atom label value is written as a string. Integers
    are decimal with no sign for zero or positive values, a leading `-` for negative ones, no
    leading zeros, no exponent, and no upper bound: an integer beyond 2^53 is written in full,
-   and a reader that cannot hold it exactly cannot re-derive the bytes — that is the reader's
+   and a reader that cannot hold it exactly cannot re-derive the bytes; that is the reader's
    limit, stated here rather than rounded. An empty object is `{}` and an empty array `[]`.
    **A float is refused**, because two runtimes may print it differently; so is anything with
-   no byte form (a reference, a pid, a tuple, a function), and a struct — a struct is not a
+   no byte form (a reference, a pid, a tuple, a function), and a struct: a struct is not a
    labels map, and its fields are the private layout of another module, which a release may
    change. A refusal at any depth is reported by node, by the label it was met under, and by
    that label's whole value.
@@ -95,7 +95,7 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
    (64 bytes; one hundred and twenty-eight). The algorithm member is part of the bytes, so
    it is under the hash: two envelopes of the same graph that name different digests are
    different bytes with different hashes, and neither is a rewrite of the other. A verifier
-   reads the version first, then the algorithm, then hashes — it never chooses a digest the
+   reads the version first, then the algorithm, then hashes; it never chooses a digest the
    bytes do not name, and it treats a name it does not know as a malformed record. SHA-256 is
    the default the package writes when the caller names none, and stays the default
    indefinitely; the other two are a caller's option (`algorithm:` on
@@ -116,7 +116,7 @@ sha256: `a401cd47f0f0410d17248538eb8a3ef00018f6a31bf6fb6a7b9b0ba3377f570e`
 Reproduce it without the package: paste the line above into a file with no trailing newline
 and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.
 
-The same graph under SHA-384 is a different envelope — one member differs — and so a
+The same graph under SHA-384 is a different envelope (one member differs) and so a
 different hash, over the bytes that name it:
 
 ```json-canonical-sha384
@@ -138,7 +138,7 @@ byte but that value.
 
 `schema_version` names the vocabulary the bytes were written in and, from `3`, the shape of
 the envelope. **`1`** (0.4.0): the sign values were `allow`, `deny`, `hold`, `unknown`.
-**`2`** (0.5.0): `unset` — no sign was supplied to the package that wrote the bytes — and
+**`2`** (0.5.0): `unset` (no sign was supplied to the package that wrote the bytes) and
 `ungoverned`, a consumer's affirmative "no rule of my policy applies", replace `unknown`;
 nothing else moved. **`3`** (`0.6.0`): the envelope
 names its algorithm as a fourth top-level member, `"algorithm"`, between the version and the
@@ -148,7 +148,7 @@ at an edge and found nothing governing it had no `ungoverned` to write, so its h
 was `unknown` too, and the bytes do not say which case a given `unknown` was. A reader must
 not narrow a version-1 `unknown` to `unset`; it is "one of the two, unrecorded which".
 
-**What a verifier holding bytes at `1` or `2` does** — 0.4.0 and 0.5.0 bytes exist in the
+**What a verifier holding bytes at `1` or `2` does**: 0.4.0 and 0.5.0 bytes exist in the
 world, and their hashes stay verifiable forever under their own version: those bytes name no
 algorithm, and **at `1` and `2` the digest is SHA-256**, by this rule and by no member of the
 bytes; the verifier hashes the bytes it holds, unchanged, with SHA-256, and compares. It does
@@ -165,7 +165,7 @@ What the version tells the verifier beyond the digest is how to *read* the sign 
 `ungoverned` are valid and `unknown` is not. A reader that resolves the vocabulary by the
 version it finds first (as Avro resolves a writer's schema against a reader's) needs no other
 signal. A sign outside the vocabulary of the version the bytes name is a malformed record:
-the hash still verifies (it is over the bytes), and the record is refused, never corrected —
+the hash still verifies (it is over the bytes), and the record is refused, never corrected:
 the rule the package applies to itself in `BeamMCP.Connectome.Graph.new/1`. The package itself
 writes `3` and only `3`, and `BeamMCP.Connectome.Graph.new/1` refuses a graph carrying any
 other version rather than translating it: bytes are not re-imported here, only produced and
@@ -174,23 +174,23 @@ kept as they were, and a test verifies them the way this section says.
 
 ## The sidecar
 
-Weights are written separately as `{"schema_version":3,"weights":[…]}` — the graph's version, no algorithm member, since the sidecar is never hashed —, one object per edge
+Weights are written separately as `{"schema_version":3,"weights":[…]}` (the graph's version, no algorithm member, since the sidecar is never hashed), one object per edge
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
 integer; a float weight is written in the shortest form that round-trips
-(`:erlang.float_to_binary/2` with `:short`, OTP 25's — every release this package compiles on
+(`:erlang.float_to_binary/2` with `:short`, OTP 25's; every release this package compiles on
 has it, the floor being OTP 27, and the placement below is measured on OTP 27, 28 and 29 by the
 CI matrix). The digits are the shortest that round-trip; the
 placement is Erlang's, which differs from other runtimes' shortest forms and is decided by
 the digit count of the mantissa, not by the magnitude. Write the digits as D, a string with
 no trailing zeros, of length L, and let e be the power of ten such that the value is
 D × 10^e. Plain notation is used when −4 ≤ e ≤ 2 for a one-digit D, and when
-−(L+2) ≤ e ≤ 1 otherwise (≤ 2 when e + L − 1 ≥ 10) — except that D ≥ 2⁵³ with e = 0,
+−(L+2) ≤ e ≤ 1 otherwise (≤ 2 when e + L − 1 ≥ 10), except that D ≥ 2⁵³ with e = 0,
 D > 2⁵² div 5 with e = 1, and D > 2⁵¹ div 25 with e = 2 take an exponent. Plain notation
 appends `.0` when no digit falls after the point, and prefixes `0.` and −(L+e) zeros when
 L + e ≤ 0. Exponent notation is the first digit, `.`, the remaining digits or `0`, `e`, and
-e + L − 1 with no `+` and no padding. Zero is `0.0`, and a negative zero — which the edge
-constructor admits, as it is not below zero — is `-0.0`. So `0.1`, `0.0001`,
+e + L − 1 with no `+` and no padding. Zero is `0.0`, and a negative zero (which the edge
+constructor admits, as it is not below zero) is `-0.0`. So `0.1`, `0.0001`,
 `999999999999999.0`, `1.0e15`, `1.0e-5`, `1.0e20`, `9.99e14`, `3.0e6`, `1.23456e-4`,
 `0.001234`, `12340.0`, `0.0`, `-0.0`. The sidecar is not part of any hash. It is defined
 only for a graph whose declared form encodes: what `encode/1` refuses, `sidecar/1` refuses
@@ -231,26 +231,26 @@ provenance and sign, and no weight. They are not canonical forms and are not has
 DOT quotes every id and every value, and quotes a label's attribute name too (`"label_<key>"`),
 because a key may carry `=`, a space or a quote; `kind`, `level` and the edge attributes are
 DOT identifiers and stay bare. GraphML's schema types every id as an NMTOKEN; a node id is
-not one (it carries `/`), and the export writes ids as given and renames nothing — a reader
+not one (it carries `/`), and the export writes ids as given and renames nothing; a reader
 that validates against the schema would reject them. Label keys are declared as `l0`, `l1`,
 … in the order of rule 4 with `attr.name` carrying the key, so a key carrying a space or a
 quote never lands in an id. Text is escaped: `&`, `<`, `>`, `"`, and
-tab, LF and CR as the character references `&#9;`, `&#10;`, `&#13;` — a parser folds the
+tab, LF and CR as the character references `&#9;`, `&#10;`, `&#13;`: a parser folds the
 literal characters to a space inside an attribute value and CR to LF in content, and a
 reference survives both, so two ids that differ only by whitespace kind stay two nodes. A
-character outside XML 1.0's Char production — `#x9 | #xA | #xD | [#x20-#xD7FF] |
+character outside XML 1.0's Char production (`#x9 | #xA | #xD | [#x20-#xD7FF] |
 [#xE000-#xFFFD] | [#x10000-#x10FFFF]`, so a C0 control other than tab, LF and CR, or U+FFFE
-or U+FFFF — which the canonical bytes do carry, is refused by `to_graphml/1` as
+or U+FFFF), which the canonical bytes do carry, is refused by `to_graphml/1` as
 `{:not_xml, id, codepoint}` rather than written into a document every conforming parser
 rejects; no character reference can carry it either.
 
 There is no Cypher export, on purpose: the canonical bytes load into Neo4j as they are, with
 APOC's JSON loader over the `nodes` array (`MERGE` on `id`) and the `edges` array (`MATCH`
-the two ids, `MERGE` the relationship) — two statements the Livebook shows — and a fourth
+the two ids, `MERGE` the relationship), two statements the Livebook shows, and a fourth
 rendering would be one more surface no hash covers.
 
 The exports' exact bytes are not specified by this page. A label value that is not a string
 is written as its rule-8 JSON text in both, so the string `"true"` and the boolean `true`
-read the same there; everything else — headers, indentation, attribute order, DOT's own
-escape of `\` and `"` — is the exporter's layout, which `test/fixtures/connectome/golden.dot`
+read the same there; everything else (headers, indentation, attribute order, DOT's own
+escape of `\` and `"`) is the exporter's layout, which `test/fixtures/connectome/golden.dot`
 and `golden.graphml` pin and a release may change without the hash changing.

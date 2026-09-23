@@ -3,12 +3,12 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# beam_mcp — FINDINGS
+# beam_mcp: FINDINGS
 
 Source: Ultraviolet `origin/main` = `778accb82759d3def30b2e1410e1aeb573f76dac`.
 Nothing is committed in this repository yet. `main` had no commits at start.
 
-## The seam is nominal — demonstrated red, in Ultraviolet, before any extraction
+## The seam is nominal: demonstrated red, in Ultraviolet, before any extraction
 
 The owner named `normalize_tool_name/1` as the demonstration. It is one, and here it is
 failing, run in a throwaway worktree at `778accb8` with `_build`/`deps` copied (§4b), the
@@ -41,7 +41,7 @@ real catalog, so the two lists happen to agree.
 
 `normalize_tool_name/1` calls `HacktuiAgent.MCP.ToolCatalog.all()` **directly**, and
 `ToolCatalog` is on the owner's stay-behind list. So the package cannot compile without
-changing that line — and changing it *is* commit 2's fix. **Commits 1 and 2 collapse.**
+changing that line, and changing it *is* commit 2's fix. **Commits 1 and 2 collapse.**
 
 The only alternative is to hardcode the six Ultraviolet tool names in the package so the
 defect survives verbatim, which the scope forbids outright: domain data in a generic module
@@ -50,7 +50,7 @@ is the thing this extraction exists to remove.
 ## Two other changes commit 1 cannot avoid, declared
 
 1. **The `new/1` defaults.** `dispatch:` defaults to `&Dispatch.safe_call/3` and
-   `tool_catalog:` to `ToolCatalog` — both stay behind. They must become injected. No test
+   `tool_catalog:` to `ToolCatalog`; both stay behind. They must become injected. No test
    changes: all four server tests pass `tool_catalog:`, and the three that omit `dispatch:`
    never reach a dispatch.
 2. **`@server_name "hacktui-hermes"`** (`server.ex:11`) is Ultraviolet branding compiled into
@@ -62,10 +62,10 @@ is the thing this extraction exists to remove.
 
 `mcp_stdio_framing_test.exs` cannot travel: it drives the real `bin/hacktui-mcp` binary,
 computes `repo_root()` as the umbrella root, runs `mix compile` there in `setup_all`, and is
-tagged `:mcp_e2e`. Making it run here needs a package-local launcher — new work, not a move.
+tagged `:mcp_e2e`. Making it run here needs a package-local launcher: new work, not a move.
 So the transport ships with **no in-package test**. Recorded as a gap, not hidden.
 
-## NOTICE — the difference the owner asked me to report rather than reconcile
+## NOTICE: the difference the owner asked me to report rather than reconcile
 
 Ultraviolet's `NOTICE` at `778accb8` reads, in full on the copyright line:
 
@@ -73,6 +73,6 @@ Ultraviolet's `NOTICE` at `778accb8` reads, in full on the copyright line:
     Copyright 2026 Ayla Croft
 
 It names **one** role. It does not mention Sudo Apt Holdings LLC, Script Kitty, the ORCID, or
-any separation of ownership from authorship — consistent with slice 14 being unstarted.
+any separation of ownership from authorship, consistent with slice 14 being unstarted.
 `beam_mcp`'s `NOTICE` is written from the owner's text and carries all three roles. **The two
 files disagree, deliberately, and reconciling Ultraviolet's is slice 14's work, not mine.**

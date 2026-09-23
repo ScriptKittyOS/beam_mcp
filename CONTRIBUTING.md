@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 **1. Sign off every commit.** `git commit -s` adds the `Signed-off-by` line, which certifies
 the [Developer Certificate of Origin](https://developercertificate.org/): you wrote the patch,
 or have the right to submit it under this project's licence. **CI checks every commit in the
-range and fails the whole push if one is missing.** A missing sign-off cannot be waived — the
+range and fails the whole push if one is missing.** A missing sign-off cannot be waived; the
 history has to be rewritten to add it, which is easier before review than after.
 
 **2. No tool-attribution trailers.** No `Co-Authored-By` naming a tool, no session links, no
@@ -99,7 +99,7 @@ is the project's aim; the pull requests show who reviewed each one.
 
 - **A red before a fix.** Show the failure first, in the commit message, with its output. A
   test that has never been seen failing is not evidence that it works. Where a red is not
-  available — the code already exists and passes — demonstrate coverage by mutation instead:
+  available (the code already exists and passes), demonstrate coverage by mutation instead:
   break the property in a throwaway copy and show the test catches it.
 - **Counts quoted from command output, never typed.** Test counts, exit codes, file counts.
 - **SPDX headers** on every `.ex`, `.exs`, `.sh` and `.yml`. The gate checks it, and CI runs

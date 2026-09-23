@@ -316,7 +316,7 @@ defmodule BeamMCP.ThreatModelTest do
     test "the reader sees a citation beside escaped quotes in the prose, and asks ExUnit which cited tests are live" do
       row =
         ~s(| **x** | REFUSED | says `"name"` and \\"quoted\\" | ) <>
-          ~s(`test/beam_mcp/threat_model_test.exs` "a name" "another" | — |)
+          ~s(`test/beam_mcp/threat_model_test.exs` "a name" "another" | none |)
 
       assert BeamMCP.Boundary.citations(row) ==
                [{"test/beam_mcp/threat_model_test.exs", ["a name", "another"]}]

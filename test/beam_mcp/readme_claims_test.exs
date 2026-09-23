@@ -482,7 +482,7 @@ defmodule BeamMCP.ReadmeClaimsTest do
     end
 
     # The BEHAVIOUR behind these sentences is exercised in
-    # `test/beam_mcp/transport/http_test.exs`, under ":authorize_body/2 — the post-read hook,
+    # `test/beam_mcp/transport/http_test.exs`, under ":authorize_body/2: the post-read hook,
     # and the bytes it is handed": the byte-identity of the body, the init-time arity refusal,
     # allow-versus-refuse, the opacity of the refusal, and the absence of `connection: close`.
     # It is not duplicated here. Reaching across for that module's catalog fixture would give

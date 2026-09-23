@@ -21,8 +21,8 @@ the caller's option and never a literal. Every other `:crypto.` function, every
 calls a crypto function other than :crypto.hash/2" and ":crypto.hash/2 is called at one site,
 over canonical bytes, with the algorithm a variable").
 
-**Three digests, named in the bytes.** A canonical envelope — the graph's and the diff
-record's — carries `"algorithm"` as a member: `"sha256"`, `"sha384"` or `"sha512"`, the SHA-2
+**Three digests, named in the bytes.** A canonical envelope (the graph's and the diff
+record's) carries `"algorithm"` as a member: `"sha256"`, `"sha384"` or `"sha512"`, the SHA-2
 family of FIPS 180-4, and its hash is that digest over exactly its bytes, so a verifier reads
 the algorithm from what it holds rather than from a page or a release note
 ([`docs/connectome-canonical.md`](connectome-canonical.md), rules 1 and 9). SHA-256 is the
@@ -44,7 +44,7 @@ defined in the document", which holds the three names to `docs/connectome.md`).
 **Why the algorithm is under the hash.** The member is part of the bytes, so two envelopes of
 one graph naming different digests are different bytes with different hashes; neither can be
 passed off as the other, and an attacker who can rewrite the member can rewrite the graph
-anyway — the hash is over all of it. What the bytes cannot do is decide which of the three a
+anyway: the hash is over all of it. What the bytes cannot do is decide which of the three a
 verifier accepts: that is the verifier's policy, stated in the verifier, and this package
 neither asks nor answers it.
 
@@ -58,8 +58,8 @@ neither asks nor answers it.
 (entry 3; `test/beam_mcp/boundary/no_signature_test.exs` "no line under lib/ calls a signing or
 MAC primitive"). What is signed is the canonical bytes, with a key the consumer holds, through
 one seam: `BeamMCP.Signer`, a behaviour with exactly one callback, `sign(canonical_bytes,
-opts)` — two arguments with those names, `{:ok, signature}` or `{:error, reason}`, pinned by
-census so that any widening is a visible act — and `BeamMCP.Connectome.Canonical.signature/3`,
+opts)` (two arguments with those names, `{:ok, signature}` or `{:error, reason}`, pinned by
+census so that any widening is a visible act), and `BeamMCP.Connectome.Canonical.signature/3`,
 the one site that calls it, over the bytes `encode/2` produces, returning the signature beside
 them and moving no byte. The one implementation here, `BeamMCP.Signer.None`, signs nothing;
 the reference implementation that does, Ed25519 through OTP's `:crypto` with a key the host

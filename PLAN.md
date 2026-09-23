@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# beam_mcp — PLAN
+# beam_mcp: PLAN
 
 **Repository:** `github.com/ScriptKittyOS/beam_mcp` (transferred from `HackTuah` 2026-09-06;
 the old path still resolves by redirect). Private, empty at start -- `main` had no commits.
@@ -35,9 +35,9 @@ validation only), `tool_spec.ex`.
 | `HacktuiAgent.MCP.Stdio` | `BeamMCP.Transport.Stdio` |
 | `HacktuiAgent.MCP.Schema` | `BeamMCP.Schema` |
 | `HacktuiAgent.MCP.ToolSpec` | `BeamMCP.ToolSpec` |
-| — (new) | `BeamMCP.ToolCatalog` (behaviour) |
+| none (new) | `BeamMCP.ToolCatalog` (behaviour) |
 
-Only external dependency: `jason`. Measured — `server.ex` and `stdio.ex` reference `Jason`;
+Only external dependency: `jason`. Measured: `server.ex` and `stdio.ex` reference `Jason`;
 `schema.ex` and `tool_spec.ex` reference nothing outside themselves.
 
 ## The two contracts the package must define
@@ -48,7 +48,7 @@ Injection without a specification is a claim with nothing behind it. So:
    `@type dispatch :: (atom(), map(), keyword() -> {:ok, term()} | {:error, term()})`.
    `safe_call/3` is specced `(atom(), term(), keyword()) :: {:ok, term()} | {:error, term()}`,
    so it satisfies the callback; the package's type is the narrower, published one.
-2. **A `BeamMCP.ToolCatalog` behaviour** — `@callback all() :: [BeamMCP.ToolSpec.t()]` — which
+2. **A `BeamMCP.ToolCatalog` behaviour**, `@callback all() :: [BeamMCP.ToolSpec.t()]`, which
    Ultraviolet's concrete catalog implements.
 
 ## The demonstration that the seam is currently nominal
@@ -64,14 +64,14 @@ real catalog as well. That coincidence is what commit 2 removes.
 
 ## Three commits, each proven before the next
 
-### Commit 1 — the move, behaviour-preserving
+### Commit 1: the move, behaviour-preserving
 
 Four files, module renames only. Both test runs pasted with pass counts and exit codes.
 **If a test needs a substantive edit to pass, stop and report; do not edit it.**
 
 **One unavoidable source change, declared rather than smuggled:** the package cannot default
 `:dispatch` to `HacktuiAgent.MCP.Dispatch.safe_call/3` or `:tool_catalog` to
-`HacktuiAgent.MCP.ToolCatalog` — those are exactly the modules that stay behind. The defaults
+`HacktuiAgent.MCP.ToolCatalog`; those are exactly the modules that stay behind. The defaults
 are therefore dropped and both become required injection. This is a **behaviour change for a
 caller that omits them** and is not a rename. It changes no test: all four server tests inject
 `tool_catalog:`, and the three that omit `dispatch:` never reach a dispatch. Ultraviolet's
@@ -96,13 +96,13 @@ in this package**. Its only test is bound to Ultraviolet's launcher. Closing tha
 transport test written against `BeamMCP.Transport.Stdio` directly, which is new work and is
 not commit 1.
 
-### Commit 2 — catalog injection fixed, red first
+### Commit 2: catalog injection fixed, red first
 
 Inject a catalog holding **one tool the real catalog lacks**; assert `tools/call` reaches
 dispatch. It fails today, because `normalize_tool_name/1` consults the real catalog. Red
 recorded verbatim before the fix.
 
-### Commit 3 — schema onto ToolSpec, red first
+### Commit 3: schema onto ToolSpec, red first
 
 Construct a `ToolSpec` carrying a schema the server has never seen; assert validation uses it.
 The per-tool `input_schema/1` clauses (`server.ex:223-299`) and the argument normalisation
@@ -123,7 +123,7 @@ Apache-2.0. SPDX headers on every source file, REUSE-compliant (`LICENSES/Apache
 
 `NOTICE` carries three roles: **Sudo Apt Holdings LLC** owns the IP, **Script Kitty** built it,
 **Ayla Croft** authored it (ORCID `0009-0008-9457-2160`). Written from the owner's text.
-**Ultraviolet's NOTICE is deliberately not copied** — see the difference recorded in
+**Ultraviolet's NOTICE is deliberately not copied**; see the difference recorded in
 `FINDINGS.md`.
 
 ## Gates for this tree
@@ -133,5 +133,5 @@ if configured. No ratchet baselines: this tree starts clean and stays at zero.
 
 ## Out of scope
 
-Publishing. Revision negotiation and `server/discover` — the next slice, in this package.
+Publishing. Revision negotiation and `server/discover`: the next slice, in this package.
 The Ultraviolet path-dep change is a separate PR in that tree with its own review.

@@ -10,14 +10,14 @@ defmodule BeamMCP.Server do
   The protocol core: one message in, one response out, no process and no state of its own.
 
   `handle_message/2` takes a decoded JSON-RPC message and the state from `new/1`, and returns
-  the next state and a response — or `nil` where the protocol defines no reply. A transport
+  the next state and a response, or `nil` where the protocol defines no reply. A transport
   supplies the bytes; this module never touches them.
 
   ## Two eras
 
   It serves `2026-07-28` and `2025-11-25`, and tells them apart the way the specification says
   a dual-era server should: a request carrying per-request `_meta` is served statelessly, and
-  an `initialize` request selects legacy semantics. `_meta` decides only the statelessness —
+  an `initialize` request selects legacy semantics. `_meta` decides only the statelessness;
   the revision it *names* then decides the method table and the result envelope, so a request
   declaring `2025-11-25` through `_meta` gets that revision's semantics, not the modern ones.
   A request naming a revision it does not support gets `UnsupportedProtocolVersionError`

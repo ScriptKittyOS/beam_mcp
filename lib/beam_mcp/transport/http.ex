@@ -32,7 +32,7 @@ if Code.ensure_loaded?(Plug) do
     Stateless Streamable HTTP transport: a `Plug` serving `2026-07-28` at one endpoint.
 
     A second caller of `BeamMCP.Server.handle_message/2`, which this module does not change.
-    Every request stands alone — **no sessions, no `Mcp-Session-Id`, no SSE resumability**,
+    Every request stands alone: **no sessions, no `Mcp-Session-Id`, no SSE resumability**,
     all three removed from the transport in `2026-07-28`.
 
     Available only when `plug` is present. `plug` and `bandit` are optional dependencies, so a
@@ -49,9 +49,9 @@ if Code.ensure_loaded?(Plug) do
     So both decisions are **required options with no defaults**. A host that omits either gets
     an `ArgumentError` when the Plug is initialised:
 
-      * `:authorize` — `(Plug.Conn.t() -> :ok | {:error, term()})`, called before any message
+      * `:authorize`: `(Plug.Conn.t() -> :ok | {:error, term()})`, called before any message
         is handled. Whatever it returns as a reason goes to the log, never to the caller.
-      * `:allowed_origins` — `[String.t()]` or `:any`. The specification makes validating
+      * `:allowed_origins`: `[String.t()]` or `:any`. The specification makes validating
         `Origin` a MUST, to prevent DNS rebinding; which origins are legitimate is host
         knowledge. `:any` must be chosen explicitly.
 
@@ -62,44 +62,44 @@ if Code.ensure_loaded?(Plug) do
 
     The `:authorize` hook runs **before** the body is read, which is what lets it refuse an
     unauthenticated caller without buffering megabytes on their behalf. The cost of that
-    position is that it cannot see the body, so body-signature authentication — HMAC over the
-    payload, an asymmetric signature — is not merely awkward through it but structurally
+    position is that it cannot see the body, so body-signature authentication (HMAC over the
+    payload, an asymmetric signature) is not merely awkward through it but structurally
     impossible: there is no argument through which the bytes arrive.
 
-      * `:authorize_body` — `(Plug.Conn.t(), binary() -> :ok | {:error, term()})`, optional,
+      * `:authorize_body`: `(Plug.Conn.t(), binary() -> :ok | {:error, term()})`, optional,
         called **after** the body is read and **before** it is decoded. The second argument is
         the request body exactly as received. Whatever it returns as a reason goes to the log,
         never to the caller.
-      * `:read_timeout` — positive integer, milliseconds, default `#{@read_timeout_default}`. One whole-body
+      * `:read_timeout`: positive integer, milliseconds, default `#{@read_timeout_default}`. One whole-body
         deadline, this package's own: the body is read in pieces against one clock, each read
         given what remains, so a client that has sent its headers and then drips the body is
         answered `408` when it lapses, however many bytes arrived and however the adapter splits
         the reads (over HTTP/2 the adapter's reader is asked for less than one frame, so every
         DATA frame, an empty one included, returns to this clock; a stream kept open by control
-        frames alone — a WINDOW_UPDATE, or a HEADERS without END_STREAM — is held past the
+        frames alone, a WINDOW_UPDATE or a HEADERS without END_STREAM, is held past the
         deadline by the adapter's own wait, which nothing outside it can end through an
         interface the adapter offers: one frame per deadline holds a stream process
         indefinitely, and whatever body then comes is refused; a WINDOW_UPDATE costs the client
         thirteen bytes and the host nothing accumulated, a HEADERS without END_STREAM writes a
-        warning line per frame to the host's log carrying the client's header bytes — the
+        warning line per frame to the host's log carrying the client's header bytes; the
         threat model states both, and the two `Bandit` listener options that bound the
         exposure: `http_2_options: [default_local_settings: [max_concurrent_streams: n]]`
         caps the held streams per connection, `http_2_options: [enabled: false]` removes
         HTTP/2 from the listener). That per-stream hold the adapter owns is bounded in
         DURATION here by `:connection_timeout` below. A body must declare its
-        length — `transfer-encoding: chunked` is refused with `411` before the read, since a
+        length; `transfer-encoding: chunked` is refused with `411` before the read, since a
         chunked body is read chunk by chunk on a per-chunk clock that no deadline above it can
         bound. The `408` is this Plug's
         JSON-RPC refusal, with `connection: close` over HTTP/1.1 (over HTTP/2 the stream ends
-        with the response); nothing is written to the host's log for it — the adapter's own
+        with the response); nothing is written to the host's log for it: the adapter's own
         error-level line at its read timeout no longer fires, since the deadline is this Plug's.
-      * `:connection_timeout` — positive integer, milliseconds, default twice `:read_timeout`.
+      * `:connection_timeout`: positive integer, milliseconds, default twice `:read_timeout`.
         The whole-body deadline above is a stream's; over HTTP/2 a stream held open by control
         frames alone cannot be ended from outside the adapter, but its **connection** can. When
         a body read has been blocked this long and nothing else on the connection is still
         within its own body deadline, the connection is closed with a `GOAWAY` the client can
-        read — an OTP `GenServer.stop` on the socket handler, not a forged adapter message or a
-        reset. So the residue the adapter owns is bounded in duration by this option and in
+        read (an OTP `GenServer.stop` on the socket handler, not a forged adapter message or a
+        reset). So the residue the adapter owns is bounded in duration by this option and in
         count by `http_2_options`'s `max_concurrent_streams`. The cost is per connection: the
         client's other legitimate streams still open on that connection end with it, so a host
         multiplexing streams that outlive one body read raises this. Twice the read deadline by
@@ -114,7 +114,7 @@ if Code.ensure_loaded?(Plug) do
     signature while looking like a fault in the host's cryptography.
 
     Absent, the hook is skipped and nothing changes. Present, it must be a 2-arity function or
-    `init/1` raises — a wrong arity is a startup failure rather than a per-request one.
+    `init/1` raises; a wrong arity is a startup failure rather than a per-request one.
 
     **This package performs no cryptography.** The hook is called `:authorize_body` rather than
     `:verify_signature` because verifying a signature is the host's work; making it possible is
@@ -1213,13 +1213,13 @@ if Code.ensure_loaded?(Plug) do
         entries
       else
         # A host catalog that RAISES is not a catalog with no such tool, and collapsing the two
-        # into [] would let a raising catalog silently disable header mirroring — the check
+        # into [] would let a raising catalog silently disable header mirroring: the check
         # would pass because it inspected nothing. The fault is returned so the caller answers
         # it, rather than thrown, so the id stays available.
         #
         # Both fault shapes are matched by their own tag rather than by their SHAPE. An earlier
         # draft matched the invalid-annotation case as a bare non-empty list, and `params.name`
-        # being a JSON array — caller-controlled — reaches this `else` as exactly that.
+        # being a JSON array (caller-controlled) reaches this `else` as exactly that.
         {__MODULE__, :host_fault, _k, _r, _st} = fault -> fault
         {__MODULE__, :invalid_annotation, _tool, _detail} = invalid -> invalid
         _ -> []
@@ -1269,7 +1269,7 @@ if Code.ensure_loaded?(Plug) do
     # ONE ENTRY PER ANNOTATED PROPERTY, and a list rather than a map keyed by the case-folded
     # name. The key was the defect: `Map.put` dropped a sibling annotated with the same name in
     # another case and `Map.merge` let a nested one overwrite an outer one, so a property could
-    # be annotated, published to clients through `tools/list`, and never checked — silently, and
+    # be annotated, published to clients through `tools/list`, and never checked -- silently, and
     # with which of the two survived decided by map iteration order.
     #
     # A property path is unique by construction, so nothing here can be lost by another
@@ -1315,7 +1315,7 @@ if Code.ensure_loaded?(Plug) do
     #
     # A property with NO declared type is left alone rather than refused. It cannot be judged
     # from the schema, and judging it on the caller's VALUE instead would make a caller who
-    # sends the wrong shape into a host fault — the wrong side of the trust boundary, which is
+    # sends the wrong shape into a host fault: the wrong side of the trust boundary, which is
     # the mistake this check exists to stop making in the other direction.
     @annotatable_types ~w(string integer boolean)
 

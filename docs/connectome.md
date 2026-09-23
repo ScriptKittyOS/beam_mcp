@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# The connectome — vocabulary
+# The connectome: vocabulary
 
 A **connectome** is the wiring diagram of a composed MCP system: which parts exist, and what can
 talk to what. It is a directed, typed graph, built before any message flows and again from what
@@ -16,10 +16,10 @@ together.
 ## What the package is and is not
 
 beam_mcp renders authority; it never decides it. The connectome carries a sign slot so that a
-graph can show what a policy allowed, denied or held — and the package itself writes only
+graph can show what a policy allowed, denied or held, and the package itself writes only
 `:unset` into that slot. It populates no sign, signs no finding, holds no key, and makes no
 authority decision. Those belong to the host, behind the same `:authorize` and `:authorize_body`
-hooks the transport already offers — where a host keeps its own risk tiers, approvals and
+hooks the transport already offers, where a host keeps its own risk tiers, approvals and
 receipts, none of which this package holds. The connectome is not an MCP capability: neither protocol
 revision this package targets defines a topology or a declared-reachability primitive, and none
 is claimed.
@@ -32,7 +32,7 @@ is claimed.
   prompts, the static call graph between the host's modules, and the host's boundary declarations.
   It says what *can* happen.
 - The **observed connectome** is built from what ran: telemetry on the dispatch path and, when the
-  host opts in, a guarded tracer. It records edge identity only — never arguments, results or
+  host opts in, a guarded tracer. It records edge identity only, never arguments, results or
   headers. It says what *did* happen, over a stated window.
 - A **drift finding** is an edge the observed connectome has and the declared connectome does not,
   or an edge both have with a sign supplied on both sides and the two different (`unset` on
@@ -52,7 +52,7 @@ is claimed.
 | `:tool` | a tool the catalog names; labelled with its `command_class` and `mode` |
 | `:resource` | a resource the catalog names |
 | `:prompt` | a prompt the catalog names |
-| `:process` | a BEAM process — a GenServer, a task, a supervisor |
+| `:process` | a BEAM process: a GenServer, a task, a supervisor |
 | `:module` | a BEAM module, at the module level, or a module–function–arity at the finest level |
 
 ## Edge kinds
@@ -72,16 +72,16 @@ A tool dispatch is an `:invoke` edge whose source is the server node. There is n
 | -- | -- |
 | `:allow` | the host's policy permits this edge |
 | `:deny` | the host's policy forbids it |
-| `:hold` | the host's policy holds it for a decision it does not make alone — an advisory, never an approval |
-| `:ungoverned` | a consumer looked and no gate — no rule of its policy, not a gate node of the reach page — applies to this edge: an affirmative statement, a supplied value like the three above; never a reason for the package to leave the edge out of anything |
+| `:hold` | the host's policy holds it for a decision it does not make alone: an advisory, never an approval |
+| `:ungoverned` | a consumer looked and no gate (no rule of its policy, not a gate node of the reach page) applies to this edge: an affirmative statement, a supplied value like the three above; never a reason for the package to leave the edge out of anything |
 | `:unset` | no sign has been supplied to this package; **the only value the package itself ever writes** |
 
 The sign is a *slot*. The package carries it so that a rendered graph can show a policy's verdict
-beside each edge; a **consumer** fills it — the host that embeds this package, or any party
+beside each edge; a **consumer** fills it: the host that embeds this package, or any party
 holding a graph it produced; the pages use the two words for the same role. Nothing in the
 package computes one. There is no setter: a consumer writes the struct field
-(`%{edge | sign: :deny}`) and rebuilds the graph from its parts —
-`BeamMCP.Connectome.Graph.new(nodes: g.nodes, edges: signed, schema_version: BeamMCP.Connectome.Graph.schema_version())` — or lets
+(`%{edge | sign: :deny}`) and rebuilds the graph from its parts
+(`BeamMCP.Connectome.Graph.new(nodes: g.nodes, edges: signed, schema_version: BeamMCP.Connectome.Graph.schema_version())`) or lets
 `BeamMCP.Connectome.Graph.check/1` or the encoder see it; each checks the value against the
 vocabulary and refuses, never corrects, anything else. **The bytes carry no field saying which
 consumer wrote a sign, or when**: the bytes' edge object is `from`, `to`, `kind`,
@@ -89,12 +89,12 @@ consumer wrote a sign, or when**: the bytes' edge object is `from`, `to`, `kind`
 its time are the consumer's own record to keep, outside this package.
 
 `:unset` says exactly one thing: that nothing was handed here. It does not say that no policy
-exists, that none spoke, or that none was computed — a host whose authority plane denied an
+exists, that none spoke, or that none was computed: a host whose authority plane denied an
 edge, where that verdict never reached this package, gets `:unset` on that edge, and a graph
 that read `:unset` as "no policy spoke" would be wrong about the world. That is why the value is
 named for the slot's state and not for the world's. (Until 0.5.0 the value was `:unknown`,
 glossed "no policy has spoken"; the rename is the correction, and the bytes carry
-`schema_version` `2` or later from here — `3` today — so a reader knows which vocabulary applies —
+`schema_version` `2` or later from here (`3` today), so a reader knows which vocabulary applies:
 [`docs/connectome-canonical.md`](connectome-canonical.md).)
 
 There is no `:not_applicable` and no `:indeterminate`: nothing in the package can produce them,
@@ -103,10 +103,10 @@ misuse. A sign means the same thing on a declared edge and on an observed one; t
 (`provenance`, `sign`) carries the whole fact, and no third value is added to say which side it
 came from: on a declared edge a sign is what a consumer wrote against the configuration; on an
 observed edge it is what a consumer wrote against the run. **The package never treats any
-sign as suppression** — `:ungoverned` included: the diff records the edge exactly as it records
+sign as suppression**, `:ungoverned` included: the diff records the edge exactly as it records
 any other (a sign appears in the diff record only in a changed-sign entry; every sign is in the
 graph's own bytes), and whether to suppress a finding is a consumer's decision, made in a
-system that can say who decided and when — which this record, carrying no author and no time
+system that can say who decided and when, which this record, carrying no author and no time
 of decision (its window is the observation's, the consumer's input), is not. A sign is also
 orthogonal to drift: an observed edge nobody declared is drift whatever its sign.
 
@@ -154,7 +154,7 @@ module-level node and a module-function-arity is an `:mfa`-level node.
 `BeamMCP.Connectome.Node.id/1` is the one place an identity becomes an id, and this is what
 it writes. The components are written the server first, then the identity's tag (its
 first element: `boundary` for a boundary identity, whose node kind is `module`), then the
-rest of the identity in order — not the tuple's order, which puts the tag first — each
+rest of the identity in order (not the tuple's order, which puts the tag first), each
 escaped and then joined by `/`. Escaping is `%` to `%25` first, then `/` to `%2F`, applied to
 every component, so a `/` inside a server name or a resource URI never reads as a separator.
 An atom naming a kind or a source is written as its name; a module is written as Elixir
@@ -197,7 +197,7 @@ An edge carries exactly one provenance. Comparing the two graphs is how a drift 
 | `:sha384` | SHA-384, by option; 48 bytes, 96 characters |
 | `:sha512` | SHA-512, by option; 64 bytes, 128 characters |
 
-A canonical envelope — the graph's and the diff record's — names one algorithm in its bytes,
+A canonical envelope (the graph's and the diff record's) names one algorithm in its bytes,
 and its hash is that digest over exactly those bytes; a verifier reads the name from the bytes
 (`docs/connectome-canonical.md`, rule 9). The three are the whole list: the package refuses any
 other name at the option, before a byte is written. The package holds no key and makes no
@@ -222,6 +222,6 @@ asserts, whatever the name, and a signer package attached here is what makes any
 
 ## Weight
 
-An edge may carry a weight — an observed call count, a latency summary. Weights are measurements.
+An edge may carry a weight: an observed call count, a latency summary. Weights are measurements.
 They are never part of the declared connectome's canonical bytes, so the hash of a declared
 connectome is a claim about wiring and nothing else.

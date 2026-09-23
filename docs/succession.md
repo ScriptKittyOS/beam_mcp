@@ -49,7 +49,7 @@ Support and hex.pm's support process.
 
 ## What survives the maintainer today, and what does not
 
-**Survives:** the public repository under the organization — public and forkable whatever
+**Survives:** the public repository under the organization, public and forkable whatever
 happens to any account; if the maintainer *stops*, they add a successor as the organization's
 owner first, which is a smaller act than transferring a personal repository; the published
 Hex releases and their documentation on hexdocs, which stay fetchable whether or not anyone

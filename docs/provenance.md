@@ -24,11 +24,11 @@ package page. The owner tags and publishes; the workflow attests and never publi
 the machine's, not the commit's: each entry carries the file's on-disk **mode** (a checkout
 under umask 002 gives `664`, under 022 gives `644`), and a directory named in `files:` is
 walked in **readdir order** (ext4's per-filesystem hash order; tmpfs's another). Measured on
-2026-09-17: one commit gave three checksums — this machine's tree, a umask-022 checkout, a
-tmpfs checkout — with the same 39 files inside. A tarball built from a working tree is that
+2026-09-17: one commit gave three checksums (this machine's tree, a umask-022 checkout, a
+tmpfs checkout) with the same 39 files inside. A tarball built from a working tree is that
 machine's; an attestation over it would describe bytes no other machine reproduces.
 
-So the release tarball is built by one script on every seat — CI, the publisher, a stranger
+So the release tarball is built by one script on every seat: CI, the publisher, a stranger
 reproducing it:
 
 ```sh
@@ -36,12 +36,12 @@ tools/release_tarball.sh v0.7.0 beam_mcp-0.7.0.tar
 ```
 
 It `git archive`s the ref with `tar.umask=022` (every file `644` whatever the machine's umask,
-and only tracked files — a draft under `docs/` cannot ship), extracts with permissions
+and only tracked files; a draft under `docs/` cannot ship), extracts with permissions
 preserved, resolves the lock's dependencies, and runs `mix hex.build` there; `mix.exs` names
 its `files:` as globs, so the entry order is `Path.wildcard`'s sort and not a filesystem's.
 Measured: the same commit built this way on ext4 and on tmpfs gave one tarball, byte for
-byte, every entry `644`. A test builds it and pins the structure — the modes, the order, the
-checksum — on every run of the suite.
+byte, every entry `644`. A test builds it and pins the structure (the modes, the order, the
+checksum) on every run of the suite.
 
 **A release verifies only if it was published with the same script** (`--publish` runs
 `mix hex.publish` from the canonical tree). The tag's run downloads the bytes hex.pm serves
@@ -58,14 +58,14 @@ curl -fsSLO "https://repo.hex.pm/tarballs/beam_mcp-${v}.tar"
 gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp
 ```
 
-`gh attestation` needs GitHub CLI 2.49 or newer (Ubuntu's packaged 2.45 does not have it —
+`gh attestation` needs GitHub CLI 2.49 or newer (Ubuntu's packaged 2.45 does not have it,
 measured here), and it is the verifier GitHub documents; the attestation is a Sigstore bundle
 (`gh attestation download` fetches it; the repository's Actions tab lists each one under
 *Attestations*), so another Sigstore verifier can read it, but no such path is measured here
 and none is claimed. What a verifier proves: the tarball's digest is the one a run of
 `provenance.yml` at a named commit of this repository produced, signed through Sigstore at the
 time. What it does not prove:
-anything about that commit's contents — that is the tree's own record (the gate, the review
+anything about that commit's contents; that is the tree's own record (the gate, the review
 record), reachable from the commit the attestation names.
 
 ## Verify a release tag's signature
@@ -101,7 +101,7 @@ tools/release_tarball.sh "v${v}" "rebuilt-${v}.tar"     # prints the sha256 = th
 
 The script needs Elixir, Erlang, Hex 2.x, bash, git and `sha256sum` or `shasum`. CI builds
 with the pair `.tool-versions` names, copied into the workflow (Elixir 1.18 on OTP 28); the
-tarball carries no compiled code, and Hex is what packages it — 2.4.0 and 2.5.1 gave
+tarball carries no compiled code, and Hex is what packages it: 2.4.0 and 2.5.1 gave
 byte-identical tarballs of one commit (measured), and a packaging change in a later Hex would
 show as a checksum the tag's run fails to match, not as a silent difference. The canonical
 bytes assume ASCII file names: a non-ASCII name is encoded by the machine's locale, and a test
@@ -111,7 +111,7 @@ holds every packaged name to ASCII.
 
 `0.5.0` and earlier carry no attestation and were built from working trees: their bytes are
 the publishing machine's (the 0.5.0 tarball's entries carry `664`), reproducible on that
-machine — measured for 0.5.0 — and not by the script above, which builds `644` entries in glob
+machine (measured for 0.5.0) and not by the script above, which builds `644` entries in glob
 order. Their provenance is the tag and the checksum, nothing more.
 
 ## Hex's own transparency log
