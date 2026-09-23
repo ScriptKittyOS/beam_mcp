@@ -10,17 +10,13 @@ gathers what `UPGRADING.md`, the README and `docs/will-not-implement.md` already
 place. The order is firm; the dates are not promised. When this page and one of those
 disagree, those are the record and this page is corrected.
 
-## Next: `0.10.0`, the quiet minor
+## Now: `0.10.0`, the quiet minor
 
-Instruments and pages, no public entry added, removed or changed:
+Instruments and pages, no public entry added, removed or changed: the suite in FIPS mode in CI
+on the validated OpenSSL FIPS provider (`docs/fips.md`, "Measured"); a CycloneDX SBOM
+attested to each release tarball (`docs/provenance.md`); the documentation free of em dashes.
 
-- a FIPS leg in CI, exercising the package on a FIPS-mode OpenSSL (`docs/fips.md` states the
-  posture today);
-- a software bill of materials attached at each release, beside the provenance attestation
-  (`docs/provenance.md`);
-- a copy sweep of the documentation.
-
-## Then: `1.0.0`, the freeze
+## Next: `1.0.0`, the freeze
 
 `1.0.0` follows once the public API and the stated threat model have each survived a full
 minor release unchanged (the README's condition). From `1.0.0`, `docs/public-api.txt` is

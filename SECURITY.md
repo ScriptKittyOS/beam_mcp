@@ -104,7 +104,8 @@ entry says so when it does.
 
 | version | supported |
 |---|---|
-| `0.9.x` | yes |
+| `0.10.x` | yes |
+| `0.9.x` | no, superseded |
 | `0.8.x` | no, superseded |
 | `0.7.x` | no, superseded |
 | `0.6.x` | no, superseded |

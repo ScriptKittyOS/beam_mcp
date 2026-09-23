@@ -13,8 +13,8 @@ says **BREAKING**, which the census requires.
 
 ## The rule for `0.x`
 
-Breaks land at the **minor** position and nowhere else. Pin `~> 0.9.0` (the current minor,
-three numbers), not `~> 0.9`: the tighter pin stops at the next minor, which is where the
+Breaks land at the **minor** position and nowhere else. Pin `~> 0.10.0` (the current minor,
+three numbers), not `~> 0.10`: the tighter pin stops at the next minor, which is where the
 next documented break can be, so a routine `mix deps.update` never carries you across one.
 To move a minor: read the release's rows below and their CHANGELOG entries, apply each "how
 to tell" sentence to your host, then raise the pin.
@@ -63,6 +63,15 @@ returns, copied from the host's options and verified by nothing here; the canoni
 `schema_version` do not move. Raise the pin to `~> 0.9.0`. A host on `beam_mcp_signer` `0.1.1`
 (requirement `~> 0.7`) resolves beside `{:beam_mcp, "~> 0.9.0"}` without a signer release.
 
+**`0.10.0` has no row: it is the quiet minor again.** No public entry was added, removed,
+renamed, hidden or changed in arity (`docs/public-api.txt` did not move, and the release step
+wrote nothing into it), and no wire byte or envelope byte moved. What changed is instruments
+and pages: the suite runs in FIPS mode in CI on the validated OpenSSL provider, each release
+carries an attested SBOM, `docs/fips.md` reads measurements, and the pages are free of em
+dashes, the CHANGELOG's released headings included (the quotations below and above follow them).
+Raise the pin to `~> 0.10.0`. `beam_mcp_signer` `0.1.1` and `0.2.0` (requirement `~> 0.7`)
+resolve beside it without a signer release.
+
 ## The road to `1.0.0`, in order
 
 Stated here so nobody infers it from a plan's label or a folder's name:
@@ -80,11 +89,11 @@ Stated here so nobody infers it from a plan's label or a folder's name:
    instrument leftovers. No public entry added, removed, renamed or hidden: the "full minor
    release unchanged" the README's `1.0.0` condition requires, measured by
    `docs/public-api.txt` not moving (the gate now diffs it against `origin/main` on every run).
-4. **`0.9.0`**, this release: the `:server` seam on both transports and `scheme:`/`key_id:`
+4. **`0.9.0`**: the `:server` seam on both transports and `scheme:`/`key_id:`
    beside the signature. Two additions, no break; four public entries added; the clock the
    README's condition names restarts here.
-5. **`0.10.0`**, the quiet minor again: instruments and pages (a FIPS leg in CI, the SBOM
-   attached at release), no public entry moves.
+5. **`0.10.0`**, this release, the quiet minor again: instruments and pages (the suite in FIPS
+   mode in CI, an attested SBOM at release, the em-dash sweep), no public entry moved.
 6. **`1.0.0`**, after `0.10.0` has stood: the surface frozen as `docs/api-stability.md` says.
 
 ## What `1.0` will ask

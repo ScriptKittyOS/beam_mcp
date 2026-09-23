@@ -11,6 +11,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-23
+
+The quiet minor again: **no public entry added, removed, renamed, hidden or changed in arity**
+(`docs/public-api.txt` did not move; `release_markers!("0.10.0")` wrote nothing), and no wire
+byte or envelope byte moved: the recording's ten version lines are the only lines re-taken,
+and every canonical golden is the same blob as at `0.9.0`. Instruments and pages only: the
+suite in FIPS mode in CI on the validated OpenSSL FIPS provider, an attested SBOM at every
+release, the pages the OpenSSF Best Practices badge asks for (silver on 2026-09-23), and the
+documentation free of em dashes. The threat model's one edited row corrects a status (what
+shipped), not what it defends. **How to tell whether you are affected:** you are not; raise
+the pin to `~> 0.10.0`. `1.0.0` follows once this minor has stood (UPGRADING's road).
+
+### Changed: the pages, copy only
+
+- The em dash is gone from the public tree outside the archived `slices/` records: README,
+  CHANGELOG (the released headings too: `## [0.8.0] - 2026-09-19`, `### Added: ...`,
+  `### Changed (BREAKING): ...`), UPGRADING (its quotations follow), SECURITY, CONVENTIONS,
+  every page under `docs/`, the livebook, and the docstrings and comments under `lib/`. No
+  meaning, number, code span or link moved; ranges keep their en dash.
+- README's "Scheduled" paragraph follows the road: the federation seam and effective
+  connectivity come after `1.0.0`, as additions, and the Tasks extension of `2026-07-28` is
+  named third (not built, not refused). `docs/roadmap.md` lists the same.
+
 ### Added: an SBOM at every release, attested to the tarball (no public entry moves)
 
 - `tools/sbom.sh` and the release workflow: a CycloneDX 1.6 SBOM of the runtime dependency set,
