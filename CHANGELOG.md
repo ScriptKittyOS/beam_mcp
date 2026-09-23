@@ -11,6 +11,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added: the suite in FIPS mode, in CI (no public entry moves)
+
+- `.github/workflows/fips.yml`: the suite on Erlang/OTP 28.1.1 built with `--enable-fips`, over
+  OpenSSL 3.5.8's libcrypto with the FIPS provider built from OpenSSL 3.1.2 (the source CMVP
+  certificate #4985, FIPS 140-3, validates), every download checked against its published
+  SHA-256. It asserts FIPS mode inside the VM before a test runs, with a negative control, and
+  runs on pushes to `main`, pull requests touching the code, weekly and on demand; the
+  toolchain is cached. Measured 2026-09-23: 11 properties, 729 tests, 0 failures in FIPS
+  mode; MD5 refused, SHA-2 answering.
+- `docs/fips.md`: a "Measured" section with those figures, and one correction the
+  measurement made: with FIPS mode requested and no provider, `crypto` does not fail to
+  start (the application answers `ok`); its module does not load, so a release boots and the
+  first `:crypto` call raises. The page said the release does not boot. Not a validation
+  claim, and the page says so.
+
 ### Added: pages for the OpenSSF Best Practices badge, and Credo's two security warnings on `lib/`
 
 No public entry moves, no wire byte and no envelope byte; `lib/` changes by one comment.

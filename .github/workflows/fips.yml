@@ -1,0 +1,129 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# The suite on Erlang/OTP in FIPS mode, against the validated OpenSSL FIPS provider.
+#
+# What runs: OTP 28.1.1 (the pinned line) built with --enable-fips, over OpenSSL 3.5.8's
+# libcrypto with the FIPS provider built from OpenSSL 3.1.2, the source CMVP certificate #4985
+# (FIPS 140-3) validates, following its security policy (section 11.1: `enable-fips`,
+# `make install_fips`, then `openssl fipsinstall` on the machine that runs it). Pairing a newer
+# libcrypto with the validated 3.1.2 provider is what OpenSSL's README-FIPS describes and its
+# own provider-compatibility CI exercises nightly. Every download is checked against its
+# published SHA-256 before it is built.
+#
+# The order is fixed: deps and compile with FIPS mode OFF (Hex fetches over TLS, rebar3 builds
+# telemetry), then the suite with `-crypto fips_mode true`, asserted inside the same VM before
+# a test runs. The assertion loads `crypto` in its OWN `-e`: expanding a remote call to
+# `:crypto` loads the module, so a check written in the same expression as the load reads a
+# crypto loaded before `fips_mode` applied and passes with FIPS off (measured 2026-09-23).
+# A negative control runs first: without the provider configuration, `fips_mode true` must not
+# give a working crypto (it fails closed: the NIF does not load).
+#
+# Not a validation claim: ubuntu-24.04 is not an operational environment #4985 names, and this
+# job proves the package's behaviour under FIPS mode, nothing about the module. See docs/fips.md.
+#
+# When: every push to main and every pull request that touches the code, weekly, and on demand.
+# The toolchain is built once and cached (keyed on the versions and this file); a warm run is
+# the suite plus a few minutes. Public repository: GitHub-hosted minutes are not billed.
+name: fips
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "mix.exs"
+      - "mix.lock"
+      - ".github/workflows/fips.yml"
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fips:
+    name: FIPS - OTP 28.1.1, OpenSSL FIPS provider 3.1.2 (CMVP 4985)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Fixed absolute paths: the rpath, OpenSSL's MODULESDIR and OTP's ROOTDIR are baked in.
+      P: /home/runner/fips/ossl
+      OTP: /home/runner/fips/otp
+      EX: /home/runner/fips/elixir
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /home/runner/fips
+          key: fips-${{ runner.os }}-${{ runner.arch }}-ubuntu24-otp28.1.1-ossl3.5.8-fipsprov3.1.2-ex1.18.4-${{ hashFiles('.github/workflows/fips.yml') }}
+
+      - name: build OpenSSL 3.5.8 (libcrypto), the 3.1.2 FIPS provider, and OTP 28.1.1 --enable-fips
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libncurses-dev
+          cd "$RUNNER_TEMP"
+          dl() { curl -fsSLO "$1"; echo "$2  $(basename "$1")" | sha256sum -c -; }
+          dl https://github.com/openssl/openssl/releases/download/openssl-3.5.8/openssl-3.5.8.tar.gz a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2
+          dl https://github.com/openssl/openssl/releases/download/openssl-3.1.2/openssl-3.1.2.tar.gz a0ce69b8b97ea6a35b96875235aa453b966ba3cba8af2de23657d8b6767d6539
+          dl https://github.com/erlang/otp/releases/download/OTP-28.1.1/otp_src_28.1.1.tar.gz 03e1b26e846b2cc1b49271656da6d5ecf4d5f4c2e34224d869a23c61a3d5660a
+          dl https://builds.hex.pm/builds/elixir/v1.18.4-otp-28.zip cbd98899abdd4b1243d8ea6dae7258f9bc71cc2dcb55b8f9c241b07f04b3de67
+          for t in openssl-3.5.8 openssl-3.1.2 otp_src_28.1.1; do tar xzf "$t.tar.gz"; done
+          (cd openssl-3.5.8 && ./Configure --prefix="$P" --openssldir="$P/ssl" --libdir=lib shared no-docs && make -j4 && make install_sw)
+          (cd openssl-3.1.2 && ./Configure enable-fips --prefix="$P" --openssldir="$P/ssl" --libdir=lib shared && make -j4 && make install_fips)
+          (cd otp_src_28.1.1 && ./configure --prefix="$OTP" --enable-fips --with-ssl="$P" --with-ssl-rpath="$P/lib" --without-javac --without-odbc --without-wx && make -j4 && make install)
+          mkdir -p "$EX" && unzip -q v1.18.4-otp-28.zip -d "$EX"
+
+      - name: fipsinstall on this machine, and the configuration that activates the provider
+        run: |
+          set -euo pipefail
+          LD_LIBRARY_PATH="$P/lib" "$P/bin/openssl" fipsinstall -pedantic -out "$P/ssl/fipsmodule.cnf" -module "$P/lib/ossl-modules/fips.so"
+          printf '%s\n' 'config_diagnostics = 1' 'openssl_conf = openssl_init' ".include $P/ssl/fipsmodule.cnf" \
+            '[openssl_init]' 'providers = provider_sect' 'alg_section = algorithm_sect' \
+            '[provider_sect]' 'fips = fips_sect' 'base = base_sect' '[base_sect]' 'activate = 1' \
+            '[algorithm_sect]' 'default_properties = fips=yes' > "$P/ssl/openssl-fips.cnf"
+          echo "OPENSSL_CONF=$P/ssl/openssl-fips.cnf" >> "$GITHUB_ENV"
+          echo "$OTP/bin" >> "$GITHUB_PATH"
+          echo "$EX/bin" >> "$GITHUB_PATH"
+
+      - name: FIPS mode is on, served by the 3.1.2 provider, and fails closed without it
+        run: |
+          set -euo pipefail
+          erl -noshell -crypto fips_mode true -eval '
+            {ok, _} = application:ensure_all_started(crypto),
+            enabled = crypto:info_fips(),
+            I = crypto:info(),
+            true = maps:get(fips_provider_available, I),
+            "3.1.2" = maps:get(fips_provider_buildinfo, I),
+            {'"'"'EXIT'"'"', _} = (catch crypto:hash(md5, <<"x">>)),
+            <<16#ba7816bf:32, _/binary>> = crypto:hash(sha256, <<"abc">>),
+            48 = byte_size(crypto:hash(sha384, <<"abc">>)),
+            64 = byte_size(crypto:hash(sha512, <<"abc">>)),
+            io:format("FIPS enabled: provider ~s over ~s~n", ["3.1.2", maps:get(cryptolib_version_linked, I)]),
+            halt(0).'
+          if env -u OPENSSL_CONF erl -noshell -crypto fips_mode true -eval 'enabled = crypto:info_fips(), halt(0).'; then
+            echo "FAIL: fips_mode true gave a working crypto without the provider configuration"; exit 1
+          fi
+          echo "negative control: without the provider configuration, crypto does not load"
+
+      - name: deps and compile, FIPS mode off
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+          MIX_ENV=test mix compile
+
+      - name: the suite, in FIPS mode, asserted in the same VM before any test runs
+        env:
+          ELIXIR_ERL_OPTIONS: "-crypto fips_mode true"
+        run: >
+          elixir
+          -e 'Application.load(:crypto)'
+          -e 'unless apply(:crypto, :info_fips, []) == :enabled, do: raise("FIPS mode is not enabled"); IO.puts("FIPS enabled, provider " <> to_string(Map.fetch!(apply(:crypto, :info, []), :fips_provider_buildinfo)))'
+          -S mix test
