@@ -14,13 +14,14 @@ the parts a larger project would have and this one does not.
 **One maintainer.** The repository `ScriptKittyOS/beam_mcp` is owned by the ScriptKittyOS
 organization; its one administrator is the maintainer, who is also the Hex package's owner
 and the address `SECURITY.md` names. `CODEOWNERS` names that login for every path. There is
-no steering group, no second reviewer, and no vote: a decision is the maintainer's, recorded
-in the tree (a CHANGELOG entry, a page, a test) or it was not made. **For continuity**, two
+no steering group and no vote: a decision is the maintainer's, recorded in the tree (a
+CHANGELOG entry, a page, a test) or it was not made. From 2026-09-23 pull requests are
+reviewed by `znmead`, who knows the code, as well as by the maintainer. **For continuity**, two
 people hold access: `znmead` and Mike Hostetler the Maintain role here, and Mike maintainer
-ownership on hex.pm, so issues, merges and releases can go on without the maintainer; neither is a reviewer
-of record, and neither decides anything while the maintainer can. The **bus factor is one** for knowledge,
-and `docs/succession.md` says what that means, what their access covers, and what a successor
-would need.
+ownership on hex.pm, so issues, merges and releases can go on without the maintainer; neither
+decides anything while the maintainer can. The **bus factor is two**: the maintainer and
+`znmead` both know the code; `docs/succession.md` says what that means, what the access covers,
+and what a successor would need.
 
 ## How a change lands
 
@@ -78,7 +79,7 @@ promised, and moves when the Scorecard next runs.
 | Packaging | the package is published to hex.pm by the maintainer from the canonical tarball, on a signed tag; no GitHub Actions publishing workflow | the publish step holds a Hex API key, which stays on the maintainer's seat rather than in a workflow secret: a decision, recorded here; the provenance workflow attests the bytes but does not publish them | −1, "packaging workflow not detected": the check reads a publishing workflow only |
 | SAST | Dialyzer and Credo in the gate; no CodeQL | the gate's analysers are what the language has; a CodeQL workflow is a separate decision and is not taken here | 0, the check recognises neither Dialyzer nor Credo |
 | Fuzzing | eleven property-based tests in the gate; no OSS-Fuzz | property tests are the fuzzing the suite does; OSS-Fuzz integration is not taken | 10, "project is fuzzed": the check reads the property tests as fuzzing |
-| CII-Best-Practices | **silver** since 2026-09-23 ([project 14774](https://www.bestpractices.dev/projects/14774)), passing the same day; continuity of access met by the two people `docs/succession.md` names; every answer cites this tree, and one that stops being true is changed there | the badge is a self-assessment a reader can check line by line; the bus factor (a SHOULD) is answered Unmet, since access is held twice and knowledge once | 2, "badge detected: InProgress" (the run of 2026-09-23 17:26 UTC, before passing was recorded; the check gives passing 5, silver 7, gold 10) |
+| CII-Best-Practices | **silver** since 2026-09-23 ([project 14774](https://www.bestpractices.dev/projects/14774)), passing the same day; continuity of access met by the two people `docs/succession.md` names; every answer cites this tree, and one that stops being true is changed there | the badge is a self-assessment a reader can check line by line; the bus factor is answered Met, two people knowing the code | 2, "badge detected: InProgress" (the run of 2026-09-23 17:26 UTC, before passing was recorded; the check gives passing 5, silver 7, gold 10) |
 | Dangerous-Workflow | the pull-request body is read through an environment variable, never interpolated into a script | | 10 |
 | Binary-Artifacts | none in the tree | | 10 |
 | Contributors | one organization owns the repository; the NOTICE names the owner and the builder | the check counts the companies commit authors declare, and read two | 6, "2 contributing companies or organizations" |
@@ -88,5 +89,5 @@ promised, and moves when the Scorecard next runs.
 No second maintainer is invented to satisfy a check. No GitHub Release is published beside
 the Hex release to satisfy a check. No analyser is added for its name. Where a check reads
 low for a reason this page states, the reason stands until the fact changes: a second
-maintainer is `docs/succession.md`'s subject, and the off-account archive that would lower
-the bus factor's cost waits on a decision recorded there.
+maintainer is `docs/succession.md`'s subject, and the off-account archive of the private
+records waits on a decision recorded there.
