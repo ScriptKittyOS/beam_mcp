@@ -631,10 +631,11 @@ federation seam for merging graphs from several nodes; and effective connectivit
 observed graph weighted into the declared one. Multi-round-trip requests are decided
 *against* ([`docs/will-not-implement.md`](docs/will-not-implement.md), entry 12).
 
-**Scheduled.** In that order, each at the minor position while the package is `0.x`: the
-federation seam, then effective connectivity.
-`1.0.0` follows once the public API and the stated threat model have each survived a full
-minor release unchanged. Who decides, how a change lands, and what happens if the one
+**Scheduled.** `1.0.0` follows once the public API and the stated threat model have each
+survived a full minor release unchanged. After it, in that order and each an addition at the
+minor position: the federation seam, then effective connectivity, then the Tasks extension of
+the `2026-07-28` revision (not built today, and not refused either).
+[`docs/roadmap.md`](docs/roadmap.md) holds the order. Who decides, how a change lands, and what happens if the one
 maintainer stops: [`docs/governance.md`](docs/governance.md) and
 [`docs/succession.md`](docs/succession.md), stated as they are.
 
