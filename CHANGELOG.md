@@ -32,6 +32,11 @@ No public entry moves, no wire byte and no envelope byte; `lib/` changes by one 
   fingerprint and where to fetch it.
 - **`docs/governance.md`**: the CII-Best-Practices row reads the badge: silver since
   2026-09-23 (passing the same day), and the Scorecard's figure from its last run. **README**: the badge, at the top.
+- **`docs/security-review.md`**: how a security review is done (measured against `SECURITY.md`,
+  the assurance case and the threat model; a nine-item checklist, each answered with what was
+  read, tried and found) and its record, empty until the first review. **CONTRIBUTING**: a
+  code-review section (how, what must be checked, what is acceptable, who reviews). In the docs
+  extras.
 - **`docs/succession.md`** and **`docs/governance.md`**: two people with access for continuity,
   `znmead` (Maintain on this repository) and Mike Hostetler (`maintainer` on hex.pm; invited
   to Maintain), the same on `beam_mcp_signer`; what that access covers and what it does not;
