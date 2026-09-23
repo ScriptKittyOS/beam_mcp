@@ -33,6 +33,11 @@ No public entry moves, no wire byte and no envelope byte; `lib/` changes by one 
 - **`docs/governance.md`**: the CII-Best-Practices row reads the badge: passing since
   2026-09-23, silver at 98% with continuity of access the one Unmet, and the Scorecard's
   figure from its last run. **README**: the badge, at the top.
+- **`docs/succession.md`** and **`docs/governance.md`**: two people with access for continuity,
+  `znmead` (Maintain on this repository) and Mike Hostetler (`maintainer` on hex.pm; invited
+  to Maintain), the same on `beam_mcp_signer`; what that access covers and what it does not;
+  the bus factor stays one for knowledge. The succession page's "no signing key to inherit" is corrected: release tags
+  are signed with the maintainer's OpenPGP key, and a successor signs with their own.
 - **`.credo.exs`**: Credo's defaults plus `UnsafeToAtom` and `LeakyEnvironment`, which its
   defaults leave off, on `lib/` only. The one site either flags, the argument-key atoms in
   `BeamMCP.Server` (keys the host declared, held by `argument_interning_test`), carries an
