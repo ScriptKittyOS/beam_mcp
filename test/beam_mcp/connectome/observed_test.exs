@@ -162,6 +162,10 @@ defmodule BeamMCP.Connectome.ObservedTest do
 
       assert Process.alive?(sup)
       assert is_pid(new)
+      # The name is registered before init/1 runs, and init/1 creates the table snapshot/1
+      # reads: the gap lasts until init returns. A call to the process is answered only after
+      # it has (the floor leg read between the two once, G-090's record).
+      _ = :sys.get_state(new)
       assert {:ok, %Graph{nodes: [], edges: []}} = Observed.snapshot(name)
 
       ids = Enum.map(:telemetry.list_handlers([:beam_mcp, :dispatch, :stop]), & &1.id)
@@ -215,6 +219,10 @@ defmodule BeamMCP.Connectome.ObservedTest do
         end)
 
       assert is_pid(new)
+      # The name is registered before init/1 runs, and init/1 creates the table snapshot/1
+      # reads: the gap lasts until init returns. A call to the process is answered only after
+      # it has (the floor leg read between the two once, G-090's record).
+      _ = :sys.get_state(new)
       assert {:ok, %Graph{edges: []}} = Observed.snapshot(name)
       call(state, :echo)
       assert {:ok, %Graph{edges: [%Edge{weight: 1}]}} = Observed.snapshot(name)
