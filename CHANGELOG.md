@@ -11,6 +11,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Follow-ups from the first human review of 0.10.1 (Sean MacGuire). No public entry moves.
+
+### Changed: a schema that becomes unenforceable after startup is a server fault
+
+- `tools/call` against a tool whose schema the catalog changed, after startup, to one this
+  package cannot enforce (`oneOf` and the rest; startup refuses it) is answered `-32603`
+  naming the tool and the keyword. 0.10.1 answered it as a tool result saying "invalid
+  arguments", which blamed the client for the server's defect. **How to tell whether you are
+  affected:** only a catalog whose `capabilities/0` answer changes after
+  `BeamMCP.Server.new/1`.
+
+### Added: tests the review found missing
+
+- `additionalProperties` given as a schema (each undeclared property held to it, the path
+  named), a list-form `type` refusing a value of none of its types, and each keyword the
+  README lists accepted with a well-formed value. The clause that accepted "any other
+  enforced keyword" is removed: every keyword has its own clause, so it could never run.
+
+### Changed: pages
+
+- The threat model's arguments row says what `pattern` costs: the host's pattern against the
+  client's string, bounded by PCRE's match limit and refused past it. Not a new threat or
+  status: the row's claim is unchanged.
+- Recorded late for 0.10.1: a tool error whose reason is `nil` now reads `null` in the result
+  text (it read `nil`), as JSON writes it.
+
 ## [0.10.1] - 2026-09-26
 
 A security release. Found by the project's own security review (three independent review

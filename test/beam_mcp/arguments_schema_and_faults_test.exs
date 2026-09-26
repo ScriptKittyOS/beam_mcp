@@ -77,6 +77,29 @@ defmodule BeamMCP.ArgumentsSchemaAndFaultsTest do
     def read_resource("r://baditem"), do: {:ok, [%{token: "ITEMSECRET"}]}
   end
 
+  # A catalog whose answer can change after startup: capabilities/0 runs in the calling
+  # process, so the schema is read from its dictionary on every call.
+  defmodule ChangingCatalog do
+    @behaviour BeamMCP.Catalog
+
+    @impl true
+    def capabilities do
+      %{
+        tools: [
+          %BeamMCP.ToolSpec{
+            name: :later,
+            command_class: :observe,
+            mode: :read_only,
+            description: "l",
+            input_schema: Process.get(:later_schema, %{"type" => "object"})
+          }
+        ],
+        resources: [],
+        prompts: []
+      }
+    end
+  end
+
   defmodule OneOfCatalog do
     @behaviour BeamMCP.Catalog
 
@@ -175,6 +198,71 @@ defmodule BeamMCP.ArgumentsSchemaAndFaultsTest do
     test "a call that meets the whole schema is dispatched" do
       call(%{"opts" => %{"mode" => "safe"}, "q" => "abc", "tags" => ["x"]})
       assert {:dispatched, %{opts: %{"mode" => "safe"}, q: "abc", tags: ["x"]}} = dispatched()
+    end
+
+    test "additionalProperties as a schema checks every undeclared property, naming its path" do
+      schema = %{
+        "type" => "object",
+        "properties" => %{"a" => %{"type" => "string"}},
+        "additionalProperties" => %{"type" => "integer"}
+      }
+
+      assert {:error, reason} = BeamMCP.Schema.validate(%{"a" => "x", "extra" => "no"}, schema)
+      assert reason =~ "extra must be of type integer"
+      assert :ok = BeamMCP.Schema.validate(%{"a" => "x", "extra" => 1}, schema)
+    end
+
+    test "a list-form type refuses a value of none of its types" do
+      call(%{"note" => 1})
+      assert :not_dispatched = dispatched()
+      call(%{"note" => "fine"})
+      assert {:dispatched, %{note: "fine"}} = dispatched()
+    end
+
+    test "every keyword the README lists is accepted with a well-formed value" do
+      for {key, value} <- [
+            {"type", "object"},
+            {"enum", [1]},
+            {"const", 1},
+            {"properties", %{}},
+            {"required", []},
+            {"additionalProperties", false},
+            {"minProperties", 0},
+            {"maxProperties", 1},
+            {"items", %{}},
+            {"minItems", 0},
+            {"maxItems", 1},
+            {"uniqueItems", true},
+            {"minLength", 0},
+            {"maxLength", 1},
+            {"pattern", "^a$"},
+            {"minimum", 0},
+            {"maximum", 1},
+            {"exclusiveMinimum", 0},
+            {"exclusiveMaximum", 1}
+          ] do
+        assert :ok = BeamMCP.Schema.check_schema(%{key => value}), key
+      end
+    end
+
+    test "a schema that becomes unenforceable after startup is a server fault (-32603), never blamed on the client" do
+      st = Server.new(catalog: ChangingCatalog, dispatch: fn _, a, _ -> {:ok, a} end)
+      Process.put(:later_schema, %{"type" => "object", "oneOf" => []})
+
+      {_state, response} =
+        Server.handle_message(st, %{
+          "jsonrpc" => "2.0",
+          "id" => 5,
+          "method" => "tools/call",
+          "params" => %{"name" => "later", "arguments" => %{}, "_meta" => @meta}
+        })
+
+      assert %{"id" => 5, "error" => %{"code" => -32_603, "message" => message}} = response
+      assert message =~ "tool later"
+      assert message =~ "oneOf"
+      refute Map.has_key?(response, "result")
+    after
+      Process.delete(:later_schema)
     end
 
     test "a schema using a keyword the server does not enforce is refused at startup, by name" do
@@ -289,6 +377,9 @@ defmodule BeamMCP.ArgumentsSchemaAndFaultsTest do
   end
 
   describe "stdio: standard output carries protocol messages only" do
+    # The device is opened as latin1 so the transport reads the input's raw bytes, byte for
+    # byte, as it reads a real pipe (the file is UTF-8 throughout; this is the device's mode,
+    # not the text's).
     defp drive(input, opts) do
       {:ok, device} = StringIO.open(input, encoding: :latin1)
       original = Process.group_leader()

@@ -530,6 +530,9 @@ defmodule BeamMCP.Server do
 
             {:error, reason} ->
               result(id, tool_failure(reason))
+
+            {:schema_defect, reason} ->
+              error(id, -32_603, "Internal error: tool #{name}: #{reason}")
           end
 
         {state, response}
@@ -908,7 +911,25 @@ defmodule BeamMCP.Server do
   # The advertised schema is the contract. Validate the wire form -- string keys, as the
   # client sent them -- before normalising, so `required` and `additionalProperties`
   # mean what tools/list says they mean.
+  #
+  # A schema this package cannot enforce is refused at startup, so reaching one here means the
+  # catalog's answer changed after it: a server defect, answered -32603 naming the tool and
+  # the keyword (both already advertised in tools/list), never an invalid-arguments result
+  # that would blame the client.
   defp validate_and_dispatch(state, %ToolSpec{} = spec, arguments) do
+    with :ok <- schema_enforceable(spec.input_schema) do
+      check_and_dispatch(state, spec, arguments)
+    end
+  end
+
+  defp schema_enforceable(schema) do
+    case Schema.check_schema(schema) do
+      :ok -> :ok
+      {:error, reason} -> {:schema_defect, reason}
+    end
+  end
+
+  defp check_and_dispatch(state, spec, arguments) do
     case Schema.validate(arguments, spec.input_schema) do
       :ok ->
         args = normalize_arguments(arguments, spec.input_schema)
