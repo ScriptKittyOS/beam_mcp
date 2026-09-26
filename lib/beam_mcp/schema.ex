@@ -57,27 +57,6 @@ defmodule BeamMCP.Schema do
   # `:dollar_endonly` keeps `$` from matching before a trailing newline.
   @pattern_options [:unicode, :dollar_endonly]
 
-  @enforced [
-    "type",
-    "enum",
-    "const",
-    "properties",
-    "required",
-    "additionalProperties",
-    "minProperties",
-    "maxProperties",
-    "items",
-    "minItems",
-    "maxItems",
-    "uniqueItems",
-    "minLength",
-    "maxLength",
-    "pattern",
-    "minimum",
-    "maximum",
-    "exclusiveMinimum",
-    "exclusiveMaximum"
-  ]
   @annotations [
     "title",
     "description",
@@ -208,8 +187,6 @@ defmodule BeamMCP.Schema do
        when key in ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"] do
     if is_number(value), do: :ok, else: {:error, "#{where}: #{key} must be a number"}
   end
-
-  defp check_keyword(key, _value, _where) when key in @enforced, do: :ok
 
   defp check_keyword(key, _value, where) when is_binary(key),
     do: {:error, "#{where} uses #{key}, which this server does not enforce"}
