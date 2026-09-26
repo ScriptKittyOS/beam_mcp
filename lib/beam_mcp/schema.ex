@@ -37,6 +37,11 @@ defmodule BeamMCP.Schema do
   classes and anchors (`\\d`, `\\w` and `\\s` are ASCII, `$` matches only at the end, never
   before a trailing newline), so an allowlist pattern admits what a client's own validator
   would; constructs PCRE and ECMA-262 read differently beyond those are the host's to avoid.
+  One exception, by OTP release: on OTP 27, whose `:re` is PCRE with Latin-1 character
+  tables and offers no ASCII tables, `\\w`, `\\b` and the POSIX letter classes
+  (`[[:alpha:]]` and the like) also match the Latin-1 letters U+00AA to U+00FF (`é`, `ß`);
+  `\\d`, `\\s` and `$` read as above there too (measured). From OTP 28 (PCRE2) all of them
+  are ASCII. A host on OTP 27 that means ASCII letters writes `[A-Za-z0-9_]`.
   `enum`, `const` and `uniqueItems` compare as JSON does: `1` and `1.0` are the same value.
 
   **Any other keyword is refused, not ignored**: a schema using `oneOf`, `$ref`, `if`, or
@@ -48,7 +53,8 @@ defmodule BeamMCP.Schema do
   @type result :: :ok | {:error, String.t()}
 
   # PCRE with ECMA-262's classes and anchors: `:unicode` without `:ucp` keeps `\d`, `\w` and
-  # `\s` ASCII, and `:dollar_endonly` keeps `$` from matching before a trailing newline.
+  # `\s` ASCII (on OTP 27, `\w` also takes the Latin-1 letters; the moduledoc says so), and
+  # `:dollar_endonly` keeps `$` from matching before a trailing newline.
   @pattern_options [:unicode, :dollar_endonly]
 
   @enforced [
