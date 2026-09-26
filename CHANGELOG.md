@@ -11,7 +11,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.10.1] - 2026-09-23
+## [0.10.1] - 2026-09-26
 
 A security release. Found by the project's own security review (three independent review
 lanes, their findings reproduced before any fix). No public entry added, removed, renamed,
@@ -45,7 +45,9 @@ patch: `~> 0.10.0` already admits it. `beam_mcp_signer` `0.2.1` is released besi
   in the host's dispatch.
 - How the subset reads, stated in `BeamMCP.Schema`'s moduledoc: `pattern` uses ECMA-262's
   character classes and anchors (`\d`, `\w`, `\s` ASCII; `$` never before a trailing
-  newline), so `^[a-z]+$` refuses `"abc\n"`; `enum`, `const` and `uniqueItems` compare as JSON
+  newline), so `^[a-z]+$` refuses `"abc\n"`; on OTP 27 only, `\w`, `\b` and the POSIX letter
+  classes also match the Latin-1 letters U+00AA to U+00FF, since that release's `:re` has
+  Latin-1 tables and no ASCII ones; `enum`, `const` and `uniqueItems` compare as JSON
   (`1` equals `1.0`); `integer` refuses `1.0`, stricter than JSON Schema, so a host typed for
   integers never receives a float. A property name that is not a string, and an `enum` or
   `const` value that is not JSON, are refused when the catalog is loaded.

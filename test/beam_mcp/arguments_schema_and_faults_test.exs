@@ -204,7 +204,17 @@ defmodule BeamMCP.ArgumentsSchemaAndFaultsTest do
 
       assert {:error, _} = BeamMCP.Schema.validate(%{"a" => "abc\n"}, only.("^[a-z]+$"))
       assert {:error, _} = BeamMCP.Schema.validate(%{"a" => "٣"}, only.("^\\d$"))
-      assert {:error, _} = BeamMCP.Schema.validate(%{"a" => "é"}, only.("^\\w$"))
+      assert {:error, _} = BeamMCP.Schema.validate(%{"a" => "\u00a0"}, only.("^\\s$"))
+
+      # \w is ASCII from OTP 28 (PCRE2). OTP 27's :re is PCRE with Latin-1 tables and offers no
+      # ASCII ones, so there \w also takes U+00AA to U+00FF, as the moduledoc states; nothing
+      # outside Latin-1 on either (measured on 27, 28 and 29).
+      assert {:error, _} = BeamMCP.Schema.validate(%{"a" => "Ā"}, only.("^\\w$"))
+
+      if String.to_integer(System.otp_release()) >= 28,
+        do: assert({:error, _} = BeamMCP.Schema.validate(%{"a" => "é"}, only.("^\\w$"))),
+        else: assert(:ok = BeamMCP.Schema.validate(%{"a" => "é"}, only.("^\\w$")))
+
       assert :ok = BeamMCP.Schema.validate(%{"a" => "abc"}, only.("^[a-z]+$"))
       assert :ok = BeamMCP.Schema.validate(%{"a" => "é"}, only.("^.$"))
     end
