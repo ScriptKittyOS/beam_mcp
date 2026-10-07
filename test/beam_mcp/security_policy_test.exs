@@ -100,13 +100,16 @@ defmodule BeamMCP.SecurityPolicyTest do
     assert critical_window =~ "patch release of the supported minor carrying only the fix"
   end
 
-  test "the CVE path names GitHub as the CNA and the advisory as where it starts" do
-    # The sentence, not the abbreviation: a regex on "GitHub ... CNA" passed a negation and
-    # failed a true sentence without the parenthetical (a lane's two plants).
-    # Through the consequence, so a negation appended after the clause fails too; \s+ between
-    # words, so a reflow of the paragraph does not (G-074).
+  test "the CVE path names the EEF CNA, which covers hex.pm, and the advisory as where it starts" do
+    # The sentence, not the abbreviation, through its consequence, with \s+ between words so a
+    # reflow does not break it (G-074). Until 2026-10-07 this pinned "GitHub is a CNA ... so a
+    # CVE is requested from the advisory draft": true of GitHub, wrong for a hex.pm package,
+    # which the Erlang Ecosystem Foundation's CNA covers, so GitHub never assigned 0.10.1's.
     assert @policy =~
-             ~r/GitHub\s+is\s+a\s+CVE\s+Numbering\s+Authority(\s+\(CNA\))?\s+for\s+repositories\s+it\s+hosts,\s+so\s+a\s+CVE\s+is\s+requested\s+from\s+the\s+advisory\s+draft/
+             ~r/CVE\s+IDs\s+come\s+from\s+the\s+\[Erlang\s+Ecosystem\s+Foundation's\s+CNA\]\(https:\/\/cna\.erlef\.org\/\),\s+the\s+CVE\s+Numbering\s+Authority\s+for\s+every\s+active\s+package\s+on\s+hex\.pm/
+
+    assert @policy =~ ~r/added\s+to\s+the\s+draft\s+advisory\s+as\s+collaborators/
+    assert @policy =~ "https://cna.erlef.org/maintainer-process"
 
     assert @policy =~ ~r/published\s+from\s+this\s+repository's\s+GitHub\s+Security\s+Advisories/
     assert @policy =~ ~r/reaches\s+the\s+GitHub\s+Advisory\s+Database\s+and\s+OSV/
