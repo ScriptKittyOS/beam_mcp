@@ -11,6 +11,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed: CVE IDs come from the EEF CNA (SECURITY.md)
+
+- `SECURITY.md` said GitHub assigns this package's CVEs. GitHub is a CNA but does not assign
+  for a package another CNA covers, and the Erlang Ecosystem Foundation's CNA covers every
+  active package on hex.pm, so the CVE requests made to GitHub for 0.10.1's advisories were
+  never answered. The section now follows the EEF CNA's maintainer process, and its pin
+  (`security_policy_test.exs`) holds the corrected sentence.
+
 Follow-ups from the first human review of 0.10.1 (Sean MacGuire). No public entry moves.
 
 ### Changed: a schema that becomes unenforceable after startup is a server fault

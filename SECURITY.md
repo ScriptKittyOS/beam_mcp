@@ -54,10 +54,16 @@ an injected function is out of scope at any level.
 
 ## CVEs
 
-Advisories are published from this repository's GitHub Security Advisories. GitHub is a CVE
-Numbering Authority (CNA) for repositories it hosts, so a CVE is requested from the advisory
-draft and assigned before publication when the defect warrants one: Critical and High always
-do; Medium when a consumer needs an identifier to act on; Low rarely. A published advisory
+Advisories are published from this repository's GitHub Security Advisories. CVE IDs come from
+the [Erlang Ecosystem Foundation's CNA](https://cna.erlef.org/), the CVE Numbering Authority for
+every active package on hex.pm (GitHub is a CNA too, and does not assign for a package another CNA
+covers). An advisory that warrants one gets one before publication: Critical and High always do;
+Medium when a consumer needs an identifier to act on; Low rarely. The EEF CNA's points of contact
+(@IngelaAndin, @maennchen, @voltone) are added to the draft advisory as collaborators, the CVE is
+left as "request later", and the ID they assign is entered as an existing CVE
+([their maintainer process](https://cna.erlef.org/maintainer-process)). The four advisories of
+`0.10.1` were first requested from GitHub, which cannot assign them, and were then requested from
+the EEF CNA. A published advisory
 reaches the GitHub Advisory Database and OSV, the source hex.pm's registry advisories are fed
 from and `mix hex.audit` reads, so a consumer running the audit sees it against their lock
 file without this project telling them.
