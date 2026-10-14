@@ -41,7 +41,7 @@ Process.register(self(), :collector)
 Process.sleep(300)
 
 declared = 32 * 1024 * 1024
-chunk = :binary.copy("x", 65536)
+chunk = :binary.copy("x", 65_536)
 
 measure = fn sndbuf ->
   opts = [:binary, active: false, packet: :raw] ++ if sndbuf, do: [sndbuf: sndbuf], else: []
@@ -87,7 +87,7 @@ IO.puts(
     String.pad_trailing("B: client wrote", 20) <> "A: server read before refusing"
 )
 
-for sndbuf <- [nil, 4096, 16384, 65536, 262_144, 1_048_576] do
+for sndbuf <- [nil, 4096, 16_384, 65_536, 262_144, 1_048_576] do
   {s, written, server_read} = measure.(sndbuf)
   label = if s, do: Integer.to_string(s), else: "default"
 
