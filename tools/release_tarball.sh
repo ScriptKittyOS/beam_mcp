@@ -20,25 +20,41 @@
 # runs this on the release tag and attests the result; the publisher runs it with --publish;
 # a stranger runs it to reproduce the checksum hex.pm shows. One instrument, three seats.
 #
-# What it does not do: pin Hex. The runner's Hex is what erlef/setup-beam installs; the
-# publisher's is theirs. Hex 2.4.0 and 2.5.1 packaged byte-identical tarballs of one commit
-# (a review lane measured both); a packaging change in Hex is caught by the workflow's
-# checksum comparison, not hidden by this script. Needs bash, git, and sha256sum or shasum.
+# ONE HEX FOR EVERY SEAT, READ FROM tools/hex-version. This script once did not pin Hex, on
+# the measurement that Hex 2.4.0 and 2.5.1 packaged byte-identical tarballs of one commit, and
+# said a packaging change would be caught rather than hidden. One was (2026-10-19): Hex 2.5.2
+# vendors hex_core 0.20, which sorts the tarball's entries and its metadata `files` list, so
+# the same commit gives a different checksum under 2.5.1 and under 2.5.2 or later. The
+# publisher and CI must therefore build with the same Hex, and the script refuses any other
+# with the command that installs the pinned one. RELEASE_HEX=<version> overrides the pin to
+# reproduce a release built before it: 0.10.1 and earlier were built with Hex 2.5.1.
+# Needs bash, git, and sha256sum or shasum.
 set -euo pipefail
 ref=${1:?ref (a tag or commit)}; out=${2:?output tarball path}; publish=${3:-}
 [ -z "$publish" ] || [ "$publish" = "--publish" ] || { echo "third argument is --publish or nothing" >&2; exit 2; }
 case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 root=$(git rev-parse --show-toplevel)
+want_hex=${RELEASE_HEX:-$(tr -d '[:space:]' < "$root/tools/hex-version")}
 work=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-release.XXXXXX"); trap 'rm -rf "$work"' EXIT
 git -C "$root" -c tar.umask=022 archive --format=tar "$ref" | tar -xp -C "$work"
 cd "$work"
+# Checked HERE, in the tree that builds: a version manager (asdf, mise) keeps one Hex per Elixir
+# install and picks the Elixir from this tree's .tool-versions, which is the ref's, so the Hex
+# that builds is this directory's, not the caller's. `|| true`: with no Hex at all, hex.info
+# fails, and the refusal below must still print.
+have_hex=$(mix hex.info 2>/dev/null | sed -nE 's/^Hex: +([0-9][0-9.]*).*/\1/p' || true)
+[ "$have_hex" = "$want_hex" ] || {
+  echo "this build needs Hex ${want_hex}; the Hex in the tree's Elixir is ${have_hex:-none}." >&2
+  echo "  mix local.hex ${want_hex} --force    # run it from inside the clone" >&2
+  exit 3
+}
 mix deps.get >/dev/null
 mix hex.build -o "$out" | tee "$work/build.out"
 sha=$(sha256 "$out")
 grep -q "Package checksum: ${sha}" "$work/build.out" \
   || { echo "the tarball's sha256 ${sha} is not the checksum hex printed" >&2; exit 1; }
-echo "release tarball ${out}: sha256 ${sha} (= hex's package checksum) from ${ref} = $(git -C "$root" rev-parse "${ref}^{commit}")"
+echo "release tarball ${out}: sha256 ${sha} (= hex's package checksum) from ${ref} = $(git -C "$root" rev-parse "${ref}^{commit}"), built with Hex ${have_hex}"
 if [ "$publish" = "--publish" ]; then
   mix hex.publish
 fi

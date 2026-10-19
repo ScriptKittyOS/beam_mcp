@@ -13,8 +13,9 @@
 # order both change the bytes -- one commit gave a review lane three checksums on one day. So
 # the tarball is built by tools/release_tarball.sh, which makes the bytes canonical by
 # construction (`git archive` at the ref with tar.umask=022: every file 644, only tracked
-# files; globs in mix.exs's `files:` for one entry order), and the publisher builds AND
-# publishes with the same script (`--publish`). A release published any other way will not
+# files; one Hex version, tools/hex-version, installed below and refused otherwise by the
+# script, because Hex 2.5.2 and later sort the tarball's entries where 2.5.1 kept the globs'
+# order), and the publisher builds AND publishes with the same script (`--publish`). A release published any other way will not
 # match this attestation, and the last step below says so, loudly, on the tag's run.
 #
 # THE OWNER TAGS AND PUBLISHES; THIS WORKFLOW ATTESTS. It never runs `mix hex.publish`. The
@@ -27,7 +28,7 @@
 #
 # THE SBOM (from 0.10.0). tools/sbom.sh generates a CycloneDX 1.6 SBOM of the runtime
 # dependency set from the same tree, outside mix.exs (the EEF's mix_sbom binary, pinned by
-# version and digest; one named workaround, G-087), and actions/attest binds it to the
+# version and digest; no workaround since mix_sbom 0.12.0), and actions/attest binds it to the
 # tarball's digest as a second attestation (predicate https://cyclonedx.org/bom). A consumer
 # verifies it with `gh attestation verify <tarball> --predicate-type https://cyclonedx.org/bom`
 # and fetches it with `gh attestation download` (docs/provenance.md).
@@ -70,6 +71,11 @@ jobs:
         with:
           otp-version: "28"
           elixir-version: "1.18"
+      # The Hex the publisher builds with, from the one file both read (tools/release_tarball.sh
+      # refuses any other): setup-beam installs the newest Hex, and Hex 2.5.2 changed the
+      # tarball's bytes for the same commit.
+      - name: the pinned Hex (tools/hex-version)
+        run: mix local.hex "$(tr -d '[:space:]' < tools/hex-version)" --force
       - name: the tarball, built the canonical way, its version and its sha256 (hex.pm's package checksum)
         id: build
         run: |
