@@ -32,7 +32,7 @@ So the release tarball is built by one script on every seat: CI, the publisher, 
 reproducing it:
 
 ```sh
-tools/release_tarball.sh v0.10.1 beam_mcp-0.10.1.tar
+RELEASE_HEX=2.5.1 tools/release_tarball.sh v0.10.1 beam_mcp-0.10.1.tar   # 0.10.1 was built with Hex 2.5.1
 ```
 
 It `git archive`s the ref with `tar.umask=022` (every file `644` whatever the machine's umask,
@@ -102,9 +102,10 @@ applications), generated from the tag's tree by `tools/sbom.sh` with the EEF's `
 (pinned by version and by the release asset's SHA-256; nothing is added to `mix.exs` or
 `mix.lock`) and attested to the same tarball digest as the provenance. `plug` and `bandit`
 appear although they are optional dependencies of this package: the tool has no notion of an
-optional dependency. One workaround is named in the script (G-087 in this project's records:
-the tool's 0.11.0 cannot read the `tools: :optional` entry in `mix.exs`, so its scratch copy
-reads `:tools`; the component list is the same).
+optional dependency. Releases up to 0.10.1 were generated with `mix_sbom` 0.11.0, which could
+not read the `tools: :optional` entry in `mix.exs`, so the script rewrote that one line to
+`:tools` in its scratch copy (the component list is the same). From 0.12.0 the tool reads the
+form and the script reads the tree exactly as tagged.
 
 ```sh
 gh attestation verify "beam_mcp-${v}.tar" --repo ScriptKittyOS/beam_mcp \
@@ -128,12 +129,22 @@ git clone https://github.com/ScriptKittyOS/beam_mcp && cd beam_mcp
 tools/release_tarball.sh "v${v}" "rebuilt-${v}.tar"     # prints the sha256 = the package checksum on hex.pm
 ```
 
-The script needs Elixir, Erlang, Hex 2.x, bash, git and `sha256sum` or `shasum`. CI builds
-with the pair `.tool-versions` names, copied into the workflow (Elixir 1.18 on OTP 28); the
-tarball carries no compiled code, and Hex is what packages it: 2.4.0 and 2.5.1 gave
-byte-identical tarballs of one commit (measured), and a packaging change in a later Hex would
-show as a checksum the tag's run fails to match, not as a silent difference. The canonical
-bytes assume ASCII file names: a non-ASCII name is encoded by the machine's locale, and a test
+The script needs Elixir, Erlang, the Hex that `tools/hex-version` names, bash, git and
+`sha256sum` or `shasum`, and it refuses any other Hex with the command that installs the right
+one. CI builds with the pair `.tool-versions` names, copied into the workflow (Elixir 1.18 on
+OTP 28), and installs the same Hex from the same file. The tarball carries no compiled code, and
+Hex is what packages it, which is why Hex is pinned: 2.4.0 and 2.5.1 gave byte-identical
+tarballs of one commit (measured), but 2.5.2 (hex_core 0.20) sorts the tarball's entries and its
+metadata `files` list, so the same commit has a different checksum under 2.5.1 and under 2.5.2
+or later (measured 2026-10-19). **Releases up to and including 0.10.1 were built with Hex 2.5.1**
+and reproduce byte for byte only under it:
+
+```sh
+mix local.hex 2.5.1 --force    # from inside the clone: a version manager keeps one Hex per Elixir
+RELEASE_HEX=2.5.1 tools/release_tarball.sh v0.10.1 rebuilt-0.10.1.tar
+```
+
+The canonical bytes assume ASCII file names: a non-ASCII name is encoded by the machine's locale, and a test
 holds every packaged name to ASCII.
 
 ## Releases before this page

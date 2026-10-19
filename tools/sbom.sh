@@ -15,12 +15,10 @@
 # the runtime dependency set a host inherits (plug and bandit included, though optional in
 # mix.exs -- the tool has no notion of an optional dependency and marks them required).
 #
-# ONE WORKAROUND, NAMED (G-087). mix_sbom 0.11.0 crashes on the `tools: :optional` entry in
-# mix.exs's `extra_applications` (FunctionClauseError in its normalize_dep/1; Mix documents
-# the `{app, :optional}` form). In the scratch copy only, that one entry is rewritten to
-# `:tools` before the tool reads it; the shipped mix.exs is untouched and the component list is
-# the same. The step refuses to run if the line is not the one it expects, so a changed mix.exs
-# is noticed rather than silently mis-read. Remove it when a mix_sbom release reads the form.
+# No workaround. mix_sbom 0.11.0 crashed on the `tools: :optional` entry in mix.exs's
+# `extra_applications` (FunctionClauseError in its normalize_dep/1), and this script rewrote that
+# one line in a scratch copy. 0.12.0 reads the form (erlef/mix_sbom#157, fixed by #169),
+# so the tool now reads the tree exactly as it is tagged.
 #
 # Not byte-reproducible by design: CycloneDX gives every document a fresh serialNumber and a
 # timestamp. What binds it is the attestation over the tarball's digest (provenance.yml).
@@ -29,8 +27,8 @@ set -euo pipefail
 ref=${1:?ref (a tag or commit)}; out=${2:?output path}
 case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
 
-version=0.11.0
-digest=db1982c8599f9383c48e6bb61cd4dc7305d2afdf48273568839b7f1dc0d572de
+version=0.12.0
+digest=5da833839dd80350e15ca5c2b02f233e0917dc4333efa520994acf0ed9cab19b
 
 root=$(git rev-parse --show-toplevel)
 work=$(mktemp -d "${TMPDIR:-/tmp}/beam_mcp-sbom.XXXXXX"); trap 'rm -rf "$work"' EXIT
@@ -43,11 +41,6 @@ chmod +x "$bin"
 
 mkdir "$work/src"
 git -C "$root" -c tar.umask=022 archive --format=tar "$ref" | tar -x -C "$work/src"
-
-expected='    [extra_applications: [:logger, :crypto, tools: :optional]]'
-grep -qxF -- "$expected" "$work/src/mix.exs" \
-  || { echo "mix.exs no longer has the extra_applications line the G-087 workaround rewrites" >&2; exit 1; }
-sed -i 's/^    \[extra_applications: \[:logger, :crypto, tools: :optional\]\]$/    [extra_applications: [:logger, :crypto, :tools]]/' "$work/src/mix.exs"
 
 (cd "$work/src" && mix deps.get >/dev/null)
 "$bin" cyclonedx --only prod --format json --schema 1.6 --force --output "$out" "$work/src" >/dev/null

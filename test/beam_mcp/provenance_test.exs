@@ -142,8 +142,13 @@ defmodule BeamMCP.ProvenanceTest do
     try do
       # HEAD's tree, the way CI and the publisher build it. The lock's dependencies are the
       # tree's own (the script resolves them; here they are already fetched).
+      # Under whatever Hex this machine has: the structure is the claim here, and the pin is
+      # the next test's. RELEASE_HEX is the script's own override, set to the installed version.
       {log, 0} =
-        System.cmd("bash", ["tools/release_tarball.sh", "HEAD", out], stderr_to_stdout: true)
+        System.cmd("bash", ["tools/release_tarball.sh", "HEAD", out],
+          stderr_to_stdout: true,
+          env: [{"RELEASE_HEX", installed_hex()}]
+        )
 
       [_, printed] = Regex.run(~r/Package checksum: ([0-9a-f]{64})/, log)
       sha = :crypto.hash(:sha256, File.read!(out)) |> Base.encode16(case: :lower)
@@ -160,11 +165,18 @@ defmodule BeamMCP.ProvenanceTest do
       modes = entries |> Enum.map(fn {_, m} -> Bitwise.band(m, 0o777) end) |> Enum.uniq()
       assert modes == [0o644], "entry modes are #{inspect(modes, base: :octal)}, not 644 alone"
 
-      # The order Hex gives a glob is Path.wildcard's, sorted; the tarball's is the globs' in
-      # files: order. A directory in files: would be readdir order and fail here on some machine.
+      # The order is the Hex that built it, read from the build's own line. Up to Hex 2.5.1 a
+      # glob's files came in Path.wildcard's order, sorted, and the globs in files: order (a
+      # directory in files: would be readdir order and fail here on some machine). From Hex
+      # 2.5.2 (hex_core 0.20) the tarball's entries are sorted by name whatever files: says --
+      # measured 2026-10-19, the change that put this test red on every pull request.
+      [_, hex] = Regex.run(~r/built with Hex ([0-9][0-9.]*)/, log)
+      globbed = Enum.map(Mix.Project.config()[:package][:files], &Enum.sort(Path.wildcard(&1)))
+
       expected =
-        Mix.Project.config()[:package][:files]
-        |> Enum.flat_map(fn glob -> glob |> Path.wildcard() |> Enum.sort() end)
+        if Version.compare(hex, "2.5.2") == :lt,
+          do: Enum.concat(globbed),
+          else: globbed |> Enum.concat() |> Enum.sort()
 
       assert Enum.map(entries, &elem(&1, 0)) == expected
       assert length(expected) >= 39
@@ -181,5 +193,56 @@ defmodule BeamMCP.ProvenanceTest do
     after
       File.rm_rf!(dir)
     end
+  end
+
+  test "the release script builds only with the Hex tools/hex-version names, and says how to get it" do
+    # The pin is what makes the publisher's checksum and CI's attested one the same bytes. A
+    # version no machine has stands in for "not the pinned one", so this holds on any machine.
+    pinned = "tools/hex-version" |> File.read!() |> String.trim()
+    assert Version.parse!(pinned)
+
+    out =
+      Path.join(System.tmp_dir!(), "beam_mcp-hexpin-#{System.unique_integer([:positive])}.tar")
+
+    {log, status} =
+      System.cmd("bash", ["tools/release_tarball.sh", "HEAD", out],
+        stderr_to_stdout: true,
+        env: [{"RELEASE_HEX", "0.0.1"}]
+      )
+
+    assert status == 3
+    assert log =~ "this build needs Hex 0.0.1"
+    assert log =~ "mix local.hex 0.0.1 --force"
+    refute File.exists?(out)
+
+    # Without the override the script reads tools/hex-version itself: on a machine whose Hex is
+    # the pinned one it builds and says so; on any other it refuses naming the pinned version.
+    # Either way the version in the outcome is the file's, which a substring match on the
+    # script's text could not show.
+    {log, status} =
+      System.cmd("bash", ["tools/release_tarball.sh", "HEAD", out],
+        stderr_to_stdout: true,
+        env: [{"RELEASE_HEX", nil}]
+      )
+
+    if installed_hex() == pinned do
+      assert status == 0
+      assert log =~ "built with Hex #{pinned}"
+    else
+      assert status == 3
+      assert log =~ "this build needs Hex #{pinned}"
+    end
+
+    File.rm(out)
+
+    script = File.read!("tools/release_tarball.sh")
+    assert script =~ "tools/hex-version"
+    assert File.read!(".github/workflows/provenance.yml") =~ "< tools/hex-version"
+  end
+
+  defp installed_hex do
+    {info, 0} = System.cmd("mix", ["hex.info"], stderr_to_stdout: true)
+    [_, version] = Regex.run(~r/^Hex: +([0-9][0-9.]*)/m, info)
+    version
   end
 end
