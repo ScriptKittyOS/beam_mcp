@@ -75,14 +75,15 @@ if Code.ensure_loaded?(Plug) do
         given what remains, so a client that has sent its headers and then drips the body is
         answered `408` when it lapses, however many bytes arrived and however the adapter splits
         the reads (over HTTP/2 the adapter's reader is asked for less than one frame, so every
-        DATA frame, an empty one included, returns to this clock; a stream kept open by control
-        frames alone, a WINDOW_UPDATE or a HEADERS without END_STREAM, is held past the
-        deadline by the adapter's own wait, which nothing outside it can end through an
-        interface the adapter offers: one frame per deadline holds a stream process
-        indefinitely, and whatever body then comes is refused; a WINDOW_UPDATE costs the client
-        thirteen bytes and the host nothing accumulated, a HEADERS without END_STREAM writes a
-        warning line per frame to the host's log carrying the client's header bytes; the
-        threat model states both, and the two `Bandit` listener options that bound the
+        DATA frame, an empty one included, returns to this clock; a stream kept open by
+        WINDOW_UPDATE frames alone is held past the deadline by the adapter's own wait, which
+        nothing outside it can end through an interface the adapter offers: one frame per
+        deadline holds a stream process indefinitely, and whatever body then comes is refused;
+        each frame costs the client thirteen bytes and the host nothing accumulated. An
+        exception the adapter raises (on `Bandit` 1.13, a HEADERS without END_STREAM in the
+        middle of a body, a malformed request) is handed back to the adapter, which resets the
+        stream; it is not answered as `-32603`. The threat model states the residue, and the
+        two `Bandit` listener options that bound the
         exposure: `http_2_options: [default_local_settings: [max_concurrent_streams: n]]`
         caps the held streams per connection, `http_2_options: [enabled: false]` removes
         HTTP/2 from the listener). That per-stream hold the adapter owns is bounded in
@@ -367,24 +368,65 @@ if Code.ensure_loaded?(Plug) do
       }
     end
 
+    # THE ADAPTER'S OWN EXCEPTIONS GO BACK TO THE ADAPTER, AS THEMSELVES.
+    #
+    # Whose exception it is decides whose answer it is, and an exception raised inside a call
+    # this transport makes into the adapter is the adapter's: a malformed request it has
+    # rejected, a socket it has lost. Its own pipeline already handles that class -- Bandit's
+    # matches `Bandit.HTTPError`, `Bandit.TransportError` and its HTTP/2 stream and connection
+    # errors, and resets the stream, logs by its own `log_protocol_errors` setting and emits its
+    # telemetry. Measured on Bandit 1.13.1: a mid-stream HTTP/2 HEADERS without END_STREAM
+    # (malformed, RFC 9113 8.1) raised `StreamError` out of `read_body`, the rescue below took
+    # it for a fault of ours because it carries no `:plug_status`, and the client got 500 /
+    # -32603 with an error-level stacktrace in the host's log. "Carries no status" is a
+    # property of the exception; who raised it is the property that decides.
+    #
+    # `adapter/1` is the one boundary: every call into the adapter goes through it (a census
+    # holds that, its population derived from `Plug.Conn.Adapter`'s callbacks), and an
+    # exception raised there is thrown past every rescue in this module tagged with its
+    # original stacktrace, then re-raised here so the adapter's pipeline sees its own struct.
+    # The 408 a read timeout raises is the one the transport still answers itself (029a's
+    # contract), in `read_by_deadline/5`, by name of its status rather than of its module.
+    #
+    # The boundary is a `Plug.Conn` function that reaches the adapter, so it includes what Plug
+    # runs on the way: `send_resp` first runs the `before_send` callbacks plugs upstream of this
+    # one registered, and Plug's own cookie checks. Their exceptions are handed back too. That is
+    # their owner: upstream plug code whose exception reaches the adapter's handler in any Plug
+    # stack. Narrowing the boundary would mean reordering Plug's private send sequence.
+    #
+    # Exceptions only: an adapter that EXITS is still answered as a fault of ours (no Bandit
+    # 1.13 path found that exits while the stream process lives; recorded, not decided here).
+    @adapter_raised {__MODULE__, :adapter_raised}
+
     @impl Plug
     def call(%Plug.Conn{} = conn, opts) do
+      serve(conn, opts)
+    catch
+      :throw, {@adapter_raised, exception, stacktrace} -> reraise exception, stacktrace
+    end
+
+    defp adapter(fun) do
+      fun.()
+    rescue
+      exception -> throw({@adapter_raised, exception, __STACKTRACE__})
+    end
+
+    defp serve(conn, opts) do
       handle(conn, opts)
     rescue
       exception ->
-        # An exception carrying a status is the SERVER SIGNALLING, not a fault: Bandit raises
-        # Bandit.HTTPError with plug_status :request_timeout for a read timeout and
-        # :bad_request for a malformed transfer coding, and its own pipeline turns that into
-        # the response. Catching it turned a 408 into a 500, a 400 into a 500, and every
-        # stalled connection into an unauthenticated 5xx with an error-level stacktrace -- a
-        # regression this rescue introduced by widening to cover the crash class.
-        #
-        # The test is Plug.Exception.status/1, Plug's own protocol, which reads any exception's
-        # :plug_status field. It therefore holds for adapters other than Bandit and needs no
-        # reference to a module that may not be loaded. 500 means "carries no status of its
-        # own", which is the only case this transport should be answering for.
+        # Whatever reaches this rescue was raised by this package's own code: the adapter's
+        # exceptions go back through `adapter/1`'s tag, and the host's code runs only under
+        # `host_call/1` and `dispatch/3`'s host-fault rescue. So it is ours to answer, inside the
+        # envelope. (This rescue once handed status-carrying exceptions on to the adapter, by
+        # `Plug.Exception.status/1`, because the adapter's own read timeout and malformed-coding
+        # errors arrived here; who raised it is now the rule, and the status branch has no
+        # producer left.)
         fault_response(conn, exception, __STACKTRACE__, nil)
     catch
+      :throw, {@adapter_raised, _exception, _stacktrace} = raised ->
+        throw(raised)
+
       kind, reason ->
         Logger.error(Exception.format(kind, reason, arities(__STACKTRACE__)))
         crash_response(conn)
@@ -477,25 +519,14 @@ if Code.ensure_loaded?(Plug) do
 
     # Answering a crash must not itself crash: the payload is a constant, so there is nothing
     # in it that can fail to encode.
-    # An exception carrying a status is the SERVER SIGNALLING, not a fault: Bandit raises
-    # Bandit.HTTPError with plug_status :request_timeout for a read timeout and :bad_request
-    # for a malformed transfer coding, and its own pipeline turns that into the response.
-    # Catching it turned a 408 into a 500, a 400 into a 500, and every stalled connection into
-    # an unauthenticated 5xx with an error-level stacktrace -- a regression introduced by
-    # widening the rescue to cover the crash class, and measured against the previous commit
-    # rather than argued.
-    #
-    # The test is Plug.Exception.status/1, Plug's own protocol, which reads any exception's
-    # :plug_status. It therefore holds for adapters other than Bandit and needs no reference to
-    # a module that may not be loaded. 500 means "carries no status of its own", which is the
-    # only case this transport should be answering for.
+    # A fault of this package's own code: logged with arities only, answered -32603 inside the
+    # envelope. The status it may carry is not consulted: the adapter's status-carrying
+    # exceptions (its read timeout, a malformed transfer coding) no longer arrive here, they go
+    # back through `adapter/1`, and a status on an exception this package raised is not the
+    # adapter speaking.
     defp fault_response(conn, exception, stacktrace, id) do
-      if Plug.Exception.status(exception) == 500 do
-        Logger.error(Exception.format(:error, exception, arities(stacktrace)))
-        send_json(conn, 500, error(id, -32_603, "Internal error"))
-      else
-        reraise exception, stacktrace
-      end
+      Logger.error(Exception.format(:error, exception, arities(stacktrace)))
+      send_json(conn, 500, error(id, -32_603, "Internal error"))
     end
 
     defp crash_response(conn) do
@@ -718,16 +749,21 @@ if Code.ensure_loaded?(Plug) do
       if remaining <= 0 do
         timed_out(conn, read_timeout)
       else
-        http1 = get_http_protocol(conn) != :"HTTP/2"
+        http1 = http_protocol(conn) != :"HTTP/2"
         length = piece_length(http1, size)
 
         try do
-          read_body(conn, length: length, read_length: @read_piece, read_timeout: remaining)
-        rescue
-          exception ->
+          adapter(fn ->
+            read_body(conn, length: length, read_length: @read_piece, read_timeout: remaining)
+          end)
+        catch
+          # The adapter's read timeout is the one adapter exception this transport answers
+          # itself: 029a's whole-body deadline is the package's contract, and its 408 is a
+          # JSON-RPC refusal the client can read. Every other one goes back to the adapter.
+          :throw, {@adapter_raised, exception, _stacktrace} = raised ->
             if Plug.Exception.status(exception) == 408,
               do: timed_out(conn, read_timeout),
-              else: reraise(exception, __STACKTRACE__)
+              else: throw(raised)
         else
           {:ok, piece, conn} when size + byte_size(piece) > @max_body_bytes ->
             too_large(conn)
@@ -764,7 +800,7 @@ if Code.ensure_loaded?(Plug) do
     # still blocked and no other stream on the connection is still within its own deadline.
     # Over HTTP/1 there is no residue -- the loop bounds every read -- so nothing is armed.
     defp arm_connection_watchdog(conn, connection_timeout) do
-      if get_http_protocol(conn) == :"HTTP/2" and is_integer(connection_timeout) do
+      if http_protocol(conn) == :"HTTP/2" and is_integer(connection_timeout) do
         arm_watchdog_on(connection_pid(), connection_timeout)
       else
         :not_armed
@@ -888,20 +924,20 @@ if Code.ensure_loaded?(Plug) do
     # remains". A body at the cap is then refused by the size rule on the next frame, or
     # accepted when the stream ends.
     #
-    # What this cannot reach: a frame that carries no DATA. A WINDOW_UPDATE, or a HEADERS
-    # without END_STREAM, re-arms the adapter's own wait for the whole of what this call gave
-    # it -- one such frame per deadline holds the stream indefinitely -- and that wait is a
+    # What this cannot reach: a frame that carries no DATA. A WINDOW_UPDATE re-arms the
+    # adapter's own wait for the whole of what this call gave it -- one such frame per
+    # deadline holds the stream indefinitely -- and that wait is a
     # receive on the adapter's messages that nothing outside it can end through an interface
     # the adapter offers. Two levers exist and both are declined: forging the adapter's own
     # message into the stream process's mailbox couples this package to a private protocol
     # that a release of the adapter can change silently; ending the stream process gives the
     # client no answer at all (the adapter forgets the stream and drops its frames). So a
     # stream kept open by control frames alone is held by the adapter past the deadline, and
-    # whatever body comes is refused here, since the clock is read on return. The cost
-    # differs by frame: a WINDOW_UPDATE is thirteen bytes and nothing accumulates; a HEADERS
-    # without END_STREAM -- a malformed request under RFC 9113, 8.1, which the adapter reads
-    # as trailers -- writes a warning line per frame to the host's log carrying the client's
-    # header bytes. The host's cost is one stream process held for as long as the frames
+    # whatever body comes is refused here, since the clock is read on return. A WINDOW_UPDATE
+    # is thirteen bytes and nothing accumulates. (A HEADERS without END_STREAM -- a malformed
+    # request under RFC 9113, 8.1 -- was the second such frame until `Bandit` 1.13, which now
+    # raises a stream error for it; `adapter/1` hands that back to the adapter, which resets
+    # the stream.) The host's cost is one stream process held for as long as the frames
     # keep coming, up to the adapter's streams-per-connection setting -- but bounded in
     # DURATION by the connection watchdog above: the stream itself cannot be ended from
     # outside the adapter, so at the connection deadline the whole connection is closed with
@@ -1566,14 +1602,31 @@ if Code.ensure_loaded?(Plug) do
     # The response carries NO detail. The reason reaches the logger, where the host can see it;
     # an HTTP caller -- possibly unauthenticated, since authorize/1 is the host's and may
     # permit anyone -- learns only that the request failed.
+    #
+    # THE HOST'S CODE AND THE ADAPTER'S CALL ARE NOT UNDER ONE `try`. The answer is computed --
+    # the core's `handle_message/2` (which runs the host's dispatch) and the encoding of what it
+    # returned -- under the host-fault rescue, and only then sent, outside it. With both under
+    # one `try`, the rescue had to let the adapter's tagged exception through, and a host that
+    # threw that private tag itself could choose the wire status through it (a review lane's
+    # probe: a forged throw answered a bare 400, no envelope). Here the host's code never runs
+    # where a tag is passed on, so a forged one is just a host throw: -32603, with the id.
     defp dispatch(conn, message, opts) do
-      do_dispatch(conn, message, opts)
+      case host_answer(message, opts) do
+        {:answer, status, body} ->
+          deliver(conn, status, body)
+
+        {:fault, kind, reason, stacktrace} ->
+          host_fault(conn, kind, reason, stacktrace, message["id"])
+      end
+    end
+
+    defp host_answer(message, opts) do
+      {status, body} = answer(message, opts)
+      {:answer, status, body}
     rescue
-      exception ->
-        host_fault(conn, :error, exception, __STACKTRACE__, message["id"])
+      exception -> {:fault, :error, exception, __STACKTRACE__}
     catch
-      kind, reason ->
-        host_fault(conn, kind, reason, __STACKTRACE__, message["id"])
+      kind, reason -> {:fault, kind, reason, __STACKTRACE__}
     end
 
     # NOT call/2's rule, and what separates them is WHOSE exception it is.
@@ -1643,22 +1696,22 @@ if Code.ensure_loaded?(Plug) do
       send_json(conn, 500, error(id, -32_603, "Internal error"))
     end
 
-    defp do_dispatch(conn, %{"method" => method} = message, _opts)
-         when method in @removed_in_modern do
+    # `{status, encoded body | nil}` for the request: computed, never sent, here.
+    defp answer(%{"method" => method} = message, _opts) when method in @removed_in_modern do
       case message["id"] do
-        nil -> send_resp(conn, 202, "")
-        id -> send_json(conn, 404, error(id, -32_601, "#{@method_not_found} #{method}"))
+        nil -> {202, nil}
+        id -> {404, Jason.encode!(error(id, -32_601, "#{@method_not_found} #{method}"))}
       end
     end
 
-    defp do_dispatch(conn, message, opts) do
+    defp answer(message, opts) do
       # Nothing is stamped: `check_headers/3` has held the body's `params._meta` to the header
       # and to the schema, so the core reads the era from the message the client actually sent.
       # Through `opts.server` and no literal: a call naming BeamMCP.Server here would serve the
       # default whatever the host passed, and a census over the transports refuses one.
       case opts.server.handle_message(opts.server.new(opts.server_opts), message) do
         {_state, nil} ->
-          send_resp(conn, 202, "")
+          {202, nil}
 
         {_state,
          %{"error" => %{"code" => -32_601, "message" => @method_not_found <> _}} =
@@ -1676,18 +1729,28 @@ if Code.ensure_loaded?(Plug) do
           # The coupling to the core's wording is deliberate and pinned: a test asserts
           # `Server.handle_message/2` still prefixes this case with @method_not_found, so a
           # reword fails that test instead of silently turning every 404 back into a 200.
-          send_json(conn, 404, response)
+          {404, Jason.encode!(response)}
 
         {_state, response} ->
-          send_json(conn, 200, response)
+          {200, Jason.encode!(response)}
       end
     end
 
-    defp send_json(conn, status, payload) do
-      conn
-      |> put_resp_content_type("application/json")
-      |> send_resp(status, Jason.encode!(payload))
+    defp deliver(conn, status, nil), do: send_empty(conn, status)
+    defp deliver(conn, status, body), do: send_encoded(conn, status, body)
+
+    # The encode stays OUTSIDE the adapter boundary: a payload this package cannot encode is
+    # its own (or the host's) fault and is answered as one; only the send is the adapter's.
+    defp send_json(conn, status, payload), do: send_encoded(conn, status, Jason.encode!(payload))
+
+    defp send_encoded(conn, status, encoded) do
+      conn = put_resp_content_type(conn, "application/json")
+      adapter(fn -> send_resp(conn, status, encoded) end)
     end
+
+    defp send_empty(conn, status), do: adapter(fn -> send_resp(conn, status, "") end)
+
+    defp http_protocol(conn), do: adapter(fn -> get_http_protocol(conn) end)
 
     # Refusing before the body is read leaves the connection with an unread remainder. Saying
     # so makes the refusal clean rather than leaving the adapter to drain a body this server
@@ -1698,7 +1761,7 @@ if Code.ensure_loaded?(Plug) do
     # (RFC 9113, 8.2.2): a client answered that way saw a stream reset in place of the 403
     # (a review lane's measurement). The header is HTTP/1's.
     defp close_after(conn) do
-      case get_http_protocol(conn) do
+      case http_protocol(conn) do
         :"HTTP/2" -> conn
         _ -> put_resp_header(conn, "connection", "close")
       end

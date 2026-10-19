@@ -128,8 +128,8 @@ defmodule BeamMCP.Boundary.NoCatalogTest do
              # option's module, `BeamMCP.Server` by default -- HTTP's `new/1` and
              # `handle_message/2` per request, stdio's the same plus `shutdown?/1` after each
              # message -- and never by name, pinned by the no-server-literal census.
-             {{BeamMCP.Transport.HTTP, :do_dispatch, 3}, :handle_message, 2},
-             {{BeamMCP.Transport.HTTP, :do_dispatch, 3}, :new, 1},
+             {{BeamMCP.Transport.HTTP, :answer, 2}, :handle_message, 2},
+             {{BeamMCP.Transport.HTTP, :answer, 2}, :new, 1},
              {{BeamMCP.Transport.Stdio, :answer, 3}, :handle_message, 2},
              {{BeamMCP.Transport.Stdio, :loop, 2}, :shutdown?, 1},
              {{BeamMCP.Transport.Stdio, :run, 1}, :new, 1}
