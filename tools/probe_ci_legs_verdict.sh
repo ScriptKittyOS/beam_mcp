@@ -38,31 +38,31 @@ run() { # run <case> <want> <seqdir>
 }
 # S1: G-079 -- two polls in progress (conclusion null), then all success.
 d=$work/s1; mkdir -p "$d"
-page "$(leg 27 1.17 floor in_progress null)" "$(leg 28 1.18 pinned in_progress null)" "$(leg 29 1.20 head completed '"success"')" "$skipped" > "$d/page.0"
-page "$(leg 27 1.17 floor completed '"success"')" "$(leg 28 1.18 pinned in_progress null)" "$(leg 29 1.20 head completed '"success"')" "$skipped" > "$d/page.1"
-page "$(leg 27 1.17 floor completed '"success"')" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" "$skipped" > "$d/page.2"
-run "S1 in_progress twice, then three successes" 0 "$d"
+page "$(leg 27 1.17 floor in_progress null)" "$(leg 28 1.18 pinned in_progress null)" "$(leg 29 1.20 head completed '"success"')" "$(leg 28.5.0.8 1.20.4 box completed '"success"')" "$skipped" > "$d/page.0"
+page "$(leg 27 1.17 floor completed '"success"')" "$(leg 28 1.18 pinned in_progress null)" "$(leg 29 1.20 head completed '"success"')" "$(leg 28.5.0.8 1.20.4 box completed '"success"')" "$skipped" > "$d/page.1"
+page "$(leg 27 1.17 floor completed '"success"')" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" "$(leg 28.5.0.8 1.20.4 box completed '"success"')" "$skipped" > "$d/page.2"
+run "S1 in_progress twice, then four successes" 0 "$d"
 # S2: a leg red once complete.
 d=$work/s2; mkdir -p "$d"
-page "$(leg 27 1.17 floor in_progress null)" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" > "$d/page.0"
-page "$(leg 27 1.17 floor completed '"failure"')" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" > "$d/page.1"
+page "$(leg 27 1.17 floor in_progress null)" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" "$(leg 28.5.0.8 1.20.4 box completed '"success"')" > "$d/page.0"
+page "$(leg 27 1.17 floor completed '"failure"')" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" "$(leg 28.5.0.8 1.20.4 box completed '"success"')" > "$d/page.1"
 run "S2 a leg completes as failure" 1 "$d"
 # S3: a leg never completes -- the bound.
 d=$work/s3; mkdir -p "$d"
-page "$(leg 27 1.17 floor in_progress null)" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" > "$d/page.0"
+page "$(leg 27 1.17 floor in_progress null)" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" "$(leg 28.5.0.8 1.20.4 box completed '"success"')" > "$d/page.0"
 run "S3 a leg never completes (bound of 3 polls)" 1 "$d"
-# S4: only two legs exist, both green -- the tree is unmeasured on one pair.
+# S4: only two legs exist, both green -- the tree is unmeasured on two pairs.
 d=$work/s4; mkdir -p "$d"
 page "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" "$skipped" > "$d/page.0"
 run "S4 two legs only, the skipped unexpanded name beside" 1 "$d"
-# S5: all three complete and green on the first read -- no wait.
+# S5: all four complete and green on the first read -- no wait.
 d=$work/s5; mkdir -p "$d"
 cp "$work/s1/page.2" "$d/page.0"
-run "S5 three successes on the first read" 0 "$d"
-# S6: the API fails once, then three successes -- a read spent, not a verdict.
+run "S5 four successes on the first read" 0 "$d"
+# S6: the API fails once, then four successes -- a read spent, not a verdict.
 d=$work/s6; mkdir -p "$d"
 echo '{"__fail__":true}' > "$d/page.0"; cp "$work/s1/page.2" "$d/page.1"
-run "S6 the API fails once, then three successes" 0 "$d"
+run "S6 the API fails once, then four successes" 0 "$d"
 # S7: the API fails every time -- the bound, named as a failed read.
 d=$work/s7; mkdir -p "$d"
 echo '{"__fail__":true}' > "$d/page.0"
@@ -71,4 +71,10 @@ run "S7 the API fails every time (bound)" 1 "$d"
 d=$work/s8; mkdir -p "$d"
 echo '{"check_runs":[]}' > "$d/page.0"
 run "S8 no check runs at all" 1 "$d"
+# S9: the box leg (an exact OTP version, "28.5.0.8") is the only red one. Its name must be read
+# as a leg at all: a pattern for OTP majors alone ("OTP [0-9]+") skipped it, so a red box leg
+# passed the edited-path verdict.
+d=$work/s9; mkdir -p "$d"
+page "$(leg 27 1.17 floor completed '"success"')" "$(leg 28 1.18 pinned completed '"success"')" "$(leg 29 1.20 head completed '"success"')" "$(leg 28.5.0.8 1.20.4 box completed '"failure"')" > "$d/page.0"
+run "S9 the box leg alone is red" 1 "$d"
 if [ "$bad" -eq 0 ]; then echo "PROBE OK: the read waits for running legs, then judges; red, too few, and the bound are FAIL"; else echo "PROBE FAILED"; exit 1; fi

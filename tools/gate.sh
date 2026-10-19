@@ -71,6 +71,12 @@ else
     printf '%s\n' "$fmt_out" | sed 's/^/      /'; fail=1
   fi
 fi
+# The runtime is at or above its line's patched floor (tools/otp-floors: CVE-2026-55737). The
+# leg's own OTP, whatever setup-beam resolved, so a resolution below the floor is a FAIL here
+# rather than a green leg on a vulnerable runtime.
+of_out=$(bash tools/otp_floor.sh 2>&1); of_rc=$?
+if [ "$of_rc" -eq 0 ]; then note "otp floor" "pass ($of_out)"
+else note "otp floor" "FAIL ($of_out)"; fail=1; fi
 step "compile"  mix compile --warnings-as-errors --force
 
 # Dialyzer over the compiled beams: the OTP binary (dialyxir declined, CX-055), a PLT under

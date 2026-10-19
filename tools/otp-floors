@@ -1,0 +1,8 @@
+# The lowest patched release of each Erlang/OTP line this project runs on: CVE-2026-55737
+# (heap corruption in binary_to_term/1 decoding LARGE_TUPLE_EXT) is fixed in 27.3.4.15,
+# 28.5.0.4 and 29.0.4 (https://www.erlang.org/patches/otp-28.5.0.4). tools/otp_floor.sh
+# refuses a runtime below its line's floor. A line here moves only to a later patch.
+# major  floor
+27       27.3.4.15
+28       28.5.0.4
+29       29.0.4

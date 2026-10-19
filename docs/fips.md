@@ -97,15 +97,16 @@ provider) and of the process that certified it, and this package holds no such m
 ## Measured: this package in FIPS mode
 
 `.github/workflows/fips.yml` runs the suite on every push to `main`, on each pull request that
-touches the code, and weekly, on this toolchain: Erlang/OTP 28.1.1 (the pinned line) built
-with `--enable-fips`, over OpenSSL 3.5.8's libcrypto with the FIPS provider built from
+touches the code, and weekly, on this toolchain, on x86_64 and on aarch64: Erlang/OTP
+28.5.0.8 (a patched release of the pinned line; until 2026-10-19 it was 28.1.1, below the
+CVE-2026-55737 fix) built with `--enable-fips`, over OpenSSL 3.5.8's libcrypto with the FIPS provider built from
 OpenSSL 3.1.2, the source that CMVP certificate #4985 (FIPS 140-3) validates, following its
 security policy (`enable-fips`, `make install_fips`, `openssl fipsinstall` on the machine
 that runs it). Before any test runs, the same VM asserts `:crypto.info_fips()` is `:enabled`
 and the provider reports build `3.1.2`; a negative control shows that without the provider
 configuration `fips_mode true` gives no working `crypto`.
 
-Measured 2026-09-23 on that toolchain: `:crypto.info_fips()` answers `:enabled`,
+Measured 2026-09-23 on the 28.1.1 toolchain, x86_64 (the 28.5.0.8 runs on both architectures are quoted in the next release's record, from their CI logs): `:crypto.info_fips()` answers `:enabled`,
 `fips_provider_available: true`, `fips_provider_buildinfo: "3.1.2"`, the linked library
 OpenSSL 3.5.8; `:crypto.hash(:md5, _)` raises `notsup` ("Bad digest type in FIPS");
 SHA-256, SHA-384 and SHA-512 answer, SHA-256 of `abc` being the FIPS 180-4 test vector; and

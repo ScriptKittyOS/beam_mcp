@@ -104,7 +104,7 @@ partial scheme.
 
 ## How the case is kept true
 
-- The gate runs on every push on three OTP/Elixir pairs; the censuses above fail when the code
+- The gate runs on every push on four OTP/Elixir legs (three pairs on x86_64, and the box pair, OTP 28.5.0.8 with Elixir 1.20.4, on aarch64), each held to its line's patched OTP floor; the censuses above fail when the code
   they describe changes.
 - The threat model's citations and the will-not-implement page's entries are each held to the
   test suite by a census of their own.
