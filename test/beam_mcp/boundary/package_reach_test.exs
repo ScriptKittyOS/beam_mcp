@@ -134,6 +134,9 @@ defmodule BeamMCP.Boundary.PackageReachTest do
       send: 2,
       spawn: 1,
       system_time: 0,
+      # The adapter's own exception carried past this package's rescues to be re-raised as itself
+      # (Transport.HTTP's adapter/1); a non-local return inside one process, reaching nothing.
+      throw: 1,
       # A float with no fraction to the integer it equals, so 1.0 compares as 1 (Schema.json_form/1).
       trunc: 1,
       tuple_size: 1,

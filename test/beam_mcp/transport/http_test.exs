@@ -1535,6 +1535,12 @@ defmodule BeamMCP.Transport.HTTPTest do
     # slice; it is recorded in slice 003's findings (internal) under "Open, recorded rather
     # than fixed", not described here as filed -- the last time this comment said something was
     # filed, grep found exactly one hit and it was the comment.
+    #
+    # SUPERSEDED, 2026-10-19 (appended; the record above stands). The re-raise branch no longer
+    # exists. An adapter's exception, status-carrying or not, is handed back through
+    # `adapter/1`'s tag before any rescue here sees it (the planted adapters below hold that),
+    # so `fault_response/4` answers every exception that reaches it, and the "NEVER re-raises"
+    # mutant has nothing left to mutate.
 
     test "an exception with no status of its own is still answered as -32603" do
       o = opts(dispatch: fn _, _, _ -> raise "ordinary fault" end)
@@ -1554,6 +1560,199 @@ defmodule BeamMCP.Transport.HTTPTest do
       conn = post(body, call_headers([]), o)
 
       assert body!(conn)["id"] == 4242
+    end
+  end
+
+  # THE ADAPTER'S OWN EXCEPTIONS ARE THE ADAPTER'S. A planted adapter stands in for the case
+  # `Plug.Test` cannot produce: its `read_body/2` is a `:binary.part` of an in-memory binary, so
+  # nothing in this suite could make the adapter raise (the comment above records the cost: the
+  # "fault_response NEVER re-raises" mutant survived for that reason; the branch it mutated is
+  # gone, since an adapter's exception no longer reaches `fault_response/4`). Each planted adapter is
+  # `Plug.Adapters.Test.Conn` with one callback replaced by a raise.
+  #
+  # Why it matters, measured: Bandit 1.13 raises `Bandit.HTTP2.Errors.StreamError` out of
+  # `read_body` for a malformed HTTP/2 request. It carries no `:plug_status`, so `call/2`'s
+  # rescue answered it 500 / -32603 and logged an error-level stacktrace, where Bandit's own
+  # pipeline would have reset the stream. Who RAISED the exception decides whose answer it is,
+  # not whether it carries a status.
+  defmodule AdapterSignal do
+    defexception message: "the adapter's own signal"
+  end
+
+  defmodule AdapterStatusSignal do
+    defexception message: "the adapter's own 400", plug_status: 400
+  end
+
+  defmodule PlantedAdapter do
+    @moduledoc false
+    # `{raise_in, exception, inner_state}`: raise `exception` from callback `raise_in`, and
+    # delegate everything else to Plug's test adapter with its own state.
+    @behaviour Plug.Conn.Adapter
+    alias Plug.Adapters.Test.Conn, as: T
+
+    def wrap(%Plug.Conn{adapter: {T, state}} = conn, raise_in, exception),
+      do: %{conn | adapter: {__MODULE__, {raise_in, exception, state}}}
+
+    defp go({cb, exception, _}, cb, _fun), do: raise(exception)
+
+    defp go({_, _, state} = s, _cb, fun) do
+      case fun.(state) do
+        {:ok, body, state} -> {:ok, body, put(s, state)}
+        {:more, body, state} -> {:more, body, put(s, state)}
+        {:ok, state} when is_map(state) -> {:ok, put(s, state)}
+        other -> other
+      end
+    end
+
+    defp put({cb, exception, _}, state), do: {cb, exception, state}
+
+    @impl true
+    def send_resp(s, st, h, b), do: go(s, :send_resp, &T.send_resp(&1, st, h, b))
+    @impl true
+    def read_req_body(s, o), do: go(s, :read_req_body, &T.read_req_body(&1, o))
+    @impl true
+    def send_file(s, st, h, p, o, l), do: go(s, :send_file, &T.send_file(&1, st, h, p, o, l))
+    @impl true
+    def send_chunked(s, st, h), do: go(s, :send_chunked, &T.send_chunked(&1, st, h))
+    @impl true
+    def chunk(s, b), do: go(s, :chunk, &T.chunk(&1, b))
+    @impl true
+    def inform(s, st, h), do: go(s, :inform, &T.inform(&1, st, h))
+    @impl true
+    def upgrade(s, p, o), do: go(s, :upgrade, &T.upgrade(&1, p, o))
+    @impl true
+    def push(s, p, h), do: go(s, :push, &T.push(&1, p, h))
+    @impl true
+    def get_peer_data({_, _, state}), do: T.get_peer_data(state)
+    @impl true
+    def get_sock_data({_, _, state}), do: T.get_sock_data(state)
+    @impl true
+    def get_ssl_data({_, _, state}), do: T.get_ssl_data(state)
+    @impl true
+    def get_http_protocol({_, _, state}), do: T.get_http_protocol(state)
+  end
+
+  describe "an exception the adapter raises goes back to the adapter as itself" do
+    defp planted_post(raise_in, exception) do
+      body = call_body(%{})
+
+      conn =
+        :post
+        |> conn("/mcp", Jason.encode!(body))
+        |> put_req_header("content-type", "application/json")
+
+      conn = Enum.reduce(call_headers([]), conn, fn {k, v}, c -> put_req_header(c, k, v) end)
+      PlantedAdapter.wrap(conn, raise_in, exception)
+    end
+
+    # Returns the exception and stacktrace `HTTP.call/2` raised, and what was logged meanwhile.
+    defp raised_by_call(conn) do
+      parent = self()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          try do
+            HTTP.call(conn, opts())
+            send(parent, {:returned, :no_raise})
+          rescue
+            exception -> send(parent, {:raised, exception, __STACKTRACE__})
+          end
+        end)
+
+      receive do
+        {:raised, exception, stacktrace} -> {exception, stacktrace, log}
+        {:returned, :no_raise} -> flunk("HTTP.call/2 answered instead of handing the error back")
+      end
+    end
+
+    test "a read that raises with no status of its own is handed back unchanged, not answered as -32603" do
+      planted = %AdapterSignal{message: "malformed, says the adapter"}
+      {exception, stacktrace, log} = raised_by_call(planted_post(:read_req_body, planted))
+
+      assert exception == planted
+      # The original stacktrace, not a re-raise from inside this package: its top frame is
+      # the planted adapter, where the exception was raised.
+      assert {PlantedAdapter, _fun, _arity, _loc} = hd(stacktrace)
+      refute log =~ "[error]", "the transport logged the adapter's error as a fault: " <> log
+    end
+
+    test "a read that raises with a status of its own is handed back too" do
+      # A status-carrying exception raised by the adapter goes back through `adapter/1`'s tag
+      # like any other: the adapter's pipeline answers it, not this one. (Before, such an
+      # exception reached `fault_response/4`, whose re-raise branch nothing here could reach;
+      # that branch no longer exists.)
+      planted = %AdapterStatusSignal{}
+      {exception, _stacktrace, log} = raised_by_call(planted_post(:read_req_body, planted))
+
+      assert exception == planted
+      refute log =~ "[error]"
+    end
+
+    test "a send that raises is handed back unchanged, and is not logged as a host fault" do
+      # A response the adapter cannot send (on Bandit, a closed socket) is the adapter's to
+      # report. Before, it surfaced through dispatch/3's host-fault branch and call/2's fault
+      # branch: two error lines blaming the host's code and this one for the adapter's state.
+      planted = %AdapterSignal{message: "the peer went away"}
+      {exception, _stacktrace, log} = raised_by_call(planted_post(:send_resp, planted))
+
+      assert exception == planted
+      refute log =~ "[error]", "the adapter's send error was logged as a fault: " <> log
+    end
+
+    test "the host's own exceptions are still ours to answer, inside the envelope" do
+      # The other side of the line: the rule is WHO raised it. A host dispatch that raises the
+      # very same exception struct is a host fault, -32603 with the request's id, as before.
+      o = opts(dispatch: fn _, _, _ -> raise AdapterSignal, "raised by the host" end)
+      body = call_body(%{}) |> Map.put("id", 4244)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn = post(body, call_headers([]), o)
+          assert conn.status == 500
+          assert body!(conn)["error"]["code"] == -32_603
+          assert body!(conn)["id"] == 4244
+        end)
+
+      assert log =~ "raised by the host"
+    end
+
+    test "a host that throws the transport's private tag is still a host fault, and cannot choose the status" do
+      # A review lane's probe: the tag that carries the adapter's exception is a constant term,
+      # and a dispatch throwing it with Plug.BadRequestError got a bare adapter 400 with no
+      # envelope. The host's code no longer runs anywhere a tag is passed on, so the throw is
+      # just a throw out of the host: -32603 in the envelope, with the request's id.
+      forged =
+        {{HTTP, :adapter_raised}, %Plug.BadRequestError{}, []}
+
+      o = opts(dispatch: fn _, _, _ -> throw(forged) end)
+      body = call_body(%{}) |> Map.put("id", 4245)
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        conn = post(body, call_headers([]), o)
+        assert conn.status == 500
+        assert body!(conn)["error"]["code"] == -32_603
+        assert body!(conn)["id"] == 4245
+      end)
+    end
+
+    test "a read timeout the adapter raises (status 408) is still answered by this transport, as its JSON-RPC 408" do
+      # The one adapter exception this package answers itself: the whole-body deadline is its
+      # contract (the drip tests hold it on a real listener over HTTP/1.1; this holds the branch
+      # without a socket, so relaxing that one test cannot let the branch go unpinned).
+      timeout = %Plug.TimeoutError{}
+      assert Plug.Exception.status(timeout) == 408
+
+      conn = planted_post(:read_req_body, timeout)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn = HTTP.call(conn, opts())
+          assert conn.status == 408
+          assert body!(conn)["error"]["code"] == -32_600
+          assert body!(conn)["error"]["message"] =~ "Request body not received within"
+        end)
+
+      refute log =~ "[error]"
     end
   end
 
