@@ -1645,12 +1645,27 @@ defmodule BeamMCP.Transport.HTTPTest do
       PlantedAdapter.wrap(conn, raise_in, exception)
     end
 
-    # Returns the exception and stacktrace `HTTP.call/2` raised, and what was logged meanwhile.
+    # What the calling process logged while `fun` ran. `capture_log/2` hands every capture the
+    # events of every process, so in an async run another module's errors land in it too (the
+    # box leg of gate run 39324309977: readme_claims_test.exs's refused-schema line failed a
+    # `refute log =~ "[error]"` here). This transport logs from the process that called it, which
+    # in these tests is the test's own, so keeping that process's entries drops nothing it logs.
+    defp own_log(fun) do
+      me = "pid=#{:erlang.pid_to_list(self())} "
+
+      [metadata: [:pid]]
+      |> ExUnit.CaptureLog.capture_log(fun)
+      |> String.split("\n")
+      |> Enum.filter(&String.contains?(&1, me))
+      |> Enum.join("\n")
+    end
+
+    # Returns the exception and stacktrace `HTTP.call/2` raised, and what it logged meanwhile.
     defp raised_by_call(conn) do
       parent = self()
 
       log =
-        ExUnit.CaptureLog.capture_log(fn ->
+        own_log(fn ->
           try do
             HTTP.call(conn, opts())
             send(parent, {:returned, :no_raise})
@@ -1745,7 +1760,7 @@ defmodule BeamMCP.Transport.HTTPTest do
       conn = planted_post(:read_req_body, timeout)
 
       log =
-        ExUnit.CaptureLog.capture_log(fn ->
+        own_log(fn ->
           conn = HTTP.call(conn, opts())
           assert conn.status == 408
           assert body!(conn)["error"]["code"] == -32_600
