@@ -958,14 +958,16 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
              "the answer came at #{elapsed} ms for a 300 ms deadline"
     end
 
-    test "over HTTP/2 a stream kept open by HEADERS frames without END_STREAM is held the same way, each frame a warning line in the host's log" do
-      # The other control-frame hold, and the one that reaches the log: the adapter reads a
-      # HEADERS without END_STREAM as trailers, ignores it with a warning carrying the
-      # client's header bytes, and waits again. Recorded like the WINDOW_UPDATE hold.
+    test "over HTTP/2 a HEADERS frame without END_STREAM in the middle of a body is reset by the adapter as malformed, not answered as our fault" do
+      # Until Bandit 1.13 this was the other control-frame hold: the adapter read a HEADERS
+      # without END_STREAM as trailers, ignored it with a warning and waited again, and this
+      # test pinned the hold so that it would fail the day Bandit bounded it. That day came
+      # (Bandit #682): RFC 9113 8.1 makes such a frame a malformed request, and the adapter now
+      # raises its own stream error out of `read_body`. Measured on 1.13.1 against the previous
+      # transport: the client got 500 / -32603 "Internal error", because `call/2`'s rescue took
+      # the adapter's signal for a fault of ours. The adapter's error is the adapter's to answer:
+      # a stream reset, PROTOCOL_ERROR, at the frame, not a JSON-RPC envelope at the deadline.
       body = call_json(1, 200)
-      # A high connection deadline so the per-stream residue below is what this records, not
-      # the package's connection-level bound (029b); the offer is that Bandit's per-stream
-      # hold still lives, and the day Bandit bounds it this fails.
       port = listen(read_timeout: 300, connection_timeout: 30_000)
       started = System.monotonic_time(:millisecond)
       sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
@@ -978,14 +980,13 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
         ExUnit.CaptureLog.capture_log(fn ->
           drip_h2(sock, frames, 100)
           {result, elapsed} = h2_answered_at(sock, started)
-          assert {:ok, headers, _body} = result
-          assert {":status", "408"} in headers
-          assert elapsed >= 1_000, "the hold ended at #{elapsed} ms: the adapter bounds it now"
+          assert {:rst, 0x1} = result
+          # The first offending frame goes out at about 100 ms; the read deadline is 300.
+          assert elapsed < 300, "the stream ended at #{elapsed} ms, not at the first bad frame"
         end)
 
-      lines = log |> String.split("\n") |> Enum.filter(&(&1 =~ "Ignoring trailers"))
-      assert length(lines) == 10
-      assert Enum.all?(lines, &(&1 =~ "[warning]" and &1 =~ ~s({"x-lane", "b"})))
+      # Nothing of ours answered it: no -32603 line from this transport's fault path.
+      refute log =~ "beam_mcp", "the transport logged the adapter's error as its own: " <> log
     end
 
     test "over HTTP/2 a body is refused at the frame that crosses the cap, not at the stream's end" do
@@ -1066,19 +1067,28 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
              "the connection closed at #{elapsed} ms for a 600 ms connection deadline"
     end
 
-    test "over HTTP/2 a connection pinned by HEADERS frames without END_STREAM is closed the same way" do
+    test "over HTTP/2 HEADERS frames without END_STREAM no longer pin a connection: the stream is reset and the connection still serves" do
+      # The connection-level twin of the test above. It used to close the pinned connection
+      # with a GOAWAY at the connection deadline (029b's watchdog). On Bandit 1.13 the first
+      # such frame ends the stream, so there is nothing left to pin: the stream is reset at
+      # once, and a second request on the same connection is served normally.
       body = call_json(1, 200)
       port = listen(read_timeout: 300, connection_timeout: 600)
       started = System.monotonic_time(:millisecond)
       sock = BeamMCP.H2C.open(port, h2_headers(byte_size(body)))
-      pin_stream(sock, 1, fn s, st -> BeamMCP.H2C.headers(s, [{"x-fill", "y"}], st) end, 3_000)
+      pin_stream(sock, 1, fn s, st -> BeamMCP.H2C.headers(s, [{"x-fill", "y"}], st) end, 300)
 
       result = BeamMCP.H2C.response(sock, 5_000)
       elapsed = System.monotonic_time(:millisecond) - started
-      BeamMCP.H2C.close(sock)
+      assert {:rst, 0x1} = result
+      assert elapsed < 600, "the stream ended at #{elapsed} ms, at the connection deadline"
 
-      assert {:goaway, 0, _last} = result
-      assert elapsed >= 600 and elapsed < 1_500
+      second = call_json(2)
+      :ok = BeamMCP.H2C.request(sock, 3, h2_headers(byte_size(second)))
+      :ok = BeamMCP.H2C.data(sock, second, true, 3)
+      assert {:ok, headers, _body} = BeamMCP.H2C.response(sock, 5_000, 3)
+      assert {":status", "200"} in headers
+      BeamMCP.H2C.close(sock)
     end
 
     test "over HTTP/2 the connection is not closed while another stream on it is still within its own deadline" do
@@ -1160,6 +1170,39 @@ defmodule BeamMCP.Transport.HTTPBanditTest do
       body = call_json(1, 200)
       {_ms, result} = drip(listen([]), byte_size(body), binary_part(body, 0, 20), 1_000)
       assert result == {:error, :timeout}
+    end
+  end
+
+  describe "an error the adapter raises while this transport answers is the adapter's" do
+    test "over HTTP/1.1 a client that resets the socket before the answer leaves no fault line of ours" do
+      # The send half of the rule, on a real listener (a review lane's probe, made a test).
+      # The dispatch takes 300 ms; the client sends its request and resets the socket (linger
+      # 0) at 50 ms, so the answer meets a closed socket and the adapter raises its own
+      # transport error out of `send_resp`. Before, that error went through the host-fault
+      # branch and then this transport's fault branch: two error lines blaming the host's code
+      # and this package for the adapter's state. Now it is handed back; the adapter decides
+      # what to log (Bandit logs client closures only under its `log_client_closures`).
+      port =
+        listen(
+          dispatch: fn _n, a, _o ->
+            Process.sleep(300)
+            {:ok, a}
+          end
+        )
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:ok, sock} =
+            :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false, linger: {true, 0}])
+
+          :ok = :gen_tcp.send(sock, good_post(1))
+          Process.sleep(50)
+          :gen_tcp.close(sock)
+          Process.sleep(800)
+        end)
+
+      refute log =~ "beam_mcp", "the adapter's send error was logged as ours: " <> log
+      refute log =~ "Internal error"
     end
   end
 end

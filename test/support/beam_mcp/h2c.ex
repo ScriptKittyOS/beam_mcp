@@ -63,8 +63,9 @@ defmodule BeamMCP.H2C do
     do: :gen_tcp.send(sock, frame(0x8, 0x0, stream, <<0::1, increment::31>>))
 
   # A second HEADERS on the stream with END_HEADERS and without END_STREAM: malformed under
-  # RFC 9113, 8.1 (trailers end the stream), which the adapter reads as trailers, ignores with
-  # a warning line, and re-arms its wait on -- the other way a stream is held.
+  # RFC 9113, 8.1 (trailers end the stream). Bandit before 1.13 read it as trailers, ignored it
+  # with a warning line and re-armed its wait (the other way a stream was held); 1.13 resets the
+  # stream with PROTOCOL_ERROR.
   def headers(sock, fields, stream \\ @stream),
     do: :gen_tcp.send(sock, frame(0x1, 0x4, stream, hpack(fields)))
 
