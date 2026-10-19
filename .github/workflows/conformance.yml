@@ -13,6 +13,12 @@
 # means nothing -- the same defect class as a check count that folds skipped checks into
 # passes. The number it publishes is the README's, reproducible locally by anyone with the
 # toolchain: `tools/conformance.sh`.
+#
+# TWO ARCHITECTURES, ONE BASELINE: the same job on x86_64 and on aarch64 (GitHub's arm64
+# runner, free for public repositories; the fielded edge box is aarch64). Both are held to the
+# same conformance/baseline-<revision>.yml, and the suite exits 1 on an unexpected failure and
+# on a stale entry, so two green jobs mean the same scenarios fail, for the same reasons, on
+# both: the architectures' results are equal by construction, not by a reader comparing them.
 
 name: conformance
 
@@ -26,8 +32,12 @@ permissions:
 
 jobs:
   conformance:
-    name: Conformance - the two rows
-    runs-on: ubuntu-latest
+    name: Conformance - the two rows, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
@@ -57,6 +67,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: conformance-results
+          name: conformance-results-${{ runner.arch }}
           path: ${{ runner.temp }}/conformance
           if-no-files-found: error
