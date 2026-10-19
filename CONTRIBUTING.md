@@ -66,7 +66,7 @@ back, whoever wrote it.
 ## Code review
 
 **How it is done.** Every change reaches `main` through a pull request, the maintainer's
-included, and is merged by rebase only after CI is green on all three OTP/Elixir pairs. The
+included, and is merged by rebase only after CI is green on all four OTP/Elixir legs. The
 reviewer reads the diff, the commit messages and the CI results, and runs the change locally
 when it touches the wire or the host contract. `CONVENTIONS.md`'s tier rule sets the depth: a
 contract change (behaviour a consumer can hit) gets two independent review passes and mutation

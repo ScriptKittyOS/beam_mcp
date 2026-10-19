@@ -31,12 +31,12 @@ Every change, the maintainer's included, goes the same way:
    force-push, no deletion, linear history, and two required status checks: the DCO sign-off
    and the quality gate. A pull request is the only way onto `main`, and it is rebased, never
    merged, so the history is a line.
-2. **The gate.** `tools/gate.sh` runs the same sixteen steps locally and in CI (format,
-   compile with warnings as errors, Dialyzer, the instruments' parse, the suite, Credo, the
+2. **The gate.** `tools/gate.sh` runs the same seventeen steps locally and in CI (format,
+   the runtime's patched OTP floor, compile with warnings as errors, Dialyzer, the instruments' parse, the suite, Credo, the
    properties, the optional-dependency probe, the dependency audit, the benchmarks, the docs,
    REUSE, the licence files, the publication census, the public-API baseline against
-   `origin/main` and the commit-message terms) on three
-   OTP/Elixir pairs (the floor, the pinned line, the newest). There is no baseline to hold: a
+   `origin/main` and the commit-message terms) on four
+   OTP/Elixir legs (the floor, the pinned line, the newest, and the box pair on aarch64). There is no baseline to hold: a
    non-zero count is a failure.
 3. **Review by tier, then the merge word.** `CONVENTIONS.md` states the tier rule: a contract
    change (behaviour a consumer can hit) gets two independent review lanes and mutation
@@ -73,7 +73,7 @@ promised, and moves when the Scorecard next runs.
 | License | `LICENSE`, `NOTICE`, `LICENSES/`, REUSE headers on every file, held by the gate | | 10 |
 | Dependency-Update-Tool | Dependabot, weekly, Mix and GitHub Actions | | 10 |
 | Vulnerabilities | `mix hex.audit` in the gate, OSV-fed, on every push | | 10 |
-| CI-Tests | the gate on three OTP/Elixir pairs | | 10, "7 out of 7 merged PRs checked" |
+| CI-Tests | the gate on four OTP/Elixir legs | | 10, "7 out of 7 merged PRs checked" |
 | Maintained | commits and releases as the CHANGELOG shows | the check scores **0 for any repository younger than 90 days**, whatever its activity; this one was created 2026-09-06, so the figure is the rule's until 2026-12-05 and says nothing about the tree | 0, "created within the last 90 days" |
 | Signed-Releases | releases are Hex releases: from `0.6.0` on, the tarball is built by CI on the tag and attested (`docs/provenance.md`; `0.5.0` and earlier carry none); there are no GitHub Releases with assets for this check to read | the attestation binds to the checksum hex.pm shows, which is where consumers fetch from; a GitHub Release would be a copy | −1, "no releases found": the check reads GitHub Releases only |
 | Packaging | the package is published to hex.pm by the maintainer from the canonical tarball, on a signed tag; no GitHub Actions publishing workflow | the publish step holds a Hex API key, which stays on the maintainer's seat rather than in a workflow secret: a decision, recorded here; the provenance workflow attests the bytes but does not publish them | −1, "packaging workflow not detected": the check reads a publishing workflow only |

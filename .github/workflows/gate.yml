@@ -23,11 +23,18 @@ on:
 # image is observed, not assumed: the first run's log is the evidence, and the slice record
 # quotes it. `fail-fast: false` so one leg's red does not hide another's measurement.
 #
+# THE BOX LEG: the pair a fielded edge box runs (OTP 28 at a patched release, Elixir 1.20), on
+# the architecture it runs on (aarch64, GitHub's arm64 runner, free for public repositories).
+# Its versions are exact (`version-type: strict`), not "the newest 28": the box pins its
+# runtime, so the leg does too. Every leg's gate runs the OTP floor step (tools/otp_floor.sh),
+# so a resolution below a line's patched floor is a red leg, not a green one on a vulnerable
+# runtime.
+#
 # THE REQUIRED CHECK IS THE SUMMARY JOB. The repository's ruleset on main requires the status
 # context "Gate - quality gate" by name; a matrix leg's context carries its values, so no leg
 # could satisfy it and a pull request would wait on a check that never reports. `summary`
 # carries that exact name, runs after every leg (`if: always()`), and fails unless the legs
-# all succeeded -- so the ruleset stays as it is and the required check means "all three".
+# all succeeded -- so the ruleset stays as it is and the required check means "every leg".
 # The token does nothing here but read: the legs read the tree, the summary reads check runs.
 # (What the Scorecard's Token-Permissions check asks for, and what the jobs need anyway.)
 permissions:
@@ -36,15 +43,16 @@ permissions:
 jobs:
   gate:
     name: Gate - leg (OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }}, ${{ matrix.leg }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     if: github.event_name != 'pull_request' || github.event.action != 'edited'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { leg: floor,  otp: "27", elixir: "1.17" }
-          - { leg: pinned, otp: "28", elixir: "1.18" }
-          - { leg: head,   otp: "29", elixir: "1.20" }
+          - { leg: floor,  otp: "27", elixir: "1.17", os: ubuntu-latest, version-type: loose }
+          - { leg: pinned, otp: "28", elixir: "1.18", os: ubuntu-latest, version-type: loose }
+          - { leg: head,   otp: "29", elixir: "1.20", os: ubuntu-latest, version-type: loose }
+          - { leg: box,    otp: "28.5.0.8", elixir: "1.20.4", os: ubuntu-24.04-arm, version-type: strict }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,6 +62,7 @@ jobs:
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
+          version-type: ${{ matrix.version-type }}
       - name: the pair setup-beam installed (observed, quoted in the slice record)
         run: |
           erl -noshell -eval 'io:format("OTP ~s~n", [erlang:system_info(otp_release)]), halt().'
@@ -67,7 +76,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _build/dialyzer
-          key: dialyzer-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock') }}
+          key: dialyzer-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock') }}
       # The leg says what it claims to be, so the gate can hold it to it: on the pinned leg a
       # format step that cannot measure (the running Elixir is not `.tool-versions`' line) is a
       # FAIL, not NOT MEASURED -- otherwise a pin moved in `.tool-versions` and not here would

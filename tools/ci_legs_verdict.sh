@@ -5,7 +5,7 @@
 # The edited-summary read, out of the workflow and into a script a probe can run with a fake
 # `gh`. On a pull-request body edit the legs do not run (the tree did not move) but the
 # summary job carries the REQUIRED context, so it reads the legs' latest check runs for the
-# head SHA and requires all three to be success. G-079 measured the hole: a body edit while the
+# head SHA and requires every one to be success. G-079 measured the hole: a body edit while the
 # same SHA's legs were still running read their conclusions as null and failed "by design",
 # and the ruleset then blocked the pull request on that red although the legs finished green a
 # minute later -- a failed run of the required name blocks even beside a later green one. So
@@ -13,17 +13,17 @@
 # then judges. A tree whose legs never finish is a FAIL at the bound, named as such.
 #
 #     GH_TOKEN=... tools/ci_legs_verdict.sh <owner/repo> <head sha>
-# env: LEGS_MIN (default 3), POLL_SECONDS (default 30), POLL_LIMIT (default 40 -- 20 minutes).
+# env: LEGS_MIN (default 4: floor, pinned, head, box), POLL_SECONDS (default 30), POLL_LIMIT (default 40 -- 20 minutes).
 # exit 0: every leg completed and success; 1: a leg not success, too few legs, or the bound hit.
 set -uo pipefail
 [ $# -eq 2 ] || { echo "usage: tools/ci_legs_verdict.sh <owner/repo> <head-sha>" >&2; exit 2; }
 repo=$1 sha=$2
-min=${LEGS_MIN:-3} every=${POLL_SECONDS:-30} limit=${POLL_LIMIT:-40}
+min=${LEGS_MIN:-4} every=${POLL_SECONDS:-30} limit=${POLL_LIMIT:-40}
 # The expanded leg names only: the skipped matrix job of the edited run registers one
 # unexpanded name ("Gate - leg (OTP ${{ matrix.otp }} ...", skipped), which is not a verdict.
 read_legs() {
   gh api "repos/${repo}/commits/${sha}/check-runs?filter=latest&per_page=100" \
-    --jq '.check_runs[] | select(.name | test("^Gate - leg \\(OTP [0-9]+, Elixir [0-9.]+, [a-z]+\\)$")) | "\(.name): \(.status)/\(.conclusion)"'
+    --jq '.check_runs[] | select(.name | test("^Gate - leg \\(OTP [0-9][0-9.]*, Elixir [0-9.]+, [a-z]+\\)$")) | "\(.name): \(.status)/\(.conclusion)"'
 }
 i=0
 while :; do
