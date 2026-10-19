@@ -138,7 +138,11 @@ defmodule BeamMCP.MixProject do
       # optional: a host using only the stdio transport must not be made to pull an HTTP
       # server in, and `optional: true` keeps them out of that host's dependency tree.
       {:plug, "~> 1.16", optional: true},
-      {:bandit, "~> 1.5", optional: true},
+      # 1.13 is a security floor, not a feature one: below it Bandit carries EEF-CVE-2026-105659
+      # (HTTP/2 send deadlines reset by every WINDOW_UPDATE) and EEF-CVE-2026-105660 (an HTTP/1
+      # request target choosing conn.host and conn.port). A host that pulls Bandit in beside this
+      # transport resolves to a fixed one; a host that does not is unaffected (optional).
+      {:bandit, "~> 1.13", optional: true},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       # Property tests. Test-time only; it does not enter the published package.

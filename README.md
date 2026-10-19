@@ -360,12 +360,13 @@ the connection is clean, and an ordinary response is possible.
   Measured through a real `Bandit` listener: `408` at 300, 301, 327 ms for a 300 ms deadline
   and 1,500, 1,500, 1,501 ms for 1,500 ms; over HTTP/2 a twenty-frame drip answered at the
   deadline. One residue is the adapter's, stated on the threat model's row with its cost: over
-  HTTP/2 a stream kept open by control frames alone (a WINDOW_UPDATE, or a HEADERS without
-  END_STREAM) is held past the deadline by the adapter's own wait, which nothing outside it
-  can end through an interface the adapter offers: one frame per deadline holds a stream
-  process indefinitely, whatever body then comes is refused, a WINDOW_UPDATE costs thirteen
-  bytes with nothing accumulated, and a HEADERS without END_STREAM writes a warning line per
-  frame to the host's log carrying the client's header bytes. The stream is the adapter's to
+  HTTP/2 a stream kept open by WINDOW_UPDATE frames alone is held past the deadline by the
+  adapter's own wait, which nothing outside it can end through an interface the adapter
+  offers: one frame per deadline holds a stream process indefinitely, whatever body then
+  comes is refused, and each frame costs thirteen bytes with nothing accumulated. (A HEADERS
+  without END_STREAM held a stream the same way until `Bandit` 1.13, which resets the stream
+  as a malformed request; this transport hands that error back to the adapter rather than
+  answering it.) The stream is the adapter's to
   end, but the **connection** is this package's: `connection_timeout:` (default twice
   `read_timeout`) closes a connection whose body read has been held that long, with nothing
   else on it still within its own deadline, using a `GOAWAY` the client can read, so the

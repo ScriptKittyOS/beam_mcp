@@ -11,6 +11,49 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed: a request the HTTP adapter rejects is the adapter's to answer
+
+- An exception raised inside a call this transport makes into the adapter (reading the
+  body, sending the response, asking the protocol) is handed back to the adapter unchanged,
+  so its own pipeline answers it. Before, one carrying no `:plug_status` was answered as a
+  fault of this package: `500`, `-32603` "Internal error", and an error-level stacktrace in
+  the host's log. **How to tell whether you are affected:** a host on `Bandit` 1.13 or later
+  serving HTTP/2. `Bandit` 1.13 rejects a mid-body HTTP/2 HEADERS frame without END_STREAM
+  as malformed (RFC 9113, 8.1) and now resets the stream with `PROTOCOL_ERROR`, logged by
+  `Bandit`'s own `log_protocol_errors` setting, where 0.10.1 answered `500`. Host code's own
+  exceptions are unchanged: still `-32603` inside the envelope, with the request's id. The
+  send counts as the adapter's call including the `before_send` callbacks that plugs ahead of
+  this one registered, which Plug runs inside `send_resp`: an exception from one of them now
+  reaches the adapter's error handling, as it would in any Plug stack, rather than this
+  package's `-32603`. A client that resets the connection before the answer is sent no longer
+  leaves error lines from this package in the host's log.
+- The adapter's read timeout is still answered by this package as its `408` JSON-RPC
+  refusal: the whole-body deadline is this package's.
+
+### Security: Bandit 1.13 or later
+
+- The optional requirement moves from `{:bandit, "~> 1.5"}` to `{:bandit, "~> 1.13"}`, for
+  EEF-CVE-2026-105659 (HTTP/2 blocked-send deadlines reset on every WINDOW_UPDATE) and
+  EEF-CVE-2026-105660 (an HTTP/1 request target choosing `conn.host` and `conn.port`), both
+  fixed in `Bandit` 1.13.0. A host that has `Bandit` beside this package now resolves a fixed
+  one; a host on the stdio transport alone, or on another adapter, is unaffected (the
+  dependency stays optional). **If `mix deps.get` reports a conflict,** your own requirement
+  holds `Bandit` below 1.13: raise it to `"~> 1.13"`. `Bandit` 1.13 requires `plug` 1.18 or
+  later, `thousand_island` 1.6 and `hpax` 1.1, and Elixir 1.13 or later (this package's own
+  floor, 1.17, is above it). Its other changes a host may see: HTTP/1.1 requests without a
+  valid `Host` are refused, and idle connections that send nothing are closed without a `408`
+  (its CHANGELOG). This package reads the `Origin` header for its own check, never
+  `conn.host`; an `authorize/1` that reads `conn.host` or `conn.port` needed the fix.
+- This repository's own lock moves `bandit` 1.12.5 to 1.13.1, with `thousand_island` 1.6.0
+  and `hpax` 1.1.0.
+
+### Added: CVE IDs for 0.10.1's advisories
+
+- The Erlang Ecosystem Foundation's CNA assigned two of 0.10.1's CVEs:
+  CVE-2026-104634 is GHSA-wv7p-j6qh-3hj4 ("JSON `true`, `false` and `null` reach dispatch as
+  themselves"), and CVE-2026-88257 is GHSA-mrg2-4747-fmpw ("the advertised schema is enforced
+  at every depth"). GHSA-rq49-3p32-pggg and GHSA-x58h-5gfm-x4p8 have no CVE ID yet.
+
 ### Changed: CVE IDs come from the EEF CNA (SECURITY.md)
 
 - `SECURITY.md` said GitHub assigns this package's CVEs. GitHub is a CNA but does not assign
