@@ -1,0 +1,80 @@
+# SPDX-FileCopyrightText: 2026 Sudo Apt Holdings LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# THE FLAKE HUNT: the suite, run many times a week on the gate's own four pairs and images, to
+# find a test that fails only sometimes before a contributor does. A flaky test shows on one run
+# in tens; the gate runs each leg once per push, so the three found so far were each one red leg
+# that a rerun turned green, and a contributor reported others on their own machine that no run
+# here reproduced (100 runs on two commits). This runs tools/flake_hunt.sh on each leg twice:
+# with the runner's schedulers, and with two (`+S 2`), where a test that waits on time instead of
+# on its condition is likeliest to lose the race. Each run is a fresh VM with a seed of its own;
+# a red run names its tests and the command that replays it, and its output is kept with the run.
+#
+# NOT A REQUIRED CHECK, BY DESIGN: it runs on a schedule and by hand, never on a push or a pull
+# request, so a flake it finds is a finding to fix, not a merge it blocks. A red hunt is a
+# failed scheduled run, which GitHub reports to the maintainer.
+#
+# The matrix is the gate's (governance_test.exs holds the two equal), so a hunt measures the
+# pairs the gate does, on the images the gate names.
+name: flake-hunt
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "runs per scheduler setting on each leg"
+        required: false
+        default: "10"
+
+permissions:
+  contents: read
+
+jobs:
+  hunt:
+    name: Flake hunt (OTP ${{ matrix.otp }}, Elixir ${{ matrix.elixir }}, ${{ matrix.leg }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { leg: floor,  otp: "27", elixir: "1.17", os: ubuntu-24.04, version-type: loose }
+          - { leg: pinned, otp: "28", elixir: "1.18", os: ubuntu-24.04, version-type: loose }
+          - { leg: head,   otp: "29", elixir: "1.20", os: ubuntu-24.04, version-type: loose }
+          - { leg: box,    otp: "28.5.0.8", elixir: "1.20.4", os: ubuntu-26.04-arm, version-type: strict }
+    env:
+      # Through the environment, never inline in a script: the input is the dispatcher's text,
+      # and tools/flake_hunt.sh refuses anything but a positive integer.
+      RUNS: ${{ inputs.runs || '10' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+          version-type: ${{ matrix.version-type }}
+      - name: the pair setup-beam installed
+        run: |
+          erl -noshell -eval 'io:format("OTP ~s~n", [erlang:system_info(otp_release)]), halt().'
+          erl -noshell -eval 'ok = application:load(crypto), [{_, _, V}] = crypto:info_lib(), io:format("crypto linked to ~s~n", [V]), halt().'
+          elixir --version
+      - run: mix deps.get
+      - run: MIX_ENV=test mix compile
+      - name: the hunt's own probe (offline)
+        run: bash tools/probe_flake_hunt.sh
+      - name: the suite, RUNS times, the runner's schedulers
+        run: ./tools/flake_hunt.sh "$RUNS" "$RUNNER_TEMP/hunt/default"
+      - name: the suite, RUNS times, two schedulers
+        if: ${{ !cancelled() }}
+        env:
+          ERL_FLAGS: "+S 2"
+        run: ./tools/flake_hunt.sh "$RUNS" "$RUNNER_TEMP/hunt/s2"
+      - name: the red runs' output, kept with the run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flake-hunt-${{ matrix.leg }}
+          path: ${{ runner.temp }}/hunt
+          if-no-files-found: ignore

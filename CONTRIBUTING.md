@@ -63,6 +63,14 @@ before the fix (below). A change to the wire or to the host contract is also mea
 mutation, as `CONVENTIONS.md`'s tier rule says. A pull request without its tests is sent
 back, whoever wrote it.
 
+**A test that fails only sometimes is a bug, and worth an issue.** If `mix test` fails on a
+`main` you have not changed, and the test passes alone, please open an issue with the test's
+name and the seed: `tools/flake_hunt.sh 20` runs the suite twenty times, each with a seed of
+its own, and prints each red run's failed tests with the command that replays it
+(`ERL_FLAGS="+S 2"` runs it with two schedulers, where a test that waits on time rather than
+on its condition loses most often). CI runs the same hunt weekly on the gate's four pairs
+(`.github/workflows/flake-hunt.yml`).
+
 ## Code review
 
 **How it is done.** Every change reaches `main` through a pull request, the maintainer's
