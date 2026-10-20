@@ -47,6 +47,26 @@ defmodule BeamMCP.Connectome.TracerTest do
     Tracer.start(Keyword.merge([collector: collector, server: @server], opts))
   end
 
+  # The barrier before a stop: every trace message the BEAM will deliver for what has run so
+  # far is in the tracer's mailbox, and the tracer has handled it. A `:sys.get_state/1` call
+  # alone waits only for what has already ARRIVED: trace delivery is "dislocated on the
+  # time-line compared to other events" (`erlang:trace_delivered/1`'s documentation), and the
+  # floor leg of gate run 39344186410 counted one of two calls (weight 1, want 2).
+  # `trace:delivered/2` is this same BIF for a session (kernel's trace.erl calls it), so the
+  # tracer's private session handle is not needed here.
+  defp handled do
+    ref = :erlang.trace_delivered(:all)
+
+    receive do
+      {:trace_delivered, :all, ^ref} -> :ok
+    after
+      5_000 -> flunk("the BEAM did not confirm trace delivery within 5 s")
+    end
+
+    _ = :sys.get_state(Tracer)
+    :ok
+  end
+
   # The tracer's sessions alive in the node, as weak handles; nothing left behind is `[]`.
   defp sessions, do: Enum.filter(:trace.session_info(:all), &match?({@session, _}, &1))
 
@@ -866,7 +886,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       # A call that is a message to the code server from this process, whether or not the
       # module is already loaded (under cover every module is).
       _ = :code.get_path()
-      _ = :sys.get_state(Tracer)
+      :ok = handled()
       :ok = Tracer.stop()
       Process.unregister(:tracer_test_sender6)
       {:ok, g} = Observed.snapshot(c)
@@ -884,7 +904,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       Traced.wrapped(@marker)
       # The barrier: a stop ends the tracer on the next message it handles, writing nothing
       # after the flag, so the trace message must be handled before the stop is asked.
-      _ = :sys.get_state(Tracer)
+      :ok = handled()
       :ok = Tracer.stop()
 
       {:ok, %Graph{} = g} = Observed.snapshot(c)
@@ -901,7 +921,7 @@ defmodule BeamMCP.Connectome.TracerTest do
     test "a dynamic call through apply/3 is the same edge as a static one", %{collector: c} do
       {:ok, _} = start(c, modules: [Beta])
       Traced.apply_wrapped(Beta, [@marker])
-      _ = :sys.get_state(Tracer)
+      :ok = handled()
       :ok = Tracer.stop()
 
       {:ok, g} = Observed.snapshot(c)
@@ -919,7 +939,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       {:ok, _} = start(c, modules: [Beta])
       Traced.tail(1)
       Alpha.run(1)
-      _ = :sys.get_state(Tracer)
+      :ok = handled()
       :ok = Tracer.stop()
 
       {:ok, g} = Observed.snapshot(c)
@@ -962,8 +982,8 @@ defmodule BeamMCP.Connectome.TracerTest do
       assert_receive :got
       assert_receive :got
       # stop/0 ends the tracer on the next message it handles and discards what is still
-      # queued; a system message is answered in mailbox order, so this waits for both.
-      _ = :sys.get_state(Tracer)
+      # queued; handled/0 waits for both trace messages to arrive and be handled first.
+      :ok = handled()
       :ok = Tracer.stop()
       send(receiver, :done)
       Process.unregister(:tracer_test_sender)
@@ -1023,7 +1043,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       send(pid, :something_else)
       send({:tracer_test_sender3, node()}, :to_myself_by_name)
       assert Tracer.running?()
-      _ = :sys.get_state(Tracer)
+      :ok = handled()
       :ok = Tracer.stop()
       Process.unregister(:tracer_test_sender3)
 
@@ -1040,7 +1060,7 @@ defmodule BeamMCP.Connectome.TracerTest do
       anon = spawn_link(fn -> receive do: (_ -> :ok) end)
       {:ok, _} = start(c, processes: [:tracer_test_sender2])
       send(anon, @marker)
-      _ = :sys.get_state(Tracer)
+      :ok = handled()
       :ok = Tracer.stop()
       Process.unregister(:tracer_test_sender2)
 
