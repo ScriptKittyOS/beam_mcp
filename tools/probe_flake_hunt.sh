@@ -25,6 +25,9 @@ case $outcome in
   pass) printf 'Finished in 1.0 seconds\n11 properties, 786 tests, 0 failures\n'; exit 0 ;;
   fail) printf '  1) test the restarted collector counts from no rows (BeamMCP.ObservedTest)\n     test/beam_mcp/connectome/observed_test.exs:150\n\nFinished in 1.0 seconds\n11 properties, 786 tests, 1 failure\n'; exit 2 ;;
   silent) exit 0 ;;
+  # Elixir 1.20's summary (measured on 1.20.4): "Result: N passed (...)" green, "Result: P/T passed" red.
+  pass120) printf 'Finished in 1.0 seconds (0.5s async, 0.5s sync)\n\nResult: 798 passed (11 properties, 787 tests)\n'; exit 0 ;;
+  fail120) printf '  1) test the restarted collector counts from no rows (BeamMCP.ObservedTest)\n     test/beam_mcp/connectome/observed_test.exs:150\n\nFinished in 1.0 seconds\n\nResult: 797/798 passed\n'; exit 2 ;;
 esac
 MIX
 chmod +x "$work/bin/mix"
@@ -46,5 +49,7 @@ run "H3 one red run among greens" 1 "pass fail pass" 3 "run 2: seed 1002; exit 2
 run "H4 a green exit with no summary is not a pass" 1 "silent" 1 "no summary" "hunt: 1 run\(s\), 1 failed"
 run "H5 a run count that is not a positive integer" 2 "pass" 0
 run "H6 the red run's whole output is kept" 1 "fail" 1
+run "H7 Elixir 1.20's green summary is a summary" 0 "pass120" 2 "run 1: seed 1001; exit 0; Result: 798 passed" "hunt: 2 run\(s\), 0 failed"
+run "H8 Elixir 1.20's red run is named with its replay" 1 "pass120 fail120" 2 "run 2: seed 1002; exit 2; Result: 797/798 passed" "the restarted collector" "mix test --seed 1002"
 ls "$work/H6/out"/run-1-seed-1001.txt >/dev/null 2>&1 || { echo "    missing: H6's kept output"; bad=1; }
 if [ "$bad" -eq 0 ]; then echo "PROBE OK: every run has its own seed; a red or silent run fails the hunt, named with its replay"; else echo "PROBE FAILED"; exit 1; fi
