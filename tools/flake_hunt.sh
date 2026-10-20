@@ -27,7 +27,9 @@ for i in $(seq 1 "$runs"); do
   log="$out/run-$i-seed-$seed.txt"
   mix test --seed "$seed" > "$log" 2>&1
   rc=$?
-  summary=$(grep -E '[0-9]+ tests?, [0-9]+ failures?' "$log" | tail -1)
+  # The summary line in either of ExUnit's forms: "786 tests, 0 failures" (to Elixir 1.19) or
+  # "Result: 798 passed (...)", "Result: 797/798 passed" (1.20 on).
+  summary=$(grep -E '[0-9]+ tests?, [0-9]+ failures?|^Result: [0-9]+(/[0-9]+)? passed' "$log" | tail -1)
   echo "run $i: seed $seed; exit $rc; ${summary:-no summary}"
   # A green exit with no summary measured nothing (the suite did not report), so it is not a pass.
   if [ "$rc" -ne 0 ] || [ -z "$summary" ]; then
