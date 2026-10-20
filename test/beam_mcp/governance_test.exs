@@ -103,6 +103,27 @@ defmodule BeamMCP.GovernanceTest do
            "gate.yml's toolchain step does not print crypto:info_lib()"
   end
 
+  # The hunt measures what the gate measures: a pair added to the gate and not to the hunt would
+  # be hunted nowhere, and a pair only in the hunt would be one the gate does not support.
+  test "the flake hunt runs the gate's four pairs on the gate's images, and never on a push or a pull request" do
+    pairs = fn wf ->
+      File.read!(wf)
+      |> String.split("\n")
+      |> Enum.filter(&(&1 =~ ~r/^\s+- \{ leg:/))
+      |> Enum.map(&(&1 |> String.trim() |> String.replace(~r/\s+/, " ")))
+      |> Enum.sort()
+    end
+
+    gate = pairs.(".github/workflows/gate.yml")
+    assert length(gate) == 4
+    assert pairs.(".github/workflows/flake-hunt.yml") == gate
+
+    [triggers, _] =
+      String.split(File.read!(".github/workflows/flake-hunt.yml"), ~r/^permissions:/m, parts: 2)
+
+    refute triggers =~ ~r/^\s+(push|pull_request)/m
+  end
+
   test "every workflow declares top-level permissions, and write permissions live on the job that needs them" do
     for wf <- @workflows do
       text = File.read!(wf)
