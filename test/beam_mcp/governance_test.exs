@@ -70,6 +70,27 @@ defmodule BeamMCP.GovernanceTest do
     end
   end
 
+  # A `-latest` label is moved by GitHub, not by a commit: `ubuntu-latest` becomes 26.04 in
+  # November 2026 (actions/runner-images#14748), which changes the OpenSSL every such leg links
+  # (3.0.13 to 3.5.5) with nothing in this tree's history to say so. Named images move only in
+  # a commit, as the pins on actions do.
+  test "every job names its runner image by version: no -latest label, and a matrix supplies only named images" do
+    for wf <- @workflows,
+        {line, n} <- Enum.with_index(String.split(File.read!(wf), "\n"), 1) do
+      refute line =~ ~r/\b[a-z]+-latest\b/,
+             "#{wf}:#{n} names a moving runner label: #{String.trim(line)}"
+
+      if line =~ ~r/^\s*runs-on:/ do
+        assert line =~ ~r/runs-on:\s+(ubuntu-\d\d\.\d\d(-arm)?|\$\{\{ matrix\.os \}\})\s*$/,
+               "#{wf}:#{n} runs on something other than a named image: #{String.trim(line)}"
+      end
+
+      for [image] <- Regex.scan(~r/\bubuntu-[a-z0-9.]+(?:-arm)?\b/, line) do
+        assert image =~ ~r/^ubuntu-\d\d\.\d\d(-arm)?$/, "#{wf}:#{n} names #{image}"
+      end
+    end
+  end
+
   test "every workflow declares top-level permissions, and write permissions live on the job that needs them" do
     for wf <- @workflows do
       text = File.read!(wf)

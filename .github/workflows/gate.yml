@@ -24,7 +24,10 @@ on:
 # quotes it. `fail-fast: false` so one leg's red does not hide another's measurement.
 #
 # THE BOX LEG: the pair a fielded edge box runs (OTP 28 at a patched release, Elixir 1.20), on
-# the architecture it runs on (aarch64, GitHub's arm64 runner, free for public repositories).
+# the architecture it runs on (aarch64, GitHub's arm64 runner, free for public repositories),
+# over the OpenSSL line the box's image pins (3.5 or later): Ubuntu 26.04's runner ships 3.5.5,
+# and builds.hex.pm's OTP for it links that, where 24.04's links 3.0.13. Every runner is named
+# by its image, never `-latest`, so an image moves only in a commit (governance_test.exs).
 # Its versions are exact (`version-type: strict`), not "the newest 28": the box pins its
 # runtime, so the leg does too. Every leg's gate runs the OTP floor step (tools/otp_floor.sh),
 # so a resolution below a line's patched floor is a red leg, not a green one on a vulnerable
@@ -49,10 +52,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { leg: floor,  otp: "27", elixir: "1.17", os: ubuntu-latest, version-type: loose }
-          - { leg: pinned, otp: "28", elixir: "1.18", os: ubuntu-latest, version-type: loose }
-          - { leg: head,   otp: "29", elixir: "1.20", os: ubuntu-latest, version-type: loose }
-          - { leg: box,    otp: "28.5.0.8", elixir: "1.20.4", os: ubuntu-24.04-arm, version-type: strict }
+          - { leg: floor,  otp: "27", elixir: "1.17", os: ubuntu-24.04, version-type: loose }
+          - { leg: pinned, otp: "28", elixir: "1.18", os: ubuntu-24.04, version-type: loose }
+          - { leg: head,   otp: "29", elixir: "1.20", os: ubuntu-24.04, version-type: loose }
+          - { leg: box,    otp: "28.5.0.8", elixir: "1.20.4", os: ubuntu-26.04-arm, version-type: strict }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,7 +96,7 @@ jobs:
   # script, so its contents cannot be run as a command.
   pr-body:
     name: Gate - pull-request body
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,7 +117,7 @@ jobs:
 
   summary:
     name: Gate - quality gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [gate, pr-body]
     if: always()
     # The edited path may wait up to 20 minutes for running legs (tools/ci_legs_verdict.sh's
@@ -139,7 +142,7 @@ jobs:
             # the REQUIRED context, and a fresh green under that name on a commit whose legs
             # this run never read would let a title edit stand a green beside a red (a review
             # lane's finding). So the legs' verdicts for this head SHA are read from the checks
-            # API -- the latest run of each leg name -- and all three must be success. The
+            # API -- the latest run of each leg name -- and all four must be success. The
             # read WAITS for legs still running (G-079: an edit during the synchronize run read
             # null conclusions, failed, and the ruleset blocked on that red beside the later
             # green); tools/ci_legs_verdict.sh polls to a bound, and its probe runs offline.
@@ -152,7 +155,7 @@ jobs:
 
   dco:
     name: Gate - DCO sign-off
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -26,7 +26,7 @@ permissions: read-all
 jobs:
   analysis:
     name: Scorecard - the measurement
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # The action's documented needs: SARIF upload and the OIDC token that publish_results
       # signs the result with. Nothing writes to the tree.
