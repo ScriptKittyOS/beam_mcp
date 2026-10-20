@@ -108,12 +108,33 @@ defmodule BeamMCP.Server do
   The dispatch contract. A host supplies a function of this shape; the server calls it and
   never inspects what it does. Any three-arity function returning an ok-or-error tuple
   satisfies it, whatever sits behind it.
+
+  The arguments are the tool's name, its validated arguments (atom keys), and the host's own
+  `dispatch_opts` with one key added, `:mcp`, reserved for the request's context:
+
+      %{
+        meta: map(),                       # the request's params._meta as sent, or %{}
+        client_capabilities: map() | nil,  # the client's declared capabilities, if any
+        protocol_version: String.t()       # the revision the request is served under
+      }
+
+  `meta` keeps string keys, as the client sent them. A request that names its revision in
+  `params._meta` is served under that revision, and the capabilities are the ones it carries
+  there (`2026-07-28` requires them); a request with no `_meta` is served under `2025-11-25`,
+  whatever `initialize` negotiated, and its capabilities are the ones `initialize` declared.
+  A capabilities value that is not an object is `nil`. Everything in this map is the client's
+  word, unverified: authorise on the host's own evidence (the transport's `authorize` hook),
+  never on `meta`. Later fields join this map at a minor release, so a host matches the keys it
+  reads and keeps no exhaustive pattern on it. The key is reserved: `new/1` refuses
+  `dispatch_opts` carrying `:mcp`.
   """
   @type dispatch :: (atom(), map(), keyword() -> {:ok, term()} | {:error, term()})
 
   @type state :: %{
           dispatch: (atom(), map(), keyword() -> {:ok, term()} | {:error, term()}),
           dispatch_opts: keyword(),
+          client: nil | %{capabilities: map() | nil},
+          request: nil | %{meta: map(), protocol_version: String.t()},
           initialized?: boolean(),
           server_name: String.t(),
           shutdown?: boolean(),
@@ -168,7 +189,8 @@ defmodule BeamMCP.Server do
   @options [
     catalog: "a module implementing the BeamMCP.Catalog behaviour",
     dispatch: "a function of three arguments, or absent",
-    dispatch_opts: "a keyword list",
+    dispatch_opts:
+      "a keyword list without the key :mcp (reserved: the request's context arrives under it)",
     server_name: "a string",
     supported_versions:
       "a non-empty list of the revisions this package implements, in the order to advertise them",
@@ -185,7 +207,10 @@ defmodule BeamMCP.Server do
 
   defp valid?(:catalog, value), do: is_atom(value)
   defp valid?(:dispatch, value), do: is_nil(value) or is_function(value, 3)
-  defp valid?(:dispatch_opts, value), do: Keyword.keyword?(value)
+
+  defp valid?(:dispatch_opts, value),
+    do: Keyword.keyword?(value) and not Keyword.has_key?(value, :mcp)
+
   defp valid?(:server_name, value), do: is_binary(value)
 
   defp valid?(:supported_versions, value),
@@ -206,6 +231,11 @@ defmodule BeamMCP.Server do
     %{
       dispatch: Keyword.get(opts, :dispatch),
       dispatch_opts: Keyword.get(opts, :dispatch_opts, []),
+      # What a 2025-11-25 session's initialize declared, and the one request being served:
+      # both read only to hand dispatch its `:mcp` context. `request` is set for one message
+      # and cleared after it, so a stdio state never carries one request's _meta into the next.
+      client: nil,
+      request: nil,
       initialized?: false,
       server_name: Keyword.get(opts, :server_name, @default_server_name),
       shutdown?: false,
@@ -313,7 +343,14 @@ defmodule BeamMCP.Server do
           "serverInfo" => %{"name" => state.server_name, "version" => @server_version}
         })
 
-      {%{state | initialized?: true}, response}
+      capabilities =
+        case message do
+          %{"params" => %{"capabilities" => %{} = caps}} -> caps
+          _ -> nil
+        end
+
+      client = %{capabilities: capabilities}
+      {%{state | initialized?: true, client: client}, response}
     else
       {state, unsupported_version(state, id, requested)}
     end
@@ -362,7 +399,7 @@ defmodule BeamMCP.Server do
             {state, error(id, -32_601, "Method not found: ping")}
 
           true ->
-            {next, response} = handle_message(state, bare)
+            {next, response} = serve_request(state, bare, meta, version)
             # `next`, not `state`: modernise/2 reads only server_name today, which nothing
             # mutates, so this is currently indistinguishable -- and would stop being so the
             # moment any handler changed a field modernise/2 reads.
@@ -372,7 +409,7 @@ defmodule BeamMCP.Server do
       @legacy_version ->
         # 2025-11-25 semantics: ping exists, and the result carries neither resultType nor
         # serverInfo _meta, both of which 2026-07-28 introduced.
-        handle_message(state, bare)
+        serve_request(state, bare, meta, version)
 
       _other ->
         {state, unsupported_version(state, id, version)}
@@ -821,7 +858,7 @@ defmodule BeamMCP.Server do
     encoded = to_json_value(payload)
 
     %{
-      "content" => [%{"type" => "text", "text" => Jason.encode!(encoded, pretty: true)}],
+      "content" => [%{"type" => "text", "text" => BeamMCP.JSON.encode!(encoded, pretty: true)}],
       "structuredContent" => encoded,
       "isError" => false
     }
@@ -846,6 +883,7 @@ defmodule BeamMCP.Server do
   defp error_text(reason) when is_map(reason) do
     reason
     |> to_json_value()
+    |> Enum.sort_by(fn {key, _} -> {to_string(key), key} end)
     |> Enum.map_join(", ", fn {key, value} -> "#{key}: #{stringify(value)}" end)
   end
 
@@ -853,7 +891,7 @@ defmodule BeamMCP.Server do
 
   defp stringify(value) when is_binary(value), do: value
   defp stringify(value) when is_number(value), do: to_string(value)
-  defp stringify(value), do: Jason.encode!(value)
+  defp stringify(value), do: BeamMCP.JSON.encode!(value)
 
   # One lookup governs both paths: a tool is callable exactly when the injected catalog names
   # it, and the spec it returns carries the schema that will be enforced. Both this and the
@@ -865,6 +903,40 @@ defmodule BeamMCP.Server do
   # host's `capabilities/0` is safe -- unlike `Transport.HTTP.init/1`, which under Plug's
   # default init_mode is the host's COMPILE time. Same pattern as `:authorize`: a host that
   # mis-wires this learns when it starts, not from a BadMapError in a request path.
+  # One message served with its request's _meta in hand, for dispatch's `:mcp` context only,
+  # and cleared on the way out (`request: nil`), whatever the handler did with the state.
+  defp serve_request(state, bare, meta, version) do
+    # Map.put, not `%{state | ...}`: a state built by hand, or held from before this field
+    # existed, has no `:request` key, and the update syntax would raise on it.
+    {next, response} =
+      handle_message(Map.put(state, :request, %{meta: meta, protocol_version: version}), bare)
+
+    {Map.put(next, :request, nil), response}
+  end
+
+  # The context dispatch receives under `:mcp`: the request's own when it carried _meta
+  # (2026-07-28 requires it, with the capabilities inside), else the session's (initialize).
+  # A request without _meta is served under 2025-11-25 semantics whatever initialize
+  # negotiated (it never reaches the versioned clause), so that is the revision it is told.
+  defp request_context(%{request: %{meta: meta, protocol_version: version}} = state) do
+    caps = Map.get(meta, @capabilities_meta_key, session_capabilities(state))
+    %{meta: meta, client_capabilities: object_or_nil(caps), protocol_version: version}
+  end
+
+  defp request_context(state) do
+    %{
+      meta: %{},
+      client_capabilities: session_capabilities(state),
+      protocol_version: @legacy_version
+    }
+  end
+
+  defp session_capabilities(%{client: %{capabilities: caps}}), do: caps
+  defp session_capabilities(_state), do: nil
+
+  defp object_or_nil(%{} = map) when not is_struct(map), do: map
+  defp object_or_nil(_), do: nil
+
   defp validate_options!(opts) do
     unless Keyword.keyword?(opts) do
       raise ArgumentError, "BeamMCP.Server.new/1 takes a keyword list, got: #{inspect(opts)}"
@@ -960,7 +1032,7 @@ defmodule BeamMCP.Server do
     )
 
     try do
-      result = state.dispatch.(tool, args, state.dispatch_opts)
+      result = state.dispatch.(tool, args, state.dispatch_opts ++ [mcp: request_context(state)])
       stop = System.monotonic_time()
 
       :telemetry.execute(

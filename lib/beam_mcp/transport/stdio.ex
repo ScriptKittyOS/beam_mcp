@@ -335,13 +335,13 @@ defmodule BeamMCP.Transport.Stdio do
   defp write_message(message) do
     line =
       try do
-        Jason.encode!(message)
+        BeamMCP.JSON.encode!(message)
       rescue
         e ->
           # The exception's name, not its message: the encoder's message quotes the bytes it
           # refused, and those are the host's.
           report("a response could not be encoded as JSON (#{inspect(e.__struct__)})")
-          Jason.encode!(error(Map.get(message, "id"), -32_603, "Internal error"))
+          BeamMCP.JSON.encode!(error(Map.get(message, "id"), -32_603, "Internal error"))
       end
 
     IO.binwrite(:stdio, [line, "\n"])

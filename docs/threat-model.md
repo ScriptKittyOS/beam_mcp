@@ -91,7 +91,11 @@ tool, and the client that chose to feed its result to a model, own that vector b
 the tool then does (the effect in the world, the privilege it uses) is the host's, and the
 connectome exists to make that inspectable (which effects a catalog can reach, and which paths
 cross a gate), not to decide it. The sign an edge carries is a consumer's; this package writes
-only `:unset` and never treats any sign as suppression.
+only `:unset` and never treats any sign as suppression. With the call, dispatch receives the request's
+context under `:mcp`: the request's `params._meta` as the client sent it and the capabilities
+the client declares. Both are the client's word, unvalidated beyond their JSON shape: a host
+authorises on its own evidence (the transport's `authorize` and `authorize_body` hooks), never
+on a tenant, a role or a capability read from `meta`.
 
 **Authority.** The verdict on an edge, the key that would sign a finding, the decision that
 acts on one: absent by decision (`docs/will-not-implement.md`, entries 1–4). A threat model for

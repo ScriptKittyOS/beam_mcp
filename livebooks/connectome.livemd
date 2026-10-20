@@ -28,7 +28,7 @@ each is held by a test to what the package produces from its fixtures today. To 
 your own system, point the next cell at your own exports.
 
 The fixture is small on purpose: a server `fx` declaring two tools, one resource, one
-prompt and six modules, and a run of the collector in which the *running* catalog carried
+resource template, one prompt and six modules, and a run of the collector in which the *running* catalog carried
 a third tool the declaration never mentioned.
 
 ```elixir

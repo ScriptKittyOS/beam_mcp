@@ -161,7 +161,8 @@ defmodule BeamMCP.ServerTest do
         }
       })
 
-    assert_receive {:dispatch, :propose_action, args, []}
+    # The host passed no dispatch_opts: the third argument is only the reserved request context.
+    assert_receive {:dispatch, :propose_action, args, [mcp: %{meta: %{}}]}
     assert args[:case_id] == "case-7"
     # The package normalises the KEY and passes the VALUE through. Turning "contain" into an
     # atom is domain knowledge and belongs to the host's dispatch, not to a generic server.

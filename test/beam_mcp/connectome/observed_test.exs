@@ -605,7 +605,8 @@ defmodule BeamMCP.Connectome.ObservedTest do
         )
 
       assert {_, %{"result" => _}} = call(state, :echo, %{"k" => "plain"})
-      assert_receive {:opts, [secret: @marker]}
+      # The host's own options, as given, then the reserved request context.
+      assert_receive {:opts, [{:secret, @marker}, {:mcp, %{}}]}
       assert_marker_absent(name)
     end
 

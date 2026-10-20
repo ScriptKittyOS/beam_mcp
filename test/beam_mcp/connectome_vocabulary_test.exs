@@ -15,10 +15,12 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
      this file red, and a term added here without the document being updated does the same.
   3. Every atom in a `@type` union under `lib/beam_mcp/connectome/` is defined in the document.
      Derived by reading the tree, not listed: the population is every `.ex` file under that
-     directory, and the atoms are the alternatives of every `@type` there. Empty today, which is
-     the point -- the first `@type sign :: :allow | ...` a later slice writes is policed by a
-     test that already runs, and a fifth edge kind or a new sign cannot arrive without a
-     sentence in the public vocabulary.
+     directory, and the atoms are the alternatives of every `@type` there. It was empty when
+     this anchor was written, which was the point: the first `@type sign :: :allow | ...` a
+     later slice wrote was policed by a test that already ran, so an edge kind, a node kind or
+     a sign cannot arrive without a sentence in the public vocabulary. Whether such a set may
+     grow at a minor is a different question, answered on `docs/api-stability.md` and held by
+     `test/beam_mcp/growth_table_test.exs` over the compiled types.
 
   The limit, stated: anchor 3 reads `@type` unions only, and only their BARE-ATOM alternatives
   (`:: :a | :b`), checking for a definition row anywhere in the document rather than under a
@@ -49,7 +51,7 @@ defmodule BeamMCP.ConnectomeVocabularyTest do
   # the node-kind row for `:module` survived -- the level row satisfied it (mutation Md5). The
   # heading is the family, and a row outside it does not define the term in it.
   @families [
-    {"Node kinds", [:server, :tool, :resource, :prompt, :process, :module]},
+    {"Node kinds", [:server, :tool, :resource, :resource_template, :prompt, :process, :module]},
     {"Edge kinds", [:invoke, :read, :message, :supervise]},
     {"Sign", [:allow, :deny, :hold, :ungoverned, :unset]},
     {"Level", [:mfa, :module, :boundary, :server]},

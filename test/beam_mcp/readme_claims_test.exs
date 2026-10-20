@@ -993,4 +993,53 @@ defmodule BeamMCP.ReadmeClaimsTest do
 
     HTTP.call(conn, HTTP.init(opts))
   end
+
+  describe "the dispatch callback's third argument" do
+    defmodule ContextCatalog do
+      @moduledoc false
+      def capabilities do
+        %{
+          tools: [
+            %BeamMCP.ToolSpec{
+              name: :probe,
+              command_class: :observe,
+              mode: :read_only,
+              description: "Reports its third argument."
+            }
+          ],
+          resources: [],
+          prompts: []
+        }
+      end
+    end
+
+    test "is the host's dispatch_opts plus :mcp, whose meta is params._meta as sent" do
+      assert readme() |> String.replace(~r/\s+/u, " ") =~
+               "The third argument is the host's own `dispatch_opts` plus one reserved key, `:mcp`"
+
+      parent = self()
+
+      state =
+        BeamMCP.Server.new(
+          catalog: ContextCatalog,
+          dispatch: fn _, _, opts -> send(parent, {:opts, opts}) && {:ok, %{}} end,
+          dispatch_opts: [mine: 1]
+        )
+
+      meta = %{
+        "io.modelcontextprotocol/protocolVersion" => "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities" => %{},
+        "com.example/x" => 1
+      }
+
+      BeamMCP.Server.handle_message(state, %{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/call",
+        "params" => %{"name" => "probe", "arguments" => %{}, "_meta" => meta}
+      })
+
+      assert_receive {:opts, [mine: 1, mcp: %{meta: ^meta, protocol_version: "2026-07-28"}]}
+    end
+  end
 end

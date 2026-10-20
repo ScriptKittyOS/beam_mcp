@@ -9,7 +9,8 @@ defmodule BeamMCP.WireRecordingTest do
   that the same catalog still answers exactly that, and that the catalog with the surface's
   entries added answers exactly that plus the entries -- nothing else on the wire moved, and
   `server/discover` is identical (as decoded JSON: the recording holds the decoded responses,
-  and the encoder is deterministic): no capability was claimed for a graph.
+  and the encoder writes every map's keys in sorted order, so equal decoded JSON is equal bytes:
+  `test/beam_mcp/wire_bytes_test.exs`): no capability was claimed for a graph.
 
   The recording pins the package version the results carry, so a release bump fails both
   tests; the rule then is to re-record with the recorder on the fixture catalog WITHOUT the

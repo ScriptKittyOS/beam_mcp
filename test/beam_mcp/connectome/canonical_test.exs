@@ -144,7 +144,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
 
       assert String.starts_with?(
                bytes,
-               ~s({"schema_version":3,"algorithm":"sha256","nodes":[{"id":")
+               ~s({"schema_version":4,"algorithm":"sha256","nodes":[{"id":")
              )
 
       assert bytes == File.read!(Path.join(@fixtures, "golden.json"))
@@ -170,7 +170,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       decoded = Jason.decode!(Canonical.encode!(golden_graph()))
 
       words =
-        ~w(server tool resource prompt process module mfa boundary invoke read message supervise allow deny hold unknown declared observed)
+        ~w(server tool resource resource_template prompt process module mfa boundary invoke read message supervise allow deny hold unknown declared observed)
 
       for node <- decoded["nodes"], {key, value} <- node, is_binary(value), value in words do
         assert key in ["kind", "level"], "#{value} under #{key}"
@@ -615,14 +615,14 @@ defmodule BeamMCP.Connectome.CanonicalTest do
     test "the envelope names its algorithm right after the version, and the default is sha256" do
       g = golden_graph()
       {:ok, bytes} = Canonical.encode(g)
-      assert String.starts_with?(bytes, ~s({"schema_version":3,"algorithm":"sha256","nodes":[))
+      assert String.starts_with?(bytes, ~s({"schema_version":4,"algorithm":"sha256","nodes":[))
       assert Canonical.encode!(g, algorithm: :sha256) == bytes
     end
 
     test "an envelope tagged sha384 round-trips: the bytes name it and the hash is SHA-384 over them" do
       g = golden_graph()
       {:ok, bytes} = Canonical.encode(g, algorithm: :sha384)
-      assert String.starts_with?(bytes, ~s({"schema_version":3,"algorithm":"sha384","nodes":[))
+      assert String.starts_with?(bytes, ~s({"schema_version":4,"algorithm":"sha384","nodes":[))
       assert {:ok, hash} = Canonical.hash(g, algorithm: :sha384)
       assert hash == :crypto.hash(:sha384, bytes)
       assert byte_size(hash) == 48
@@ -738,15 +738,15 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert verifier_algorithm(v2) == :sha256
       assert Base.encode16(:crypto.hash(verifier_algorithm(v2), v2), case: :lower) == v2_hex
 
-      v3 = File.read!(Path.join(@fixtures, "golden.json"))
+      v3 = File.read!(Path.join(@fixtures, "golden.v3.json"))
       assert verifier_algorithm(v3) == :sha256
 
       assert Base.encode16(:crypto.hash(:sha256, v3), case: :lower) ==
-               String.trim(File.read!(Path.join(@fixtures, "golden.sha256")))
+               String.trim(File.read!(Path.join(@fixtures, "golden.v3.sha256")))
 
       assert verifier_algorithm(Canonical.encode!(golden_graph(), algorithm: :sha384)) == :sha384
       # And what the page calls malformed, the verifier refuses: a 2 with a member, a 3
-      # without one, a 4, an unknown name.
+      # without one, a 5, an unknown name.
       with_member = ~s({"schema_version":2,"algorithm":"sha256",)
 
       assert verifier_algorithm(String.replace(v2, ~s({"schema_version":2,), with_member)) ==
@@ -755,7 +755,7 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       assert verifier_algorithm(String.replace(v3, ~s("algorithm":"sha256",), "")) == :malformed
 
       assert verifier_algorithm(
-               String.replace(v3, ~s("schema_version":3), ~s("schema_version":4))
+               String.replace(v3, ~s("schema_version":3), ~s("schema_version":5))
              ) == :malformed
 
       assert verifier_algorithm(String.replace(v3, "sha256", "sha3-256")) == :malformed
@@ -763,6 +763,29 @@ defmodule BeamMCP.Connectome.CanonicalTest do
       # And the package itself no longer writes 2: a graph carrying it is refused, not translated.
       assert {:error, {:invalid, :schema_version, 2}} =
                Graph.new(nodes: [], edges: [], schema_version: 2)
+    end
+
+    test "versioned, not frozen: bytes at 3 still verify under the code that writes 4" do
+      # 0.6.0 to 0.10.1 wrote 3; this package writes 4 since the node vocabulary grew
+      # (`resource_template`). A new version is how a shared encoding grows: the old bytes are
+      # kept, unchanged, and verify by their own version's rule, which for 3 and 4 is the same
+      # (the named digest). Nothing reads 3's bytes as 4's or rewrites them.
+      v3 = File.read!(Path.join(@fixtures, "golden.v3.json"))
+      v4 = File.read!(Path.join(@fixtures, "golden.json"))
+      assert String.starts_with?(v3, ~s({"schema_version":3,"algorithm":"sha256",))
+      assert String.starts_with?(v4, ~s({"schema_version":4,"algorithm":"sha256",))
+
+      for {bytes, hex} <- [{v3, "golden.v3.sha256"}, {v4, "golden.sha256"}] do
+        assert verifier_algorithm(bytes) == :sha256
+
+        assert Base.encode16(:crypto.hash(verifier_algorithm(bytes), bytes), case: :lower) ==
+                 String.trim(File.read!(Path.join(@fixtures, hex)))
+      end
+
+      # The two differ in the version alone: the golden graph carries no template, and the
+      # envelope's shape did not move.
+      assert String.replace(v3, ~s("schema_version":3), ~s("schema_version":4)) == v4
+      assert Canonical.encode!(golden_graph()) == v4
     end
 
     test "a weight change alters the sidecar and not the hash" do
@@ -1056,13 +1079,13 @@ defmodule BeamMCP.Connectome.CanonicalTest do
   # What the migration note tells a verifier to do, in a dozen lines, on the page's terms:
   # the members are in a fixed order, so the version and the algorithm are read from the
   # prefix, not from a decoded map; below 3 the digest is SHA-256 and a member is malformed;
-  # at 3 the member is the second and names one of the three; above 3 is refused.
+  # at 3 and 4 the member is the second and names one of the three; above 4 is refused.
   defp verifier_algorithm(bytes) do
     prefix = ~r/^\{"schema_version":(\d+),(?:"algorithm":"(sha256|sha384|sha512)",)?"nodes":/
 
     case Regex.run(prefix, bytes) do
       [_, v] when v in ["1", "2"] -> :sha256
-      [_, "3", name] -> String.to_existing_atom(name)
+      [_, v, name] when v in ["3", "4"] -> String.to_existing_atom(name)
       _ -> :malformed
     end
   end

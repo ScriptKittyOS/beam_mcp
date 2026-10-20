@@ -27,7 +27,8 @@ defmodule BeamMCP.Connectome.NodeTest do
       # level of every :tool node to :server survived them all. The field is what the caller
       # said, whatever the kind; :module and :server are members of both families and the
       # struct must never derive one field from the other.
-      for kind <- [:tool, :resource, :prompt, :process], level <- [:mfa, :module, :boundary] do
+      for kind <- [:tool, :resource, :resource_template, :prompt, :process],
+          level <- [:mfa, :module, :boundary] do
         assert {:ok, %Node{kind: ^kind, level: ^level}} =
                  Node.new(kind: kind, level: level, identity: {kind, "srv", :x})
       end

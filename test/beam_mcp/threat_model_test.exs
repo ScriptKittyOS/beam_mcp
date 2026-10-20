@@ -138,9 +138,13 @@ defmodule BeamMCP.ThreatModelTest do
       escaped = ~s({"k":"a\\"#{String.duplicate("[", max * 3)}"})
       assert {:ok, %{"k" => _}} = BeamMCP.JSON.decode(escaped)
       # A backslash before a bracket inside a string, as JSON allows only for a few escapes:
-      # Jason refuses it, and that is Jason's answer, not a nesting refusal.
-      assert {:error, %Jason.DecodeError{}} =
+      # the decoder refuses it, and that is the decoder's answer, not a nesting refusal (its
+      # shape is unspecified, so only what it is not is asserted).
+      assert {:error, reason} =
                BeamMCP.JSON.decode(~s({"k":"\\[#{String.duplicate("[", max * 3)}"}))
+
+      refute match?({:nesting, _, _}, reason)
+      refute match?({:duplicate_key, _}, reason)
 
       # Many siblings at depth two: the closing bracket counts back down.
       siblings = "[" <> Enum.map_join(1..(max * 3), ",", fn _ -> "[]" end) <> "]"

@@ -11,6 +11,75 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed (BREAKING, the host contract): the request's context reaches dispatch under `:mcp`
+
+- The host's dispatch function receives, in its third argument, its own `dispatch_opts`
+  followed by one reserved key, `:mcp`: a map of the request's `params._meta` as the client
+  sent it (string keys, `%{}` when it sent none), the client's capabilities (the request's own
+  in `_meta`, else what `initialize` declared; `nil` when there are none, or when they are not
+  an object), and the protocol revision the request is served under (the one its `_meta` names,
+  else `2025-11-25`). It is the client's word: authorise on the transport's hooks, not on it. Before, the core stripped `params._meta` before
+  `tools/call` was matched and kept no client capabilities, so a host could not see a trace id
+  or a capability the client declared. Fields added later join this map at a minor.
+  `BeamMCP.Server.new/1` refuses `dispatch_opts` carrying `:mcp`, and so does
+  `BeamMCP.Transport.HTTP` at init.
+  **How to tell whether you are affected:** your `dispatch_opts` has a key named `:mcp` (rename it); or your dispatch
+  function checks its third argument as a whole: matches it exactly (`fn _, _, [secret: s] ->`),
+  compares it (`opts == []`), or validates it against a closed key list (`Keyword.validate!/2`,
+  `NimbleOptions.validate!/2`, which now raise on `:mcp`): match or fetch the keys you read
+  (`Keyword.fetch!(opts, :secret)`); or you log or forward the whole of it, which now carries
+  the client's `_meta`: drop `:mcp` first (`Keyword.delete(opts, :mcp)`).
+
+### Changed (BREAKING, the exported bytes): `schema_version` 4 and the `resource_template` node kind
+
+- A resource template is a node of the declared connectome, of the new kind
+  `:resource_template`, identified by its uri template (`srv/resource_template/<template>`), in
+  a key space of its own. Before, every template a catalog offered was enumerated as an
+  unreadable catalog entry and had no node. The canonical bytes move to `schema_version` `4`
+  because their node vocabulary grew; the envelope's shape is unchanged, so a graph with no
+  template differs from its `3` bytes in the version alone, and bytes at `3` stay verifiable
+  by the same rule (`docs/connectome-canonical.md`, *Versions*).
+  **How to tell whether you are affected:** you verify or store the canonical bytes and pin `schema_version` `3`, or you
+  match a node's kind exhaustively (accept `4`, and `resource_template`); or you build a graph
+  with a literal `schema_version: 3` (`BeamMCP.Connectome.Graph.new/1` now refuses it, as it refused `2` in
+  0.6.0: pass `BeamMCP.Connectome.Graph.schema_version()`); or your catalog offers resource
+  templates and you read the bound's `unreadable_catalog_entries` (now empty) or track the
+  diff record's `declared_nodes` and `nodes_in_both` over time: both count one more per
+  template, while the diff record's own `schema_version` stays `3`, because its bytes carry
+  node ids and never a node's kind.
+
+### Changed: the wire's bytes are the same on every OTP release
+
+- Every JSON value the transports write has its object keys in sorted order at every depth,
+  the tool result written as text inside `content` included, and a refusal names the first
+  offending property, and lists unknown ones, in sorted order. A struct is written by its own
+  `Jason.Encoder`, as before; no struct reaches the wire from this package today. A map of more than 32 keys
+  iterates in hash order, and that order differs between OTP releases: one `tools/list` whose
+  schema had 40 properties was measured hashing differently on OTP 28.5.0.8 and OTP 29.1.
+  The content is unchanged; a client that compares decoded JSON sees nothing, and one that
+  hashes or caches the bytes now sees one answer per content.
+
+### Added: what may grow, and how (`docs/api-stability.md`)
+
+- A growth table marks every union of atoms in a public type OPEN (it may gain a value at a
+  minor, so code keeps a catch-all) or CLOSED; every one is OPEN today, and so is every value
+  set not in the table, error reasons included. It is held by a census over the compiled
+  types. The page also states that encodings a shared contract governs are versioned, not
+  frozen; that the request context grows inside `:mcp`; that the wire's bytes are stable in
+  1.x; and that a callback joins a behaviour only as optional.
+- `BeamMCP.JSON.decode/1` promises its two named error reasons and leaves every other reason
+  unspecified (it is the decoder's); its spec says `term()` where it said `struct()`.
+
+### Changed: the will-not-implement page gains entry 13, and entry 12 draws its line at `input_required`
+
+- Entry 13: the package never advertises a change notification it does not deliver: every
+  `listChanged` and `subscribe` flag is `false` while `subscriptions/listen` is not served,
+  and `subscriptions/listen` and `resources/subscribe` are answered `-32601` (`404` over HTTP).
+  Nothing a client sees changes; the rule is written down and held by a test.
+- Entry 12 now says the package never writes an `input_required` result, where it said the one
+  result type written is `complete`, so that another result type the specification defines
+  can be added without crossing the boundary.
+
 ### Changed: a request the HTTP adapter rejects is the adapter's to answer
 
 - An exception raised inside a call this transport makes into the adapter (reading the

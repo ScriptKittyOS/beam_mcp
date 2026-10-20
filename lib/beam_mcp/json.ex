@@ -4,7 +4,7 @@
 defmodule BeamMCP.JSON do
   @moduledoc """
   The one place the wire's JSON is read, on every transport, with the nesting bound in front
-  of the decoder.
+  of the decoder; and the one place it is written, with every map's keys in sorted order.
 
   The size cap a transport puts on a body (1 MiB on both) bounds how deep a body can nest --
   half its bytes, one level per bracket -- but not what decoding it costs: a 1 MiB body nested
@@ -18,8 +18,9 @@ defmodule BeamMCP.JSON do
   string is text -- and refuses a body whose nesting passes `max_depth/0` with
   `{:error, {:nesting, depth, max}}`, building nothing. The walk is O(bytes) and allocates
   nothing but its counters; what it costs a well-formed request is measured in
-  `docs/threat-model.md`. A body it admits is handed to Jason unchanged, so every other
-  answer -- a parse error, a non-object -- is the decoder's, as before.
+  `docs/threat-model.md`. A body it admits is handed to the decoder unchanged, so every other
+  answer -- a parse error, a non-object -- is the decoder's, as before, and its shape is not
+  promised (see `decode/1`).
 
   ## The number
 
@@ -42,7 +43,9 @@ defmodule BeamMCP.JSON do
   Decodes a JSON body after bounding its nesting and refusing a repeated key.
   `{:error, {:nesting, depth, max}}` names the first depth past the bound, before a byte is
   decoded; `{:error, {:duplicate_key, key}}` names the first key an object repeats, at any
-  depth; every other error is Jason's.
+  depth. Those two reasons are promised; every other reason (a parse error) is unspecified:
+  it is the decoder's, today Jason's, and the decoder may change (OTP's `:json` was measured
+  2.3 to 2.6 times faster on bodies near the 1 MiB cap), so match `{:error, _}` for it.
 
   Repeated keys are refused rather than resolved because two parsers resolve them two ways:
   Jason keeps the first, most others the last. A hop in front of this server that routes on
@@ -59,13 +62,43 @@ defmodule BeamMCP.JSON do
   @spec decode(binary()) ::
           {:ok, term()}
           | {:error,
-             {:nesting, pos_integer(), pos_integer()} | {:duplicate_key, String.t()} | struct()}
+             {:nesting, pos_integer(), pos_integer()} | {:duplicate_key, String.t()} | term()}
   def decode(body) when is_binary(body) do
     with :ok <- bound(nesting(body, 0, @max_depth)),
          {:ok, ordered} <- Jason.decode(body, objects: :ordered_objects) do
       maps(ordered)
     end
   end
+
+  # The one writer for bytes this package puts on the wire, on every transport: every map, at
+  # every depth, written with its keys in sorted order (by the text JSON carries for the key;
+  # Erlang term order breaks a tie between an atom key and a string key that read the same).
+  # A map of more than 32 keys iterates in hash order and that order is not promised across
+  # OTP releases: one `tools/list` with a 40-property schema was measured hashing differently
+  # on OTP 28.5.0.8 and 29.1 (test/beam_mcp/wire_bytes_test.exs pins one hash). A struct is
+  # its own `Jason.Encoder`'s, left as it is.
+  @doc false
+  @spec encode!(term(), keyword()) :: String.t()
+  def encode!(term, opts \\ []), do: Jason.encode!(sorted(term), opts)
+
+  defp sorted(%{__struct__: _} = struct), do: struct
+
+  defp sorted(%{} = map) do
+    pairs =
+      map
+      |> Enum.map(fn {key, value} -> {key, sorted(value)} end)
+      |> Enum.sort_by(fn {key, _} -> {key_text(key), key} end)
+
+    %Jason.OrderedObject{values: pairs}
+  end
+
+  defp sorted(list) when is_list(list), do: Enum.map(list, &sorted/1)
+  defp sorted(other), do: other
+
+  # The text Jason writes for a key: an atom by its name (`nil` is "nil", where to_string/1
+  # gives ""), anything else by String.Chars, as Jason does.
+  defp key_text(key) when is_atom(key), do: Atom.to_string(key)
+  defp key_text(key), do: to_string(key)
 
   @doc "The type of a decoded value that is not an object, for a refusal that names it."
   @spec type_of(term()) :: String.t()

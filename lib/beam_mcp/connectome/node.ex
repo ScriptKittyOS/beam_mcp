@@ -16,12 +16,13 @@ defmodule BeamMCP.Connectome.Node do
   an insertion order, so two builds of the same system produce the same ids and a diff can
   line them up. `id/1` is the one function that derives it, and the only place in the package
   that does -- a second scheme is how two graphs stop agreeing about what a node is. The
-  server component is the identity the host supplies for its server; a tool, resource, prompt
-  or process is named within it; a module is named by its module, or at the finest level by
-  module, function and arity.
+  server component is the identity the host supplies for its server; a tool, resource,
+  resource template, prompt or process is named within it (a template by its uri template, in
+  a key space of its own); a module is named by its module, or at the finest level by module,
+  function and arity.
   """
 
-  @kinds [:server, :tool, :resource, :prompt, :process, :module]
+  @kinds [:server, :tool, :resource, :resource_template, :prompt, :process, :module]
   @levels [:mfa, :module, :boundary, :server]
   @keys [:kind, :level, :identity, :labels]
   @required [:kind, :level, :identity]
@@ -30,7 +31,8 @@ defmodule BeamMCP.Connectome.Node do
   defstruct [:id, :kind, :level, labels: %{}]
 
   @typedoc "What kind of part the node is."
-  @type kind :: :server | :tool | :resource | :prompt | :process | :module
+  @type kind ::
+          :server | :tool | :resource | :resource_template | :prompt | :process | :module
 
   @typedoc "The granularity the node was built at; coarsest last."
   @type level :: :mfa | :module | :boundary | :server
@@ -41,7 +43,7 @@ defmodule BeamMCP.Connectome.Node do
   """
   @type identity ::
           {:server, server :: String.t()}
-          | {:tool | :resource | :prompt | :process, server :: String.t(),
+          | {:tool | :resource | :resource_template | :prompt | :process, server :: String.t(),
              name :: atom() | String.t()}
           | {:module, server :: String.t(), module()}
           | {:module, server :: String.t(), {module(), atom(), arity()}}
@@ -126,7 +128,8 @@ defmodule BeamMCP.Connectome.Node do
   defp id_parts({:server, server}) when is_binary(server), do: [server, "server"]
 
   defp id_parts({kind, server, name})
-       when kind in [:tool, :resource, :prompt, :process] and is_binary(server) and
+       when kind in [:tool, :resource, :resource_template, :prompt, :process] and
+              is_binary(server) and
               (is_atom(name) or is_binary(name)),
        do: [server, Atom.to_string(kind), to_string(name)]
 

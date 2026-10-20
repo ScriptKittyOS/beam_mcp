@@ -72,8 +72,11 @@ defmodule BeamMCP.Connectome.GraphTest do
       refute page =~ ~r/schema_version: \d/
     end
 
-    test "the version is 3, and the two the package wrote before are refused rather than translated" do
-      assert Graph.schema_version() == 3
+    test "the version is 4, and the three the package wrote before are refused rather than translated" do
+      assert Graph.schema_version() == 4
+
+      assert {:error, {:invalid, :schema_version, 3}} =
+               Graph.new(nodes: [], edges: [], schema_version: 3)
 
       assert {:error, {:invalid, :schema_version, 2}} =
                Graph.new(nodes: [], edges: [], schema_version: 2)
@@ -263,8 +266,8 @@ defmodule BeamMCP.Connectome.GraphTest do
       %Graph{} = g = Graph.new!(nodes: nodes, edges: edges, schema_version: @version)
       assert Graph.check(g) == :ok
 
-      assert Graph.check(%Graph{g | schema_version: 4}) ==
-               {:error, {:invalid, :schema_version, 4}}
+      assert Graph.check(%Graph{g | schema_version: 5}) ==
+               {:error, {:invalid, :schema_version, 5}}
 
       assert Graph.check(%Graph{g | nodes: :none}) == {:error, {:invalid, :nodes, :none}}
       assert Graph.check(%Graph{g | edges: [1]}) == {:error, {:invalid, :edges, [1]}}

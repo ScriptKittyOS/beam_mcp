@@ -28,8 +28,8 @@ is claimed.
 
 - A **connectome** is the graph itself: nodes and edges, each edge carrying a kind, a sign and a
   provenance.
-- The **declared connectome** is built from what is declared: the catalog's tools, resources and
-  prompts, the static call graph between the host's modules, and the host's boundary declarations.
+- The **declared connectome** is built from what is declared: the catalog's tools, resources,
+  resource templates and prompts, the static call graph between the host's modules, and the host's boundary declarations.
   It says what *can* happen.
 - The **observed connectome** is built from what ran: telemetry on the dispatch path and, when the
   host opts in, a guarded tracer. It records edge identity only, never arguments, results or
@@ -50,7 +50,8 @@ is claimed.
 | -- | -- |
 | `:server` | the MCP server: the thing whose catalog is advertised |
 | `:tool` | a tool the catalog names; labelled with its `command_class` and `mode` |
-| `:resource` | a resource the catalog names |
+| `:resource` | a resource the catalog names, identified by its uri |
+| `:resource_template` | a resource template the catalog names, identified by its uri template (a key space of its own: a template and a resource never share an id); in the vocabulary from `schema_version` `4` |
 | `:prompt` | a prompt the catalog names |
 | `:process` | a BEAM process: a GenServer, a task, a supervisor |
 | `:module` | a BEAM module, at the module level, or a module–function–arity at the finest level |
@@ -94,7 +95,7 @@ edge, where that verdict never reached this package, gets `:unset` on that edge,
 that read `:unset` as "no policy spoke" would be wrong about the world. That is why the value is
 named for the slot's state and not for the world's. (Until 0.5.0 the value was `:unknown`,
 glossed "no policy has spoken"; the rename is the correction, and the bytes carry
-`schema_version` `2` or later from here (`3` today), so a reader knows which vocabulary applies:
+`schema_version` `2` or later from here (`4` today), so a reader knows which vocabulary applies:
 [`docs/connectome-canonical.md`](connectome-canonical.md).)
 
 There is no `:not_applicable` and no `:indeterminate`: nothing in the package can produce them,
@@ -133,7 +134,7 @@ the part within it.
 | identity | node |
 | -- | -- |
 | `{:server, server}` | the server itself |
-| `{:tool, server, name}` · `{:resource, server, name}` · `{:prompt, server, name}` · `{:process, server, name}` | a catalog part or a process, named within the server |
+| `{:tool, server, name}` · `{:resource, server, uri}` · `{:resource_template, server, uri_template}` · `{:prompt, server, name}` · `{:process, server, name}` | a catalog part or a process, named within the server |
 | `{:module, server, module}` | a module, at the `:module` level |
 | `{:module, server, {module, function, arity}}` | one function, at the `:mfa` level |
 | `{:boundary, server, source, name}` | a group of modules, at the `:boundary` level, with the source of the grouping named |
@@ -168,6 +169,7 @@ the canonical form, not by the id.
 | `{:server, "srv"}` | `srv/server` |
 | `{:tool, "srv", "écho"}` | `srv/tool/écho` |
 | `{:resource, "srv", "r://a"}` | `srv/resource/r:%2F%2Fa` |
+| `{:resource_template, "srv", "r://t/{x}"}` | `srv/resource_template/r:%2F%2Ft%2F{x}` |
 | `{:prompt, "a/b", "p%"}` | `a%2Fb/prompt/p%25` |
 | `{:process, "srv", :worker}` | `srv/process/worker` |
 | `{:module, "srv", Foo.Bar}` | `srv/module/Foo.Bar` |

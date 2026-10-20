@@ -43,7 +43,7 @@ defmodule BeamMCP.Cursor do
   @spec encode(kind(), key()) :: String.t()
   def encode(kind, key) when is_atom(kind) and is_binary(key) do
     %{"v" => @version, "k" => Atom.to_string(kind), "a" => key}
-    |> Jason.encode!()
+    |> BeamMCP.JSON.encode!()
     |> Base.url_encode64(padding: false)
   end
 

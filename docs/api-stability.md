@@ -70,7 +70,7 @@ and metadata (`docs/connectome-observed.md`); and the tracer's exit reasons, doc
 fields of the public structs and the shapes behind the `@type`s and `@spec`s. A field renamed
 or a return shape changed leaves `Module kind name/arity` untouched, so the census does not see
 it; such a change is a break like any other and is a reviewer's line and a CHANGELOG entry,
-not a census failure. **Not promised anywhere:** the shape of `inspect/1` output, the text of
+not a census failure, unless it is growth that *What may grow, and how*, below, allows. **Not promised anywhere:** the shape of `inspect/1` output, the text of
 log lines and error messages, the names of the tracer's processes and trace session, and the
 layout of the observed collector's ETS rows beyond the `row/0` type
 `BeamMCP.Connectome.Observed` documents.
@@ -95,6 +95,70 @@ removal waits.
 and deprecates; a patch fixes. `1.0.0` follows once the public API and the stated threat model
 have each survived a full minor release unchanged (the README's condition, and the only one
 stated); `UPGRADING.md` carries what a `0.x` consumer must do to reach it.
+
+## What may grow, and how
+
+1.0.0 freezes this package's own call surface. It does not freeze a value set that the
+protocol, a shared contract (the canonical bytes, the signature schemes, the digest names) or a
+system built beside this one may still extend. Five rules say how each kind of thing grows.
+
+**Value sets: open by default.** Every named type, and every public struct field, whose
+definition is a union of atoms is listed below, OPEN or CLOSED. An OPEN set may gain a value at a minor release: code that matches on it keeps
+a catch-all clause, and a value it does not know is not an error. A CLOSED set changes only at
+a major. Every value set not in the table, an atom nested in a list, a tuple or an error reason
+included, is OPEN. Every error reason a function returns is OPEN in particular, and
+`BeamMCP.JSON.decode/1` promises the two reasons it names (`{:nesting, depth, max}`,
+`{:duplicate_key, key}`) and nothing about any other: which decoder produced it, and in which
+shape, is unspecified. The table is held by `test/beam_mcp/growth_table_test.exs` "every atom
+union in a public type has exactly one row, with its atoms and OPEN or CLOSED", which reads the
+compiled types, so a union that grows, shrinks or appears without its row fails.
+
+| Type | Values | Growth |
+| -- | -- | -- |
+| `t:BeamMCP.Connectome.Node.kind/0` | `:server` `:tool` `:resource` `:resource_template` `:prompt` `:process` `:module` | OPEN |
+| `t:BeamMCP.Connectome.Node.level/0` | `:mfa` `:module` `:boundary` `:server` | OPEN |
+| `t:BeamMCP.Connectome.Edge.kind/0` | `:invoke` `:read` `:message` `:supervise` | OPEN |
+| `t:BeamMCP.Connectome.Edge.provenance/0` | `:declared` `:observed` | OPEN |
+| `t:BeamMCP.Connectome.Edge.sign/0` | `:allow` `:deny` `:hold` `:ungoverned` `:unset` | OPEN |
+| `t:BeamMCP.Connectome.Canonical.algorithm/0` | `:sha256` `:sha384` `:sha512` | OPEN |
+| `t:BeamMCP.Connectome.Canonical.scheme/0` | `:ed25519` `:ecdsa_p384_sha384` `:mldsa87` | OPEN |
+| `t:BeamMCP.ToolSpec.t/0` field `mode` | `:read_only` `:proposal` | OPEN |
+
+None is CLOSED today. A set is CLOSED only when it is this package's alone and a consumer's
+exhaustive match on it is the point; the column exists so that such a set can say so.
+
+**Encodings: versioned, not frozen.** An encoding a shared contract governs carries its
+`schema_version` inside the bytes. It changes only as a new version at a minor, and bytes at an
+older version are never rewritten and keep verifying by their own version's rule. The canonical
+connectome bytes are the first: `4` since the node vocabulary gained `resource_template`, with
+the bytes `0.6.0` to `0.10.1` wrote at `3` kept as goldens and verified under the code that
+writes `4` (`test/beam_mcp/connectome/canonical_test.exs` "versioned, not frozen: bytes at 3
+still verify under the code that writes 4"; `docs/connectome-canonical.md`, *Versions*). In
+`0.x` such a version is a documented break, like every break. From `1.0.0` it is the one change
+a minor may make to bytes a consumer pins: the alternative is freezing a contract other systems
+share. It ships with a CHANGELOG heading naming the new version and a "how to tell" sentence;
+the old version's bytes keep verifying; and code that builds the structure passes the version
+the package exports (`BeamMCP.Connectome.Graph.schema_version/0`), never a literal, which a
+new version refuses.
+
+**Request context: one reserved key.** What a request carries beyond its arguments reaches the
+host's dispatch under the `:mcp` key of its third argument (the request's `params._meta`, the
+client's capabilities, the revision served; `BeamMCP.Server` `t:dispatch/0`). A later field,
+the next protocol addition that rides in `_meta`, joins that map at a minor, never as a new
+function or a new argument; a host matches the keys it reads.
+
+**Wire bytes: stable in 1.x.** Every JSON value the transports write has its object keys in
+sorted order at every depth (a struct is written by its own `Jason.Encoder`), and a refusal
+walks a client's arguments in sorted order too, so a response's bytes are a function of its
+content and not of the OTP release's map iteration order (`test/beam_mcp/wire_bytes_test.exs` pins one sha256 per
+response on every CI leg). Field values are the protocol's; a field the protocol adds is an
+addition to the bytes, not a break.
+
+**Behaviours: callbacks are added optional.** A callback joins `BeamMCP.Catalog` or
+`BeamMCP.Server` at a minor only under `@optional_callbacks`, never as required: a module
+written against the earlier behaviour keeps compiling without a warning. `BeamMCP.Signer` is the
+one exception by design: its single callback is a boundary (will-not-implement entry 3), held
+exactly by `test/beam_mcp/boundary/no_signature_test.exs`, and it does not grow.
 
 ## Deprecation: three steps, three minors
 
