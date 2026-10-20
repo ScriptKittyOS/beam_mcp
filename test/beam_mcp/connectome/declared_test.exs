@@ -37,6 +37,7 @@ defmodule BeamMCP.Connectome.DeclaredTest do
           Node.id({:tool, @server, :echo}),
           Node.id({:tool, @server, :write}),
           Node.id({:resource, @server, "r://a"}),
+          Node.id({:resource_template, @server, "r://t/{x}"}),
           Node.id({:prompt, @server, "greet"})
         ] ++ Enum.map(@modules, &Node.id({:module, @server, &1}))
 
@@ -121,16 +122,18 @@ defmodule BeamMCP.Connectome.DeclaredTest do
       assert Enum.map(bound.allowlisted_calls, &elem(&1, 0)) == [{Fx.Dyn, :fun, 2}]
     end
 
-    test "a catalog entry no reader can name is enumerated, and has no node" do
+    test "a resource template is a node of its own kind, named by its uri template; nothing is unreadable" do
       {:ok, %{graph: g, bound: bound}} = build()
 
-      # A resource template has no uri, so this builder cannot name it: enumerated, no node.
-      # (Every other entry is a struct the catalog contract holds to a name, so a template is
-      # the one unreadable entry a valid catalog can carry.)
-      assert bound.unreadable_catalog_entries == [
-               {:resources, %BeamMCP.ResourceTemplateSpec{uri_template: "r://t/{x}", name: "t"}}
-             ]
-
+      # The specification identifies a template by its `uriTemplate`, as it identifies a
+      # resource by its `uri`: two key spaces (a resource and a template are two lists on the
+      # wire), so a template is its own kind and never collides with a resource whose uri is
+      # the same string. Until this kind existed, the fixture's template was the one entry a
+      # valid catalog could carry that the builder enumerated as unreadable (G-056).
+      assert bound.unreadable_catalog_entries == []
+      assert [template] = Enum.filter(g.nodes, &(&1.kind == :resource_template))
+      assert template.id == Node.id({:resource_template, @server, "r://t/{x}"})
+      assert template.level == :server
       assert length(Enum.filter(g.nodes, &(&1.kind == :resource))) == 1
     end
 

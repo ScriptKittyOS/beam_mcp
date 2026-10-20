@@ -27,7 +27,10 @@ defmodule BeamMCP.Connectome.Graph do
   # bytes at 1 and bytes at 2 read their signs against different vocabularies. 3 since the
   # release after: the canonical envelope names its algorithm as a fourth top-level member,
   # and bytes at 1 and 2, which name none, are SHA-256 by the page's rule for those versions.
-  @schema_version 3
+  # 4 since the release after 0.10.1: the node vocabulary gained `resource_template`, so bytes
+  # at 3 and bytes at 4 read their node kinds against different vocabularies; the envelope's
+  # shape is 3's. Growth is a new version, never an edit of an old one (docs/api-stability.md).
+  @schema_version 4
   @keys [:nodes, :edges, :schema_version]
   @required [:nodes, :edges, :schema_version]
 

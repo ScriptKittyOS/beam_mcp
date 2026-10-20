@@ -70,7 +70,8 @@ defmodule BeamMCP.Boundary.PackageReachTest do
   # tag (`:error_logger`), a tuple tag in the canonical encoder (`:array`), `:json` -- a local
   # function name that OTP 28 turned into a module's name, the collision this census is loud
   # about -- and `Jason.OrderedObject`, the struct the decoder hands back for ordered objects,
-  # matched by `BeamMCP.JSON` to read each object's keys once and never called, and
+  # matched by `BeamMCP.JSON` to read each object's keys once, and built by its writer to put
+  # each map's keys in sorted order; never called, and
   # `:standard_error`, the registered name of the VM's standard-error device, which the stdio
   # transport writes its reports to (standard output is the protocol's). Exact for the
   # OTP the gate runs; an older OTP without `json` reads one fewer.
@@ -180,7 +181,9 @@ defmodule BeamMCP.Boundary.PackageReachTest do
     ],
     :atomics => [get: 2, new: 2, put: 3],
     :telemetry => [attach_many: 4, detach: 1, execute: 3],
-    Jason => [decode: 2, encode!: 1, encode!: 2],
+    # One writer: BeamMCP.JSON.encode!/2 hands Jason sorted maps, so the wire's bytes do not
+    # depend on a map's hash order (test/beam_mcp/wire_bytes_test.exs).
+    Jason => [decode: 2, encode!: 2],
     Logger => [__do_log__: 4, __should_log__: 2],
     Process => [delete: 1, info: 2, put: 2, whereis: 1],
     GenServer => [format_report: 1, start: 3, start_link: 3, stop: 3],

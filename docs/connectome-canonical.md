@@ -22,7 +22,7 @@ The bytes are UTF-8 JSON with no insignificant whitespace, written under these r
 1. **The top level is an object with exactly four members, in this fixed order:**
    `"schema_version"`, then `"algorithm"`, then `"nodes"`, then `"edges"`. This is the one
    place the order is fixed rather than sorted, so the version is the first thing a reader
-   meets and the digest the second. The schema version is the integer `3` (see *Versions*
+   meets and the digest the second. The schema version is the integer `4` (see *Versions*
    below). The algorithm is one of the three strings `"sha256"`, `"sha384"`, `"sha512"`
    (the name under which the digest is known to `:crypto`, lowercase, no hyphen), and it is
    what rule 9 hashes the bytes with. **The nodes and edges members do not depend on the
@@ -108,10 +108,10 @@ A server `"s"` with one tool `"t"` (labelled `mode: :read_only`) and the one dec
 from the server to the tool. Its canonical bytes under the default algorithm, on one line:
 
 ```json-canonical
-{"schema_version":3,"algorithm":"sha256","nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
+{"schema_version":4,"algorithm":"sha256","nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
 ```
 
-sha256: `a401cd47f0f0410d17248538eb8a3ef00018f6a31bf6fb6a7b9b0ba3377f570e`
+sha256: `b27e00414811cf71a818af1ee6f4be7d779432c34e052477614ec2a2431a320a`
 
 Reproduce it without the package: paste the line above into a file with no trailing newline
 and run `sha256sum` over it, or `printf '%s' '<the line>' | sha256sum`.
@@ -120,15 +120,15 @@ The same graph under SHA-384 is a different envelope (one member differs) and so
 different hash, over the bytes that name it:
 
 ```json-canonical-sha384
-{"schema_version":3,"algorithm":"sha384","nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
+{"schema_version":4,"algorithm":"sha384","nodes":[{"id":"s/server","kind":"server","labels":{},"level":"server"},{"id":"s/tool/t","kind":"tool","labels":{"mode":"read_only"},"level":"server"}],"edges":[{"from":"s/server","kind":"invoke","provenance":"declared","sign":"unset","to":"s/tool/t"}]}
 ```
 
-sha384: `f5b9b2f4fe21a4bfe88721d804f4f82d167f73f7dd59b1a64ae0196f4cf78f05a6b9a3efa6d02e7362469796dbba53dd`
+sha384: `0055fe763dfad9c2aea0de1ebb233da8a62ae592134a5c6376fa37ceae4ca612024b3eb1ce08db29b4f5fe37f234ee15`
 
 (`sha384sum` over that line.) Under SHA-512 the member reads `"algorithm":"sha512"` and the
 rest of the line is byte-identical:
 
-sha512: `26cacb025eeaeabb0c441a293882ab81ec2436b80559618fd700dc494f9a5d2e2c6d46cee69a68cbdc84746aa9d64a4a11da027df7b0bc733ba1091031ee2e78`
+sha512: `1095ab691c82759659e20d9850b27244f9b50ccaf0e87df3dd8f42573e3ce4d354937189a19ec264607a1b82d90273e40ba1daa53db6d93af35d1c6fc20d73b8`
 
 A blind reader reproduces all three from this page alone: rule 1 fixes the four members and
 their order, rule 9 the digest by the member's value, and the line is the same in every
@@ -148,6 +148,13 @@ at an edge and found nothing governing it had no `ungoverned` to write, so its h
 was `unknown` too, and the bytes do not say which case a given `unknown` was. A reader must
 not narrow a version-1 `unknown` to `unset`; it is "one of the two, unrecorded which".
 
+**`4`** (the release after 0.10.1): the node kind `resource_template` joins the vocabulary, a
+resource template named by its uri template in a key space of its own; the envelope's shape is
+`3`'s, unchanged, so the only byte that differs for a graph with no template is the version
+itself. That is the rule this page keeps for every shared encoding: it grows by a new version
+at a minor, and bytes at an older version stay what they were and verify by their own
+version's rule (`docs/api-stability.md`, *Versioned, not frozen*).
+
 **What a verifier holding bytes at `1` or `2` does**: 0.4.0 and 0.5.0 bytes exist in the
 world, and their hashes stay verifiable forever under their own version: those bytes name no
 algorithm, and **at `1` and `2` the digest is SHA-256**, by this rule and by no member of the
@@ -155,26 +162,28 @@ bytes; the verifier hashes the bytes it holds, unchanged, with SHA-256, and comp
 not add an `"algorithm"` member, rewrite the version, or re-encode: a `2` envelope with a
 member inserted is different bytes with a different hash, not a migration. At `3` the
 verifier reads the member and hashes with what it names; a `3` envelope without the member,
-or a `1` or `2` envelope with one, is a malformed record and is refused. So the whole
-verifier is: read `schema_version`; below `3`, SHA-256; at `3`, the named digest; anything
-else, refuse. Published 0.4.0 and 0.5.0 hashes verify under that rule exactly as they did the
+or a `1` or `2` envelope with one, is a malformed record and is refused. At `4` the rule is
+`3`'s. So the whole verifier is: read `schema_version`; below `3`, SHA-256; at `3` or `4`,
+the named digest; anything else, refuse. Published 0.4.0 and 0.5.0 hashes verify under that rule exactly as they did the
 day they were written.
 
 What the version tells the verifier beyond the digest is how to *read* the sign field: at
-`1`, `unknown` is a valid sign and `ungoverned` is not; at `2` and `3`, `unset` and
+`1`, `unknown` is a valid sign and `ungoverned` is not; at `2`, `3` and `4`, `unset` and
 `ungoverned` are valid and `unknown` is not. A reader that resolves the vocabulary by the
 version it finds first (as Avro resolves a writer's schema against a reader's) needs no other
 signal. A sign outside the vocabulary of the version the bytes name is a malformed record:
 the hash still verifies (it is over the bytes), and the record is refused, never corrected:
-the rule the package applies to itself in `BeamMCP.Connectome.Graph.new/1`. The package itself
-writes `3` and only `3`, and `BeamMCP.Connectome.Graph.new/1` refuses a graph carrying any
+the rule the package applies to itself in `BeamMCP.Connectome.Graph.new/1`. The same holds for
+node kinds: `resource_template` is valid at `4` and not below it. The package itself
+writes `4` and only `4`, and `BeamMCP.Connectome.Graph.new/1` refuses a graph carrying any
 other version rather than translating it: bytes are not re-imported here, only produced and
-hashed. `test/fixtures/connectome/golden.v2.json` and `golden.v2.sha256` are 0.5.0's goldens
-kept as they were, and a test verifies them the way this section says.
+hashed. `test/fixtures/connectome/golden.v2.json` and `golden.v2.sha256` are 0.5.0's goldens,
+and `golden.v3.json` and `golden.v3.sha256` the goldens 0.6.0 to 0.10.1 wrote, kept as they
+were, and a test verifies them the way this section says.
 
 ## The sidecar
 
-Weights are written separately as `{"schema_version":3,"weights":[…]}` (the graph's version, no algorithm member, since the sidecar is never hashed), one object per edge
+Weights are written separately as `{"schema_version":4,"weights":[…]}` (the graph's version, no algorithm member, since the sidecar is never hashed), one object per edge
 that carries a weight, each with `"from"`, `"kind"`, `"provenance"`, `"to"`, `"weight"` in
 that order, the array sorted as in rule 3, the same string rules. An integer weight is an
 integer; a float weight is written in the shortest form that round-trips

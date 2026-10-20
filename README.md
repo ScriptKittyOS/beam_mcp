@@ -152,6 +152,11 @@ does not advertise.
 @type dispatch :: (atom(), map(), keyword() -> {:ok, term()} | {:error, term()})
 ```
 
+The third argument is the host's own `dispatch_opts` plus one reserved key, `:mcp`: the
+request's context, `%{meta: ..., client_capabilities: ..., protocol_version: ...}`, where
+`meta` is the request's `params._meta` exactly as the client sent it. Fields added later join
+that map, so match the keys you read.
+
 ## Running it
 
 ```elixir
@@ -197,7 +202,7 @@ A `BeamMCP.ToolSpec` that omits `input_schema` is a tool with no arguments: it a
 empty object, so `tools/call` refuses nothing and dispatch is handed `%{}` whatever the client
 sent.
 
-Dispatch receives the declared properties only: a property outside `properties` is held to
+Dispatch's arguments are the declared properties only: a property outside `properties` is held to
 `additionalProperties` (refused when it is `false`, checked when it is a schema) and is not
 passed on.
 
@@ -577,7 +582,7 @@ cryptographic posture, and what a FIPS-mode host needs from it, are
 - **Declared**: `BeamMCP.Connectome.Declared.build/1` reads what *can* happen: the catalog,
   the call edges of the modules in scope from their beams (OTP's `:xref`), and a grouping of
   modules by OTP application. Beside the graph it returns a completeness bound: every dynamic
-  dispatch site, callee outside the scope and unreadable entry, enumerated rather than guessed.
+  dispatch site and callee outside the scope, enumerated rather than guessed.
 - **Observed**: `BeamMCP.Connectome.Observed` reads what *did* happen: a `:telemetry` span on
   the one dispatch site and a host-started ETS collector, plus an optional, off-by-default,
   guarded tracer for module-level edges (`BeamMCP.Connectome.Tracer`). Edge identity only:
@@ -662,7 +667,7 @@ there. A small surface can look unfinished from the outside; this one is a commo
 that says which it is. The list is derived, not typed: the thesis sentence at the top of this
 README, the census test that no line under `lib/` writes a sign other than `:unset`, and a
 test that no line under `lib/` names a receipt, an approval, a risk tier or egress. The full
-boundary (twelve entries, each with the test that enforces it by path and by name) is
+boundary (thirteen entries, each with the test that enforces it by path and by name) is
 [`docs/will-not-implement.md`](docs/will-not-implement.md), held to the tests in both
 directions by a census of its own; a request to cross it is answered by pointing there. What
 the package defends against on the wire, and what it hands to the server or the host, is

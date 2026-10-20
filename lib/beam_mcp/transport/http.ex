@@ -344,6 +344,8 @@ if Code.ensure_loaded?(Plug) do
         """
       end
 
+      validate_dispatch_opts!(Keyword.get(opts, :dispatch_opts))
+
       read_timeout =
         validate_read_timeout!(Keyword.get(opts, :read_timeout, @read_timeout_default))
 
@@ -367,6 +369,19 @@ if Code.ensure_loaded?(Plug) do
           opts |> Keyword.drop(@plug_opts) |> Keyword.put(:supported_versions, [@modern_version])
       }
     end
+
+    # The core refuses a reserved `:mcp` in `dispatch_opts` at `new/1`, which this transport
+    # calls per request; refused here too, structurally, so a host learns it at startup and
+    # not as a fault on every call. Any other shape is the core's to judge, as before.
+    defp validate_dispatch_opts!([_ | _] = dispatch_opts) do
+      if Keyword.keyword?(dispatch_opts) and Keyword.has_key?(dispatch_opts, :mcp) do
+        raise ArgumentError,
+              "BeamMCP.Transport.HTTP: :dispatch_opts must not carry :mcp, the key the " <>
+                "request's context arrives under"
+      end
+    end
+
+    defp validate_dispatch_opts!(_), do: :ok
 
     # THE ADAPTER'S OWN EXCEPTIONS GO BACK TO THE ADAPTER, AS THEMSELVES.
     #
@@ -1700,7 +1715,7 @@ if Code.ensure_loaded?(Plug) do
     defp answer(%{"method" => method} = message, _opts) when method in @removed_in_modern do
       case message["id"] do
         nil -> {202, nil}
-        id -> {404, Jason.encode!(error(id, -32_601, "#{@method_not_found} #{method}"))}
+        id -> {404, BeamMCP.JSON.encode!(error(id, -32_601, "#{@method_not_found} #{method}"))}
       end
     end
 
@@ -1729,10 +1744,10 @@ if Code.ensure_loaded?(Plug) do
           # The coupling to the core's wording is deliberate and pinned: a test asserts
           # `Server.handle_message/2` still prefixes this case with @method_not_found, so a
           # reword fails that test instead of silently turning every 404 back into a 200.
-          {404, Jason.encode!(response)}
+          {404, BeamMCP.JSON.encode!(response)}
 
         {_state, response} ->
-          {200, Jason.encode!(response)}
+          {200, BeamMCP.JSON.encode!(response)}
       end
     end
 
@@ -1741,7 +1756,8 @@ if Code.ensure_loaded?(Plug) do
 
     # The encode stays OUTSIDE the adapter boundary: a payload this package cannot encode is
     # its own (or the host's) fault and is answered as one; only the send is the adapter's.
-    defp send_json(conn, status, payload), do: send_encoded(conn, status, Jason.encode!(payload))
+    defp send_json(conn, status, payload),
+      do: send_encoded(conn, status, BeamMCP.JSON.encode!(payload))
 
     defp send_encoded(conn, status, encoded) do
       conn = put_resp_content_type(conn, "application/json")

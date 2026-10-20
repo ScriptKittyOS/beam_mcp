@@ -9,7 +9,7 @@ defmodule BeamMCP.Connectome.Declared do
   Three sources, each optional but the scope:
 
   * **the catalog** -- `c:BeamMCP.Catalog.capabilities/0` of the module given as `catalog:`; one node per tool,
-    resource and prompt, a `:invoke` edge from the server to each tool, and a `:invoke` edge
+    resource, resource template and prompt, a `:invoke` edge from the server to each tool, and a `:invoke` edge
     from a tool to the module the host names for it in `tool_modules:`;
   * **the compiled code** -- call edges read from the beams of the modules in scope with OTP's
     `:xref`. A module whose only use is at a macro's expansion site produces no edge, because
@@ -32,7 +32,9 @@ defmodule BeamMCP.Connectome.Declared do
   every field an enumerated, sorted list and never a count: dynamic-dispatch sites (the calls
   `:xref` cannot resolve, by caller), sites the host vouched for in `dynamic_allowlist:`, callees
   outside the scope, modules with no beam on the code path, modules whose beam carries no debug
-  information, catalog entries no reader can name, tools with no implementing module, modules
+  information, catalog entries no reader can name (none, for a catalog `BeamMCP.Catalog`
+  accepts: it holds every resource, template and prompt to a name, so the field is kept and
+  empty since templates became nodes), tools with no implementing module, modules
   that could not be grouped at the `:boundary` level and the calls into or out of them. Nothing
   the compiled code shows is dropped silently; what it cannot show is stated below.
 
@@ -295,24 +297,35 @@ defmodule BeamMCP.Connectome.Declared do
       for n <- tool_nodes,
           do: Edge.new!(from: server_id, to: n.id, kind: :invoke, provenance: :declared)
 
+    # A template is named by its uri template, as the specification identifies it, and is a
+    # kind of its own: a resource's uri and a template's uri_template are two key spaces.
+    {templates, resources} =
+      Enum.split_with(Map.get(caps, :resources, []), &match?(%BeamMCP.ResourceTemplateSpec{}, &1))
+
     {resource_nodes, bad_resources} =
-      named(Map.get(caps, :resources, []), :resources, [:uri, "uri"], server, :resource)
+      named(resources, :resources, [:uri, "uri"], server, :resource)
+
+    {template_nodes, bad_templates} =
+      named(templates, :resources, [:uri_template], server, :resource_template)
 
     {prompt_nodes, bad_prompts} =
       named(Map.get(caps, :prompts, []), :prompts, [:name, "name"], server, :prompt)
 
     {:ok,
      %{
-       nodes: tool_nodes ++ resource_nodes ++ prompt_nodes,
+       nodes: tool_nodes ++ resource_nodes ++ template_nodes ++ prompt_nodes,
        edges: tool_edges,
-       unreadable: Enum.sort(bad_resources ++ bad_prompts),
+       unreadable: Enum.sort(bad_resources ++ bad_templates ++ bad_prompts),
        tools: Enum.map(tools, & &1.name),
        sources: [:catalog]
      }}
   end
 
-  # A resource or prompt entry is readable when it carries a name under one of the keys a
-  # reader can look for. Anything else is enumerated as unreadable, never dropped.
+  # A resource, template or prompt entry is readable when it carries a name under one of the
+  # keys a reader can look for. Anything else is enumerated as unreadable, never dropped:
+  # unreachable for a catalog `Catalog.validate/1` admits (every entry is a named struct, and
+  # with templates as nodes the suite passes with this branch raising), kept as the guard if
+  # that admission ever widens.
   defp named(entries, field, keys, server, kind) do
     Enum.reduce(entries, {[], []}, fn entry, {nodes, bad} ->
       # The map test comes first and on its own: `is_map(e) and find(...)` short-circuits to

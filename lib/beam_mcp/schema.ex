@@ -95,8 +95,9 @@ defmodule BeamMCP.Schema do
   @spec check_schema(term()) :: result()
   def check_schema(schema), do: check_schema(schema, "the schema")
 
+  # Sorted, as `check_properties/3` is: the first defect named is part of a -32603's text.
   defp check_schema(schema, where) when is_map(schema) and not is_struct(schema) do
-    Enum.reduce_while(schema, :ok, fn {key, value}, :ok ->
+    Enum.reduce_while(Enum.sort(schema), :ok, fn {key, value}, :ok ->
       continue_or_halt(check_keyword(key, value, where))
     end)
   end
@@ -131,7 +132,7 @@ defmodule BeamMCP.Schema do
   # so the property would be advertised and never checked.
   defp check_keyword("properties", properties, where)
        when is_map(properties) and not is_struct(properties) do
-    Enum.reduce_while(properties, :ok, fn
+    Enum.reduce_while(Enum.sort(properties), :ok, fn
       {name, sub}, :ok when is_binary(name) ->
         continue_or_halt(check_schema(sub, "#{where}, property #{name}"))
 
@@ -269,8 +270,11 @@ defmodule BeamMCP.Schema do
     end
   end
 
+  # Keys are visited in sorted order, never the map's: a map of more than 32 keys iterates in
+  # hash order, which differs between OTP releases, and the refusal (which property it names
+  # first, the order it lists unknown ones in) is bytes on the wire.
   defp check_additional(object, properties, schema, path) do
-    extra = object |> Map.keys() |> Enum.reject(&Map.has_key?(properties, &1))
+    extra = object |> Map.keys() |> Enum.sort() |> Enum.reject(&Map.has_key?(properties, &1))
 
     case Map.get(schema, "additionalProperties", true) do
       false when extra != [] ->
@@ -287,9 +291,12 @@ defmodule BeamMCP.Schema do
   end
 
   defp check_properties(object, properties, path) do
-    Enum.reduce_while(object, :ok, fn {key, value}, :ok ->
+    object
+    |> Map.keys()
+    |> Enum.sort()
+    |> Enum.reduce_while(:ok, fn key, :ok ->
       case Map.fetch(properties, key) do
-        {:ok, sub} -> continue_or_halt(check(value, sub, path ++ [key]))
+        {:ok, sub} -> continue_or_halt(check(Map.fetch!(object, key), sub, path ++ [key]))
         :error -> {:cont, :ok}
       end
     end)
@@ -429,7 +436,7 @@ defmodule BeamMCP.Schema do
   # Schema values rendered for a message, whatever JSON they are: a string as itself, anything
   # else as its JSON text (a map or a list in an enum has no to_string/1).
   defp display(value) when is_binary(value), do: value
-  defp display(value), do: Jason.encode!(value)
+  defp display(value), do: BeamMCP.JSON.encode!(value)
 
   defp plural([_]), do: "y"
   defp plural(_), do: "ies"
