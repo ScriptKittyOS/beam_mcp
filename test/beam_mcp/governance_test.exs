@@ -91,6 +91,18 @@ defmodule BeamMCP.GovernanceTest do
     end
   end
 
+  # A named image fixes the OpenSSL a leg's `:crypto` links only if the log says which one it
+  # was: the box leg's "OpenSSL 3.5" is a reading of its own run, not an inference from another
+  # repository's run on the same image.
+  test "the gate's toolchain step prints the OpenSSL :crypto linked, on every leg" do
+    text = File.read!(".github/workflows/gate.yml")
+    [_, step] = String.split(text, "- name: the pair setup-beam installed", parts: 2)
+    [step | _] = String.split(step, ~r/^\s+- /m, parts: 2)
+
+    assert step =~ "crypto:info_lib()",
+           "gate.yml's toolchain step does not print crypto:info_lib()"
+  end
+
   test "every workflow declares top-level permissions, and write permissions live on the job that needs them" do
     for wf <- @workflows do
       text = File.read!(wf)

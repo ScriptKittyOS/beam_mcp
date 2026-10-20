@@ -66,9 +66,12 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
           version-type: ${{ matrix.version-type }}
+      # The OpenSSL `:crypto` linked is part of the pair: builds.hex.pm's OTP links the runner
+      # image's own, so the image decides it (3.0.13 on 24.04, 3.5.5 on 26.04), and the log says it.
       - name: the pair setup-beam installed (observed, quoted in the slice record)
         run: |
           erl -noshell -eval 'io:format("OTP ~s~n", [erlang:system_info(otp_release)]), halt().'
+          erl -noshell -eval 'ok = application:load(crypto), [{_, _, V}] = crypto:info_lib(), io:format("crypto linked to ~s~n", [V]), halt().'
           elixir --version
           cat .tool-versions
       - run: mix deps.get
